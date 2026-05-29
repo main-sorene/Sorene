@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ export default function DashboardPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [dnaComplete, setDnaComplete] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -33,6 +35,8 @@ export default function DashboardPage() {
           // ignore parse errors
         }
       }
+      const dnaKey = `sorene_dna_complete_${user.uid}`;
+      setDnaComplete(!!localStorage.getItem(dnaKey));
     }
   }, [user, loading, router]);
 
@@ -68,11 +72,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-slate-500 mb-4">
-              Your DNA Assessment will begin here.
+              {dnaComplete
+                ? "Your DNA profile is ready. Explore your personalized direction."
+                : "Answer 12 questions to build your entrepreneurship DNA profile."}
             </p>
-            <Button disabled className="bg-slate-900 text-white opacity-60 cursor-not-allowed">
-              Start Assessment
-            </Button>
+            {dnaComplete ? (
+              <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
+                <Link href="/assessment/complete">View Your DNA Profile →</Link>
+              </Button>
+            ) : (
+              <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
+                <Link href="/assessment">Start Assessment →</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -77,9 +77,14 @@ export default function DashboardPage() {
                 : "Answer 12 questions to build your entrepreneurship DNA profile."}
             </p>
             {dnaComplete ? (
-              <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
-                <Link href="/assessment/complete">View Your DNA Profile →</Link>
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
+                  <Link href="/assessment/complete">View Your DNA Profile →</Link>
+                </Button>
+                <Button asChild variant="outline" className="border-slate-900 text-slate-900 hover:bg-slate-50">
+                  <Link href="/direction">See Your Direction →</Link>
+                </Button>
+              </div>
             ) : (
               <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
                 <Link href="/assessment">Start Assessment →</Link>

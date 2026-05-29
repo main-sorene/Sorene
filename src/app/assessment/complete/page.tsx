@@ -215,12 +215,12 @@ export default function AssessmentCompletePage() {
 
         {/* CTA */}
         <div className="flex flex-col gap-3">
-          <button
-            disabled
-            className="w-full bg-slate-900 text-white text-sm px-6 py-3 rounded-md opacity-60 cursor-not-allowed"
+          <Link
+            href="/direction"
+            className="w-full bg-slate-900 text-white text-sm px-6 py-3 rounded-md text-center hover:bg-slate-800 transition-colors"
           >
             See Your Direction →
-          </button>
+          </Link>
           <Link
             href="/dashboard"
             className="text-sm text-slate-400 hover:text-slate-600 text-center transition-colors"

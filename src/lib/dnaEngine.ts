@@ -28,7 +28,7 @@ export type DirectionEligibility =
 
 function snapRisk(value: number): 1 | 3 | 5 | 8 | 10 {
   const allowed = [1, 3, 5, 8, 10] as const;
-  let best = allowed[0];
+  let best: 1 | 3 | 5 | 8 | 10 = allowed[0];
   let bestDist = Math.abs(value - best);
   for (const v of allowed) {
     const d = Math.abs(value - v);

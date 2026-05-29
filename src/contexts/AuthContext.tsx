@@ -22,12 +22,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     import("firebase/auth").then(({ onAuthStateChanged }) => {
       import("@/lib/firebase").then(({ auth }) => {
-        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-          setUser(firebaseUser);
-          setLoading(false);
-        });
-      });
-    });
+        unsubscribe = onAuthStateChanged(
+          auth,
+          (firebaseUser) => {
+            setUser(firebaseUser);
+            setLoading(false);
+          },
+          () => {
+            // Firebase error (bad config, network, etc.) — stop loading
+            setLoading(false);
+          }
+        );
+      }).catch(() => setLoading(false));
+    }).catch(() => setLoading(false));
 
     return () => {
       if (unsubscribe) unsubscribe();

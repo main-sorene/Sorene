@@ -50,6 +50,7 @@ export function useDirectionResult() {
             },
             firstName,
             rawAnswers: profile.assessmentAnswers,
+            cvSummary: profile.cvSummary,
           }),
         });
 

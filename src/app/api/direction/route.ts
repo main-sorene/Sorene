@@ -22,11 +22,16 @@ CRITICAL RULES:
 function buildUserMessage(
   eligibility: DirectionEligibility,
   firstName: string,
-  rawAnswers: Record<string, string>
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
 ): string {
+  const cvBlock = cvSummary && cvSummary.trim()
+    ? `\n\nBackground context (from their CV/portfolio):\n${cvSummary.trim()}\n\nWeave 1-2 specific references to their actual background (years, fields, role transitions) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`
+    : "";
+
   if (!eligibility.eligible) {
     const { reason, scores } = eligibility;
-    return `The user's name is ${firstName}.
+    return `The user's name is ${firstName}.${cvBlock}
 
 The direction engine has determined this user should receive a "Strengthen First" path, not a business direction.
 
@@ -51,7 +56,7 @@ Keep it under 400 words. Write as Sorene speaking directly to ${firstName}.`;
   }
 
   const { model, scores } = eligibility;
-  return `The user's name is ${firstName}.
+  return `The user's name is ${firstName}.${cvBlock}
 
 The direction engine has selected: ${model}
 
@@ -89,11 +94,12 @@ export async function POST(req: NextRequest) {
       eligibility: DirectionEligibility;
       firstName: string;
       rawAnswers: Record<string, string>;
+      cvSummary?: string;
     };
 
-    const { eligibility, firstName, rawAnswers } = body;
+    const { eligibility, firstName, rawAnswers, cvSummary } = body;
 
-    const userMessage = buildUserMessage(eligibility, firstName, rawAnswers);
+    const userMessage = buildUserMessage(eligibility, firstName, rawAnswers, cvSummary);
 
     const stream = await client.messages.stream({
       model: "claude-sonnet-4-6",

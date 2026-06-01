@@ -25,9 +25,28 @@ function buildUserMessage(
   rawAnswers: Record<string, string>,
   cvSummary?: string,
 ): string {
-  const cvBlock = cvSummary && cvSummary.trim()
-    ? `\n\nBackground context (from their CV/portfolio):\n${cvSummary.trim()}\n\nWeave 1-2 specific references to their actual background (years, fields, role transitions) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`
-    : "";
+  let cvBlock = "";
+  if (cvSummary && cvSummary.trim()) {
+    cvBlock = `\n\nBackground context (from their CV/portfolio):\n${cvSummary.trim()}\n\nWeave 1-2 specific references to their actual background (years, fields, role transitions) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`;
+  } else {
+    // No CV — synthesize background from the 5 background questions they answered
+    const bg1 = rawAnswers["bg1_history"];
+    const bg2 = rawAnswers["bg2_skills"];
+    const bg3 = rawAnswers["bg3_pattern"];
+    const bg4 = rawAnswers["bg4_direction"];
+    const bg5 = rawAnswers["bg5_turning"];
+    const hasBg = bg1 || bg2 || bg3 || bg4 || bg5;
+    if (hasBg) {
+      const lines = [
+        bg1 ? `- Recent professional life: ${bg1}` : "",
+        bg2 ? `- What people come to them for: ${bg2}` : "",
+        bg3 ? `- Pattern across their path: ${bg3}` : "",
+        bg4 ? `- Where they're drifting: ${bg4}` : "",
+        bg5 ? `- Turning-point moment: ${bg5}` : "",
+      ].filter(Boolean).join("\n");
+      cvBlock = `\n\nBackground context (from their own words — they did not share a CV):\n${lines}\n\nWeave 1-2 specific references to their actual history (real roles, real skills, real shifts) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`;
+    }
+  }
 
   if (!eligibility.eligible) {
     const { reason, scores } = eligibility;

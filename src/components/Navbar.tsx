@@ -184,7 +184,12 @@ export const Navbar = ({ isPolicyPage = false }) => {
                 if (window.location.pathname !== "/") {
                   router.push("/#footer");
                 } else {
-                  scrollToSection("footer");
+                  setTimeout(() => {
+                    window.scrollTo({
+                      top: document.documentElement.scrollHeight,
+                      behavior: "smooth",
+                    });
+                  }, 10);
                 }
               }}
             >

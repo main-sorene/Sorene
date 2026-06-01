@@ -32,10 +32,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Redirect unauthenticated users to landing page
+  // Redirect unauthenticated users to landing page, incomplete onboarding to /onBoarding
   useEffect(() => {
     if (!authLoading && !authUser) {
       router.replace("/");
+    } else if (!authLoading && authUser && !authUser.profile?.onboardingComplete) {
+      router.replace("/onBoarding");
     }
   }, [authLoading, authUser, router]);
 

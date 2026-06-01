@@ -89,9 +89,12 @@ function UserMessage({ content }: { content: string }) {
 }
 
 export function AssessmentChatPage() {
-  const { messages, sendMessage, skipCv, isSaving, isWaiting, isDone, isCvRequest, currentChoices, inputType } =
-    useAssessmentFlow();
+  const {
+    messages, sendMessage, skipCv, uploadCv, isSaving, isWaiting, isProcessingCv,
+    isDone, isCvRequest, currentChoices, inputType,
+  } = useAssessmentFlow();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -123,7 +126,7 @@ export function AssessmentChatPage() {
 
   const isDisabled = isSending || isWaiting || isDone;
   const canSend = inputValue.trim().length > 0 && !isDisabled;
-  const showInput = !isCvRequest && !isDone;
+  const showInput = !isDone;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
@@ -191,13 +194,43 @@ export function AssessmentChatPage() {
                     handleSend(inputValue);
                   }
                 }}
-                placeholder={isWaiting ? "Sorene is thinking…" : "Ask anything"}
+                placeholder={
+                  isProcessingCv
+                    ? "Reading your CV…"
+                    : isWaiting
+                    ? "Sorene is thinking…"
+                    : isCvRequest
+                    ? "Type a reply, or skip with the button above"
+                    : "Type your answer"
+                }
                 rows={1}
                 disabled={isDisabled}
                 className="w-full resize-none bg-transparent text-[16px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-[28px] max-h-[160px] disabled:cursor-not-allowed"
               />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadCv(f);
+                  e.target.value = "";
+                }}
+              />
               <div className="flex items-center justify-between mt-1">
-                <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!isCvRequest || isProcessingCv}
+                  title={isCvRequest ? "Attach CV (PDF or image)" : "Attachments unavailable"}
+                  className={cn(
+                    "p-2 rounded-xl transition-colors text-[#111111]",
+                    isCvRequest && !isProcessingCv
+                      ? "hover:bg-gray-100"
+                      : "opacity-40 cursor-not-allowed",
+                  )}
+                >
                   <Plus size={20} />
                 </button>
                 <div className="flex items-center gap-1">

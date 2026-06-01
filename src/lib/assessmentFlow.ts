@@ -30,6 +30,39 @@ export type QuestionNode = {
 };
 
 export const QUESTION_NODES: QuestionNode[] = [
+  // Background questions — only used when user skips CV upload
+  {
+    id: "bg1_history",
+    signal: "Background",
+    soreneMessage: (ctx) =>
+      `That's completely fine${ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""}. Let me get to know you through a few short questions instead.\n\nTo start — could you walk me through what you've been doing professionally over the last few years? Not the job titles, but what your days have actually looked like, what kind of work has filled your time.`,
+    inputType: "freetext",
+    next: "bg2_skills",
+  },
+  {
+    id: "bg2_skills",
+    signal: "Background",
+    soreneMessage:
+      "Thank you for sharing that. When people come to you for help at work — colleagues, clients, friends — what do they tend to ask you about? What are the things you've quietly become good at over time, even if they don't feel like big achievements?",
+    inputType: "freetext",
+    next: "bg3_pattern",
+  },
+  {
+    id: "bg3_pattern",
+    signal: "Background",
+    soreneMessage:
+      "When you look back at the path you've taken — the roles, the shifts, the choices you made — does a thread run through it? Some quiet pattern in what kept pulling you forward, or in what you kept moving away from? Or has it felt more like one thing after another, without much shape?",
+    inputType: "freetext",
+    next: "bg4_direction",
+  },
+  {
+    id: "bg4_direction",
+    signal: "Background",
+    soreneMessage:
+      "One last bit of context before we go deeper. Where do you feel yourself drifting these days — whether it's something you're quietly being drawn toward, or something you're slowly starting to step away from? Even if it's not fully formed yet, name what comes to mind.",
+    inputType: "freetext",
+    next: "q1_energy",
+  },
   {
     id: "q1_energy",
     signal: "Energy Pattern",
@@ -264,7 +297,7 @@ export const OPENING_MESSAGE = (firstName: string) =>
 export const CV_CONTEXT_MESSAGE = (cvSummary: string) =>
   `To do that well, I'd like to start with some context about your background and experience.\n\n${cvSummary}`;
 
-export const CV_REQUEST_MESSAGE = `To do that well, I'd like to start with some context about your background and experience.\n\n**Would you like to share your CV, portfolio, or LinkedIn profile?**\n\nThis is completely optional, but it helps me understand:\n• What you've done professionally\n• What skills and experience you bring\n• What patterns might exist in your career journey\n• What you might be moving away from or toward\n\nIf you'd prefer not to share anything, that's fine too. We'll just start with questions.`;
+export const CV_REQUEST_MESSAGE = `To do that well, I'd like to start with some context about your background and experience.\n\n**Would you like to share your CV or portfolio?**\n\nThis is completely optional, but it helps me understand:\n• What you've done professionally\n• What skills and experience you bring\n• What patterns might exist in your career journey\n• What you might be moving away from or toward\n\nYou can attach a PDF using the + button below, or skip and I'll get to know you through a few short questions instead.`;
 
 export const CLOSING_MESSAGE =
   "Thank you for being honest with me. Give me a moment to bring this together.";

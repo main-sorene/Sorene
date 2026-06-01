@@ -14,8 +14,9 @@ import {
 } from "@/lib/assessmentFlow";
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { userAtom, isAssessmentCompleteAtom } from "@/store/atoms";
+import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
   id: string;
@@ -84,7 +85,7 @@ function buildInitialMessages(
 }
 
 export function useAssessmentFlow() {
-  const authUser = useAtomValue(userAtom);
+  const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
@@ -101,19 +102,102 @@ export function useAssessmentFlow() {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isReflecting, setIsReflecting] = useState(false);
+  const [isProcessingCv, setIsProcessingCv] = useState(false);
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
 
+  // Skip path: route into the 4 background questions (bg1_history)
   const skipCv = useCallback(() => {
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: false };
+    const bgNode = getNode("bg1_history")!;
     addMessage({
-      id: `first-q-${Date.now()}`,
+      id: `bg1-${Date.now()}`,
       role: "assistant",
-      content: getNodeMessage(QUESTION_NODES[0], ctx),
+      content: getNodeMessage(bgNode, ctx),
     });
-    setFlowState({ phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false });
+    setFlowState({ phase: "question", nodeId: "bg1_history", awaitingFollowUp: false });
   }, [firstName]);
+
+  // Upload path: user attaches PDF/image during CV request
+  const uploadCv = useCallback(
+    async (file: File) => {
+      if (!authUser?.uid) return;
+      setIsProcessingCv(true);
+
+      // Echo the upload to the chat as a user "message"
+      addMessage({
+        id: `user-cv-${Date.now()}`,
+        role: "user",
+        content: `Uploaded: ${file.name}`,
+      });
+
+      try {
+        const buf = await file.arrayBuffer();
+        let binary = "";
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        const fileBase64 = btoa(binary);
+
+        const res = await fetch("/api/cv-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileBase64, mimeType: file.type }),
+        });
+
+        let summary = "";
+        if (res.ok) {
+          const data = await res.json();
+          summary = (data?.summary || "").trim();
+        }
+
+        const cvDataPayload = {
+          file_name: file.name,
+          file_path: "",
+          status: "uploaded",
+          text_length: file.size,
+        };
+
+        // Persist to Firestore and local atom
+        await saveUserProfile(authUser.uid, {
+          cvData: cvDataPayload,
+          ...(summary ? { cvSummary: summary } : {}),
+        } as any);
+
+        setAuthUser({
+          ...authUser,
+          profile: {
+            ...(authUser.profile as any),
+            cvData: cvDataPayload,
+            ...(summary ? { cvSummary: summary } : {}),
+          },
+        });
+
+        // Show CV context (if we got a summary) + first energy question
+        if (summary) {
+          addMessage({
+            id: `cv-context-${Date.now()}`,
+            role: "assistant",
+            content: CV_CONTEXT_MESSAGE(summary),
+          });
+        }
+        const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
+        addMessage({
+          id: `first-q-${Date.now()}`,
+          role: "assistant",
+          content: getNodeMessage(QUESTION_NODES.find((n) => n.id === "q1_energy")!, ctx),
+        });
+        setFlowState({ phase: "question", nodeId: "q1_energy", awaitingFollowUp: false });
+      } catch (e) {
+        console.warn("CV upload failed:", e);
+        // On failure, fall through to background questions so the assessment continues
+        skipCv();
+      } finally {
+        setIsProcessingCv(false);
+      }
+    },
+    [authUser, firstName, setAuthUser, skipCv],
+  );
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -229,12 +313,14 @@ export function useAssessmentFlow() {
   }
 
   const currentNode = flowState.phase === "question" ? getNode(flowState.nodeId) : null;
-  const isWaiting = isReflecting || isSaving;
+  const isWaiting = isReflecting || isSaving || isProcessingCv;
 
   return {
     messages,
     sendMessage,
     skipCv,
+    uploadCv,
+    isProcessingCv,
     isSaving,
     isWaiting,
     isCvRequest: flowState.phase === "cv_request",

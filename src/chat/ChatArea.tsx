@@ -50,7 +50,7 @@ export function ChatArea() {
 
   // If profile exists, mark assessment as complete to hide buttons and enable chat
   useEffect(() => {
-    if (profileRes?.profile?.core && !isAssessmentComplete) {
+    if (profileRes?.dnaAssessmentComplete && !isAssessmentComplete) {
       setIsAssessmentComplete(true);
     }
   }, [profileRes, isAssessmentComplete, setIsAssessmentComplete]);

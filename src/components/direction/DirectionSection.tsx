@@ -1,15 +1,13 @@
 "use client";
 
 import { DirectionCard } from "./DirectionCard";
-import { useProfile } from "@/hooks/useProfile";
-import { useAtom, useAtomValue } from "jotai";
+import { useDirectionResult } from "@/hooks/useDirectionResult";
+import { useAtom } from "jotai";
 import {
   ideationAtom,
-  userAtom,
   IdeationIdea,
   IdeationData,
 } from "@/store/atoms";
-import { useDirection } from "@/hooks/useDirection";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 const DEFAULT_IDEATION_DATA: IdeationData = {
@@ -90,12 +88,9 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
 };
 
 export const DirectionSection = () => {
-  useProfile();
+  const { directionText, isLoading: isDirectionLoading } = useDirectionResult();
   const [ideation, setIdeation] = useAtom(ideationAtom);
-  const authUser = useAtomValue(userAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useDirection();
 
   const heroBadges = [
     {

@@ -45,8 +45,7 @@ export function YourCoreDetail() {
   const router = useRouter();
   const { data: profileRes, isLoading } = useProfile();
 
-  const profile = profileRes?.profile;
-  const core = profile?.core;
+  const core = profileRes?.dnaScores;
 
   console.log("Core ========> ", core);
 
@@ -83,7 +82,7 @@ export function YourCoreDetail() {
             Your Core
           </h2>
           <p className="text-white/90 text-sm max-w-2xl leading-relaxed">
-            {profile?.identity?.archetype?.[0] ||
+            {core?.strengths_summary ||
               "Someone who cares deeply about doing things well and doing it right. You're not chasing speed or noise. You care about quality, clarity, and doing things properly."}
           </p>
         </div>
@@ -96,28 +95,23 @@ export function YourCoreDetail() {
         <div className="flex flex-col">
           <MetricRow
             label="Primary Motivation"
-            value={core?.primary_motivation || "Mastery"}
+            value={core?.motivation_driver || "Mastery"}
             description="You care about doing things well, not just finishing them."
           />
           <MetricRow
-            label="Structure Preference"
-            value={core?.structure_preference || "Guided"}
-            description="You like frameworks. Not rigid rules, but clear direction."
+            label="Energy Source"
+            value={core?.energy_source || "Guided"}
+            description="What fuels you and keeps you going."
           />
           <MetricRow
-            label="Collaboration Mode"
-            value={core?.collaboration_mode?.replace("_", " ") || "Small Team"}
-            description="You think best in focused environments, not large noisy groups."
+            label="Energy Drains"
+            value={core?.energy_drains || "Chaos"}
+            description="What depletes your energy and focus."
           />
           <MetricRow
-            label="Ambiguity Tolerance"
-            value={core?.ambiguity_tolerance || "Low"}
-            description="Too much uncertainty drains you. You prefer clarity before action."
-            valueColor={
-              core?.ambiguity_tolerance === "low"
-                ? "text-red-500/80"
-                : "text-gray-900"
-            }
+            label="Non-Negotiable"
+            value={core?.non_negotiable || "Quality"}
+            description="The thing you won't compromise on."
           />
 
           {/* Risk Profile (Special Grid Layout) */}
@@ -129,32 +123,18 @@ export function YourCoreDetail() {
               <div className="flex gap-12 mb-6">
                 <div>
                   <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">
-                    Emotional Risk
+                    Risk Score
                   </p>
-                  <p
-                    className={cn(
-                      "text-2xl font-semibold capitalize",
-                      core?.risk_emotional === "low"
-                        ? "text-red-500/80"
-                        : "text-gray-900",
-                    )}
-                  >
-                    {core?.risk_emotional || "Low"}
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {core?.risk_score ?? "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">
-                    Financial Risk
+                    Readiness Score
                   </p>
-                  <p
-                    className={cn(
-                      "text-2xl font-semibold capitalize",
-                      core?.risk_financial === "medium"
-                        ? "text-yellow-500/80"
-                        : "text-gray-900",
-                    )}
-                  >
-                    {core?.risk_financial || "Medium"}
+                  <p className="text-2xl font-semibold text-gray-900">
+                    {core?.readiness_score ?? "—"}
                   </p>
                 </div>
               </div>
@@ -165,15 +145,15 @@ export function YourCoreDetail() {
           </div>
 
           <MetricRow
-            label="Time Availability"
-            value={core?.time_availability || "High"}
-            description="You currently have the capacity to commit deeply. You're not constrained by time pressure."
+            label="Structure Score"
+            value={core?.structure_score?.toString() || "High"}
+            description="How much you prefer clear frameworks and process."
             valueColor="text-emerald-500/80"
           />
           <MetricRow
-            label="Readiness Level"
-            value={core?.readiness_level || "Committed"}
-            description="You're not casually exploring. You're ready to act when the direction feels right."
+            label="Uncertainty Score"
+            value={core?.uncertainty_score?.toString() || "Medium"}
+            description="How you handle ambiguity and unclear situations."
           />
         </div>
 
@@ -184,7 +164,7 @@ export function YourCoreDetail() {
           </h3>
           <div className="flex flex-wrap gap-3">
             {(
-              profile?.strength_profile?.strengths || [
+              [
                 "Adaptability",
                 "Systems Thinking",
                 "Quality Focus",

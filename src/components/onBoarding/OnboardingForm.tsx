@@ -14,13 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FormData } from "@/types/onboarding";
-import { useAtom, useSetAtom } from "jotai";
-import { userAtom, cvTextAtom } from "@/store/atoms";
+import { useAtom } from "jotai";
+import { userAtom } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 import { useRouter } from "next/navigation";
 import { OnboardingSideImage } from "./OnboardingSideImage";
-import { authApi } from "@/lib/authApi";
-import * as chatApi from "@/lib/chatApi";
 
 const SEX_OPTIONS = [
   { value: "male", label: "Male" },
@@ -42,7 +40,6 @@ export function OnboardingForm({
   onNext: (data: FormData) => void;
 }) {
   const [authUser, setAuthUser] = useAtom(userAtom);
-  const setCvText = useSetAtom(cvTextAtom);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [sexOpen, setSexOpen] = React.useState(false);
   const [occupationOpen, setOccupationOpen] = React.useState(false);
@@ -80,32 +77,7 @@ export function OnboardingForm({
         photoUrl: authUser.photoURL || authUser.profile?.photoUrl || undefined,
       };
 
-      let cvExtractedText = "";
-
-      // Handle CV Upload if file exists
-      if (data.portfolioFile && data.portfolioFile.length > 0) {
-        try {
-          const cvResponse = await authApi.uploadCV({
-            file: data.portfolioFile[0],
-            user_id: authUser.uid,
-            name: `${data.firstName} ${data.lastName}`,
-            character: "sorene",
-          });
-
-          if (cvResponse.text) {
-            cvExtractedText = cvResponse.text;
-            setCvText(cvResponse.text);
-            profileData.cvData = {
-              file_name: cvResponse.file_name,
-              file_path: cvResponse.file_path,
-              status: cvResponse.status,
-              text_length: cvResponse.text_length,
-            };
-          }
-        } catch (cvError) {
-          console.error("Error uploading CV:", cvError);
-        }
-      }
+      // CV upload via external API removed — using Firestore-only flow
 
       await saveUserProfile(authUser.uid, profileData);
 
@@ -119,29 +91,6 @@ export function OnboardingForm({
           updatedAt: new Date().toISOString(),
         },
       });
-
-      // Call backend API
-      try {
-        const [month, day, year] = data.birthday.split("/").map(Number);
-        const today = new Date();
-        const birthDate = new Date(year, month - 1, day);
-        let calculatedAge = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate()))
-          calculatedAge--;
-
-        await authApi.updateProfileBio({
-          age: calculatedAge,
-          birthday: data.birthday,
-          email: authUser.uid || "",
-          name: `${data.firstName} ${data.lastName}`,
-          occupation: data.occupation,
-          sex: data.sex,
-          user_id: authUser.uid,
-        });
-      } catch (backendError) {
-        console.error("Error updating profile bio in backend:", backendError);
-      }
 
       onNext(data);
 

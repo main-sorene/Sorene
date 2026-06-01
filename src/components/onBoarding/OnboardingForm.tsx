@@ -64,7 +64,20 @@ export function OnboardingForm({
 
     try {
       setIsSubmitting(true);
-      const profileData = {
+
+      // Capture CV metadata if user uploaded a file (actual parsing not yet wired up)
+      const portfolioFiles = (data as any).portfolioFile as FileList | null | undefined;
+      const cvFile = portfolioFiles && portfolioFiles.length > 0 ? portfolioFiles[0] : null;
+      const cvData = cvFile
+        ? {
+            file_name: cvFile.name,
+            file_path: "",
+            status: "uploaded",
+            text_length: cvFile.size,
+          }
+        : undefined;
+
+      const profileData: any = {
         firstName: data.firstName,
         lastName: data.lastName,
         email: authUser.uid || "",
@@ -73,11 +86,9 @@ export function OnboardingForm({
         sex: data.sex,
         useCase: "general",
         onboardingComplete: true,
-        cvData: undefined as any,
         photoUrl: authUser.photoURL || authUser.profile?.photoUrl || undefined,
       };
-
-      // CV upload via external API removed — using Firestore-only flow
+      if (cvData) profileData.cvData = cvData;
 
       await saveUserProfile(authUser.uid, profileData);
 

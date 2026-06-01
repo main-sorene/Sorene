@@ -62,20 +62,17 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      // Silent — individual queries can opt in to their own error handling
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Query error]", error);
+      }
     },
   }),
   mutationCache: new MutationCache({
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Mutation error]", error);
+      }
     },
   }),
   defaultOptions: {

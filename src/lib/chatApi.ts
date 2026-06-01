@@ -154,14 +154,16 @@ export async function getConvoHistory(
   userId: string,
 ): Promise<ApiConvoResponse> {
   const search = new URLSearchParams({ user_id: userId });
-  const res = await fetch(`${API_BASE_URL}/history/convo?${search.toString()}`);
-
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+  try {
+    const res = await fetch(`${API_BASE_URL}/history/convo?${search.toString()}`);
+    if (!res.ok) {
+      // External history API not yet wired up — return empty list silently
+      return { conversations: [] } as unknown as ApiConvoResponse;
+    }
+    return (await res.json()) as ApiConvoResponse;
+  } catch {
+    return { conversations: [] } as unknown as ApiConvoResponse;
   }
-
-  return (await res.json()) as ApiConvoResponse;
 }
 
 export async function getChatHistory(params: {

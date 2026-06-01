@@ -19,10 +19,14 @@ export const LandingPageScreen = () => {
 
     // Defer until the section is mounted.
     setTimeout(() => {
+      if (id === "footer") {
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+        return;
+      }
       document
         .getElementById(id)
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
+    }, 100);
   }, []);
 
   return (

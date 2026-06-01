@@ -6,7 +6,6 @@ import {
   OPENING_MESSAGE,
   CV_REQUEST_MESSAGE,
   CV_CONTEXT_MESSAGE,
-  CLOSING_MESSAGE,
   getNode,
   getNodeMessage,
   getFollowUpMessage,
@@ -71,6 +70,25 @@ async function translateText(text: string, language: string): Promise<string> {
     return data.translatedQuestion || text;
   } catch {
     return text;
+  }
+}
+
+async function fetchClosingSummary(
+  firstName: string,
+  answers: Record<string, string>,
+  hasCv: boolean,
+): Promise<string> {
+  try {
+    const res = await fetch("/api/closing-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName, answers, hasCv }),
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    return data.summary || "";
+  } catch {
+    return "";
   }
 }
 
@@ -298,19 +316,27 @@ export function useAssessmentFlow() {
     userAnswer: string,
   ) {
     if (nextId === "closing") {
-      // Get reflection for final answer, then closing
       setIsReflecting(true);
-      const { reflection: closingReflection, translatedQuestion: translatedClosing } =
-        await fetchReflection(userAnswer, questionSignal, "", CLOSING_MESSAGE);
+      // Fetch reflection for final answer + closing summary in parallel
+      const [{ reflection: closingReflection }, summary] = await Promise.all([
+        fetchReflection(userAnswer, questionSignal, ""),
+        fetchClosingSummary(firstName, currentAnswers, hasCv),
+      ]);
       setIsReflecting(false);
+
       if (closingReflection) {
         addMessage({ id: `reflect-closing-${Date.now()}`, role: "assistant", content: closingReflection });
       }
+      // "Give me a moment" bridge line
       addMessage({
-        id: `closing-${Date.now()}`,
+        id: `closing-bridge-${Date.now()}`,
         role: "assistant",
-        content: translatedClosing || CLOSING_MESSAGE,
+        content: "Thank you for being honest with me. Give me a moment to bring this together.",
       });
+      if (summary) {
+        addMessage({ id: `closing-summary-${Date.now()}`, role: "assistant", content: summary });
+      }
+
       setFlowState({ phase: "closing" });
       setIsSaving(true);
       try {

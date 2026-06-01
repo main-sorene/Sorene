@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useAssessmentFlow } from "@/hooks/useAssessmentFlow";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Mic, Plus, Settings, Copy } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Plus, Settings, Copy, Sparkles, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -47,7 +47,7 @@ function CvRequestCard({ onSkip }: { onSkip: () => void }) {
   return (
     <div className="mt-5 rounded-xl border border-gray-200 p-5 space-y-3 bg-gray-50/60">
       <p className="font-semibold text-[#151515] text-[15px]">
-        Would you like to share your CV, portfolio, or LinkedIn profile?
+        Would you like to share your CV or portfolio?
       </p>
       <p className="text-sm text-gray-600">This is completely optional, but it helps me understand:</p>
       <ul className="space-y-1.5 text-sm text-gray-600">
@@ -88,6 +88,27 @@ function UserMessage({ content }: { content: string }) {
   );
 }
 
+function NavButtons({ onDna, onDirection }: { onDna: () => void; onDirection: () => void }) {
+  return (
+    <div className="flex flex-wrap gap-3 pt-2">
+      <button
+        onClick={onDna}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-black transition-colors shadow-sm active:scale-95"
+      >
+        <Sparkles size={15} />
+        Explore your DNA
+      </button>
+      <button
+        onClick={onDirection}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-[#111111] text-sm font-medium hover:bg-gray-50 transition-colors active:scale-95"
+      >
+        <ArrowRight size={15} />
+        Explore your Direction
+      </button>
+    </div>
+  );
+}
+
 export function AssessmentChatPage() {
   const {
     messages, sendMessage, skipCv, uploadCv, isSaving, isWaiting, isProcessingCv,
@@ -102,11 +123,7 @@ export function AssessmentChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, isWaiting]);
-
-  useEffect(() => {
-    if (isDone) router.push("/dna");
-  }, [isDone, router]);
+  }, [messages.length, isWaiting, isDone]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -155,6 +172,15 @@ export function AssessmentChatPage() {
               Building your profile…
             </div>
           )}
+
+          {/* Navigation buttons shown once assessment is complete */}
+          {isDone && (
+            <NavButtons
+              onDna={() => router.push("/dna")}
+              onDirection={() => router.push("/direction")}
+            />
+          )}
+
           <div ref={bottomRef} />
         </div>
       </div>

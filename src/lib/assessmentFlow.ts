@@ -34,9 +34,8 @@ export const QUESTION_NODES: QuestionNode[] = [
     id: "q1_energy",
     signal: "Energy Pattern",
     soreneMessage: (ctx) => {
-      if (ctx.hasCv && ctx.profile.cvFileName) {
-        const cvArea = ctx.profile.cvFileName.replace(/\.pdf$/i, "");
-        return `You've built experience in ${cvArea}. But I want to go beyond what's on paper. Think of a moment in your work when you felt genuinely energized — not just 'it was fine,' but when what you were doing felt like it mattered. What were you doing, and why?`;
+      if (ctx.hasCv) {
+        return `Think about a time when work didn't feel like work. When you were so absorbed that you lost track of time. What were you actually doing in that moment?`;
       }
       return `Think of a specific moment in your work or life when you felt genuinely energized — like what you were doing actually mattered and didn't feel like a burden. What were you doing, and why did it feel that way?`;
     },
@@ -259,13 +258,11 @@ export const QUESTION_NODES: QuestionNode[] = [
   },
 ];
 
-export const OPENING_MESSAGE = (firstName: string, hasCv: boolean, cvSummary?: string) => {
-  const intro = `Hi${firstName !== "there" ? ` ${firstName}` : ""}. I'm Sorene.\n\nBefore we explore business ideas together, I want to understand who you are — not who you think you should be, but how you actually work, what matters to you, and what your life allows right now.`;
-  if (hasCv && cvSummary) {
-    return `${intro}\n\nTo do that well, I'd like to start with some context about your background and experience.\n\n${cvSummary}\n\nThink about a time when work didn't feel like work. When you were so absorbed that you lost track of time. What were you actually doing in that moment?`;
-  }
-  return intro;
-};
+export const OPENING_MESSAGE = (firstName: string) =>
+  `Hi${firstName && firstName !== "there" ? ` ${firstName}` : ""}. I'm Sorene.\n\nBefore we explore business ideas together, I want to understand who you are — not who you think you should be, but how you actually work, what matters to you, and what your life allows right now.`;
+
+export const CV_CONTEXT_MESSAGE = (cvSummary: string) =>
+  `To do that well, I'd like to start with some context about your background and experience.\n\n${cvSummary}`;
 
 export const CV_REQUEST_MESSAGE = `To do that well, I'd like to start with some context about your background and experience.\n\n**Would you like to share your CV, portfolio, or LinkedIn profile?**\n\nThis is completely optional, but it helps me understand:\n• What you've done professionally\n• What skills and experience you bring\n• What patterns might exist in your career journey\n• What you might be moving away from or toward\n\nIf you'd prefer not to share anything, that's fine too. We'll just start with questions.`;
 

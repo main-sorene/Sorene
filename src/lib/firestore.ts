@@ -19,6 +19,7 @@ export interface UserProfile {
     status: string;
     text_length: number;
   };
+  cvSummary?: string;
   createdAt: string;
   updatedAt: string;
   photoUrl?: string;

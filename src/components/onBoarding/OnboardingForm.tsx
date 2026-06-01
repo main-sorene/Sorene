@@ -90,6 +90,28 @@ export function OnboardingForm({
       };
       if (cvData) profileData.cvData = cvData;
 
+      // Generate CV summary via Claude (blocks until done so assessment opens with it)
+      if (cvFile) {
+        try {
+          const buf = await cvFile.arrayBuffer();
+          let binary = "";
+          const bytes = new Uint8Array(buf);
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+          const fileBase64 = btoa(binary);
+          const res = await fetch("/api/cv-summary", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fileBase64, mimeType: cvFile.type }),
+          });
+          if (res.ok) {
+            const summaryData = await res.json();
+            if (summaryData?.summary) profileData.cvSummary = summaryData.summary;
+          }
+        } catch (e) {
+          console.warn("CV summary generation failed:", e);
+        }
+      }
+
       await saveUserProfile(authUser.uid, profileData);
 
       // Update local state

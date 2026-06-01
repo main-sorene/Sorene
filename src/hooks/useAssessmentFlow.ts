@@ -5,6 +5,7 @@ import {
   QUESTION_NODES,
   OPENING_MESSAGE,
   CV_REQUEST_MESSAGE,
+  CV_CONTEXT_MESSAGE,
   CLOSING_MESSAGE,
   getNode,
   getNodeMessage,
@@ -37,20 +38,34 @@ function buildInitialMessages(
   hasCv: boolean,
   cvSummary?: string,
 ): AssessmentMessage[] {
+  const opening: AssessmentMessage = {
+    id: "opening",
+    role: "assistant",
+    content: OPENING_MESSAGE(firstName),
+  };
+
   if (hasCv) {
-    // With CV: show personalized intro + go straight to questions (first question included)
-    const openingText = OPENING_MESSAGE(firstName, true, cvSummary);
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
     const firstNode = QUESTION_NODES[0];
-    return [
-      { id: "opening", role: "assistant", content: openingText },
-      { id: "first-q", role: "assistant", content: getNodeMessage(firstNode, ctx) },
-    ];
+    const messages: AssessmentMessage[] = [opening];
+    if (cvSummary && cvSummary.trim()) {
+      messages.push({
+        id: "cv-context",
+        role: "assistant",
+        content: CV_CONTEXT_MESSAGE(cvSummary.trim()),
+      });
+    }
+    messages.push({
+      id: "first-q",
+      role: "assistant",
+      content: getNodeMessage(firstNode, ctx),
+    });
+    return messages;
   }
-  // Without CV: show intro + CV request
-  const openingText = OPENING_MESSAGE(firstName, false);
+
+  // Without CV: show intro + CV request card
   return [
-    { id: "opening", role: "assistant", content: openingText },
+    opening,
     { id: "cv-request", role: "assistant", content: CV_REQUEST_MESSAGE, type: "cv_request" },
   ];
 }
@@ -60,9 +75,10 @@ export function useAssessmentFlow() {
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
+  const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
 
   const [messages, setMessages] = useState<AssessmentMessage[]>(() =>
-    buildInitialMessages(firstName, hasCv)
+    buildInitialMessages(firstName, hasCv, cvSummary)
   );
 
   const [answers, setAnswers] = useState<Record<string, string>>({});

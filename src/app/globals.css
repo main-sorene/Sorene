@@ -1,5 +1,15 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&display=swap");
 @import "tailwindcss";
+@config "../../tailwind.config.ts";
+
+@plugin "tailwindcss-animate";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-satoshi: "Satoshi", sans-serif;
+  --font-inter-tight: "Inter Tight", sans-serif;
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+}
 
 @layer components {
   .all-\[unset\] {

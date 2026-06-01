@@ -24,7 +24,7 @@ export function HomePage() {
     } else {
       setActiveId(null);
     }
-  }, [setActiveId, isAssessmentComplete, conversations, navigate]);
+  }, [setActiveId, isAssessmentComplete, conversations, router]);
 
   return null;
 }

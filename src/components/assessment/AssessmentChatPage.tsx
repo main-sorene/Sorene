@@ -90,17 +90,17 @@ function UserMessage({ content }: { content: string }) {
 
 function NavButtons({ onDna, onDirection }: { onDna: () => void; onDirection: () => void }) {
   return (
-    <div className="flex flex-wrap gap-3 pt-2">
+    <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-2">
       <button
         onClick={onDna}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-black transition-colors shadow-sm active:scale-95"
+        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-black transition-colors shadow-sm active:scale-95 whitespace-nowrap"
       >
         <Sparkles size={15} />
         Explore your DNA
       </button>
       <button
         onClick={onDirection}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-[#111111] text-sm font-medium hover:bg-gray-50 transition-colors active:scale-95"
+        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-[#111111] text-sm font-medium hover:bg-gray-50 transition-colors active:scale-95 whitespace-nowrap"
       >
         <ArrowRight size={15} />
         Explore your Direction

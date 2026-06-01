@@ -33,18 +33,44 @@ type FlowState =
   | { phase: "closing" }
   | { phase: "done" };
 
-async function fetchReflection(answer: string, signal: string, questionText: string): Promise<string> {
+async function fetchReflection(
+  answer: string,
+  signal: string,
+  questionText: string,
+  nextQuestion?: string,
+): Promise<{ reflection: string; translatedQuestion: string; detectedLanguage: string }> {
   try {
     const res = await fetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, signal, questionText }),
+      body: JSON.stringify({ answer, signal, questionText, nextQuestion }),
     });
-    if (!res.ok) return "";
+    if (!res.ok) return { reflection: "", translatedQuestion: "", detectedLanguage: "" };
     const data = await res.json();
-    return data.reflection || "";
+    return {
+      reflection: data.reflection || "",
+      translatedQuestion: data.translatedQuestion || "",
+      detectedLanguage: data.detectedLanguage || "",
+    };
   } catch {
-    return "";
+    return { reflection: "", translatedQuestion: "", detectedLanguage: "" };
+  }
+}
+
+async function translateText(text: string, language: string): Promise<string> {
+  if (!language || language === "en" || language === "english") return text;
+  try {
+    const res = await fetch("/api/reflect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Pass an empty answer so Claude only translates the nextQuestion
+      body: JSON.stringify({ answer: "...", signal: "", questionText: "", nextQuestion: text, forceLanguage: language }),
+    });
+    if (!res.ok) return text;
+    const data = await res.json();
+    return data.translatedQuestion || text;
+  } catch {
+    return text;
   }
 }
 
@@ -103,6 +129,8 @@ export function useAssessmentFlow() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReflecting, setIsReflecting] = useState(false);
   const [isProcessingCv, setIsProcessingCv] = useState(false);
+  // Detected from first user answer; used to translate follow-up messages
+  const [detectedLanguage, setDetectedLanguage] = useState<string>("");
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
@@ -234,14 +262,21 @@ export function useAssessmentFlow() {
 
         // Conditional follow-up (no reflection before it — it's part of the same question)
         if (currentNode.followUp && currentNode.followUp.condition(text)) {
-          const followUpMsg = getFollowUpMessage(currentNode.followUp, text);
+          const rawFollowUpMsg = getFollowUpMessage(currentNode.followUp, text);
+          const followUpMsg = detectedLanguage
+            ? await translateText(rawFollowUpMsg, detectedLanguage)
+            : rawFollowUpMsg;
           addMessage({ id: `fu-${Date.now()}`, role: "assistant", content: followUpMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "condition" });
           return;
         }
 
         if (currentNode.alwaysFollowUp) {
-          addMessage({ id: `afu-${Date.now()}`, role: "assistant", content: currentNode.alwaysFollowUp.message });
+          const rawAlwaysMsg = currentNode.alwaysFollowUp.message;
+          const alwaysMsg = detectedLanguage
+            ? await translateText(rawAlwaysMsg, detectedLanguage)
+            : rawAlwaysMsg;
+          addMessage({ id: `afu-${Date.now()}`, role: "assistant", content: alwaysMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "always" });
           return;
         }
@@ -252,7 +287,7 @@ export function useAssessmentFlow() {
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }
     },
-    [flowState, answers, firstName, hasCv, authUser, skipCv]
+    [flowState, answers, firstName, hasCv, authUser, skipCv, detectedLanguage]
   );
 
   async function advanceToNode(
@@ -265,12 +300,17 @@ export function useAssessmentFlow() {
     if (nextId === "closing") {
       // Get reflection for final answer, then closing
       setIsReflecting(true);
-      const reflection = await fetchReflection(userAnswer, questionSignal, "");
+      const { reflection: closingReflection, translatedQuestion: translatedClosing } =
+        await fetchReflection(userAnswer, questionSignal, "", CLOSING_MESSAGE);
       setIsReflecting(false);
-      if (reflection) {
-        addMessage({ id: `reflect-closing-${Date.now()}`, role: "assistant", content: reflection });
+      if (closingReflection) {
+        addMessage({ id: `reflect-closing-${Date.now()}`, role: "assistant", content: closingReflection });
       }
-      addMessage({ id: `closing-${Date.now()}`, role: "assistant", content: CLOSING_MESSAGE });
+      addMessage({
+        id: `closing-${Date.now()}`,
+        role: "assistant",
+        content: translatedClosing || CLOSING_MESSAGE,
+      });
       setFlowState({ phase: "closing" });
       setIsSaving(true);
       try {
@@ -289,26 +329,25 @@ export function useAssessmentFlow() {
     const nextNode = getNode(nextId);
     if (!nextNode) return;
 
-    // Fetch reflection in parallel with state update
     setIsReflecting(true);
     const nextQuestion = getNodeMessage(nextNode, ctx);
-    const reflection = await fetchReflection(userAnswer, questionSignal, nextQuestion);
+    const { reflection, translatedQuestion, detectedLanguage: lang } = await fetchReflection(
+      userAnswer,
+      questionSignal,
+      nextQuestion,
+      nextQuestion,
+    );
     setIsReflecting(false);
-
-    if (reflection) {
-      // Reflection + question as one combined message, separated by a blank line
-      addMessage({
-        id: `q-${nextId}-${Date.now()}`,
-        role: "assistant",
-        content: `${reflection}\n\n${nextQuestion}`,
-      });
-    } else {
-      addMessage({
-        id: `q-${nextId}-${Date.now()}`,
-        role: "assistant",
-        content: nextQuestion,
-      });
+    if (lang && lang.toLowerCase() !== "english" && !detectedLanguage) {
+      setDetectedLanguage(lang);
     }
+
+    const questionToShow = translatedQuestion || nextQuestion;
+    addMessage({
+      id: `q-${nextId}-${Date.now()}`,
+      role: "assistant",
+      content: reflection ? `${reflection}\n\n${questionToShow}` : questionToShow,
+    });
     setFlowState({ phase: "question", nodeId: nextId, awaitingFollowUp: false });
   }
 

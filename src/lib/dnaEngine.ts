@@ -183,33 +183,34 @@ export function computeDirection(answers: RawAnswers): DirectionEligibility {
     return true;
   });
 
-  let bestModel: StructuralModel = eligible[0] || "Low-Risk Hybrid";
-  let bestScore = -Infinity;
-  let bestRiskDist = Infinity;
-  let bestConstraintDist = Infinity;
-
-  for (const m of eligible) {
-    const p = MODEL_PROFILES[m];
-    const distance =
-      Math.abs(scores.risk_score - p.risk) +
-      Math.abs(scores.uncertainty_score - p.uncertainty) +
-      Math.abs(scores.energy_stability_score - p.energy) +
-      Math.abs(scores.structure_score - p.structure);
-    const compatibility = 100 * (1 - distance / 40);
-    const riskDist = Math.abs(scores.risk_score - p.risk);
-    const constraintDist = Math.abs(scores.constraint_score - 6); // neutral reference
-
-    if (
-      compatibility > bestScore ||
-      (compatibility === bestScore && riskDist < bestRiskDist) ||
-      (compatibility === bestScore && riskDist === bestRiskDist && constraintDist < bestConstraintDist)
-    ) {
-      bestScore = compatibility;
-      bestModel = m;
-      bestRiskDist = riskDist;
-      bestConstraintDist = constraintDist;
-    }
-  }
+  const ranked = rankModels(scores, eligible);
+  const bestModel = ranked[0]?.model ?? "Low-Risk Hybrid";
 
   return { eligible: true, model: bestModel, scores };
+}
+
+export type RankedModel = { model: StructuralModel; compatibility: number };
+
+export function rankModels(scores: DnaScores, eligibleModels?: StructuralModel[]): RankedModel[] {
+  const models =
+    eligibleModels ??
+    (Object.keys(MODEL_PROFILES) as StructuralModel[]).filter((m) => {
+      if (m === "Startup" && scores.risk_score <= 3) return false;
+      if ((m === "Startup" || m === "Productized Expertise") && scores.energy_stability_score <= 2) return false;
+      if (m === "Startup" && scores.constraint_score === 3) return false;
+      return true;
+    });
+
+  return models
+    .map((m) => {
+      const p = MODEL_PROFILES[m];
+      const distance =
+        Math.abs(scores.risk_score - p.risk) +
+        Math.abs(scores.uncertainty_score - p.uncertainty) +
+        Math.abs(scores.energy_stability_score - p.energy) +
+        Math.abs(scores.structure_score - p.structure);
+      const compatibility = Math.max(0, Math.round(100 * (1 - distance / 40)));
+      return { model: m, compatibility };
+    })
+    .sort((a, b) => b.compatibility - a.compatibility);
 }

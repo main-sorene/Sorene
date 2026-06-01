@@ -44,6 +44,11 @@ export interface UserProfile {
     reason?: string;
   };
   directionText?: string;
+  directionAlternatives?: {
+    model: string;
+    compatibility: number;
+    summary?: string;
+  }[];
 }
 
 function getDb() {
@@ -142,6 +147,8 @@ export async function saveAssessmentResults(
   eligibility: import("@/lib/dnaEngine").DirectionEligibility,
 ): Promise<void> {
   const { scores } = eligibility;
+  const { rankModels } = await import("@/lib/dnaEngine");
+  const ranked = eligibility.eligible ? rankModels(scores) : [];
   await saveUserProfile(uid, {
     assessmentAnswers: answers,
     dnaAssessmentComplete: true,
@@ -149,6 +156,10 @@ export async function saveAssessmentResults(
     directionEligibility: eligibility.eligible
       ? { eligible: true, model: eligibility.model }
       : { eligible: false, reason: eligibility.reason },
+    directionAlternatives: ranked.map((r) => ({
+      model: r.model,
+      compatibility: r.compatibility,
+    })),
   });
 }
 

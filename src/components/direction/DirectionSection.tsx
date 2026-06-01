@@ -88,7 +88,13 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
 };
 
 export const DirectionSection = () => {
-  const { directionText, isLoading: isDirectionLoading, model } = useDirectionResult();
+  const {
+    directionText,
+    isLoading: isDirectionLoading,
+    model,
+    bestCompatibility,
+    otherDirections,
+  } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -113,7 +119,7 @@ export const DirectionSection = () => {
 
   if (directionText) {
     return (
-      <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24">
+      <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <section>
           <DirectionCard
             variant="hero"
@@ -121,8 +127,29 @@ export const DirectionSection = () => {
             description={directionText}
             badges={heroBadges}
             actionText="View detail"
+            score={String(bestCompatibility ?? 100)}
           />
         </section>
+
+        {otherDirections.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-medium text-[#62646A] px-1">
+              Other possible directions
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {otherDirections.map((alt) => (
+                <DirectionCard
+                  key={alt.model}
+                  variant="standard"
+                  title={alt.model}
+                  description={alt.summary || "Sorene is generating this alternative direction…"}
+                  score={String(alt.compatibility)}
+                  actionText="View detail"
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     );
   }

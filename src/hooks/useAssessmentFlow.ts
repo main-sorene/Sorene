@@ -37,22 +37,29 @@ async function fetchReflection(
   signal: string,
   questionText: string,
   nextQuestion?: string,
-): Promise<{ reflection: string; translatedQuestion: string; detectedLanguage: string }> {
+  nextChoices?: string[],
+): Promise<{
+  reflection: string;
+  translatedQuestion: string;
+  translatedChoices: string[];
+  detectedLanguage: string;
+}> {
   try {
     const res = await fetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, signal, questionText, nextQuestion }),
+      body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices }),
     });
-    if (!res.ok) return { reflection: "", translatedQuestion: "", detectedLanguage: "" };
+    if (!res.ok) return { reflection: "", translatedQuestion: "", translatedChoices: [], detectedLanguage: "" };
     const data = await res.json();
     return {
       reflection: data.reflection || "",
       translatedQuestion: data.translatedQuestion || "",
+      translatedChoices: data.translatedChoices || [],
       detectedLanguage: data.detectedLanguage || "",
     };
   } catch {
-    return { reflection: "", translatedQuestion: "", detectedLanguage: "" };
+    return { reflection: "", translatedQuestion: "", translatedChoices: [], detectedLanguage: "" };
   }
 }
 
@@ -149,6 +156,9 @@ export function useAssessmentFlow() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReflecting, setIsReflecting] = useState(false);
   const [isProcessingCv, setIsProcessingCv] = useState(false);
+  // For non-English flows: translated choice labels parallel to currentNode.choices.
+  // Index N in translatedChoices corresponds to index N in currentNode.choices.
+  const [translatedChoices, setTranslatedChoices] = useState<string[]>([]);
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
@@ -246,7 +256,11 @@ export function useAssessmentFlow() {
   );
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    // `text` is shown in chat as the user's message.
+    // `canonicalAnswer` (optional) is the English version stored for scoring/branching.
+    // For choice buttons in a translated language: text = translated label, canonicalAnswer = English.
+    // For free-text or English choices: only `text` is needed.
+    async (text: string, canonicalAnswer?: string) => {
       if (flowState.phase === "done" || flowState.phase === "closing") return;
 
       addMessage({ id: `user-${Date.now()}`, role: "user", content: text });
@@ -255,6 +269,8 @@ export function useAssessmentFlow() {
         skipCv();
         return;
       }
+
+      const answerForLogic = canonicalAnswer ?? text;
 
       const { nodeId, awaitingFollowUp } = flowState as {
         phase: "question";
@@ -266,7 +282,7 @@ export function useAssessmentFlow() {
       let newAnswers = { ...answers };
 
       if (awaitingFollowUp) {
-        newAnswers = { ...newAnswers, [`${nodeId}_followup`]: text };
+        newAnswers = { ...newAnswers, [`${nodeId}_followup`]: answerForLogic };
         setAnswers(newAnswers);
         const ctx: AssessmentContext = { profile: { firstName }, answers: newAnswers, hasCv };
         const nextId = typeof currentNode.next === "function"
@@ -274,13 +290,13 @@ export function useAssessmentFlow() {
           : currentNode.next;
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       } else {
-        newAnswers = { ...newAnswers, [nodeId]: text };
+        newAnswers = { ...newAnswers, [nodeId]: answerForLogic };
         setAnswers(newAnswers);
         const ctx: AssessmentContext = { profile: { firstName }, answers: newAnswers, hasCv };
 
         // Conditional follow-up — translate into same language as user's answer
-        if (currentNode.followUp && currentNode.followUp.condition(text)) {
-          const rawFollowUpMsg = getFollowUpMessage(currentNode.followUp, text);
+        if (currentNode.followUp && currentNode.followUp.condition(answerForLogic)) {
+          const rawFollowUpMsg = getFollowUpMessage(currentNode.followUp, answerForLogic);
           setIsReflecting(true);
           const followUpMsg = await translateFollowUp(rawFollowUpMsg, text);
           setIsReflecting(false);
@@ -356,12 +372,14 @@ export function useAssessmentFlow() {
 
     setIsReflecting(true);
     const nextQuestion = getNodeMessage(nextNode, ctx);
-    const { reflection, translatedQuestion } = await fetchReflection(
-      userAnswer,
-      questionSignal,
-      nextQuestion,
-      nextQuestion,
-    );
+    const { reflection, translatedQuestion, translatedChoices: nextTranslatedChoices } =
+      await fetchReflection(
+        userAnswer,
+        questionSignal,
+        nextQuestion,
+        nextQuestion,
+        nextNode.choices,
+      );
     setIsReflecting(false);
 
     const questionToShow = translatedQuestion || nextQuestion;
@@ -370,11 +388,28 @@ export function useAssessmentFlow() {
       role: "assistant",
       content: reflection ? `${reflection}\n\n${questionToShow}` : questionToShow,
     });
+    setTranslatedChoices(nextTranslatedChoices);
     setFlowState({ phase: "question", nodeId: nextId, awaitingFollowUp: false });
   }
 
   const currentNode = flowState.phase === "question" ? getNode(flowState.nodeId) : null;
   const isWaiting = isReflecting || isSaving || isProcessingCv;
+
+  // Canonical (English) choices for the current node — used for scoring/branching
+  const canonicalChoices: string[] | undefined =
+    flowState.phase === "question" && !flowState.awaitingFollowUp
+      ? currentNode?.choices
+      : flowState.phase === "question" && (flowState as any).awaitingFollowUp
+      ? (flowState as any).followUpType === "condition"
+        ? currentNode?.followUp?.choices
+        : currentNode?.alwaysFollowUp?.choices
+      : undefined;
+
+  // Display choices — translated if we have them, otherwise canonical English
+  const displayChoices: string[] | undefined =
+    canonicalChoices && translatedChoices.length === canonicalChoices.length && !((flowState as any).awaitingFollowUp)
+      ? translatedChoices
+      : canonicalChoices;
 
   return {
     messages,
@@ -386,14 +421,8 @@ export function useAssessmentFlow() {
     isWaiting,
     isCvRequest: flowState.phase === "cv_request",
     isDone: flowState.phase === "done",
-    currentChoices:
-      flowState.phase === "question" && !flowState.awaitingFollowUp
-        ? currentNode?.choices
-        : flowState.phase === "question" && (flowState as any).awaitingFollowUp
-        ? (flowState as any).followUpType === "condition"
-          ? currentNode?.followUp?.choices
-          : currentNode?.alwaysFollowUp?.choices
-        : undefined,
+    currentChoices: displayChoices,
+    canonicalChoices,
     inputType:
       flowState.phase === "question" && !flowState.awaitingFollowUp
         ? currentNode?.inputType ?? "freetext"

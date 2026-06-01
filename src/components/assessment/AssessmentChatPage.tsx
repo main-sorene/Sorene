@@ -112,7 +112,7 @@ function NavButtons({ onDna, onDirection }: { onDna: () => void; onDirection: ()
 export function AssessmentChatPage() {
   const {
     messages, sendMessage, skipCv, uploadCv, isSaving, isWaiting, isProcessingCv,
-    isDone, isCvRequest, currentChoices, inputType,
+    isDone, isCvRequest, currentChoices, canonicalChoices, inputType,
   } = useAssessmentFlow();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -133,11 +133,11 @@ export function AssessmentChatPage() {
     ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
   }, [inputValue]);
 
-  const handleSend = async (text: string) => {
+  const handleSend = async (text: string, canonical?: string) => {
     if (!text.trim() || isSending || isWaiting) return;
     setInputValue("");
     setIsSending(true);
-    await sendMessage(text.trim());
+    await sendMessage(text.trim(), canonical);
     setIsSending(false);
   };
 
@@ -192,10 +192,10 @@ export function AssessmentChatPage() {
             {/* Choice buttons */}
             {currentChoices && currentChoices.length > 0 && !isWaiting && (
               <div className="flex flex-wrap gap-2 mb-3">
-                {currentChoices.map((choice) => (
+                {currentChoices.map((choice, i) => (
                   <button
-                    key={choice}
-                    onClick={() => handleSend(choice)}
+                    key={`${i}-${choice}`}
+                    onClick={() => handleSend(choice, canonicalChoices?.[i])}
                     disabled={isDisabled}
                     className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
                   >

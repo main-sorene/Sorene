@@ -359,7 +359,9 @@ export function useAssessmentFlow() {
         if (authUser?.uid) {
           await saveAssessmentResults(authUser.uid, currentAnswers, eligibility);
         }
-        setIsAssessmentComplete(true);
+        // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
+        // this component and the user would never see the summary or nav buttons.
+        // The atom flips when the user clicks a nav button (see AssessmentChatPage).
         setFlowState({ phase: "done" });
       } finally {
         setIsSaving(false);
@@ -411,11 +413,16 @@ export function useAssessmentFlow() {
       ? translatedChoices
       : canonicalChoices;
 
+  const completeAssessment = useCallback(() => {
+    setIsAssessmentComplete(true);
+  }, [setIsAssessmentComplete]);
+
   return {
     messages,
     sendMessage,
     skipCv,
     uploadCv,
+    completeAssessment,
     isProcessingCv,
     isSaving,
     isWaiting,

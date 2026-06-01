@@ -111,7 +111,7 @@ function NavButtons({ onDna, onDirection }: { onDna: () => void; onDirection: ()
 
 export function AssessmentChatPage() {
   const {
-    messages, sendMessage, skipCv, uploadCv, isSaving, isWaiting, isProcessingCv,
+    messages, sendMessage, skipCv, uploadCv, completeAssessment, isSaving, isWaiting, isProcessingCv,
     isDone, isCvRequest, currentChoices, canonicalChoices, inputType,
   } = useAssessmentFlow();
   const router = useRouter();
@@ -176,8 +176,8 @@ export function AssessmentChatPage() {
           {/* Navigation buttons shown once assessment is complete */}
           {isDone && (
             <NavButtons
-              onDna={() => router.push("/dna")}
-              onDirection={() => router.push("/direction")}
+              onDna={() => { completeAssessment(); router.push("/dna"); }}
+              onDirection={() => { completeAssessment(); router.push("/direction"); }}
             />
           )}
 

@@ -21,7 +21,6 @@ export type AssessmentMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  // Special message types for UI rendering
   type?: "cv_request";
 };
 
@@ -32,6 +31,21 @@ type FlowState =
   | { phase: "question"; nodeId: string; awaitingFollowUp: true; followUpType: "condition" | "always" }
   | { phase: "closing" }
   | { phase: "done" };
+
+async function fetchReflection(answer: string, signal: string, questionText: string): Promise<string> {
+  try {
+    const res = await fetch("/api/reflect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer, signal, questionText }),
+    });
+    if (!res.ok) return "";
+    const data = await res.json();
+    return data.reflection || "";
+  } catch {
+    return "";
+  }
+}
 
 function buildInitialMessages(
   firstName: string,
@@ -63,7 +77,6 @@ function buildInitialMessages(
     return messages;
   }
 
-  // Without CV: show intro + CV request card
   return [
     opening,
     { id: "cv-request", role: "assistant", content: CV_REQUEST_MESSAGE, type: "cv_request" },
@@ -80,24 +93,25 @@ export function useAssessmentFlow() {
   const [messages, setMessages] = useState<AssessmentMessage[]>(() =>
     buildInitialMessages(firstName, hasCv, cvSummary)
   );
-
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [flowState, setFlowState] = useState<FlowState>(() => {
-    if (hasCv) {
-      return { phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false };
-    }
-    return { phase: "cv_request" };
-  });
+  const [flowState, setFlowState] = useState<FlowState>(() =>
+    hasCv
+      ? { phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false }
+      : { phase: "cv_request" }
+  );
   const [isSaving, setIsSaving] = useState(false);
+  const [isReflecting, setIsReflecting] = useState(false);
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
 
-  // Called when user clicks "Skip" or "No" on CV request
   const skipCv = useCallback(() => {
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: false };
-    const firstNode = QUESTION_NODES[0];
-    addMessage({ id: `first-q-${Date.now()}`, role: "assistant", content: getNodeMessage(firstNode, ctx) });
+    addMessage({
+      id: `first-q-${Date.now()}`,
+      role: "assistant",
+      content: getNodeMessage(QUESTION_NODES[0], ctx),
+    });
     setFlowState({ phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false });
   }, [firstName]);
 
@@ -105,14 +119,8 @@ export function useAssessmentFlow() {
     async (text: string) => {
       if (flowState.phase === "done" || flowState.phase === "closing") return;
 
-      const userMsg: AssessmentMessage = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: text,
-      };
-      addMessage(userMsg);
+      addMessage({ id: `user-${Date.now()}`, role: "user", content: text });
 
-      // CV request phase: any typed reply treated as "no CV, just start"
       if (flowState.phase === "cv_request" || flowState.phase === "opening") {
         skipCv();
         return;
@@ -128,19 +136,19 @@ export function useAssessmentFlow() {
       let newAnswers = { ...answers };
 
       if (awaitingFollowUp) {
-        const followUpKey = `${nodeId}_followup`;
-        newAnswers = { ...newAnswers, [followUpKey]: text };
+        newAnswers = { ...newAnswers, [`${nodeId}_followup`]: text };
         setAnswers(newAnswers);
         const ctx: AssessmentContext = { profile: { firstName }, answers: newAnswers, hasCv };
         const nextId = typeof currentNode.next === "function"
           ? currentNode.next(newAnswers[nodeId] || "", ctx)
           : currentNode.next;
-        await advanceToNode(nextId, newAnswers, ctx);
+        await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       } else {
         newAnswers = { ...newAnswers, [nodeId]: text };
         setAnswers(newAnswers);
         const ctx: AssessmentContext = { profile: { firstName }, answers: newAnswers, hasCv };
 
+        // Conditional follow-up (no reflection before it — it's part of the same question)
         if (currentNode.followUp && currentNode.followUp.condition(text)) {
           const followUpMsg = getFollowUpMessage(currentNode.followUp, text);
           addMessage({ id: `fu-${Date.now()}`, role: "assistant", content: followUpMsg });
@@ -157,7 +165,7 @@ export function useAssessmentFlow() {
         const nextId = typeof currentNode.next === "function"
           ? currentNode.next(text, ctx)
           : currentNode.next;
-        await advanceToNode(nextId, newAnswers, ctx);
+        await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }
     },
     [flowState, answers, firstName, hasCv, authUser, skipCv]
@@ -167,8 +175,17 @@ export function useAssessmentFlow() {
     nextId: string,
     currentAnswers: Record<string, string>,
     ctx: AssessmentContext,
+    questionSignal: string,
+    userAnswer: string,
   ) {
     if (nextId === "closing") {
+      // Get reflection for final answer, then closing
+      setIsReflecting(true);
+      const reflection = await fetchReflection(userAnswer, questionSignal, "");
+      setIsReflecting(false);
+      if (reflection) {
+        addMessage({ id: `reflect-closing-${Date.now()}`, role: "assistant", content: reflection });
+      }
       addMessage({ id: `closing-${Date.now()}`, role: "assistant", content: CLOSING_MESSAGE });
       setFlowState({ phase: "closing" });
       setIsSaving(true);
@@ -188,24 +205,44 @@ export function useAssessmentFlow() {
     const nextNode = getNode(nextId);
     if (!nextNode) return;
 
-    const msg = getNodeMessage(nextNode, ctx);
-    addMessage({ id: `q-${nextId}-${Date.now()}`, role: "assistant", content: msg });
+    // Fetch reflection in parallel with state update
+    setIsReflecting(true);
+    const nextQuestion = getNodeMessage(nextNode, ctx);
+    const reflection = await fetchReflection(userAnswer, questionSignal, nextQuestion);
+    setIsReflecting(false);
+
+    if (reflection) {
+      // Reflection + question as one combined message, separated by a blank line
+      addMessage({
+        id: `q-${nextId}-${Date.now()}`,
+        role: "assistant",
+        content: `${reflection}\n\n${nextQuestion}`,
+      });
+    } else {
+      addMessage({
+        id: `q-${nextId}-${Date.now()}`,
+        role: "assistant",
+        content: nextQuestion,
+      });
+    }
     setFlowState({ phase: "question", nodeId: nextId, awaitingFollowUp: false });
   }
 
   const currentNode = flowState.phase === "question" ? getNode(flowState.nodeId) : null;
+  const isWaiting = isReflecting || isSaving;
 
   return {
     messages,
     sendMessage,
     skipCv,
     isSaving,
+    isWaiting,
     isCvRequest: flowState.phase === "cv_request",
     isDone: flowState.phase === "done",
     currentChoices:
       flowState.phase === "question" && !flowState.awaitingFollowUp
         ? currentNode?.choices
-        : flowState.phase === "question" && flowState.awaitingFollowUp
+        : flowState.phase === "question" && (flowState as any).awaitingFollowUp
         ? (flowState as any).followUpType === "condition"
           ? currentNode?.followUp?.choices
           : currentNode?.alwaysFollowUp?.choices
@@ -213,7 +250,7 @@ export function useAssessmentFlow() {
     inputType:
       flowState.phase === "question" && !flowState.awaitingFollowUp
         ? currentNode?.inputType ?? "freetext"
-        : flowState.phase === "question" && flowState.awaitingFollowUp
+        : flowState.phase === "question" && (flowState as any).awaitingFollowUp
         ? (flowState as any).followUpType === "condition"
           ? currentNode?.followUp?.inputType ?? "freetext"
           : currentNode?.alwaysFollowUp?.inputType ?? "freetext"

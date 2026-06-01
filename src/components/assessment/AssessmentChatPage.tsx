@@ -16,25 +16,29 @@ function SoreneMessage({ content }: { content: string }) {
         const parts = line.split(/\*\*(.*?)\*\*/g);
         const rendered = parts.map((part, j) =>
           j % 2 === 1 ? (
-            <strong key={j} className="font-semibold text-[#151515]">
-              {part}
-            </strong>
-          ) : (
-            part
-          )
+            <strong key={j} className="font-semibold text-[#151515]">{part}</strong>
+          ) : part
         );
         return (
-          <p
-            key={i}
-            className={cn(
-              "text-[15px] leading-7 text-[#111111]",
-              line.startsWith("•") && "pl-1"
-            )}
-          >
+          <p key={i} className={cn("text-[15px] leading-7 text-[#111111]", line.startsWith("•") && "pl-1")}>
             {rendered}
           </p>
         );
       })}
+    </div>
+  );
+}
+
+function ThinkingDots() {
+  return (
+    <div className="flex items-center gap-1 py-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-gray-300 animate-bounce"
+          style={{ animationDelay: `${i * 150}ms`, animationDuration: "900ms" }}
+        />
+      ))}
     </div>
   );
 }
@@ -45,9 +49,7 @@ function CvRequestCard({ onSkip }: { onSkip: () => void }) {
       <p className="font-semibold text-[#151515] text-[15px]">
         Would you like to share your CV, portfolio, or LinkedIn profile?
       </p>
-      <p className="text-sm text-gray-600">
-        This is completely optional, but it helps me understand:
-      </p>
+      <p className="text-sm text-gray-600">This is completely optional, but it helps me understand:</p>
       <ul className="space-y-1.5 text-sm text-gray-600">
         <li>• What you&apos;ve done professionally</li>
         <li>• What skills and experience you bring</li>
@@ -57,57 +59,38 @@ function CvRequestCard({ onSkip }: { onSkip: () => void }) {
       <p className="text-sm text-gray-500 pt-1">
         If you&apos;d prefer not to share anything, that&apos;s fine too. We&apos;ll just start with questions.
       </p>
-      <div className="flex gap-2 pt-2">
-        <button
-          onClick={onSkip}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
-        >
-          Skip — just ask me questions
-        </button>
-      </div>
+      <button
+        onClick={onSkip}
+        className="mt-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+      >
+        Skip — just ask me questions
+      </button>
     </div>
   );
 }
 
 function UserMessage({ content }: { content: string }) {
   const { toast } = useToast();
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    toast({ description: "Copied to clipboard" });
-  };
   return (
     <div className="flex justify-end group">
-      <div className="max-w-[75%] sm:max-w-[65%] flex flex-col items-end gap-2">
+      <div className="max-w-[75%] sm:max-w-[65%] flex flex-col items-end gap-1.5">
         <div className="bg-[#F2F2F2] rounded-2xl rounded-tr-md px-4 py-3">
-          <p className="text-[#111111] text-[15px] leading-relaxed whitespace-pre-wrap">
-            {content}
-          </p>
+          <p className="text-[#111111] text-[15px] leading-relaxed whitespace-pre-wrap">{content}</p>
         </div>
-        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={handleCopy}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
-            title="Copy"
-          >
-            <Copy size={14} />
-          </button>
-        </div>
+        <button
+          onClick={() => { navigator.clipboard.writeText(content); toast({ description: "Copied" }); }}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 text-gray-400"
+        >
+          <Copy size={13} />
+        </button>
       </div>
     </div>
   );
 }
 
 export function AssessmentChatPage() {
-  const {
-    messages,
-    sendMessage,
-    skipCv,
-    isSaving,
-    isDone,
-    isCvRequest,
-    currentChoices,
-    inputType,
-  } = useAssessmentFlow();
+  const { messages, sendMessage, skipCv, isSaving, isWaiting, isDone, isCvRequest, currentChoices, inputType } =
+    useAssessmentFlow();
   const router = useRouter();
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -116,7 +99,7 @@ export function AssessmentChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, isWaiting]);
 
   useEffect(() => {
     if (isDone) router.push("/dna");
@@ -131,15 +114,16 @@ export function AssessmentChatPage() {
   }, [inputValue]);
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || isSending || isSaving) return;
+    if (!text.trim() || isSending || isWaiting) return;
     setInputValue("");
     setIsSending(true);
     await sendMessage(text.trim());
     setIsSending(false);
   };
 
-  const showInput = !isCvRequest && !isDone && !isSaving;
-  const canSend = inputValue.trim().length > 0 && !isSending;
+  const isDisabled = isSending || isWaiting || isDone;
+  const canSend = inputValue.trim().length > 0 && !isDisabled;
+  const showInput = !isCvRequest && !isDone;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
@@ -152,14 +136,15 @@ export function AssessmentChatPage() {
               return (
                 <div key={msg.id}>
                   <SoreneMessage content={msg.content} />
-                  {msg.id === "opening" && isCvRequest && (
-                    <CvRequestCard onSkip={skipCv} />
-                  )}
+                  {msg.id === "opening" && isCvRequest && <CvRequestCard onSkip={skipCv} />}
                 </div>
               );
             }
             return <UserMessage key={msg.id} content={msg.content} />;
           })}
+
+          {/* Thinking indicator while reflection is loading */}
+          {isWaiting && !isSaving && <ThinkingDots />}
 
           {isSaving && (
             <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -171,19 +156,19 @@ export function AssessmentChatPage() {
         </div>
       </div>
 
-      {/* Input area */}
+      {/* Input area — always visible while questions are active */}
       {showInput && (
         <div className="px-4 sm:px-6 pb-4 shrink-0">
           <div className="max-w-2xl mx-auto">
             {/* Choice buttons */}
-            {currentChoices && currentChoices.length > 0 && (
+            {currentChoices && currentChoices.length > 0 && !isWaiting && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {currentChoices.map((choice) => (
                   <button
                     key={choice}
                     onClick={() => handleSend(choice)}
-                    disabled={isSending}
-                    className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-50 text-left"
+                    disabled={isDisabled}
+                    className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
                   >
                     {choice}
                   </button>
@@ -191,72 +176,53 @@ export function AssessmentChatPage() {
               </div>
             )}
 
-            {/* Composer */}
-            {(inputType === "freetext" || !currentChoices?.length) && (
-              <div className="rounded-2xl border border-[#ECEDEE] bg-white px-4 pt-3 pb-2 shadow-sm">
-                <textarea
-                  ref={textareaRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend(inputValue);
-                    }
-                  }}
-                  placeholder="Ask anything"
-                  rows={1}
-                  disabled={isSending}
-                  className="w-full resize-none bg-transparent text-[16px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-[28px] max-h-[160px]"
-                />
-                <div className="flex items-center justify-between mt-1">
-                  <button
-                    type="button"
-                    className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111]"
-                    title="Attach"
-                    disabled
-                  >
-                    <Plus size={20} />
+            {/* Composer — always shown */}
+            <div className={cn(
+              "rounded-2xl border border-[#ECEDEE] bg-white px-4 pt-3 pb-2 shadow-sm transition-opacity",
+              isDisabled && "opacity-60"
+            )}>
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend(inputValue);
+                  }
+                }}
+                placeholder={isWaiting ? "Sorene is thinking…" : "Ask anything"}
+                rows={1}
+                disabled={isDisabled}
+                className="w-full resize-none bg-transparent text-[16px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-[28px] max-h-[160px] disabled:cursor-not-allowed"
+              />
+              <div className="flex items-center justify-between mt-1">
+                <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
+                  <Plus size={20} />
+                </button>
+                <div className="flex items-center gap-1">
+                  <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
+                    <Mic size={20} />
                   </button>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] disabled:opacity-40"
-                      title="Voice input"
-                      disabled
-                    >
-                      <Mic size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] disabled:opacity-40"
-                      title="Settings"
-                      disabled
-                    >
-                      <Settings size={20} />
-                    </button>
-                    <button
-                      onClick={() => handleSend(inputValue)}
-                      disabled={!canSend}
-                      className={cn(
-                        "ml-1 w-9 h-9 rounded-md flex items-center justify-center transition-all",
-                        canSend
-                          ? "bg-[#111111] text-white hover:bg-black shadow-sm active:scale-95"
-                          : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
-                      )}
-                    >
-                      {isSending ? (
-                        <Loader2 size={18} className="animate-spin" />
-                      ) : (
-                        <ArrowUp size={20} strokeWidth={2.5} />
-                      )}
-                    </button>
-                  </div>
+                  <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
+                    <Settings size={20} />
+                  </button>
+                  <button
+                    onClick={() => handleSend(inputValue)}
+                    disabled={!canSend}
+                    className={cn(
+                      "ml-1 w-9 h-9 rounded-md flex items-center justify-center transition-all",
+                      canSend
+                        ? "bg-[#111111] text-white hover:bg-black shadow-sm active:scale-95"
+                        : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
+                    )}
+                  >
+                    {isSending ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={20} strokeWidth={2.5} />}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Footer disclaimer */}
             <p className="text-center text-xs text-[#62646A] mt-3">
               Sorene can make mistakes. Consider checking important information.
             </p>

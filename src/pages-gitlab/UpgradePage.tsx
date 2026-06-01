@@ -25,7 +25,7 @@ export function UpgradePage() {
     "monthly",
   );
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+  const searchParams = useSearchParams();
   const user = useAtomValue(userAtom);
   const refetchSubscriptionStatus = useRefetchSubscriptionStatus();
   const { data: subscription } = useSubscriptionStatus();

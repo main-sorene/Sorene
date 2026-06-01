@@ -20,7 +20,7 @@ export function HomePage() {
     // redirect to the most recent one instead of allowing a new chat.
     if (!isAssessmentComplete && conversations.length > 0) {
       const latestConv = conversations[0];
-      router.push(`/chat/${latestConv.id}`, { replace: true });
+      router.replace(`/chat/${latestConv.id}`);
     } else {
       setActiveId(null);
     }

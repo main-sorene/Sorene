@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { scrollToSection } from "@/lib/utils";
 
@@ -78,6 +78,7 @@ export const EarlyAccessCtaSection = ({
   showCta = true,
 }: EarlyAccessCtaSectionProps) => {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleNavigate = (path: string) => {
     router.push(path);
@@ -184,7 +185,7 @@ export const EarlyAccessCtaSection = ({
                         key={link.label}
                         onClick={() => {
                           if (!link.sectionId) return;
-                          if (window.pathname !== "/") {
+                          if (pathname !== "/") {
                             router.push(`/#${link.sectionId}`);
                           } else {
                             scrollToSection(link.sectionId);

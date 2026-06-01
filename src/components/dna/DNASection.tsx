@@ -7,6 +7,67 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { DNACoreItem } from "@/lib/dnaMapping";
 
+function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]>["dnaScores"]): DNACoreItem[] | null {
+  if (!scores) return null;
+  const riskLabel = scores.risk_score >= 8 ? "High" : scores.risk_score >= 5 ? "Medium" : "Low";
+  const structureLabel = scores.structure_score >= 8 ? "Independent" : scores.structure_score >= 6 ? "Small Team" : "Collaborative";
+  const uncertaintyLabel = scores.uncertainty_score >= 8 ? "High" : scores.uncertainty_score >= 5 ? "Medium" : "Low";
+  const readinessLabel = scores.readiness_score >= 7 ? "Ready" : scores.readiness_score >= 5 ? "Deciding" : "Exploring";
+  const timeLabel = scores.constraint_score >= 8 ? "High" : scores.constraint_score >= 5 ? "Medium" : "Limited";
+
+  return [
+    {
+      core_id: "your_core",
+      title: "Your Core",
+      variant: "hero" as const,
+      isLarge: true,
+      fullWidth: true,
+      gradient: `radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #16B364 0%, #ECFCCB 100%)`,
+      icon: "/figmaAssets/dna.svg",
+      hero_statement: scores.motivation_driver.slice(0, 80),
+      description: scores.strengths_summary || "Your unique strengths and energy patterns shape how you work best.",
+      summary: scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
+      key_signals: [
+        { label: "Risk Profile", value: riskLabel, explanation: `Risk score: ${scores.risk_score}/10` },
+        { label: "Structure Preference", value: structureLabel, explanation: `Structure score: ${scores.structure_score}/10` },
+        { label: "Uncertainty Tolerance", value: uncertaintyLabel, explanation: `Uncertainty score: ${scores.uncertainty_score}/10` },
+        { label: "Readiness Level", value: readinessLabel, explanation: `Readiness score: ${scores.readiness_score}/10` },
+        { label: "Time Availability", value: timeLabel, explanation: `Capacity score: ${scores.constraint_score}/10` },
+      ],
+      strength_patterns: scores.energy_source ? [scores.energy_source.slice(0, 60)] : [],
+    },
+    {
+      core_id: "energy",
+      title: "Energy & Motivation",
+      variant: "standard" as const,
+      isLarge: false,
+      gradient: `radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #6366F1 0%, #E0E7FF 100%)`,
+      icon: "/figmaAssets/lightning.svg",
+      hero_statement: "What drives and drains you",
+      description: scores.energy_drains ? `Energized by: ${scores.energy_source}\n\nDrained by: ${scores.energy_drains}` : scores.energy_source,
+      summary: `Motivated by ${scores.motivation_driver.slice(0, 60)}`,
+      key_signals: [
+        { label: "Energy Stability", value: scores.energy_stability_score >= 7 ? "Stable" : scores.energy_stability_score >= 4 ? "Variable" : "Depleted" },
+        { label: "Primary Driver", value: scores.motivation_driver.slice(0, 30) },
+      ],
+    },
+    {
+      core_id: "non_negotiable",
+      title: "Non-Negotiables",
+      variant: "standard" as const,
+      isLarge: false,
+      gradient: `radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #F59E0B 0%, #FEF3C7 100%)`,
+      icon: "/figmaAssets/scales.svg",
+      hero_statement: "What you won't compromise on",
+      description: scores.non_negotiable || "The trade-offs that matter most to you.",
+      summary: scores.non_negotiable?.slice(0, 80) || "",
+      key_signals: [
+        { label: "Core Value", value: scores.non_negotiable?.slice(0, 30) || "Authenticity" },
+      ],
+    },
+  ];
+}
+
 const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
   {
     core_id: "your_core",
@@ -208,14 +269,25 @@ const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
 ];
 
 export const DNASection = () => {
-  const { isLoading } = useDnaData();
+  const { data: profile, isLoading } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const dnaItems = DEFAULT_DNA_ITEMS;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Loading your DNA profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const dnaItems = buildDnaItems(profile?.dnaScores) || DEFAULT_DNA_ITEMS;
 
   return (
     <AnimatePresence>

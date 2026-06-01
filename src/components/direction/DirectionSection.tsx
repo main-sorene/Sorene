@@ -88,8 +88,8 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
 };
 
 export const DirectionSection = () => {
-  const { directionText, isLoading: isDirectionLoading } = useDirectionResult();
-  const [ideation, setIdeation] = useAtom(ideationAtom);
+  const { directionText, isLoading: isDirectionLoading, model } = useDirectionResult();
+  const [ideation] = useAtom(ideationAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const heroBadges = [
@@ -99,8 +99,35 @@ export const DirectionSection = () => {
     },
   ];
 
-  const currentIdeation = ideation || DEFAULT_IDEATION_DATA;
+  // If we have a streamed direction from our internal API, show it in the hero card
+  if (isDirectionLoading && !directionText) {
+    return (
+      <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">Sorene is building your direction...</p>
+        </div>
+      </div>
+    );
+  }
 
+  if (directionText) {
+    return (
+      <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24">
+        <section>
+          <DirectionCard
+            variant="hero"
+            title={model || "Your Direction"}
+            description={directionText}
+            badges={heroBadges}
+            actionText="View detail"
+          />
+        </section>
+      </div>
+    );
+  }
+
+  const currentIdeation = ideation || DEFAULT_IDEATION_DATA;
   const bestPickName = currentIdeation?.ideation?.best_pick?.name;
   const topIdeas = currentIdeation?.ideation?.top_ideas || [];
 

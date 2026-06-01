@@ -12,9 +12,11 @@ import {
   sidebarOpenAtom,
   isSettingsOpenAtom,
   userAtom,
+  authLoadingAtom,
   isAssessmentCompleteAtom,
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useRouter } from "next/navigation";
 import { SettingsModal } from "../modals/SettingsModal";
 import { LogoutConfirmModal } from "../modals/LogoutConfirmModal";
 import { CancelSubscriptionDialog } from "../modals/CancelSubscriptionDialog";
@@ -24,13 +26,41 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const authUser = useAtomValue(userAtom);
+  const authLoading = useAtomValue(authLoadingAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
-  const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
+  const [isAssessmentComplete, setIsAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Redirect unauthenticated users to landing page
+  useEffect(() => {
+    if (!authLoading && !authUser) {
+      router.replace("/");
+    }
+  }, [authLoading, authUser, router]);
+
+  // Sync assessment complete state from Firestore profile
+  useEffect(() => {
+    if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete) {
+      setIsAssessmentComplete(true);
+    }
+  }, [authUser, isAssessmentComplete, setIsAssessmentComplete]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname, setSidebarOpen]);
+
+  // Show spinner while auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#f7f7f7]">
+        <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Don't render protected content for unauthenticated users
+  if (!authUser) return null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f7]">

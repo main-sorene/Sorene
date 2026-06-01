@@ -44,27 +44,29 @@ const socialLogos = [
   },
 ];
 
-const footerColumns = [
+type FooterLink = { label: string; sectionId?: string | null; href?: string };
+
+const footerColumns: { heading: string; links: FooterLink[] }[] = [
   {
     heading: "Product",
     links: [
       { label: "Features", sectionId: "features" },
       { label: "Pricing", sectionId: "pricing" },
-      // { label: "Templates", sectionId: null },
       { label: "AI Demo", sectionId: "how-it-works" },
-      // { label: "Documentation", sectionId: null },
     ],
   },
-  // {
-  //   heading: "Company",
-  //   links: ["About Us", "Careers", "Blog", "Press", "Contact"],
-  // },
   {
     heading: "Resources",
     links: [
-      // { label: "Help Center", sectionId: null },
       { label: "FAQs", sectionId: "faq" },
       { label: "Community", sectionId: "testimonials" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms of Service", href: "/terms-of-service" },
     ],
   },
 ];
@@ -180,22 +182,32 @@ export const EarlyAccessCtaSection = ({
                     {column.heading}
                   </p>
                   <div className="flex flex-col items-start gap-2 w-full">
-                    {column.links.map((link) => (
-                      <button
-                        key={link.label}
-                        onClick={() => {
-                          if (!link.sectionId) return;
-                          if (pathname !== "/") {
-                            router.push(`/#${link.sectionId}`);
-                          } else {
-                            scrollToSection(link.sectionId);
-                          }
-                        }}
-                        className={`font-['Inter_Tight',Helvetica] font-medium text-[#101010] text-sm sm:text-base leading-6 hover:underline text-left ${!link.sectionId ? "opacity-50 cursor-default" : "cursor-pointer"}`}
-                      >
-                        {link.label}
-                      </button>
-                    ))}
+                    {column.links.map((link) => {
+                      const baseClass = "font-['Inter_Tight',Helvetica] font-medium text-[#101010] text-sm sm:text-base leading-6 hover:underline text-left cursor-pointer";
+                      if (link.href) {
+                        return (
+                          <Link key={link.label} href={link.href} className={baseClass}>
+                            {link.label}
+                          </Link>
+                        );
+                      }
+                      return (
+                        <button
+                          key={link.label}
+                          onClick={() => {
+                            if (!link.sectionId) return;
+                            if (pathname !== "/") {
+                              router.push(`/#${link.sectionId}`);
+                            } else {
+                              scrollToSection(link.sectionId);
+                            }
+                          }}
+                          className={`${baseClass} ${!link.sectionId ? "opacity-50 cursor-default" : ""}`}
+                        >
+                          {link.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

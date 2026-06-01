@@ -1,5 +1,7 @@
+"use client";
+
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 
 const commitmentItems = [
   {
@@ -36,14 +38,14 @@ function WhatThisMeansBox({ children }: { children: React.ReactNode }) {
 }
 
 export default function ResponsibleAIPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="flex flex-col min-h-screen w-full bg-white items-center">
       <header className="w-full sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="p-6 h-16">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => router.back()}
             className="flex items-center gap-2 text-gray-500 hover:text-black transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />

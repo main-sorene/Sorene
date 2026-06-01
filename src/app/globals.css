@@ -1,12 +1,425 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500&display=swap");
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #111111;
+@layer components {
+  .all-\[unset\] {
+    all: unset;
+  }
+  .border-neutral-30 {
+    border: 1px solid var(--neutral-30, #ededed);
+  }
+
+  /* Typography Tiers */
+  .text-display-large { @apply font-satoshi text-display-large; }
+  .text-display-medium { @apply font-satoshi text-display-medium; }
+  .text-display-small { @apply font-satoshi text-display-small; }
+
+  .text-heading-large { @apply font-satoshi text-heading-large; }
+  .text-heading-medium { @apply font-satoshi text-heading-medium; }
+  .text-heading-small { @apply font-satoshi text-heading-small; }
+  .text-heading-xsmall { @apply font-satoshi text-heading-xsmall; }
+
+  .text-body-large-medium { @apply font-inter-tight text-body-large-medium; }
+  .text-body-large { @apply font-inter-tight text-body-large; }
+  .text-body-medium-medium { @apply font-inter-tight text-body-medium-medium; }
+  .text-body-medium { @apply font-inter-tight text-body-medium; }
+  .text-body-small-medium { @apply font-inter-tight text-body-small-medium; }
+  .text-body-small { @apply font-inter-tight text-body-small; }
+  .text-body-xsmall-medium { @apply font-inter-tight text-body-xsmall-medium; }
+  .text-body-xsmall { @apply font-inter-tight text-body-xsmall; }
+
+  .text-label-large { @apply font-inter-tight text-label-large; }
+  .text-label-medium { @apply font-inter-tight text-label-medium; }
+  .text-label-small { @apply font-inter-tight text-label-small; }
+  .text-label-small-underline { @apply font-inter-tight text-label-small underline; }
+
+  .text-caption-medium { @apply font-inter-tight text-caption-medium; }
+  .text-caption-small { @apply font-inter-tight text-caption-small; }
+
+  .shadow-card {
+    box-shadow: 6px 6px 32px 0px rgba(0, 0, 0, 0.06); /* same as #0000000F */
+  }
+  .shadow-shadow {
+    box-shadow: 6px 6px 32px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  .shadow-yellow-shadow {
+    box-shadow: 0 0 40px 0 rgba(254, 221, 144, 0.50);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+:root {
+  --errormain: rgba(251, 44, 54, 1);
+  --infomain: rgba(90, 18, 240, 1);
+  --inter-body-large-16-medium-font-family: "Inter Tight", Helvetica;
+  --inter-body-large-16-medium-font-size: 16px;
+  --inter-body-large-16-medium-font-style: normal;
+  --inter-body-large-16-medium-font-weight: 500;
+  --inter-body-large-16-medium-letter-spacing: 0px;
+  --inter-body-large-16-medium-line-height: 150%;
+  --inter-body-large-16-regular-font-family: "Inter Tight", Helvetica;
+  --inter-body-large-16-regular-font-size: 16px;
+  --inter-body-large-16-regular-font-style: normal;
+  --inter-body-large-16-regular-font-weight: 400;
+  --inter-body-large-16-regular-letter-spacing: 0px;
+  --inter-body-large-16-regular-line-height: 150%;
+  --inter-body-medium-14-medium-font-family: "Inter Tight", Helvetica;
+  --inter-body-medium-14-medium-font-size: 14px;
+  --inter-body-medium-14-medium-font-style: normal;
+  --inter-body-medium-14-medium-font-weight: 500;
+  --inter-body-medium-14-medium-letter-spacing: 0px;
+  --inter-body-medium-14-medium-line-height: 150%;
+  --inter-body-medium-14-regular-font-family: "Inter Tight", Helvetica;
+  --inter-body-medium-14-regular-font-size: 14px;
+  --inter-body-medium-14-regular-font-style: normal;
+  --inter-body-medium-14-regular-font-weight: 400;
+  --inter-body-medium-14-regular-letter-spacing: 0px;
+  --inter-body-medium-14-regular-line-height: 150%;
+  --inter-body-small-12-medium-font-family: "Inter Tight", Helvetica;
+  --inter-body-small-12-medium-font-size: 12px;
+  --inter-body-small-12-medium-font-style: normal;
+  --inter-body-small-12-medium-font-weight: 500;
+  --inter-body-small-12-medium-letter-spacing: 0px;
+  --inter-body-small-12-medium-line-height: 150%;
+  --inter-body-small-12-regular-font-family: "Inter Tight", Helvetica;
+  --inter-body-small-12-regular-font-size: 12px;
+  --inter-body-small-12-regular-font-style: normal;
+  --inter-body-small-12-regular-font-weight: 400;
+  --inter-body-small-12-regular-letter-spacing: 0px;
+  --inter-body-small-12-regular-line-height: 150%;
+  --inter-heading-h1-64-medium-font-family: "Inter Tight", Helvetica;
+  --inter-heading-h1-64-medium-font-size: 64px;
+  --inter-heading-h1-64-medium-font-style: normal;
+  --inter-heading-h1-64-medium-font-weight: 500;
+  --inter-heading-h1-64-medium-letter-spacing: -0.5px;
+  --inter-heading-h1-64-medium-line-height: 120.00000762939453%;
+  --inter-heading-h2-48-medium-font-family: "Inter Tight", Helvetica;
+  --inter-heading-h2-48-medium-font-size: 48px;
+  --inter-heading-h2-48-medium-font-style: normal;
+  --inter-heading-h2-48-medium-font-weight: 500;
+  --inter-heading-h2-48-medium-letter-spacing: -0.5px;
+  --inter-heading-h2-48-medium-line-height: 120.00000762939453%;
+  --inter-heading-h5-24-medium-font-family: "Inter Tight", Helvetica;
+  --inter-heading-h5-24-medium-font-size: 24px;
+  --inter-heading-h5-24-medium-font-style: normal;
+  --inter-heading-h5-24-medium-font-weight: 500;
+  --inter-heading-h5-24-medium-letter-spacing: 0px;
+  --inter-heading-h5-24-medium-line-height: 120.00000762939453%;
+  --inter-heading-h6-18-medium-font-family: "Inter Tight", Helvetica;
+  --inter-heading-h6-18-medium-font-size: 18px;
+  --inter-heading-h6-18-medium-font-style: normal;
+  --inter-heading-h6-18-medium-font-weight: 500;
+  --inter-heading-h6-18-medium-letter-spacing: 0px;
+  --inter-heading-h6-18-medium-line-height: 120.00000762939453%;
+  --inter-heading-h6-18-regular-font-family: "Inter Tight", Helvetica;
+  --inter-heading-h6-18-regular-font-size: 18px;
+  --inter-heading-h6-18-regular-font-style: normal;
+  --inter-heading-h6-18-regular-font-weight: 400;
+  --inter-heading-h6-18-regular-letter-spacing: 0px;
+  --inter-heading-h6-18-regular-line-height: 120.00000762939453%;
+  --neutral-10: rgba(255, 255, 255, 1);
+  --neutral-20: rgba(245, 245, 245, 1);
+  --neutral-30: rgba(237, 237, 237, 1);
+  --neutral-60: rgba(135, 135, 135, 1);
+  --primarybackground: rgba(238, 252, 253, 1);
+  --primaryborder: rgba(163, 179, 255, 1);
+  --primaryhover: rgba(0, 35, 5, 1);
+  --primarymain: rgba(0, 75, 3, 1);
+  --primaryouter-border: rgba(210, 226, 255, 1);
+  --primarypressed: rgba(0, 35, 6, 1);
+  --primarysurface: rgba(242, 254, 244, 1);
+  --satoshi-body-large-16-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-body-large-16-regular-font-size: 16px;
+  --satoshi-body-large-16-regular-font-style: normal;
+  --satoshi-body-large-16-regular-font-weight: 400;
+  --satoshi-body-large-16-regular-letter-spacing: -0.5px;
+  --satoshi-body-large-16-regular-line-height: 150%;
+  --satoshi-body-small-12-regular-font-family: "Instrument Serif", Helvetica;
+  --satoshi-body-small-12-regular-font-size: 12px;
+  --satoshi-body-small-12-regular-font-style: normal;
+  --satoshi-body-small-12-regular-font-weight: 400;
+  --satoshi-body-small-12-regular-letter-spacing: 0px;
+  --satoshi-body-small-12-regular-line-height: 150%;
+  --satoshi-heading-h1-64-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-heading-h1-64-regular-font-size: 64px;
+  --satoshi-heading-h1-64-regular-font-style: normal;
+  --satoshi-heading-h1-64-regular-font-weight: 400;
+  --satoshi-heading-h1-64-regular-letter-spacing: -1px;
+  --satoshi-heading-h1-64-regular-line-height: 120.00000762939453%;
+  --satoshi-heading-h3-40-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-heading-h3-40-regular-font-size: 40px;
+  --satoshi-heading-h3-40-regular-font-style: normal;
+  --satoshi-heading-h3-40-regular-font-weight: 400;
+  --satoshi-heading-h3-40-regular-letter-spacing: -1px;
+  --satoshi-heading-h3-40-regular-line-height: 120.00000762939453%;
+  --satoshi-heading-h4-32-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-heading-h4-32-regular-font-size: 32px;
+  --satoshi-heading-h4-32-regular-font-style: normal;
+  --satoshi-heading-h4-32-regular-font-weight: 400;
+  --satoshi-heading-h4-32-regular-letter-spacing: -1px;
+  --satoshi-heading-h4-32-regular-line-height: 120.00000762939453%;
+  --satoshi-heading-h5-24-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-heading-h5-24-regular-font-size: 24px;
+  --satoshi-heading-h5-24-regular-font-style: normal;
+  --satoshi-heading-h5-24-regular-font-weight: 400;
+  --satoshi-heading-h5-24-regular-letter-spacing: -1px;
+  --satoshi-heading-h5-24-regular-line-height: 120.00000762939453%;
+  --satoshi-heading-h6-18-regular-font-family: "Satoshi", Helvetica;
+  --satoshi-heading-h6-18-regular-font-size: 18px;
+  --satoshi-heading-h6-18-regular-font-style: normal;
+  --satoshi-heading-h6-18-regular-font-weight: 400;
+  --satoshi-heading-h6-18-regular-letter-spacing: -1px;
+  --satoshi-heading-h6-18-regular-line-height: 120.00000762939453%;
+  --shadow: 6px 6px 32px 0px rgba(0, 0, 0, 0.06);
+  --shadow-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+  --successhover: rgba(70, 178, 119, 1);
+  --successmain: rgba(57, 161, 104, 1);
+  --warningfocus: rgba(255, 211, 60, 0.2);
+  --warningmain: rgba(255, 211, 60, 1);
+  --yellow-shadow: 0px 0px 40px 0px rgba(254, 221, 144, 0.5);
+}
+
+:root {
+  --animate-spin: spin 1s linear infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 1s var(--animation-delay, 0s) ease forwards;
+}
+
+.animate-fade-up {
+  animation: fade-up 1s var(--animation-delay, 0s) ease forwards;
+}
+
+.animate-marquee {
+  animation: marquee var(--duration) infinite linear;
+}
+
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration) linear infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 8s infinite;
+}
+
+.animate-spin {
+  animation: var(--animate-spin);
+}
+
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #8A8D93 25%,
+    #c2c4c7 50%,
+    #8A8D93 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite linear;
+
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes image-glow {
+  0% {
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.74, 0.25, 0.76, 1);
+  }
+
+  10% {
+    opacity: 0.7;
+    animation-timing-function: cubic-bezier(0.12, 0.01, 0.08, 0.99);
+  }
+
+  to {
+    opacity: 0.4;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  90%,
+  to {
+    background-position: calc(-100% - var(--shimmer-width)) 0;
+  }
+
+  30%,
+  60% {
+    background-position: calc(100% + var(--shimmer-width)) 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translate(0);
+  }
+
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+@keyframes marquee-vertical {
+  0% {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: transparent;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: transparent;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+
+  button,
+  [role="button"]:not([disabled]),
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role="button"][disabled] {
+    cursor: not-allowed;
+  }
 }

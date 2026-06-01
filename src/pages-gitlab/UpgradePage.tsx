@@ -1,6 +1,8 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "next/navigation";
 import { useAtomValue } from "jotai";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

@@ -1,3 +1,5 @@
+"use client";
+
 import LandingLayout from "@/layouts/LandingLayout";
 import { BuildDirectionSection } from "./sections/BuildDirectionSection";
 import { EarlyAccessCtaSection } from "./sections/EarlyAccessCtaSection";

@@ -1,4 +1,6 @@
-import { useNavigate } from "react-router-dom";
+"use client";
+
+import { useRouter } from "next/navigation";
 import VerifyEmail from "@/components/auth/VerifyEmail";
 
 export const VerifyEmailPage = () => {

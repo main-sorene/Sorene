@@ -1,3 +1,5 @@
+"use client";
+
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   activeConversationAtom,
@@ -12,7 +14,7 @@ import { MessageBubble } from "./MessageBubble";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ChatInput } from "./ChatInput";
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +40,7 @@ export function ChatArea() {
   const selectedModel = useAtomValue(selectedModelAtom);
   const authUser = useAtomValue(userAtom);
   const setIdeation = useSetAtom(ideationAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Fetch profile to see if DNA data is already present
@@ -92,7 +94,7 @@ export function ChatArea() {
       // Refresh profile data to ensure local state matches backend
       queryClient.invalidateQueries({ queryKey: ["profile", authUser?.uid] });
       queryClient.invalidateQueries({ queryKey: ["direction", authUser?.uid] });
-      navigate("/dna");
+      router.push("/dna");
     },
   });
 

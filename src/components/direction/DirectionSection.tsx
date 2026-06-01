@@ -1,3 +1,5 @@
+"use client";
+
 import { DirectionCard } from "./DirectionCard";
 import { useProfile } from "@/hooks/useProfile";
 import { useAtom, useAtomValue } from "jotai";

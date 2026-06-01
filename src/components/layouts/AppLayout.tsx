@@ -1,4 +1,7 @@
-import { Outlet, useLocation } from "react-router-dom";
+"use client";
+
+import { usePathname } from "next/navigation";
+import React from "react";
 import { useEffect, useState } from "react";
 import { ChatHeader } from "./ChatHeader";
 import { Menu } from "lucide-react";
@@ -17,17 +20,17 @@ import { LogoutConfirmModal } from "../modals/LogoutConfirmModal";
 import { CancelSubscriptionDialog } from "../modals/CancelSubscriptionDialog";
 import { ManagePaymentModal } from "../modals/ManagePaymentModal";
 
-export function AppLayout() {
+export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
-  const location = useLocation();
+  const pathname = usePathname();
 
   useEffect(() => {
     setSidebarOpen(false);
-  }, [location.pathname, setSidebarOpen]);
+  }, [pathname, setSidebarOpen]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f7]">
@@ -66,7 +69,7 @@ export function AppLayout() {
 
       {/* Main Content — white panel */}
       <div className="flex m-2 flex-col flex-1 min-w-0 h-full overflow-hidden rounded-4xl bg-white">
-        {location.pathname.startsWith("/chat") ? (
+        {pathname.startsWith("/chat") ? (
           <ChatHeader />
         ) : (
           <div className="flex items-center justify-between h-12 px-4 pt-4 shrink-0 lg:hidden">
@@ -91,7 +94,7 @@ export function AppLayout() {
             />
           </div>
         )}
-        <Outlet />
+        {children}
       </div>
       {/* Global Modals */}
       <SettingsModal />

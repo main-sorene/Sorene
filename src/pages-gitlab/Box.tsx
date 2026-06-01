@@ -1,3 +1,5 @@
+"use client";
+
 export const Box = () => {
   // Row data: active state determines if background is shown
   const rows = [

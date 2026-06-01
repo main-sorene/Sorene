@@ -1,10 +1,11 @@
+"use client";
+
 import { ChatArea } from "@/chat/ChatArea";
-import { Outlet } from "react-router-dom";
-export function ChatLayout() {
+export function ChatLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ChatArea />
-      <Outlet />
+      {children}
     </>
   );
 }

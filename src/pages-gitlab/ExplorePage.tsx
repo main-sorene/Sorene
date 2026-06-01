@@ -1,6 +1,8 @@
+"use client";
+
 import { useSetAtom } from "jotai";
 import { inputValueAtom, activeConversationIdAtom } from "@/store/atoms";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import {
   Code2,
   PenLine,
@@ -110,12 +112,12 @@ const categories = [
 export function ExplorePage() {
   const setInput = useSetAtom(inputValueAtom);
   const setActiveId = useSetAtom(activeConversationIdAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const handlePrompt = (prompt: string) => {
     setActiveId(null);
     setInput(prompt);
-    navigate("/chat");
+    router.push("/chat");
   };
 
   return (

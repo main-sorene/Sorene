@@ -1,5 +1,7 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 const OnboardingWelcome = ({ onNext }: { onNext: () => void }) => {
   return (
     <div className="relative min-h-screen w-full bg-white flex items-center justify-center p-4">
@@ -34,11 +36,11 @@ const OnboardingWelcome = ({ onNext }: { onNext: () => void }) => {
       {/* Footer Text */}
       <div className="absolute bottom-8 w-full text-center text-gray-500 text-sm">
         By using Sorene, you agree to our 
-        {" "}<Link to="/terms-of-service" className="underline hover:text-gray-700">
+        {" "}<Link href="/terms-of-service" className="underline hover:text-gray-700">
         Terms
         </Link>{" "}
          and have read our{" "}
-        <Link to="/privacy-policy" className="underline hover:text-gray-700">
+        <Link href="/privacy-policy" className="underline hover:text-gray-700">
           Privacy Policy
         </Link>
       </div>

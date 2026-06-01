@@ -1,6 +1,9 @@
+"use client";
+
 import React from "react";
 import { Input } from "@/components/ui/input";
-import { Link, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { emailInputAtom, userAtom } from "@/store/atoms";
 import { useAtom, useSetAtom } from "jotai";
 import { signInWithPopup } from "firebase/auth";
@@ -22,7 +25,7 @@ export const HeroSection = () => {
   const setUser = useSetAtom(userAtom);
   const [error, setError] = React.useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState<boolean>(false);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -32,7 +35,7 @@ export const HeroSection = () => {
     mutationFn: authApi.sendOTP,
     onSuccess: () => {
       setError(null);
-      navigate("/verify-email");
+      router.push("/verify-email");
     },
     onError: (error: Error) => {
       setError(getFriendlyErrorMessage(error));
@@ -83,9 +86,9 @@ export const HeroSection = () => {
       });
 
       if (profile && profile.onboardingComplete) {
-        navigate("/chat");
+        router.push("/chat");
       } else {
-        navigate("/onBoarding");
+        router.push("/onBoarding");
       }
     } catch (error) {
       console.error("Google sign-in error:", error);
@@ -196,7 +199,7 @@ export const HeroSection = () => {
               <p className="self-stretch font-normal text-[#878787] text-xs text-center tracking-[0] leading-normal">
                 By continuing, you acknowledge Sorene&apos;s{" "}
                 <Link
-                  to="/privacy-policy"
+                  href="/privacy-policy"
                   className="hover:underline hover:text-[#555]"
                 >
                   Privacy Policy

@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 
 import { Controller, useForm } from "react-hook-form";
@@ -15,7 +17,7 @@ import { FormData } from "@/types/onboarding";
 import { useAtom, useSetAtom } from "jotai";
 import { userAtom, cvTextAtom } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { OnboardingSideImage } from "./OnboardingSideImage";
 import { authApi } from "@/lib/authApi";
 import * as chatApi from "@/lib/chatApi";
@@ -44,7 +46,7 @@ export function OnboardingForm({
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [sexOpen, setSexOpen] = React.useState(false);
   const [occupationOpen, setOccupationOpen] = React.useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const {
     register,
@@ -143,7 +145,7 @@ export function OnboardingForm({
 
       onNext(data);
 
-      navigate("/chat");
+      router.push("/chat");
     } catch (error) {
       console.error("Error saving user profile:", error);
       setIsSubmitting(false);

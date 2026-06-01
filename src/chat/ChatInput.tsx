@@ -1,3 +1,5 @@
+"use client";
+
 import { useAtom, useAtomValue } from "jotai";
 import {
   inputValueAtom,
@@ -16,7 +18,7 @@ import {
 import { Plus, Mic, ArrowUp, Settings } from "lucide-react";
 import { useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   chatKeys,
@@ -58,7 +60,7 @@ export function ChatInput({
   const [authUser] = useAtom(userAtom);
   const [cvText, setCvText] = useAtom(cvTextAtom);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const navigate = useNavigate();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const userId = getChatUserId(authUser);
@@ -281,7 +283,7 @@ export function ChatInput({
       setActiveId(newConv.id);
       convId = newConv.id;
       if (!disableNavigation) {
-        navigate(`/chat/${newConv.id}`);
+        router.push(`/chat/${newConv.id}`);
       }
     } else {
       setConversations((prev) =>
@@ -673,7 +675,7 @@ export function ChatInput({
 
       {showFooter && (
         <button
-          onClick={() => navigate("/responsible-ai")}
+          onClick={() => router.push("/responsible-ai")}
           className="w-full text-center text-xs text-[#62646A] mt-2 hover:text-black transition-colors"
         >
           Sorene can make mistakes. Consider checking important information.

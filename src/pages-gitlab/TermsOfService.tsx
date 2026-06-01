@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from "react";
 import { EarlyAccessCtaSection } from "./sections/EarlyAccessCtaSection";
 import LandingLayout from "@/layouts/LandingLayout";

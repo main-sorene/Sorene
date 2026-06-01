@@ -1,3 +1,5 @@
+"use client";
+
 import { DNACard } from "./DNACard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useProfile } from "@/hooks/useProfile";

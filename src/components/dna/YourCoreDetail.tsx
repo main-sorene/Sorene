@@ -1,6 +1,8 @@
+"use client";
+
 import { motion } from "framer-motion";
 import { ChevronLeft, MoreHorizontal } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useProfile } from "@/hooks/useProfile";
 
@@ -40,7 +42,7 @@ const MetricRow = ({
 );
 
 export function YourCoreDetail() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { data: profileRes, isLoading } = useProfile();
 
   const profile = profileRes?.profile;
@@ -66,7 +68,7 @@ export function YourCoreDetail() {
         <div className="mx-6">
           <div className="flex justify-between items-center mb-12">
             <button
-              onClick={() => navigate("/dna")}
+              onClick={() => router.push("/dna")}
               className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium"
             >
               <ChevronLeft size={20} />

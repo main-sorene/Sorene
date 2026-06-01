@@ -1,3 +1,5 @@
+"use client";
+
 import { ChevronDown, MoreHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -21,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { useLocation, useNavigate } from "react-router-dom";
+import { usePathname, useRouter } from "next/navigation";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,7 +37,7 @@ function ConversationItem({ conv }: { conv: Conversation }) {
   const [conversations, setConversations] = useAtom(conversationsAtom);
   const [authUser] = useAtom(userAtom);
   const setSidebarOpen = useSetAtom(sidebarOpenAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const isActive = activeId === conv.id;
@@ -48,7 +50,7 @@ function ConversationItem({ conv }: { conv: Conversation }) {
   const handleClick = () => {
     if (!isAssessmentComplete) return;
     setActiveId(conv.id);
-    navigate(`/chat/${conv.id}`);
+    router.push(`/chat/${conv.id}`);
     setSidebarOpen(false);
   };
 
@@ -59,7 +61,7 @@ function ConversationItem({ conv }: { conv: Conversation }) {
     setConversations((prev) => prev.filter((c) => c.id !== conv.id));
     if (activeId === conv.id) {
       setActiveId(null);
-      navigate("/chat");
+      router.push("/chat");
     }
     try {
       await deleteHistoryMutation.mutateAsync(conv.id);
@@ -133,8 +135,8 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   const [conversations] = useAtom(conversationsAtom);
   const [authUser] = useAtom(userAtom);
   const setSidebarOpen = useSetAtom(sidebarOpenAtom);
@@ -218,7 +220,7 @@ export function Sidebar({
     try {
       if (auth) {
         await signOut(auth);
-        navigate("/");
+        router.push("/");
       }
     } catch (error) {
       toast({
@@ -243,7 +245,7 @@ export function Sidebar({
 
   const handleNewChat = () => {
     setActiveId(null);
-    navigate("/chat");
+    router.push("/chat");
     if (mobile) setSidebarOpen(false);
   };
 
@@ -333,7 +335,7 @@ export function Sidebar({
       {/* Nav items */}
       <div className={cn("px-2 shrink-0", collapsed && "px-3")}>
         {navItems.map((item) => {
-          const isActive = item.path ? location.pathname === item.path : false;
+          const isActive = item.path ? pathname === item.path : false;
           return (
             <button
               key={item.label}
@@ -343,7 +345,7 @@ export function Sidebar({
                 if (!isAssessmentComplete) return;
                 if (item.action) item.action();
                 else if (item.path) {
-                  navigate(item.path);
+                  router.push(item.path);
                   if (mobile) setSidebarOpen(false);
                 }
               }}
@@ -447,7 +449,7 @@ export function Sidebar({
       {!collapsed && (
         <div className="px-2 mb-4 flex justify-center">
           <button
-            onClick={() => isAssessmentComplete && navigate("/upgrade")}
+            onClick={() => isAssessmentComplete && router.push("/upgrade")}
             disabled={!isAssessmentComplete}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors",
@@ -473,7 +475,7 @@ export function Sidebar({
       {collapsed && (
         <div className="px-2 mb-4 flex justify-center">
           <button
-            onClick={() => isAssessmentComplete && navigate("/upgrade")}
+            onClick={() => isAssessmentComplete && router.push("/upgrade")}
             disabled={!isAssessmentComplete}
             className={cn(
               "p-3 rounded-xl text-black/70 transition-all duration-200 group",

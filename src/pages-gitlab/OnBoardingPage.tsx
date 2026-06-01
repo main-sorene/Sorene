@@ -1,3 +1,5 @@
+"use client";
+
 import { FormData } from "@/types/onboarding";
 import { OnboardingForm } from "@/components/onBoarding/OnboardingForm";
 import OnboardingWelcome from "@/components/onBoarding/OnboardingWelcome";

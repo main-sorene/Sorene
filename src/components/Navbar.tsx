@@ -1,5 +1,8 @@
+"use client";
+
 import { Menu, X } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { activeNavAtom } from "@/store/atoms";
 import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
@@ -17,7 +20,7 @@ const navLinks = [
 export const Navbar = ({ isPolicyPage = false }) => {
   const [activeNav, setActiveNav] = useAtom(activeNavAtom);
   const [menuOpen, setMenuOpen] = useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const sectionIdByLabel: Record<string, string> = {
     Home: "home",
@@ -37,7 +40,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
 
     if (window.location.pathname !== "/") {
       // Navigate to homepage + scroll after navigation (no full refresh)
-      navigate(`/#${targetId}`);
+      router.push(`/#${targetId}`);
       return;
     }
 
@@ -65,7 +68,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
 
       <div className="inline-flex items-center gap-[6.65px] shrink-0">
         <img
-          onClick={() => navigate("/")}
+          onClick={() => router.push("/")}
           id="header-logo"
           className="w-[154px] h-[36px] cursor-pointer"
           alt="Sorene logo"
@@ -96,7 +99,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
           onClick={() => {
             setMenuOpen(false);
             if (window.location.pathname !== "/") {
-              navigate("/#footer");
+              router.push("/#footer");
             } else {
               scrollToSection("footer");
             }
@@ -106,7 +109,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
         </button>
         <div className="inline-flex justify-center gap-2 p-0.5 bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] items-center">
           <Link
-            to="/chat"
+            href="/chat"
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a] transition-colors"
           >
             <span className="text-body-small-medium text-white">
@@ -144,7 +147,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
               onClick={() => {
                 setMenuOpen(false);
                 if (window.location.pathname !== "/") {
-                  navigate("/#footer");
+                  router.push("/#footer");
                 } else {
                   scrollToSection("footer");
                 }
@@ -154,7 +157,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
             </button>
             <div className="flex justify-center gap-2 p-0.5 bg-white rounded-[10px] border border-solid border-[#ededed] shadow-shadow items-center">
               <Link
-                to="/chat"
+                href="/chat"
                 className="w-full text-center inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a]"
               >
                 <span className="font-medium text-white text-sm">

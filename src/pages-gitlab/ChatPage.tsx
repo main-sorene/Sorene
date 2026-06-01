@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "next/navigation";
 import { useAtom } from "jotai";
 import {
   activeConversationIdAtom,

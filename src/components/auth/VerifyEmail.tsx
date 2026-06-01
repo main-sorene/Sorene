@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { useAtomValue } from "jotai";
 import { emailInputAtom, userAtom } from "@/store/atoms";
@@ -7,7 +9,7 @@ import { useMutation } from "@tanstack/react-query";
 import { authApi } from "@/lib/authApi";
 import { getUserProfile } from "@/lib/firestore";
 import { useSetAtom } from "jotai";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { signInWithCustomToken } from "firebase/auth";
@@ -16,7 +18,7 @@ import { auth } from "@/lib/firebase";
 const VerifyEmail = () => {
   const email = useAtomValue(emailInputAtom);
   const setUser = useSetAtom(userAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
@@ -44,9 +46,9 @@ const VerifyEmail = () => {
         });
 
         if (profile?.onboardingComplete) {
-          navigate("/chat");
+          router.push("/chat");
         } else {
-          navigate("/onBoarding");
+          router.push("/onBoarding");
         }
       } else {
         setError("Invalid verification code. Please try again.");

@@ -1,6 +1,8 @@
+"use client";
+
 import { useAtom } from "jotai";
 import { conversationsAtom, activeConversationIdAtom } from "@/store/atoms";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { MessageSquare, Trash2, Search } from "lucide-react";
 import { useState } from "react";
@@ -9,7 +11,7 @@ import { cn } from "@/lib/utils";
 export function HistoryPage() {
   const [conversations, setConversations] = useAtom(conversationsAtom);
   const [, setActiveId] = useAtom(activeConversationIdAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const [search, setSearch] = useState("");
 
   const filtered = conversations.filter((c) =>
@@ -18,7 +20,7 @@ export function HistoryPage() {
 
   const handleOpen = (id: string) => {
     setActiveId(id);
-    navigate(`/chat/${id}`);
+    router.push(`/chat/${id}`);
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {

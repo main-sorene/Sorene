@@ -19,13 +19,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
 export function LogoutConfirmModal() {
   const [isOpen, setIsOpen] = useAtom(isLogoutConfirmOpenAtom);
   const setUser = useSetAtom(userAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setIsCancelSubscriptionOpen = useSetAtom(isCancelSubscriptionOpenAtom);
@@ -40,7 +40,7 @@ export function LogoutConfirmModal() {
         setIsSettingsOpen(false);
         setIsCancelSubscriptionOpen(false);
         setIsManagePaymentOpen(false);
-        navigate("/");
+        router.push("/");
         toast({
           title: "Logged out successfully",
           description: "See you next time!",

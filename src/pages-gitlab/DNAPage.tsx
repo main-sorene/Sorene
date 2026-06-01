@@ -1,10 +1,12 @@
-import { Outlet } from "react-router-dom";
+"use client";
+
 import { useState } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle } from "lucide-react";
 import { DNAChat } from "@/components/dna/DNAChat";
 
-export function DNAPage() {
+export function DNAPage({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
@@ -18,7 +20,7 @@ export function DNAPage() {
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F9FAFB]">
           <div className="max-w-6xl mx-auto">
-            <Outlet />
+            {children}
           </div>
         </div>
       </div>

@@ -1,3 +1,5 @@
+"use client";
+
 import { Message } from "@/store/atoms";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";

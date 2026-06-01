@@ -1,3 +1,5 @@
+"use client";
+
 import { Menu, Plus } from "lucide-react";
 import {
   activeConversationAtom,
@@ -11,7 +13,7 @@ import {
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export function ChatHeader() {
@@ -20,7 +22,7 @@ export function ChatHeader() {
   const [selectedModel, setSelectedModel] = useAtom(selectedModelAtom);
   const setActiveId = useSetAtom(activeConversationIdAtom);
   const authUser = useAtom(userAtom)[0];
-  const navigate = useNavigate();
+  const router = useRouter();
   const conversations = useAtomValue(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
 
@@ -28,7 +30,7 @@ export function ChatHeader() {
 
   const handleNewChat = () => {
     setActiveId(null);
-    navigate("/chat");
+    router.push("/chat");
   };
 
   return (

@@ -1,7 +1,9 @@
+"use client";
+
 import { useAtom } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { ChatInput } from "./ChatInput";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { useRecipePreset } from "@/hooks/useRecipePreset";
 
 function getGreeting(): string {
@@ -13,12 +15,12 @@ function getGreeting(): string {
 
 export function WelcomeScreen() {
   const [authUser] = useAtom(userAtom);
-  const navigate = useNavigate();
+  const router = useRouter();
   const greeting = getGreeting();
 
   const { suggestionLabels, handleRecipeClick } = useRecipePreset({
     segment: "chat",
-    onConversationCreated: (convId) => navigate(`/chat/${convId}`),
+    onConversationCreated: (convId) => router.push(`/chat/${convId}`),
   });
 
   return (

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { useAtom } from "jotai";
 import { selectedModelAtom, MODELS } from "@/store/atoms";

@@ -16,7 +16,7 @@ import {
   useInvoices,
 } from "@/hooks/useSubscriptionStatus";
 import { createPortalSession } from "@/lib/subscriptionApi";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { plans } from "@/lib/plans";
 
 export function SubscriptionContent() {
@@ -136,7 +136,7 @@ export function SubscriptionContent() {
           {/* Action Buttons */}
           <div className="flex items-center gap-3 pt-2">
             {subscription?.plan === "free" ? (
-              <Link to="/upgrade">
+              <Link href="/upgrade">
                 <Button className="h-10 px-4 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium">
                   Upgrade plan
                 </Button>

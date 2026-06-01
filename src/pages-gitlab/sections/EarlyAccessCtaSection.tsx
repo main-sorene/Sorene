@@ -1,5 +1,8 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { scrollToSection } from "@/lib/utils";
 
@@ -74,10 +77,10 @@ export type EarlyAccessCtaSectionProps = {
 export const EarlyAccessCtaSection = ({
   showCta = true,
 }: EarlyAccessCtaSectionProps) => {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const handleNavigate = (path: string) => {
-    navigate(path);
+    router.push(path);
     scrollToSection("home");
   };
 
@@ -181,8 +184,8 @@ export const EarlyAccessCtaSection = ({
                         key={link.label}
                         onClick={() => {
                           if (!link.sectionId) return;
-                          if (window.location.pathname !== "/") {
-                            navigate(`/#${link.sectionId}`);
+                          if (window.pathname !== "/") {
+                            router.push(`/#${link.sectionId}`);
                           } else {
                             scrollToSection(link.sectionId);
                           }
@@ -207,13 +210,13 @@ export const EarlyAccessCtaSection = ({
             </span>
             <div className="flex items-center gap-4 sm:gap-6">
               <Link
-                to="/privacy-policy"
+                href="/privacy-policy"
                 className="font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline"
               >
                 Privacy Policy
               </Link>
               <Link
-                to="/terms-of-service"
+                href="/terms-of-service"
                 className="font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline"
               >
                 Terms of Service

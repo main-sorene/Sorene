@@ -133,24 +133,22 @@ export const HeroSection = () => {
                 <div className="flex flex-col items-start gap-5 sm:gap-6 w-full">
                   {/* Google */}
                   <div className="flex justify-center gap-2 p-0.5 self-stretch w-full bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] shadow-shadow items-center">
-                    <button className="flex items-center justify-center gap-2 px-4 sm:px-[18px] py-3 sm:py-3.5 flex-1 bg-white rounded-lg border-none cursor-pointer hover:bg-gray-50 transition-colors">
-                      <img
-                        className="w-6 h-6"
-                        alt="Google"
-                        src="/figmaAssets/logo-6.svg"
-                      />
-                      <span
-                        className="text-body-medium-medium text-[#101010] text-sm sm:text-base text-center tracking-[0] leading-6"
-                        onClick={handleGoogleSignup}
-                      >
-                        {isGoogleLoading ? (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Signing in...
-                          </div>
-                        ) : (
-                          "Continue with Google"
-                        )}
+                    <button
+                      onClick={handleGoogleSignup}
+                      disabled={isGoogleLoading}
+                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] py-3 sm:py-3.5 flex-1 bg-white rounded-lg border-none cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed w-full"
+                    >
+                      {isGoogleLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+                      ) : (
+                        <img
+                          className="w-5 h-5"
+                          alt="Google"
+                          src="/figmaAssets/logo-6.svg"
+                        />
+                      )}
+                      <span className="text-body-medium-medium text-[#101010] text-sm sm:text-base text-center tracking-[0] leading-6">
+                        {isGoogleLoading ? "Signing in..." : "Continue with Google"}
                       </span>
                     </button>
                   </div>

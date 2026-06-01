@@ -56,17 +56,19 @@ async function fetchReflection(
   }
 }
 
-async function translateText(text: string, language: string): Promise<string> {
-  if (!language || language === "en" || language === "english") return text;
+async function translateFollowUp(text: string, userAnswer: string): Promise<string> {
+  // Detect language from the user's actual answer and translate the follow-up into it
   try {
     const res = await fetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Pass an empty answer so Claude only translates the nextQuestion
-      body: JSON.stringify({ answer: "...", signal: "", questionText: "", nextQuestion: text, forceLanguage: language }),
+      body: JSON.stringify({ answer: userAnswer, signal: "", questionText: "", nextQuestion: text }),
     });
     if (!res.ok) return text;
     const data = await res.json();
+    // If detected language is English, return original; otherwise return translated
+    const lang = (data.detectedLanguage || "").toLowerCase();
+    if (!lang || lang === "english") return text;
     return data.translatedQuestion || text;
   } catch {
     return text;
@@ -147,8 +149,6 @@ export function useAssessmentFlow() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReflecting, setIsReflecting] = useState(false);
   const [isProcessingCv, setIsProcessingCv] = useState(false);
-  // Detected from first user answer; used to translate follow-up messages
-  const [detectedLanguage, setDetectedLanguage] = useState<string>("");
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
@@ -278,22 +278,21 @@ export function useAssessmentFlow() {
         setAnswers(newAnswers);
         const ctx: AssessmentContext = { profile: { firstName }, answers: newAnswers, hasCv };
 
-        // Conditional follow-up (no reflection before it — it's part of the same question)
+        // Conditional follow-up — translate into same language as user's answer
         if (currentNode.followUp && currentNode.followUp.condition(text)) {
           const rawFollowUpMsg = getFollowUpMessage(currentNode.followUp, text);
-          const followUpMsg = detectedLanguage
-            ? await translateText(rawFollowUpMsg, detectedLanguage)
-            : rawFollowUpMsg;
+          setIsReflecting(true);
+          const followUpMsg = await translateFollowUp(rawFollowUpMsg, text);
+          setIsReflecting(false);
           addMessage({ id: `fu-${Date.now()}`, role: "assistant", content: followUpMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "condition" });
           return;
         }
 
         if (currentNode.alwaysFollowUp) {
-          const rawAlwaysMsg = currentNode.alwaysFollowUp.message;
-          const alwaysMsg = detectedLanguage
-            ? await translateText(rawAlwaysMsg, detectedLanguage)
-            : rawAlwaysMsg;
+          setIsReflecting(true);
+          const alwaysMsg = await translateFollowUp(currentNode.alwaysFollowUp.message, text);
+          setIsReflecting(false);
           addMessage({ id: `afu-${Date.now()}`, role: "assistant", content: alwaysMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "always" });
           return;
@@ -305,7 +304,7 @@ export function useAssessmentFlow() {
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }
     },
-    [flowState, answers, firstName, hasCv, authUser, skipCv, detectedLanguage]
+    [flowState, answers, firstName, hasCv, authUser, skipCv]
   );
 
   async function advanceToNode(
@@ -357,16 +356,13 @@ export function useAssessmentFlow() {
 
     setIsReflecting(true);
     const nextQuestion = getNodeMessage(nextNode, ctx);
-    const { reflection, translatedQuestion, detectedLanguage: lang } = await fetchReflection(
+    const { reflection, translatedQuestion } = await fetchReflection(
       userAnswer,
       questionSignal,
       nextQuestion,
       nextQuestion,
     );
     setIsReflecting(false);
-    if (lang && lang.toLowerCase() !== "english" && !detectedLanguage) {
-      setDetectedLanguage(lang);
-    }
 
     const questionToShow = translatedQuestion || nextQuestion;
     addMessage({

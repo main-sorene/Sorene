@@ -1,0 +1,170 @@
+import { Menu, X } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { activeNavAtom } from "@/store/atoms";
+import { useAtom } from "jotai";
+import { useEffect, useState } from "react";
+import { scrollToSection } from "@/lib/utils";
+
+const navLinks = [
+  { label: "Home" },
+  { label: "Features" },
+  { label: "Testimonial" },
+  { label: "How It Works" },
+  { label: "Our Team" },
+  { label: "Pricing" },
+];
+
+export const Navbar = ({ isPolicyPage = false }) => {
+  const [activeNav, setActiveNav] = useAtom(activeNavAtom);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const sectionIdByLabel: Record<string, string> = {
+    Home: "home",
+    Features: "features",
+    Testimonial: "testimonials",
+    "How It Works": "how-it-works",
+    "Our Team": "team",
+    Pricing: "pricing",
+  };
+
+  const handleNavClick = (label: string) => {
+    setActiveNav(label);
+    setMenuOpen(false);
+
+    const targetId = sectionIdByLabel[label];
+    if (!targetId) return;
+
+    if (window.location.pathname !== "/") {
+      // Navigate to homepage + scroll after navigation (no full refresh)
+      navigate(`/#${targetId}`);
+      return;
+    }
+
+    // Already on homepage → just scroll
+    scrollToSection(targetId);
+  };
+
+  // Handle scrolling when coming from another page via hash
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash && window.location.pathname === "/") {
+      // Small delay to let the page render first
+      setTimeout(() => scrollToSection(hash), 100);
+    }
+  }, []);
+
+  return (
+    <nav className="flex w-full items-center justify-between px-5 sm:px-10 lg:px-20 py-2 lg:py-4 sticky top-0 z-20 bg-white/90 backdrop-blur-sm">
+      {!isPolicyPage && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
+          <div className="absolute -top-40 -left-40 w-[400px] h-[400px] bg-[rgba(254,221,144,0.5)] rounded-full blur-[120px]" />
+          <div className="absolute -top-40 -right-40 w-[400px] h-[400px] bg-[rgba(254,221,144,0.5)] rounded-full blur-[120px]" />
+        </div>
+      )}
+
+      <div className="inline-flex items-center gap-[6.65px] shrink-0">
+        <img
+          onClick={() => navigate("/")}
+          id="header-logo"
+          className="w-[154px] h-[36px] cursor-pointer"
+          alt="Sorene logo"
+          src="/figmaAssets/Logo-full-black.png"
+        />
+        {/* <span className="font-['Clash_Display-Medium',Helvetica] font-medium text-[#101010] text-[28px] sm:text-[35.7px] leading-tight whitespace-nowrap">
+          Sorene
+        </span> */}
+      </div>
+
+      {/* Desktop Nav Links */}
+      <div className="hidden lg:inline-flex items-center px-6 py-4 bg-white border border-[#EDEDED] rounded-xl gap-6 shadow-card">
+        {navLinks.map((link) => (
+          <button
+            key={link.label}
+            onClick={() => handleNavClick(link.label)}
+            className="inline-flex items-center justify-center gap-2 cursor-pointer text-body-small-medium text-[#101010] text-center tracking-[0] leading-[21px] whitespace-nowrap"
+          >
+            {link.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop Right Actions */}
+      <div className="hidden lg:inline-flex gap-6 items-center">
+        <button
+          className="text-body-small-medium text-[#101010] whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => {
+            setMenuOpen(false);
+            if (window.location.pathname !== "/") {
+              navigate("/#footer");
+            } else {
+              scrollToSection("footer");
+            }
+          }}
+        >
+          Contact Us
+        </button>
+        <div className="inline-flex justify-center gap-2 p-0.5 bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] items-center">
+          <Link
+            to="/chat"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a] transition-colors"
+          >
+            <span className="text-body-small-medium text-white">
+              Try Sorene
+            </span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Mobile Menu ... (same as before, just use handleNavClick) */}
+      <button
+        className="lg:hidden p-2 rounded-md text-[#101010] hover:bg-gray-100 transition-colors"
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label="Toggle menu"
+      >
+        {menuOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
+      {menuOpen && (
+        <div className="absolute top-full left-0 right-0 bg-white border-b border-[#ededed] shadow-lg z-30 lg:hidden">
+          <div className="flex flex-col px-5 py-4 gap-4">
+            {navLinks.map((link) => (
+              <button
+                key={link.label}
+                onClick={() => handleNavClick(link.label)}
+                className={`text-left font-medium text-[#101010] text-sm py-2 border-b border-[#f5f5f5] last:border-0 transition-opacity ${
+                  activeNav === link.label ? "opacity-100" : "opacity-60"
+                }`}
+              >
+                {link.label}
+              </button>
+            ))}
+            <button
+              className="font-medium text-[#101010] text-sm text-center py-2"
+              onClick={() => {
+                setMenuOpen(false);
+                if (window.location.pathname !== "/") {
+                  navigate("/#footer");
+                } else {
+                  scrollToSection("footer");
+                }
+              }}
+            >
+              Contact Us
+            </button>
+            <div className="flex justify-center gap-2 p-0.5 bg-white rounded-[10px] border border-solid border-[#ededed] shadow-shadow items-center">
+              <Link
+                to="/chat"
+                className="w-full text-center inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a]"
+              >
+                <span className="font-medium text-white text-sm">
+                  Try Sorene
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+};

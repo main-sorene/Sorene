@@ -1,3 +1,4 @@
+"use client";
 export type RawAnswers = Record<string, string>;
 
 export type DnaScores = {

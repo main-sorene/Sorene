@@ -1,3 +1,4 @@
+"use client";
 export type AssessmentContext = {
   profile: { firstName: string; cvFileName?: string | null };
   answers: Record<string, string>;

@@ -62,13 +62,6 @@ const footerColumns: { heading: string; links: FooterLink[] }[] = [
       { label: "Community", sectionId: "testimonials" },
     ],
   },
-  {
-    heading: "Legal",
-    links: [
-      { label: "Privacy Policy", href: "/privacy-policy" },
-      { label: "Terms of Service", href: "/terms-of-service" },
-    ],
-  },
 ];
 
 export type EarlyAccessCtaSectionProps = {

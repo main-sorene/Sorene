@@ -2,10 +2,10 @@
 
 import { DNACard } from "./DNACard";
 import { AnimatePresence, motion } from "framer-motion";
-import { useProfile } from "@/hooks/useProfile";
+import { useDnaData } from "@/hooks/useDnaData";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { mapProfileToDNA, DNACoreItem } from "@/lib/dnaMapping";
+import { DNACoreItem } from "@/lib/dnaMapping";
 
 const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
   {
@@ -208,17 +208,14 @@ const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
 ];
 
 export const DNASection = () => {
-  const { data: profileRes, isLoading } = useProfile();
+  const { isLoading } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const dnaItems =
-    !isLoading && profileRes?.profile
-      ? mapProfileToDNA(profileRes.profile)
-      : DEFAULT_DNA_ITEMS;
+  const dnaItems = DEFAULT_DNA_ITEMS;
 
   return (
     <AnimatePresence>

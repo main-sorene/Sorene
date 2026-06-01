@@ -22,6 +22,27 @@ export interface UserProfile {
   createdAt: string;
   updatedAt: string;
   photoUrl?: string;
+  assessmentAnswers?: Record<string, string>;
+  dnaScores?: {
+    risk_score: number;
+    uncertainty_score: number;
+    energy_stability_score: number;
+    constraint_score: number;
+    readiness_score: number;
+    structure_score: number;
+    motivation_driver: string;
+    strengths_summary: string;
+    non_negotiable: string;
+    success_feeling: string;
+    energy_source: string;
+    energy_drains: string;
+  };
+  directionEligibility?: {
+    eligible: boolean;
+    model?: string;
+    reason?: string;
+  };
+  directionText?: string;
 }
 
 function getDb() {
@@ -112,6 +133,22 @@ export async function isDNAAssessmentComplete(uid: string): Promise<boolean> {
   const profile = await getUserProfile(uid);
   if (!profile) return false;
   return profile.dnaAssessmentComplete === true;
+}
+
+export async function saveAssessmentResults(
+  uid: string,
+  answers: Record<string, string>,
+  eligibility: import("@/lib/dnaEngine").DirectionEligibility,
+): Promise<void> {
+  const { scores } = eligibility;
+  await saveUserProfile(uid, {
+    assessmentAnswers: answers,
+    dnaAssessmentComplete: true,
+    dnaScores: scores,
+    directionEligibility: eligibility.eligible
+      ? { eligible: true, model: eligibility.model }
+      : { eligible: false, reason: eligibility.reason },
+  });
 }
 
 export async function deleteUserProfile(uid: string): Promise<void> {

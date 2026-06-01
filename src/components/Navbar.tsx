@@ -16,7 +16,6 @@ const navLinks = [
   { label: "Features" },
   { label: "Testimonial" },
   { label: "How It Works" },
-  { label: "Our Team" },
   { label: "Pricing" },
 ];
 
@@ -57,7 +56,6 @@ export const Navbar = ({ isPolicyPage = false }) => {
     Features: "features",
     Testimonial: "testimonials",
     "How It Works": "how-it-works",
-    "Our Team": "team",
     Pricing: "pricing",
   };
 

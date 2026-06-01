@@ -6,7 +6,6 @@ import { EarlyAccessCtaSection } from "./sections/EarlyAccessCtaSection";
 import { FeaturesOverviewSection } from "./sections/FeaturesOverviewSection";
 import { HeroSection } from "./sections/HeroSection";
 import { PricingSection } from "./sections/PricingSection";
-import { TeamSection } from "./sections/TeamSection";
 import { TestimonialsSection } from "./sections/TestimonialsSection";
 import { useEffect } from "react";
 import { FAQSection } from "./sections/FAQSection";
@@ -41,9 +40,6 @@ export const LandingPageScreen = () => {
 
         <div id="how-it-works">
           <BuildDirectionSection />
-        </div>
-        <div id="team">
-          <TeamSection />
         </div>
 
         <div id="pricing">

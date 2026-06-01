@@ -59,7 +59,15 @@ export const QUESTION_NODES: QuestionNode[] = [
     id: "bg4_direction",
     signal: "Background",
     soreneMessage:
-      "One last bit of context before we go deeper. Where do you feel yourself drifting these days — whether it's something you're quietly being drawn toward, or something you're slowly starting to step away from? Even if it's not fully formed yet, name what comes to mind.",
+      "Where do you feel yourself drifting these days — whether it's something you're quietly being drawn toward, or something you're slowly starting to step away from? Even if it's not fully formed yet, name what comes to mind.",
+    inputType: "freetext",
+    next: "bg5_turning",
+  },
+  {
+    id: "bg5_turning",
+    signal: "Background",
+    soreneMessage:
+      "One last bit of context before we go deeper. Looking back, was there a moment — a project, a conversation, a season of your life — that quietly shifted how you saw your work, or what you wanted from it? Take your time with this one.",
     inputType: "freetext",
     next: "q1_energy",
   },

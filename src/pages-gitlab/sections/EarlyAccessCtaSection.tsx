@@ -181,12 +181,12 @@ export const EarlyAccessCtaSection = ({
                   <p className="self-stretch [font-family:'Inter_Tight',Helvetica] font-normal text-[#242424] text-base leading-6">
                     {column.heading}
                   </p>
-                  <div className="flex flex-col items-start gap-2 w-full">
+                  <div className="flex flex-col items-start gap-2 w-full relative z-10">
                     {column.links.map((link) => {
-                      const baseClass = "font-['Inter_Tight',Helvetica] font-medium text-[#101010] text-sm sm:text-base leading-6 hover:underline text-left cursor-pointer";
+                      const baseClass = "relative z-10 font-['Inter_Tight',Helvetica] font-medium text-[#101010] text-sm sm:text-base leading-6 hover:underline text-left cursor-pointer py-1";
                       if (link.href) {
                         return (
-                          <Link key={link.label} href={link.href} className={baseClass}>
+                          <Link key={link.label} href={link.href} prefetch={false} className={baseClass}>
                             {link.label}
                           </Link>
                         );
@@ -221,16 +221,18 @@ export const EarlyAccessCtaSection = ({
             <span className="font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap">
               ©Sorene, Inc. All rights reserved.
             </span>
-            <div className="flex items-center gap-4 sm:gap-6">
+            <div className="flex items-center gap-4 sm:gap-6 relative z-10">
               <Link
                 href="/privacy-policy"
-                className="font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline"
+                prefetch={false}
+                className="relative z-10 font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline py-1 cursor-pointer"
               >
                 Privacy Policy
               </Link>
               <Link
                 href="/terms-of-service"
-                className="font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline"
+                prefetch={false}
+                className="relative z-10 font-normal text-[#101010] text-sm sm:text-base leading-6 whitespace-nowrap hover:underline py-1 cursor-pointer"
               >
                 Terms of Service
               </Link>

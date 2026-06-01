@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Cookie } from "lucide-react";
 
 const STORAGE_KEY = "sorene_cookie_consent";
 
 export function CookieBanner() {
+  const pathname = usePathname();
   const [visible, setVisible] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) !== "accepted";
@@ -15,6 +17,10 @@ export function CookieBanner() {
       return true;
     }
   });
+
+  // Don't render on legal pages so the user can read them without the banner overlapping
+  const isLegalPage = /^\/(privacy|terms)/.test(pathname || "");
+  if (isLegalPage) return null;
 
   const handleAccept = () => {
     try {
@@ -38,7 +44,7 @@ export function CookieBanner() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.97 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed bottom-6 right-6 z-50 w-[min(360px,calc(100vw-3rem))]"
+          className="fixed bottom-6 left-6 z-40 w-[min(320px,calc(100vw-3rem))]"
         >
           <div className="bg-white border border-[#ECEDEE] rounded-2xl shadow-2xl p-5 space-y-4">
             {/* Header */}

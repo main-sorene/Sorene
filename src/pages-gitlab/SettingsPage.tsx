@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { selectedModelAtom, MODELS, userAtom, conversationsAtom } from "@/store/atoms";
+import { selectedModelAtom, MODELS, userAtom, conversationsAtom, isAssessmentCompleteAtom } from "@/store/atoms";
+import { saveUserProfile } from "@/lib/firestore";
 import { cn } from "@/lib/utils";
 import {
   Bell,
@@ -44,11 +45,13 @@ export function SettingsPage() {
   const [selectedModel, setSelectedModel] = useAtom(selectedModelAtom);
   const [darkMode, setDarkMode] = useState(false);
   const { toast } = useToast();
-  const authUser = useAtomValue(userAtom);
+  const [authUser, setUser] = useAtom(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
+  const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const displayName = authUser?.profile
     ? `${authUser.profile.firstName ?? ""} ${authUser.profile.lastName ?? ""}`.trim() || authUser.displayName
@@ -62,6 +65,7 @@ export function SettingsPage() {
     setIsLoggingOut(true);
     try {
       if (auth) await signOut(auth);
+      setUser(null);
       router.push("/");
     } catch {
       toast({ title: "Error signing out", description: "Please try again.", variant: "destructive" });
@@ -73,7 +77,25 @@ export function SettingsPage() {
     setIsClearing(true);
     try {
       setConversations([]);
-      toast({ description: "All conversation history cleared." });
+      setIsAssessmentComplete(false);
+      try {
+        Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+      } catch {}
+      if (authUser?.uid) {
+        await saveUserProfile(authUser.uid, {
+          onboardingComplete: false,
+          dnaAssessmentComplete: false,
+          assessmentAnswers: undefined,
+          directionText: undefined,
+          dnaScores: undefined,
+        } as any);
+        setUser((prev) => prev ? { ...prev, profile: prev.profile ? { ...prev.profile, onboardingComplete: false, dnaAssessmentComplete: false } : prev.profile } : prev);
+      }
+      setShowClearConfirm(false);
+      toast({ description: "All history cleared. You will start fresh on next visit." });
+      router.push("/");
+    } catch {
+      toast({ description: "Failed to clear history.", variant: "destructive" });
     } finally {
       setIsClearing(false);
     }
@@ -232,32 +254,49 @@ export function SettingsPage() {
           {activeTab === "privacy" && (
             <div className="max-w-lg space-y-6">
               <h2 className="text-base font-semibold text-[#151515]">Privacy & Security</h2>
-              <div className="rounded-2xl border border-[#E8E5F0] bg-white overflow-hidden">
-                <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[#FAF8FF] transition-colors border-b border-[#F0EEF5]">
-                  <div className="flex items-center gap-3">
-                    <Shield size={18} className="text-[#6B6B6B]" />
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-[#151515]">Privacy Settings</p>
-                      <p className="text-xs text-[#9B9B9B]">Control your data</p>
-                    </div>
+              {showClearConfirm ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-6">
+                  <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+                    <Trash2 size={24} className="text-red-500" />
                   </div>
-                  <ChevronRight size={16} className="text-[#BCBCBC]" />
-                </button>
-                <button
-                  onClick={handleClearHistory}
-                  disabled={isClearing}
-                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors disabled:opacity-60"
-                >
-                  <div className="flex items-center gap-3">
-                    <Trash2 size={18} className="text-red-400" />
-                    <div className="text-left">
-                      <p className="text-sm font-medium text-red-500">Clear All History</p>
-                      <p className="text-xs text-[#9B9B9B]">Delete all conversations</p>
-                    </div>
+                  <div className="text-center max-w-sm">
+                    <h3 className="text-base font-semibold text-[#151515] mb-2">Clear all history?</h3>
+                    <p className="text-sm text-[#62646A]">This will delete all your conversations and reset your assessment. You'll start completely fresh. This cannot be undone.</p>
                   </div>
-                  <ChevronRight size={16} className="text-[#BCBCBC]" />
-                </button>
-              </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowClearConfirm(false)} className="px-5 py-2.5 rounded-xl border border-[#ECEDEE] text-sm font-medium text-[#151515] hover:bg-gray-50 transition-colors">Cancel</button>
+                    <button onClick={handleClearHistory} disabled={isClearing} className="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-60">
+                      {isClearing ? "Clearing…" : "Yes, clear everything"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-[#E8E5F0] bg-white overflow-hidden">
+                  <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-[#FAF8FF] transition-colors border-b border-[#F0EEF5]">
+                    <div className="flex items-center gap-3">
+                      <Shield size={18} className="text-[#6B6B6B]" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-[#151515]">Privacy Settings</p>
+                        <p className="text-xs text-[#9B9B9B]">Control your data</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-[#BCBCBC]" />
+                  </button>
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Trash2 size={18} className="text-red-400" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-red-500">Clear All History</p>
+                        <p className="text-xs text-[#9B9B9B]">Delete all conversations and reset account</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-[#BCBCBC]" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

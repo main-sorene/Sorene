@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export interface UserProfile {
@@ -136,6 +136,17 @@ export async function saveUserProfile(
     console.error("[Firestore] Error saving user profile:", error);
     throw error;
   }
+}
+
+export async function clearDownstreamProfile(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  const docRef = doc(firestore, "users", uid);
+  await updateDoc(docRef, {
+    directionText: deleteField(),
+    directionAlternatives: deleteField(),
+    directionEligibility: deleteField(),
+  });
 }
 
 export async function isOnboardingComplete(uid: string): Promise<boolean> {

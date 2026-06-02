@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { useQueryClient } from "@tanstack/react-query";
-import { saveUserProfile } from "@/lib/firestore";
+import { saveUserProfile, clearDownstreamProfile } from "@/lib/firestore";
 import { useDnaData } from "./useDnaData";
 
 export interface DnaEditMessage {
@@ -95,13 +95,21 @@ export function useDnaEdit() {
       const currentScores = dnaData?.dnaScores ?? {};
       const updatedScores = { ...currentScores, [pendingEdit.field]: pendingEdit.proposed };
 
+      // Update DNA scores, then wipe downstream Direction data (re-sync boundary)
       await saveUserProfile(user.uid, { dnaScores: updatedScores as any });
-      await queryClient.invalidateQueries({ queryKey: ["dna", user.uid] });
+      await clearDownstreamProfile(user.uid);
+
+      // Invalidate all downstream caches
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dna", user.uid] }),
+        queryClient.invalidateQueries({ queryKey: ["direction"] }),
+        queryClient.invalidateQueries({ queryKey: ["profile", user.uid] }),
+      ]);
 
       setPendingEdit(null);
       appendMessage({
         role: "assistant",
-        content: `Done! I've updated your ${pendingEdit.fieldLabel} to "${pendingEdit.proposed}". 🎉`,
+        content: `Done! I've updated your ${pendingEdit.fieldLabel} to "${pendingEdit.proposed}". Your Direction has been reset so it reflects your updated profile.`,
       });
     } catch (error) {
       console.error("[useDnaEdit] confirmEdit error:", error);

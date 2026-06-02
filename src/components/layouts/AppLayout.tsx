@@ -62,8 +62,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Don't render protected content for unauthenticated users
+  // Don't render protected content for unauthenticated or incomplete onboarding users
   if (!authUser) return null;
+  if (!authUser.profile?.onboardingComplete) return null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f7]">

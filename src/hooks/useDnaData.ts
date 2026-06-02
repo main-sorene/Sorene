@@ -19,8 +19,6 @@ export function useDnaData() {
       ]);
       const firestore = firestoreProfile.status === "fulfilled" ? firestoreProfile.value : null;
       const external = externalProfile.status === "fulfilled" ? externalProfile.value : null;
-      console.log("[useDnaData] externalProfile raw:", external);
-      console.log("[useDnaData] externalProfile.profile:", external?.profile);
       return {
         ...firestore,
         externalProfile: external?.profile ?? null,

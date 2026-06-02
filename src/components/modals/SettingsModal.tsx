@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import {
   isSettingsOpenAtom,
@@ -64,7 +65,10 @@ export function SettingsModal() {
   const [isClearing, setIsClearing] = React.useState(false);
   const [selectedModel, setSelectedModel] = React.useState("sorene-1");
 
-  if (!isOpen) return null;
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => { setMounted(true); }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleClose = () => {
     setIsOpen(false);
@@ -218,7 +222,7 @@ export function SettingsModal() {
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
@@ -274,6 +278,7 @@ export function SettingsModal() {
           </div>
         </main>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -176,7 +176,22 @@ export function Sidebar({
       let assessmentConv: Conversation | null = null;
       try {
         const stored = localStorage.getItem(`assessment_conv_${authUser?.uid || "local"}`);
-        if (stored) assessmentConv = JSON.parse(stored);
+        if (stored) {
+          assessmentConv = JSON.parse(stored);
+        } else if (authUser?.profile?.dnaAssessmentComplete) {
+          // Fallback for users who completed assessment before localStorage was added
+          assessmentConv = {
+            id: `assessment-${authUser.uid || "local"}`,
+            title: "User Assessment Phase",
+            messages: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            model: "sorene-1",
+            done: true,
+            segment: "assessment",
+            isCreatedOnBackend: false,
+          };
+        }
       } catch {}
 
       const newConvs: Conversation[] = convoData.chats.map((item, index) => {

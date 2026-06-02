@@ -3,17 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
-import { Plus, X, ArrowUp, Loader2 } from "lucide-react";
+import { Plus, X, ArrowUp, Loader2, Mic, Settings } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRecipePreset } from "@/hooks/useRecipePreset";
 import { useDnaEdit } from "@/hooks/useDnaEdit";
+
+const DNA_SUGGESTIONS = ["Explain My Core", "My Risk & Change Style"];
 
 export function DNAChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [inputValue, setInputValue] = useState("");
-  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
 
   const { messages, pendingEdit, isProcessing, sendMessage, confirmEdit, cancelEdit } = useDnaEdit();
 
@@ -23,8 +24,6 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
     "there";
 
   const hasMessages = messages.length > 0;
-
-  const { suggestionLabels } = useRecipePreset({ segment: "dna" });
 
   useEffect(() => {
     if (hasMessages) {
@@ -36,6 +35,9 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
     const text = inputValue.trim();
     if (!text || isProcessing) return;
     setInputValue("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     await sendMessage(text);
   };
 
@@ -46,13 +48,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const handleSuggestionClick = (label: string) => {
-    sendMessage(label);
-  };
-
   const handleNewChat = () => {
-    // Clear is managed by the hook's local state — we can't reset from outside easily,
-    // but a page reload or re-mount will reset. For now, just scroll to top.
     window.location.reload();
   };
 
@@ -111,18 +107,12 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
 
                 return (
                   <div key={message.id}>
-                    <div
-                      className={
-                        message.role === "user"
-                          ? "flex justify-end"
-                          : "flex justify-start"
-                      }
-                    >
+                    <div className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
                       <div
                         className={
                           message.role === "user"
-                            ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm"
-                            : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm"
+                            ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
+                            : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"
                         }
                       >
                         {message.content}
@@ -151,8 +141,8 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
               })}
               {isProcessing && (
                 <div className="flex justify-start">
-                  <div className="px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111]">
-                    <Loader2 size={16} className="animate-spin" />
+                  <div className="px-4 py-3 rounded-2xl bg-[#F8F9FA]">
+                    <Loader2 size={16} className="animate-spin text-[#6B7280]" />
                   </div>
                 </div>
               )}
@@ -164,57 +154,65 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
 
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
-        <div className="flex flex-col gap-4 p-6 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {/* Suggestion chips — only show when no messages yet */}
-          {!hasMessages && suggestionLabels.length > 0 && (
-            <div className="flex flex-nowrap overflow-x-auto no-scrollbar -mx-6 px-6 gap-2 pb-2 scroll-smooth sm:flex-wrap sm:overflow-x-visible sm:mx-0 sm:px-0">
-              {(showAllSuggestions ? suggestionLabels : suggestionLabels.slice(0, 3)).map((label) => (
+        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          {/* Suggestion chips */}
+          {!hasMessages && (
+            <div className="flex flex-wrap gap-2">
+              {DNA_SUGGESTIONS.map((label) => (
                 <button
                   key={label}
-                  onClick={() => handleSuggestionClick(label)}
-                  className="text-body-xsmall-medium flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] active:bg-[#E5E7EB] transition-all whitespace-nowrap shrink-0"
+                  onClick={() => sendMessage(label)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
                 >
-                  <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5" alt="" />
+                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
                   {label}
                 </button>
               ))}
-              {suggestionLabels.length > 3 && (
-                <button
-                  onClick={() => setShowAllSuggestions((prev) => !prev)}
-                  className="text-body-xsmall-medium flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#ECEDEE] bg-white text-xs font-medium text-[#6B7280] hover:bg-[#F1F3F5] hover:text-[#111111] active:bg-[#E5E7EB] transition-all whitespace-nowrap shrink-0"
-                >
-                  {showAllSuggestions ? "View less" : "View all"}
-                </button>
-              )}
             </div>
           )}
 
-          {/* Textarea + send button */}
-          <div className="relative min-h-[44px] flex items-end gap-3">
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your DNA or update a field…"
-              rows={1}
-              disabled={isProcessing}
-              className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
-              style={{ height: "auto" }}
-              onInput={(e) => {
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = `${el.scrollHeight}px`;
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isProcessing}
-              className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ArrowUp size={16} />
+          {/* Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask anything"
+            rows={1}
+            disabled={isProcessing}
+            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${el.scrollHeight}px`;
+            }}
+          />
+
+          {/* Bottom row: plus + icons + send */}
+          <div className="flex items-center justify-between">
+            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+              <Plus size={18} />
             </button>
+            <div className="flex items-center gap-1">
+              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+                <Mic size={16} />
+              </button>
+              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+                <Settings size={16} />
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={!inputValue.trim() || isProcessing}
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ArrowUp size={16} />
+              </button>
+            </div>
           </div>
         </div>
+        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+          Sorene can make mistakes. Consider checking important information.
+        </p>
       </div>
     </div>
   );

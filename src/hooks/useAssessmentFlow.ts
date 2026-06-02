@@ -114,7 +114,7 @@ function buildInitialMessages(
 
   if (hasCv) {
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
-    const firstNode = QUESTION_NODES[0];
+    const firstNode = getNode("q1_energy")!;
     const messages: AssessmentMessage[] = [opening];
     if (cvSummary && cvSummary.trim()) {
       messages.push({

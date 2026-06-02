@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
-import { Plus, X, ArrowUp, Loader2, Mic, Settings } from "lucide-react";
+import { Plus, X, ArrowUp, Loader2, Mic, Settings, Square } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDnaEdit } from "@/hooks/useDnaEdit";
 
-const DNA_SUGGESTIONS = ["Explain My Core", "My Risk & Change Style"];
+const DNA_SUGGESTIONS = [
+  "Explain My Core",
+  "What Drives Me",
+  "How I Work",
+  "My Risk & Change Style",
+  "My Energy",
+  "My Strength",
+];
 
 function FormattedMessage({ content }: { content: string }) {
   const paragraphs = content.split(/\n\n+/).filter(Boolean);
@@ -36,7 +43,10 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
 
   const { messages, pendingEdit, isProcessing, sendMessage, confirmEdit, cancelEdit } = useDnaEdit();
 
@@ -73,6 +83,56 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
   const handleNewChat = () => {
     window.location.reload();
   };
+
+  const recognitionRef = useRef<any>(null);
+
+  const handleMicClick = useCallback(() => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (e: any) => {
+      const transcript: string = e.results[0]?.[0]?.transcript || "";
+      if (transcript) setInputValue((prev) => prev + (prev ? " " : "") + transcript);
+    };
+    recognition.onend = () => { setIsRecording(false); };
+    recognition.onerror = () => { setIsRecording(false); };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, [isRecording]);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    const isSupported = file.type === "application/pdf" || file.type.startsWith("image/");
+    if (!isSupported) return;
+    setIsUploadingFile(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        const res = await fetch("/api/cv-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileBase64: base64, mimeType: file.type }),
+        });
+        if (res.ok) {
+          const { summary } = (await res.json()) as { summary: string };
+          if (summary) await sendMessage(`Here is a summary of my uploaded file: ${summary}`);
+        }
+        setIsUploadingFile(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setIsUploadingFile(false);
+    }
+  }, [sendMessage]);
 
   return (
     <div className="flex flex-col h-full xl:h-[97vh] w-full bg-white xl:border-l xl:border-gray-100 xl:rounded-4xl xl:my-6 overflow-hidden shrink-0">
@@ -177,21 +237,20 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {/* Suggestion chips */}
-          {!hasMessages && (
-            <div className="flex flex-wrap gap-2">
-              {DNA_SUGGESTIONS.map((label) => (
-                <button
-                  key={label}
-                  onClick={() => sendMessage(label)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Suggestion chips — always visible */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {DNA_SUGGESTIONS.map((label) => (
+              <button
+                key={label}
+                onClick={() => sendMessage(label)}
+                disabled={isProcessing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap disabled:opacity-50"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                {label}
+              </button>
+            ))}
+          </div>
 
           {/* Textarea */}
           <textarea
@@ -212,12 +271,29 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
 
           {/* Bottom row: plus + icons + send */}
           <div className="flex items-center justify-between">
-            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
-              <Plus size={18} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingFile || isProcessing}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280] disabled:opacity-50"
+              title="Attach file (PDF or image)"
+            >
+              {isUploadingFile ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }}
+            />
             <div className="flex items-center gap-1">
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
-                <Mic size={16} />
+              <button
+                onClick={handleMicClick}
+                disabled={isProcessing}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isRecording ? "bg-red-100 text-red-500 hover:bg-red-200" : "hover:bg-gray-100 text-[#6B7280]"} disabled:opacity-50`}
+                title={isRecording ? "Stop recording" : "Record voice"}
+              >
+                {isRecording ? <Square size={14} className="fill-current" /> : <Mic size={16} />}
               </button>
               <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
                 <Settings size={16} />
@@ -233,7 +309,15 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
         <p className="text-center text-xs text-[#9CA3AF] mt-3">
-          Sorene can make mistakes. Consider checking important information.
+          Sorene can make mistakes.{" "}
+          <a
+            href="https://github.com/anthropics/claude-code/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[#6B7280] transition-colors"
+          >
+            Consider checking important information.
+          </a>
         </p>
       </div>
     </div>

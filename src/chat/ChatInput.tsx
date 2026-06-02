@@ -675,7 +675,7 @@ export function ChatInput({
 
       {showFooter && (
         <button
-          onClick={() => router.push("/responsible-ai")}
+          onClick={() => router.push("/responsible")}
           className="w-full text-center text-xs text-[#62646A] mt-2 hover:text-black transition-colors"
         >
           Sorene can make mistakes. Consider checking important information.

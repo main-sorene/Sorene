@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Trash2, Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Conversation,
@@ -253,7 +253,7 @@ export function Sidebar({
   // DNA/DIRECTION logic will be applied later.
   // For now, all conversations will be under "Your chats" section.
 
-  let navItems = [
+  let navItems: { icon: string | null; lucideIcon?: React.ReactNode; label: string; action?: () => void; path?: string }[] = [
     {
       icon: "/figmaAssets/note-pencil.svg",
       label: "New chat",
@@ -271,7 +271,8 @@ export function Sidebar({
       path: "/direction",
     },
     {
-      icon: "/figmaAssets/rocket-launch-collapsed.svg",
+      icon: null,
+      lucideIcon: <Rocket size={20} className="text-[#151515] transition-all duration-200 group-hover:scale-110" />,
       label: "Execution Hub",
       path: "/execution-hub",
     },
@@ -364,11 +365,13 @@ export function Sidebar({
               title={collapsed ? item.label : undefined}
             >
               <div className="w-12 h-12 flex items-center justify-center shrink-0">
-                <img
-                  src={item.icon}
-                  alt={item.label}
-                  className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
-                />
+                {item.lucideIcon ?? (
+                  <img
+                    src={item.icon!}
+                    alt={item.label}
+                    className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
+                  />
+                )}
               </div>
               <AnimatePresence mode="popLayout" initial={false}>
                 {!collapsed && (
@@ -489,7 +492,7 @@ export function Sidebar({
       <div className="shrink-0 border-t border-black/5 px-2 py-3">
         <button
           type="button"
-          onClick={() => router.push("/settings")}
+          onClick={() => setIsSettingsOpen(true)}
           data-testid="user-profile-trigger"
           className={cn(
             "w-full flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer text-left",

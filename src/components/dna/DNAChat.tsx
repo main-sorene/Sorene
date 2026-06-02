@@ -238,7 +238,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
           {/* Suggestion chips — always visible */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {DNA_SUGGESTIONS.map((label) => (
               <button
                 key={label}

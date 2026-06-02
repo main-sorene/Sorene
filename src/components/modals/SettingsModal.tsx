@@ -220,7 +220,7 @@ export function SettingsModal() {
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
 
       {/* Modal */}
-      <div className="relative w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex overflow-hidden">
+      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex overflow-hidden">
         {/* Sidebar */}
         <aside className="w-[220px] shrink-0 flex flex-col py-6 px-3 border-r border-[#F0F0F0]">
           <div className="flex items-center justify-between px-2 mb-5">

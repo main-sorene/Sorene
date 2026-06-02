@@ -87,23 +87,26 @@ export function SettingsModal() {
 
   const handleClearHistory = async () => {
     setIsClearing(true);
+    const uid = authUser?.uid;
     try {
+      // Sign out first so AppLayout doesn't redirect to /onBoarding on profile update
+      if (auth) await signOut(auth);
+      setUser(null);
       setConversations([]);
       setIsAssessmentComplete(false);
       try {
         Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
       } catch {}
-      if (authUser?.uid) {
-        await saveUserProfile(authUser.uid, {
+      // Reset Firestore in background — user is already signed out
+      if (uid) {
+        saveUserProfile(uid, {
           onboardingComplete: false,
           dnaAssessmentComplete: false,
           assessmentAnswers: undefined,
           directionText: undefined,
           dnaScores: undefined,
-        } as any);
+        } as any).catch(() => {});
       }
-      if (auth) await signOut(auth);
-      setUser(null);
       setShowClearConfirm(false);
       setIsOpen(false);
       router.push("/");

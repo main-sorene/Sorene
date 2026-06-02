@@ -485,11 +485,12 @@ export function Sidebar({
       )}
 
       <div className="shrink-0 border-t border-black/5 px-2 py-3">
-        <Link
-          href="/settings"
+        <button
+          type="button"
+          onClick={() => router.push("/settings")}
           data-testid="user-profile-trigger"
           className={cn(
-            "flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer",
+            "w-full flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer text-left",
             collapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
           )}
         >
@@ -529,7 +530,7 @@ export function Sidebar({
               </motion.div>
             )}
           </AnimatePresence>
-        </Link>
+        </button>
       </div>
     </motion.div>
   );

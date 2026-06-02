@@ -222,7 +222,7 @@ export function Sidebar({
       try {
         const uidKey = authUser?.uid || "local";
         Object.keys(localStorage)
-          .filter((k) => k.startsWith(`dna_chat_${uidKey}_`))
+          .filter((k) => k.startsWith(`dna_chat_${uidKey}_`) || k.startsWith(`direction_chat_${uidKey}_`))
           .forEach((k) => {
             try {
               const c = JSON.parse(localStorage.getItem(k)!);

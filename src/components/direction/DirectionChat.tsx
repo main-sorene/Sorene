@@ -1,51 +1,133 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useAtom, useAtomValue } from "jotai";
-import {
-  userAtom,
-  activeConversationAtom,
-  activeConversationIdAtom,
-  inputValueAtom,
-} from "@/store/atoms";
-import { Plus, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
+import { Plus, X, ArrowUp, Loader2, Mic, Settings } from "lucide-react";
 import Link from "next/link";
-import { ChatInput } from "@/chat/ChatInput";
-import { MessageBubble } from "@/chat/MessageBubble";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRecipePreset } from "@/hooks/useRecipePreset";
+import { useDirectionResult } from "@/hooks/useDirectionResult";
+import { useDnaData } from "@/hooks/useDnaData";
+
+const DIRECTION_SUGGESTIONS = ["Why does this fit me?", "How do I start?"];
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+function FormattedMessage({ content }: { content: string }) {
+  const paragraphs = content.split(/\n\n+/).filter(Boolean);
+  return (
+    <span className="space-y-2 block">
+      {paragraphs.map((para, i) => {
+        const parts = para.split(/(\*\*.*?\*\*)/g);
+        return (
+          <span key={i} className="block">
+            {parts.map((part, j) =>
+              part.startsWith("**") && part.endsWith("**") ? (
+                <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong>
+              ) : (
+                <span key={j}>{part}</span>
+              )
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
-  const conversation = useAtomValue(activeConversationAtom);
-  const [, setActiveId] = useAtom(activeConversationIdAtom);
-  const [, setInputValue] = useAtom(inputValueAtom);
+  const setConversations = useSetAtom(conversationsAtom);
+  const { model, bestCompatibility, directionText, otherDirections } = useDirectionResult();
+  const { data: dnaData } = useDnaData();
+
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const convIdRef = useRef(`direction-chat-${Date.now()}`);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
-  const hasMessages = conversation && conversation.messages.length > 0;
-
-  const { suggestionLabels, handleRecipeClick } = useRecipePreset({
-    segment: "ideation",
-  });
+  const hasMessages = messages.length > 0;
 
   useEffect(() => {
-    if (hasMessages) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, hasMessages]);
+
+  const persistToSidebar = (msgs: ChatMessage[]) => {
+    const uid = authUser?.uid || "local";
+    const convId = convIdRef.current;
+    const sidebarMessages: Message[] = msgs.map((m) => ({
+      id: m.id, role: m.role, content: m.content, timestamp: new Date(), type: "chat" as const,
+    }));
+    const firstUser = msgs.find((m) => m.role === "user")?.content || "Direction Chat";
+    const conv: Conversation = {
+      id: convId, title: firstUser.slice(0, 50) + (firstUser.length > 50 ? "..." : ""),
+      messages: sidebarMessages, createdAt: new Date(), updatedAt: new Date(),
+      model: "sorene-1", segment: "direction", isCreatedOnBackend: false,
+    };
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === convId);
+      if (idx === -1) return [conv, ...prev];
+      return prev.map((c) => (c.id === convId ? conv : c));
+    });
+    try { localStorage.setItem(`direction_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
+  };
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isProcessing) return;
+    const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: text };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    persistToSidebar(next);
+    setIsProcessing(true);
+
+    try {
+      const res = await fetch("/api/direction-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          directionContext: {
+            recommendedModel: model,
+            compatibility: bestCompatibility,
+            directionText: directionText || "",
+            alternatives: otherDirections.map((a: { model: string; compatibility: number; summary?: string }) => ({ model: a.model, compatibility: a.compatibility, summary: a.summary })),
+            dnaScores: dnaData?.dnaScores ?? {},
+          },
+        }),
+      });
+      const data = (await res.json()) as { reply: string };
+      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: data.reply || "Sorry, I couldn't respond. Try again." };
+      const withAi = [...next, aiMsg];
+      setMessages(withAi);
+      persistToSidebar(withAi);
+    } catch {
+      const errMsg: ChatMessage = { id: `${Date.now()}-e`, role: "assistant", content: "Sorry, something went wrong. Please try again." };
+      const withErr = [...next, errMsg];
+      setMessages(withErr);
+      persistToSidebar(withErr);
+    } finally {
+      setIsProcessing(false);
     }
-  }, [
-    conversation?.messages?.length,
-    conversation?.messages?.[conversation?.messages?.length - 1]?.content,
-    hasMessages,
-  ]);
+  };
 
-  useEffect(() => {
-    setActiveId(null);
+  const handleSend = async () => {
+    const text = inputValue.trim();
+    if (!text || isProcessing) return;
     setInputValue("");
-  }, [setActiveId, setInputValue]);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    await sendMessage(text);
+  };
 
-  const handleNewChat = () => {
-    setActiveId(null);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   return (
@@ -53,18 +135,13 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between p-6 gap-3 shrink-0">
         {onClose ? (
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500">
             <X size={20} />
           </button>
-        ) : (
-          <div />
-        )}
+        ) : <div />}
         <div className="flex items-center gap-3">
           <button
-            onClick={handleNewChat}
+            onClick={() => { setMessages([]); convIdRef.current = `direction-chat-${Date.now()}`; }}
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all"
           >
             <Plus size={16} />
@@ -73,10 +150,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           <Link href="/settings">
             <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
               <img
-                src={
-                  authUser?.profile?.photoUrl ||
-                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-                }
+                src={authUser?.profile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`}
                 alt="User Avatar"
                 className="w-full h-full object-cover"
               />
@@ -88,24 +162,32 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {!hasMessages ? (
-          <div className="flex-1 flex flex-col items-start px-12 pt-12">
-            <img
-              alt="Sorene logo"
-              src="/figmaAssets/cube.svg"
-              className="mb-6"
-            />
-            <h2 className="text-heading-medium text-gray-900 leading-[1.1] tracking-tight mb-12">
+          <div className="flex-1 flex flex-col items-start px-6 md:px-12 pt-12">
+            <img alt="Sorene logo" src="/figmaAssets/cube.svg" className="mb-6" />
+            <h2 className="text-heading-small text-[#151515] leading-[1.1] tracking-tight mb-12">
               How do you feel today, {userName}?
             </h2>
           </div>
         ) : (
           <ScrollArea className="flex-1">
-            <div className="px-6 py-6 space-y-8">
-              {conversation.messages
-                .filter((m) => !m.isHidden)
-                .map((message) => (
-                  <MessageBubble key={message.id} message={message} />
-                ))}
+            <div className="px-6 py-6 space-y-4">
+              {messages.map((message) => (
+                <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                  <div className={message.role === "user"
+                    ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
+                    : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"
+                  }>
+                    <FormattedMessage content={message.content} />
+                  </div>
+                </div>
+              ))}
+              {isProcessing && (
+                <div className="flex justify-start">
+                  <div className="px-4 py-3 rounded-2xl bg-[#F8F9FA]">
+                    <Loader2 size={16} className="animate-spin text-[#6B7280]" />
+                  </div>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
           </ScrollArea>
@@ -114,12 +196,60 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
 
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
-        <ChatInput
-          suggestions={!hasMessages ? suggestionLabels : undefined}
-          onSuggestionClick={!hasMessages ? handleRecipeClick : undefined}
-          segmentOverride="ideation"
-          disableNavigation={true}
-        />
+        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          {!hasMessages && (
+            <div className="flex flex-wrap gap-2">
+              {DIRECTION_SUGGESTIONS.map((label) => (
+                <button
+                  key={label}
+                  onClick={() => sendMessage(label)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
+                >
+                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask anything"
+            rows={1}
+            disabled={isProcessing}
+            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
+            onInput={(e) => {
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${el.scrollHeight}px`;
+            }}
+          />
+          <div className="flex items-center justify-between">
+            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+              <Plus size={18} />
+            </button>
+            <div className="flex items-center gap-1">
+              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+                <Mic size={16} />
+              </button>
+              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+                <Settings size={16} />
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={!inputValue.trim() || isProcessing}
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <ArrowUp size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+          Sorene can make mistakes. Consider checking important information.
+        </p>
       </div>
     </div>
   );

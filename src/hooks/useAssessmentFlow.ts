@@ -14,7 +14,7 @@ import {
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isAssessmentCompleteAtom } from "@/store/atoms";
+import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
@@ -140,6 +140,7 @@ function buildInitialMessages(
 export function useAssessmentFlow() {
   const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
+  const setConversations = useSetAtom(conversationsAtom);
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
@@ -414,8 +415,33 @@ export function useAssessmentFlow() {
       : canonicalChoices;
 
   const completeAssessment = useCallback(() => {
+    // Inject a local "User Assessment Phase" entry into the sidebar Others
+    // section so the user can revisit the conversation later. This is local
+    // only — the chat history API doesn't store assessments.
+    const assessmentConv: Conversation = {
+      id: `assessment-${authUser?.uid || "local"}-${Date.now()}`,
+      title: "User Assessment Phase",
+      messages: messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(),
+      })) as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      model: "sorene-1",
+      done: true,
+      segment: "assessment", // not "dna" or "ideation" → renders under Others
+    };
+    setConversations((prev) => {
+      // Avoid duplicate inserts if the user clicks both nav buttons
+      if (prev.some((c) => c.title === "User Assessment Phase" && c.segment === "assessment")) {
+        return prev;
+      }
+      return [assessmentConv, ...prev];
+    });
     setIsAssessmentComplete(true);
-  }, [setIsAssessmentComplete]);
+  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete]);
 
   return {
     messages,

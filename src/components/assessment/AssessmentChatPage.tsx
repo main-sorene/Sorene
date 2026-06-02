@@ -283,12 +283,11 @@ export function AssessmentChatPage() {
             </div>
 
             <p className="text-center text-xs text-[#62646A] mt-3">
-              Sorene can make mistakes.{" "}
               <a
                 href="/responsible"
                 className="underline underline-offset-2 hover:text-[#101010] transition-colors"
               >
-                Consider checking important information.
+                Sorene can make mistakes. Consider checking important information.
               </a>
             </p>
           </div>

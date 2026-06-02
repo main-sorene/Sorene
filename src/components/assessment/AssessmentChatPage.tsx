@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useAssessmentFlow } from "@/hooks/useAssessmentFlow";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Mic, Plus, Settings, Copy, Sparkles, ArrowRight } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Plus, Settings, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useSetAtom } from "jotai";
@@ -90,31 +90,10 @@ function UserMessage({ content }: { content: string }) {
   );
 }
 
-function NavButtons({ onDna, onDirection }: { onDna: () => void; onDirection: () => void }) {
-  return (
-    <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-2">
-      <button
-        onClick={onDna}
-        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-black transition-colors shadow-sm active:scale-95 whitespace-nowrap"
-      >
-        <Sparkles size={15} />
-        Explore your DNA
-      </button>
-      <button
-        onClick={onDirection}
-        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-[#111111] text-sm font-medium hover:bg-gray-50 transition-colors active:scale-95 whitespace-nowrap"
-      >
-        <ArrowRight size={15} />
-        Explore your Direction
-      </button>
-    </div>
-  );
-}
-
 export function AssessmentChatPage() {
   const {
     messages, sendMessage, skipCv, uploadCv, completeAssessment, isSaving, isWaiting, isProcessingCv,
-    isDone, isCvRequest, currentChoices, canonicalChoices, inputType,
+    isDone, isCvRequest, currentChoices, canonicalChoices,
   } = useAssessmentFlow();
   const router = useRouter();
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
@@ -144,9 +123,14 @@ export function AssessmentChatPage() {
     setIsSending(false);
   };
 
+  const handleExploreDna = () => {
+    completeAssessment();
+    router.push("/dna");
+  };
+
+  // When done, textarea is disabled but input area stays visible for the DNA button
   const isDisabled = isSending || isWaiting || isDone;
   const canSend = inputValue.trim().length > 0 && !isDisabled;
-  const showInput = !isDone;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
@@ -166,7 +150,6 @@ export function AssessmentChatPage() {
             return <UserMessage key={msg.id} content={msg.content} />;
           })}
 
-          {/* Thinking indicator while reflection is loading */}
           {isWaiting && !isSaving && <ThinkingDots />}
 
           {isSaving && (
@@ -176,126 +159,128 @@ export function AssessmentChatPage() {
             </div>
           )}
 
-          {/* Navigation buttons shown once assessment is complete */}
-          {isDone && (
-            <NavButtons
-              onDna={() => { completeAssessment(); router.push("/dna"); }}
-              onDirection={() => { completeAssessment(); router.push("/direction"); }}
-            />
-          )}
-
           <div ref={bottomRef} />
         </div>
       </div>
 
-      {/* Input area — always visible while questions are active */}
-      {showInput && (
-        <div className="px-4 sm:px-6 pb-4 shrink-0">
-          <div className="max-w-2xl mx-auto">
-            {/* Choice buttons */}
-            {currentChoices && currentChoices.length > 0 && !isWaiting && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {currentChoices.map((choice, i) => (
-                  <button
-                    key={`${i}-${choice}`}
-                    onClick={() => handleSend(choice, canonicalChoices?.[i])}
-                    disabled={isDisabled}
-                    className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
-                  >
-                    {choice}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Composer — always shown */}
-            <div className={cn(
-              "rounded-2xl border border-[#ECEDEE] bg-white px-4 pt-3 pb-2 shadow-sm transition-opacity",
-              isDisabled && "opacity-60"
-            )}>
-              <textarea
-                ref={textareaRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend(inputValue);
-                  }
-                }}
-                placeholder={
-                  isProcessingCv
-                    ? "Reading your CV…"
-                    : isWaiting
-                    ? "Sorene is thinking…"
-                    : isCvRequest
-                    ? "Type a reply, or skip with the button above"
-                    : "Type your answer"
-                }
-                rows={1}
-                disabled={isDisabled}
-                className="w-full resize-none bg-transparent text-[16px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-[28px] max-h-[160px] disabled:cursor-not-allowed"
-              />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadCv(f);
-                  e.target.value = "";
-                }}
-              />
-              <div className="flex items-center justify-between mt-1">
+      {/* Input area — always visible */}
+      <div className="px-4 sm:px-6 pb-4 shrink-0">
+        <div className="max-w-2xl mx-auto">
+          {/* DNA button shown when done, otherwise choice buttons */}
+          {isDone && !isWaiting ? (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button
+                onClick={handleExploreDna}
+                className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium active:scale-95"
+              >
+                <Sparkles size={14} />
+                Explore the DNA Page
+              </button>
+            </div>
+          ) : currentChoices && currentChoices.length > 0 && !isWaiting ? (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {currentChoices.map((choice, i) => (
                 <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!isCvRequest || isProcessingCv}
-                  title={isCvRequest ? "Attach CV (PDF or image)" : "Attachments unavailable"}
+                  key={`${i}-${choice}`}
+                  onClick={() => handleSend(choice, canonicalChoices?.[i])}
+                  disabled={isDisabled}
+                  className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Composer */}
+          <div className={cn(
+            "rounded-2xl border border-[#ECEDEE] bg-white px-4 pt-3 pb-2 shadow-sm transition-opacity",
+            isDisabled && "opacity-60"
+          )}>
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(inputValue);
+                }
+              }}
+              placeholder={
+                isDone
+                  ? "Is there anything you'd like to add?"
+                  : isProcessingCv
+                  ? "Reading your CV…"
+                  : isWaiting
+                  ? "Sorene is thinking…"
+                  : isCvRequest
+                  ? "Type a reply, or skip with the button above"
+                  : "Type your answer"
+              }
+              rows={1}
+              disabled={isDisabled}
+              className="w-full resize-none bg-transparent text-[16px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-[28px] max-h-[160px] disabled:cursor-not-allowed"
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadCv(f);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex items-center justify-between mt-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!isCvRequest || isProcessingCv}
+                title={isCvRequest ? "Attach CV (PDF or image)" : "Attachments unavailable"}
+                className={cn(
+                  "p-2 rounded-xl transition-colors text-[#111111]",
+                  isCvRequest && !isProcessingCv
+                    ? "hover:bg-gray-100"
+                    : "opacity-40 cursor-not-allowed",
+                )}
+              >
+                <Plus size={20} />
+              </button>
+              <div className="flex items-center gap-1">
+                <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
+                  <Mic size={20} />
+                </button>
+                <button type="button" onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111]">
+                  <Settings size={20} />
+                </button>
+                <button
+                  onClick={() => handleSend(inputValue)}
+                  disabled={!canSend}
                   className={cn(
-                    "p-2 rounded-xl transition-colors text-[#111111]",
-                    isCvRequest && !isProcessingCv
-                      ? "hover:bg-gray-100"
-                      : "opacity-40 cursor-not-allowed",
+                    "ml-1 w-9 h-9 rounded-md flex items-center justify-center transition-all",
+                    canSend
+                      ? "bg-[#111111] text-white hover:bg-black shadow-sm active:scale-95"
+                      : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
                   )}
                 >
-                  <Plus size={20} />
+                  {isSending ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={20} strokeWidth={2.5} />}
                 </button>
-                <div className="flex items-center gap-1">
-                  <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
-                    <Mic size={20} />
-                  </button>
-                  <button type="button" onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111]">
-                    <Settings size={20} />
-                  </button>
-                  <button
-                    onClick={() => handleSend(inputValue)}
-                    disabled={!canSend}
-                    className={cn(
-                      "ml-1 w-9 h-9 rounded-md flex items-center justify-center transition-all",
-                      canSend
-                        ? "bg-[#111111] text-white hover:bg-black shadow-sm active:scale-95"
-                        : "bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed"
-                    )}
-                  >
-                    {isSending ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={20} strokeWidth={2.5} />}
-                  </button>
-                </div>
               </div>
             </div>
-
-            <p className="text-center text-xs text-[#62646A] mt-3">
-              <a
-                href="/responsible"
-                className="underline underline-offset-2 hover:text-[#101010] transition-colors"
-              >
-                Sorene can make mistakes. Consider checking important information.
-              </a>
-            </p>
           </div>
+
+          <p className="text-center text-xs text-[#62646A] mt-3">
+            <a
+              href="/responsible"
+              className="underline underline-offset-2 hover:text-[#101010] transition-colors"
+            >
+              Sorene can make mistakes. Consider checking important information.
+            </a>
+          </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }

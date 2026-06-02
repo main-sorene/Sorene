@@ -453,9 +453,10 @@ export function Sidebar({
 
       {!collapsed && (
         <div className="px-2 mb-4 flex justify-center">
-          <Link
-            href="/upgrade"
-            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors hover:bg-[#ECEDEE] cursor-pointer group"
+          <button
+            type="button"
+            onClick={() => router.push("/upgrade")}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors hover:bg-[#ECEDEE] cursor-pointer group text-left"
           >
             <img
               src="/figmaAssets/starfour.svg"
@@ -463,15 +464,16 @@ export function Sidebar({
               alt="Upgrade"
             />
             Upgrade Plan
-          </Link>
+          </button>
         </div>
       )}
 
       {/* Upgrade icon if collapsed */}
       {collapsed && (
         <div className="px-2 mb-4 flex justify-center">
-          <Link
-            href="/upgrade"
+          <button
+            type="button"
+            onClick={() => router.push("/upgrade")}
             className="p-3 rounded-xl text-black/70 transition-all duration-200 group hover:bg-black/5 hover:text-black cursor-pointer"
             title="Upgrade Plan"
           >
@@ -480,7 +482,7 @@ export function Sidebar({
               className="w-6 h-6 transition-transform group-hover:scale-110"
               alt="Upgrade"
             />
-          </Link>
+          </button>
         </div>
       )}
 

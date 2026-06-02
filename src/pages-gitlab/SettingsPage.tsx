@@ -89,10 +89,10 @@ export function SettingsPage() {
           directionText: undefined,
           dnaScores: undefined,
         } as any);
-        setUser((prev) => prev ? { ...prev, profile: prev.profile ? { ...prev.profile, onboardingComplete: false, dnaAssessmentComplete: false } : prev.profile } : prev);
       }
+      if (auth) await signOut(auth);
+      setUser(null);
       setShowClearConfirm(false);
-      toast({ description: "All history cleared. You will start fresh on next visit." });
       router.push("/");
     } catch {
       toast({ description: "Failed to clear history.", variant: "destructive" });

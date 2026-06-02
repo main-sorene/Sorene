@@ -101,11 +101,11 @@ export function SettingsModal() {
           directionText: undefined,
           dnaScores: undefined,
         } as any);
-        setUser((prev) => prev ? { ...prev, profile: prev.profile ? { ...prev.profile, onboardingComplete: false, dnaAssessmentComplete: false } : prev.profile } : prev);
       }
+      if (auth) await signOut(auth);
+      setUser(null);
       setShowClearConfirm(false);
       setIsOpen(false);
-      toast({ description: "All history cleared." });
       router.push("/");
     } catch {
       toast({ description: "Failed to clear history.", variant: "destructive" });

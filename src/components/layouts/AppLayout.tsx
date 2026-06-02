@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import React from "react";
 import { useEffect, useState } from "react";
 import { ChatHeader } from "./ChatHeader";
@@ -115,15 +116,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
             {!isAssessmentComplete && <div className="w-8" />}{" "}
             {/* Spacer to maintain alignment if needed */}
-            <img
-              src={
-                authUser?.profile?.photoUrl ||
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-              }
-              alt="User Avatar"
-              onClick={() => setIsSettingsOpen(true)}
-              className="w-8 h-8  rounded-full cursor-pointer object-cover hover:opacity-90 transition-opacity"
-            />
+            <Link href="/settings">
+              <img
+                src={
+                  authUser?.profile?.photoUrl ||
+                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
+                }
+                alt="User Avatar"
+                className="w-8 h-8  rounded-full cursor-pointer object-cover hover:opacity-90 transition-opacity"
+              />
+            </Link>
           </div>
         )}
         {children}

@@ -13,7 +13,6 @@ import {
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -111,7 +110,11 @@ export function ChatHeader() {
         </button>
 
         {/* User avatar */}
-        <Link href="/settings" data-testid="user-avatar" className="hidden sm:block">
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          data-testid="user-avatar"
+          className="hidden sm:block"
+        >
           <img
             src={
               authUser?.profile?.photoUrl ||
@@ -120,7 +123,7 @@ export function ChatHeader() {
             alt="User Profile"
             className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 transition-transform hover:scale-105 active:scale-95"
           />
-        </Link>
+        </button>
       </div>
     </header>
   );

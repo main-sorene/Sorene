@@ -2,31 +2,14 @@
 
 import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, getGoogleRedirectResult } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
-import { getUserProfile, saveUserProfile } from "@/lib/firestore";
-import { useRouter } from "next/navigation";
+import { getUserProfile } from "@/lib/firestore";
 
 export function AuthPersistence({ children }: { children: React.ReactNode }) {
   const setUser = useSetAtom(userAtom);
   const setLoading = useSetAtom(authLoadingAtom);
-  const router = useRouter();
-
-  // Handle post-redirect result from mobile Google sign-in
-  useEffect(() => {
-    getGoogleRedirectResult().then(async (result) => {
-      if (!result) return;
-      const user = result.user;
-      const appUid = user.email || user.uid;
-      if (user.photoURL || user.email) {
-        await saveUserProfile(appUid, { photoUrl: user.photoURL || undefined, email: user.email || "" });
-      }
-      const profile = await getUserProfile(appUid);
-      setUser({ uid: appUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
-      router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    }).catch(() => {});
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!auth) {

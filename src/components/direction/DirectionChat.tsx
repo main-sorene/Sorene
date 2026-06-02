@@ -248,7 +248,14 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
         <p className="text-center text-xs text-[#9CA3AF] mt-3">
-          Sorene can make mistakes. Consider checking important information.
+          <a
+            href="https://sorene.ai/responsible-ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[#6B7280] transition-colors"
+          >
+            Sorene can make mistakes. Consider checking important information.
+          </a>
         </p>
       </div>
     </div>

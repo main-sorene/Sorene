@@ -237,8 +237,8 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {/* Suggestion chips — always visible */}
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          {/* Suggestion chips — always visible, wrapped rows */}
+          <div className="flex flex-wrap gap-2">
             {DNA_SUGGESTIONS.map((label) => (
               <button
                 key={label}
@@ -246,7 +246,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                 disabled={isProcessing}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap disabled:opacity-50"
               >
-                <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                <img src="/figmaAssets/starfour.svg" className="w-3 h-3 shrink-0" alt="" />
                 {label}
               </button>
             ))}
@@ -274,7 +274,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploadingFile || isProcessing}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280] disabled:opacity-50"
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#111111] disabled:opacity-50"
               title="Attach file (PDF or image)"
             >
               {isUploadingFile ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
@@ -290,12 +290,12 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
               <button
                 onClick={handleMicClick}
                 disabled={isProcessing}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isRecording ? "bg-red-100 text-red-500 hover:bg-red-200" : "hover:bg-gray-100 text-[#6B7280]"} disabled:opacity-50`}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isRecording ? "bg-red-100 text-red-500 hover:bg-red-200" : "hover:bg-gray-100 text-[#111111]"} disabled:opacity-50`}
                 title={isRecording ? "Stop recording" : "Record voice"}
               >
                 {isRecording ? <Square size={14} className="fill-current" /> : <Mic size={16} />}
               </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#111111]">
                 <Settings size={16} />
               </button>
               <button
@@ -309,14 +309,13 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
           </div>
         </div>
         <p className="text-center text-xs text-[#9CA3AF] mt-3">
-          Sorene can make mistakes.{" "}
           <a
-            href="https://github.com/anthropics/claude-code/issues"
+            href="https://sorene.ai/responsible-ai"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-[#6B7280] transition-colors"
           >
-            Consider checking important information.
+            Sorene can make mistakes. Consider checking important information.
           </a>
         </p>
       </div>

@@ -96,6 +96,7 @@ export function SettingsModal() {
       setIsAssessmentComplete(false);
       try {
         Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+        Object.keys(localStorage).filter(k => k.startsWith("assessment_conv_")).forEach(k => localStorage.removeItem(k));
       } catch {}
       // Reset Firestore in background — user is already signed out
       if (uid) {

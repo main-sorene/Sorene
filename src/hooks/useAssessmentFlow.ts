@@ -470,11 +470,9 @@ export function useAssessmentFlow() {
       : canonicalChoices;
 
   const completeAssessment = useCallback(() => {
-    // Inject a local "User Assessment Phase" entry into the sidebar Others
-    // section so the user can revisit the conversation later. This is local
-    // only — the chat history API doesn't store assessments.
+    const uid = authUser?.uid || "local";
     const assessmentConv: Conversation = {
-      id: `assessment-${authUser?.uid || "local"}-${Date.now()}`,
+      id: `assessment-${uid}`,
       title: "User Assessment Phase",
       messages: messages.map((m) => ({
         id: m.id,
@@ -486,13 +484,14 @@ export function useAssessmentFlow() {
       updatedAt: new Date(),
       model: "sorene-1",
       done: true,
-      segment: "assessment", // not "dna" or "ideation" → renders under Others
+      segment: "assessment",
     };
+    // Persist to localStorage so it survives page refreshes
+    try {
+      localStorage.setItem(`assessment_conv_${uid}`, JSON.stringify(assessmentConv));
+    } catch {}
     setConversations((prev) => {
-      // Avoid duplicate inserts if the user clicks both nav buttons
-      if (prev.some((c) => c.title === "User Assessment Phase" && c.segment === "assessment")) {
-        return prev;
-      }
+      if (prev.some((c) => c.segment === "assessment")) return prev;
       return [assessmentConv, ...prev];
     });
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}

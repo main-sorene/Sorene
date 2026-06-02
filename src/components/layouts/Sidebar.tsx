@@ -172,6 +172,13 @@ export function Sidebar({
     if (!convoData?.chats) return;
 
     setConversations((prev) => {
+      // Restore persisted assessment conversation from localStorage
+      let assessmentConv: Conversation | null = null;
+      try {
+        const stored = localStorage.getItem(`assessment_conv_${authUser?.uid || "local"}`);
+        if (stored) assessmentConv = JSON.parse(stored);
+      } catch {}
+
       const newConvs: Conversation[] = convoData.chats.map((item, index) => {
         const id = item.chat_id;
         const existing = prev.find((c) => c.id === id);
@@ -195,13 +202,16 @@ export function Sidebar({
         };
       });
 
-      // Merge backend data (newConvs) into state, preserving any local-only chats from prev
+      // Merge backend data + assessment conv + existing local-only chats
       const merged = [...newConvs];
       prev.forEach((pc) => {
         if (!merged.find((m) => m.id === pc.id)) {
           merged.push(pc);
         }
       });
+      if (assessmentConv && !merged.find((m) => m.id === assessmentConv!.id)) {
+        merged.push(assessmentConv);
+      }
 
       return merged.sort((a, b) => {
         const timeA = new Date(a.updatedAt).getTime();

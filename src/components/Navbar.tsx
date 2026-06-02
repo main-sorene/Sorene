@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { activeNavAtom, userAtom } from "@/store/atoms";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
-import { signInWithPopup } from "firebase/auth";
-import { auth, provider } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { scrollToSection } from "@/lib/utils";
 
@@ -32,10 +31,9 @@ export const Navbar = ({ isPolicyPage = false }) => {
       router.push("/chat");
       return;
     }
-    if (!auth || !provider) return;
     try {
       setIsGoogleLoading(true);
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithGoogle();
       const user = result.user;
       const userUid = user.email || user.uid;
       if (user.photoURL || user.email) {

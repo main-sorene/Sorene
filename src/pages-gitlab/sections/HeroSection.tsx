@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { emailInputAtom, userAtom } from "@/store/atoms";
 import { useAtom, useSetAtom } from "jotai";
-import { signInWithPopup } from "firebase/auth";
-import { auth, provider } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useMutation } from "@tanstack/react-query";
 import { authApi } from "@/lib/authApi";
@@ -56,14 +55,9 @@ export const HeroSection = () => {
   };
 
   const handleGoogleSignup = async () => {
-    if (!auth || !provider) {
-      console.error("Firebase auth not initialized");
-      return;
-    }
-
     try {
       setIsGoogleLoading(true);
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithGoogle();
       const user = result.user;
       const userUid = user.email || user.uid;
       // Save/update profile with basic Google info

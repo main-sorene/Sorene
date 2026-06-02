@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 
@@ -448,8 +449,8 @@ export function Sidebar({
 
       {!collapsed && (
         <div className="px-2 mb-4 flex justify-center">
-          <button
-            onClick={() => router.push("/upgrade")}
+          <Link
+            href="/upgrade"
             className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors hover:bg-[#ECEDEE] cursor-pointer group"
           >
             <img
@@ -458,15 +459,15 @@ export function Sidebar({
               alt="Upgrade"
             />
             Upgrade Plan
-          </button>
+          </Link>
         </div>
       )}
 
       {/* Upgrade icon if collapsed */}
       {collapsed && (
         <div className="px-2 mb-4 flex justify-center">
-          <button
-            onClick={() => router.push("/upgrade")}
+          <Link
+            href="/upgrade"
             className="p-3 rounded-xl text-black/70 transition-all duration-200 group hover:bg-black/5 hover:text-black cursor-pointer"
             title="Upgrade Plan"
           >
@@ -475,14 +476,14 @@ export function Sidebar({
               className="w-6 h-6 transition-transform group-hover:scale-110"
               alt="Upgrade"
             />
-          </button>
+          </Link>
         </div>
       )}
 
       <div className="shrink-0 border-t border-black/5 px-2 py-3">
-        <div
+        <Link
+          href="/settings"
           data-testid="user-profile-trigger"
-          onClick={() => router.push("/settings")}
           className={cn(
             "flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer",
             collapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
@@ -524,7 +525,7 @@ export function Sidebar({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </Link>
       </div>
     </motion.div>
   );

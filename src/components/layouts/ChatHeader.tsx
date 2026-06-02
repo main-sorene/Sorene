@@ -13,6 +13,7 @@ import {
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -110,16 +111,16 @@ export function ChatHeader() {
         </button>
 
         {/* User avatar */}
-        <img
-          src={
-            authUser?.profile?.photoUrl ||
-            `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-          }
-          alt="User Profile"
-          onClick={() => router.push("/settings")}
-          className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 hidden sm:block transition-transform hover:scale-105 active:scale-95"
-          data-testid="user-avatar"
-        />
+        <Link href="/settings" data-testid="user-avatar" className="hidden sm:block">
+          <img
+            src={
+              authUser?.profile?.photoUrl ||
+              `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
+            }
+            alt="User Profile"
+            className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 transition-transform hover:scale-105 active:scale-95"
+          />
+        </Link>
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   inputValueAtom,
   isSendingAtom,
@@ -14,6 +14,7 @@ import {
   cvTextAtom,
   isAddMoreInfoModeAtom,
   isAssessmentCompleteAtom,
+  isSettingsOpenAtom,
 } from "@/store/atoms";
 import { Plus, Mic, ArrowUp, Settings } from "lucide-react";
 import { useRef, useEffect, useCallback } from "react";
@@ -68,6 +69,7 @@ export function ChatInput({
     isAddMoreInfoModeAtom,
   );
   const [isAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
+  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const apiModel = toApiModel(selectedModel);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -650,6 +652,7 @@ export function ChatInput({
 
             <button
               data-testid="settings-button"
+              onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors"
               title="Sorene Settings"
             >

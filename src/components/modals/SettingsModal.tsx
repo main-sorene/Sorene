@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import {
   isSettingsOpenAtom,
   settingsTabAtom,
   isLogoutConfirmOpenAtom,
+  userAtom,
+  conversationsAtom,
 } from "@/store/atoms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -20,10 +22,15 @@ import {
   Lock,
   LogOut,
   X,
+  Moon,
+  Globe,
+  Trash2,
+  ChevronRight,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { useToast } from "@/hooks/use-toast";
 
 const SIDEBAR_ITEMS = [
   {
@@ -64,7 +71,7 @@ const SIDEBAR_ITEMS = [
   {
     id: "Security",
     icon: <img src="/figmaAssets/key.svg" alt="" />,
-    label: "Security",
+    label: "Privacy & Security",
   },
 ];
 
@@ -73,6 +80,14 @@ export function SettingsModal() {
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
   const setLogoutConfirmOpen = useSetAtom(isLogoutConfirmOpenAtom);
   const { data: subscription } = useSubscriptionStatus();
+  const [darkMode, setDarkMode] = React.useState(false);
+  const setConversations = useSetAtom(conversationsAtom);
+  const { toast } = useToast();
+
+  const handleClearHistory = () => {
+    setConversations([]);
+    toast({ description: "All conversation history cleared." });
+  };
 
   const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
     if (item.id === "Manage Subscription") {
@@ -85,6 +100,74 @@ export function SettingsModal() {
     switch (activeTab) {
       case "Manage Subscription":
         return <SubscriptionContent />;
+      case "Preferences":
+        return (
+          <div className="space-y-6">
+            <h2 className="text-lg font-medium text-[#151515]">Preferences</h2>
+            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+              <button onClick={() => setDarkMode(p => !p)} className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
+                <div className="flex items-center gap-3">
+                  <Moon size={18} className="text-[#6B6B6B]" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-[#151515]">Dark Mode</p>
+                    <p className="text-xs text-[#9B9B9B]">Toggle dark theme</p>
+                  </div>
+                </div>
+                <div className={cn("w-10 rounded-full transition-colors relative shrink-0", darkMode ? "bg-[#8A38F5]" : "bg-[#E8E5F0]")} style={{ height: "22px" }}>
+                  <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform", darkMode ? "translate-x-5" : "translate-x-0.5")} />
+                </div>
+              </button>
+              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
+                <div className="flex items-center gap-3">
+                  <Globe size={18} className="text-[#6B6B6B]" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-[#151515]">Language</p>
+                    <p className="text-xs text-[#9B9B9B]">English (US)</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-[#BCBCBC]" />
+              </button>
+              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Bell size={18} className="text-[#6B6B6B]" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-[#151515]">Notifications</p>
+                    <p className="text-xs text-[#9B9B9B]">Manage alerts</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-[#BCBCBC]" />
+              </button>
+            </div>
+          </div>
+        );
+      case "Security":
+        return (
+          <div className="space-y-6">
+            <h2 className="text-lg font-medium text-[#151515]">Privacy & Security</h2>
+            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
+                <div className="flex items-center gap-3">
+                  <Shield size={18} className="text-[#6B6B6B]" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-[#151515]">Privacy Settings</p>
+                    <p className="text-xs text-[#9B9B9B]">Control your data</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-[#BCBCBC]" />
+              </button>
+              <button onClick={handleClearHistory} className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Trash2 size={18} className="text-red-400" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-red-500">Clear All History</p>
+                    <p className="text-xs text-[#9B9B9B]">Delete all conversations</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-[#BCBCBC]" />
+              </button>
+            </div>
+          </div>
+        );
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">

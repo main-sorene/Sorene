@@ -46,8 +46,7 @@ export function mapProfileToDNA(profile: ProfileData): DNACoreItem[] {
     hero_statement: `${identity?.archetype?.[0] || "Strategic Thinker"} driven by ${core?.primary_motivation || "purpose"}.`,
     description: core
       ? `${capitalize(core.primary_motivation || "")}-driven, ${(core.structure_preference || "").toLowerCase().replace(/_/g, " ")}-structured, and ${(core.collaboration_mode || "").toLowerCase().replace(/_/g, " ")} by nature — you bring ${(core.execution_bias || "focused execution").toLowerCase().replace(/_/g, " ")} to everything you build.`
-      : core?.description?.primary_motivation ||
-        `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with ${core?.structure_preference || "guided"} structure and ${(core?.collaboration_mode || "collaborative").replace("_", " ")} collaboration.`,
+      : `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with guided structure and collaborative collaboration.`,
     summary: `As ${identity?.archetype?.[0] || "a professional"}, you combine a ${core?.primary_motivation || "value"}-led approach with a preference for ${core?.structure_preference || "balanced"} environments and ${(core?.collaboration_mode || "dynamic").replace("_", " ")} settings to ensure meaningful outcomes.`,
     key_signals: [
       {

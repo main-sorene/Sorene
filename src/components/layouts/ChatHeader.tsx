@@ -116,7 +116,7 @@ export function ChatHeader() {
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
           }
           alt="User Profile"
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={() => router.push("/settings")}
           className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 hidden sm:block transition-transform hover:scale-105 active:scale-95"
           data-testid="user-avatar"
         />

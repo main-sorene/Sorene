@@ -449,21 +449,12 @@ export function Sidebar({
       {!collapsed && (
         <div className="px-2 mb-4 flex justify-center">
           <button
-            onClick={() => isAssessmentComplete && router.push("/upgrade")}
-            disabled={!isAssessmentComplete}
-            className={cn(
-              "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors",
-              !isAssessmentComplete
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-[#ECEDEE] cursor-pointer",
-            )}
+            onClick={() => router.push("/upgrade")}
+            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-label-medium text-[#151515] transition-colors hover:bg-[#ECEDEE] cursor-pointer group"
           >
             <img
               src="/figmaAssets/starfour.svg"
-              className={cn(
-                "w-6 h-6 transition-transform",
-                isAssessmentComplete && "group-hover:scale-110",
-              )}
+              className="w-6 h-6 transition-transform group-hover:scale-110"
               alt="Upgrade"
             />
             Upgrade Plan
@@ -475,22 +466,13 @@ export function Sidebar({
       {collapsed && (
         <div className="px-2 mb-4 flex justify-center">
           <button
-            onClick={() => isAssessmentComplete && router.push("/upgrade")}
-            disabled={!isAssessmentComplete}
-            className={cn(
-              "p-3 rounded-xl text-black/70 transition-all duration-200 group",
-              !isAssessmentComplete
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-black/5 hover:text-black cursor-pointer",
-            )}
+            onClick={() => router.push("/upgrade")}
+            className="p-3 rounded-xl text-black/70 transition-all duration-200 group hover:bg-black/5 hover:text-black cursor-pointer"
             title="Upgrade Plan"
           >
             <img
               src="/figmaAssets/starfour.svg"
-              className={cn(
-                "w-6 h-6 transition-transform",
-                isAssessmentComplete && "group-hover:scale-110",
-              )}
+              className="w-6 h-6 transition-transform group-hover:scale-110"
               alt="Upgrade"
             />
           </button>
@@ -500,13 +482,10 @@ export function Sidebar({
       <div className="shrink-0 border-t border-black/5 px-2 py-3">
         <div
           data-testid="user-profile-trigger"
-          onClick={() => isAssessmentComplete && openSettings("Account")}
+          onClick={() => router.push("/settings")}
           className={cn(
-            "flex items-center rounded-xl transition-colors group outline-none",
+            "flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer",
             collapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
-            !isAssessmentComplete
-              ? "opacity-50 cursor-not-allowed"
-              : "hover:bg-black/5 cursor-pointer",
           )}
         >
           <img

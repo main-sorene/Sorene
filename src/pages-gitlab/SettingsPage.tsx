@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAtom } from "jotai";
-import { selectedModelAtom, MODELS } from "@/store/atoms";
+import { useAtom, useAtomValue } from "jotai";
+import { selectedModelAtom, MODELS, userAtom } from "@/store/atoms";
 import { cn } from "@/lib/utils";
 import {
   Bell,
@@ -12,8 +12,12 @@ import {
   Trash2,
   ChevronRight,
   Check,
+  LogOut,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
 
 const settingSections = [
   {
@@ -62,10 +66,36 @@ export function SettingsPage() {
   const [selectedModel, setSelectedModel] = useAtom(selectedModelAtom);
   const [darkMode, setDarkMode] = useState(false);
   const { toast } = useToast();
+  const authUser = useAtomValue(userAtom);
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleClearHistory = () => {
     toast({ description: "All conversation history cleared." });
   };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      if (auth) await signOut(auth);
+      router.push("/");
+    } catch {
+      toast({
+        title: "Error signing out",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+      setIsLoggingOut(false);
+    }
+  };
+
+  const displayName = authUser?.profile
+    ? `${authUser.profile.firstName ?? ""} ${authUser.profile.lastName ?? ""}`.trim() || authUser.displayName
+    : authUser?.displayName || "User";
+  const email = authUser?.profile?.email || authUser?.email || "";
+  const photoUrl =
+    authUser?.profile?.photoUrl ||
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName || "User"}`;
 
   return (
     <div className="flex-1 overflow-auto px-4 sm:px-6 py-6 max-w-2xl mx-auto w-full">
@@ -187,17 +217,25 @@ export function SettingsPage() {
           Account
         </h2>
         <div className="rounded-2xl border border-[#E8E5F0] bg-white p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8A38F5] to-[#C084FC] flex items-center justify-center text-white text-lg font-semibold">
-            A
-          </div>
-          <div>
-            <p className="text-sm font-medium text-[#151515]">Alex Johnson</p>
-            <p className="text-xs text-[#9B9B9B]">alex@example.com</p>
-            <span className="inline-block mt-1 text-xs font-medium text-[#8A38F5] bg-[#F5F3FF] px-2 py-0.5 rounded-full">
-              Pro Plan
-            </span>
+          <img
+            src={photoUrl}
+            alt={displayName || "User"}
+            className="w-12 h-12 rounded-full bg-purple-100 shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[#151515] truncate">{displayName}</p>
+            {email && <p className="text-xs text-[#9B9B9B] truncate">{email}</p>}
           </div>
         </div>
+
+        <button
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-2xl border border-[#E8E5F0] bg-white py-3 text-sm font-medium text-[#DF2E16] hover:bg-red-50 transition-colors disabled:opacity-60"
+        >
+          <LogOut size={16} />
+          {isLoggingOut ? "Logging out…" : "Log out"}
+        </button>
       </div>
 
       <p className="text-center text-xs text-[#BCBCBC]">Sorene v3.0.1</p>

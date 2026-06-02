@@ -5,29 +5,40 @@ import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDnaData } from "@/hooks/useDnaData";
-import { mapProfileToDNA } from "@/lib/dnaMapping";
+
+const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "—";
+
+function valueColor(val: string): string {
+  const v = val.toLowerCase();
+  if (["high", "strong", "ready", "committed", "stable", "full"].some(w => v.includes(w)))
+    return "text-emerald-600";
+  if (["low", "limited", "depleted", "stuck"].some(w => v.includes(w)))
+    return "text-red-500";
+  if (["medium", "moderate", "deciding", "variable"].some(w => v.includes(w)))
+    return "text-amber-500";
+  return "text-gray-900";
+}
 
 interface MetricRowProps {
   label: string;
   value: string;
-  description: string;
-  valueColor?: string;
+  description?: string;
 }
 
-const MetricRow = ({ label, value, description, valueColor }: MetricRowProps) => (
+const MetricRow = ({ label, value, description }: MetricRowProps) => (
   <motion.div
-    initial={{ opacity: 0, y: 10 }}
+    initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
     className="flex flex-col md:flex-row py-6 border-b border-gray-100 last:border-0"
   >
-    <div className="w-full md:w-1/3 mb-2 md:mb-0">
-      <p className="font-medium text-sm text-gray-500">{label}</p>
+    <div className="w-full md:w-1/3 mb-1 md:mb-0">
+      <p className="text-sm text-gray-500 font-medium">{label}</p>
     </div>
     <div className="flex-1">
-      <h4 className={cn("text-xl font-medium mb-1 capitalize", valueColor || "text-gray-900")}>
-        {value}
+      <h4 className={cn("text-2xl font-medium mb-1 capitalize", valueColor(value))}>
+        {capitalize(value)}
       </h4>
-      <p className="text-gray-400 text-sm leading-relaxed">{description}</p>
+      {description && <p className="text-gray-400 text-sm leading-relaxed">{description}</p>}
     </div>
   </motion.div>
 );
@@ -36,22 +47,16 @@ export function YourCoreDetail() {
   const router = useRouter();
   const { data: profile, isLoading } = useDnaData();
 
+  const core = profile?.externalProfile?.core;
   const scores = profile?.dnaScores;
-  const externalProfile = profile?.externalProfile;
+  const strengthProfile = profile?.externalProfile?.strength_profile;
 
-  // Use rich external profile if available, otherwise fall back to dnaScores
-  const dnaItems = externalProfile ? mapProfileToDNA(externalProfile) : null;
-  const coreItem = dnaItems?.find((i) => i.core_id === "your_core");
+  // Build a deep founder DNA sentence from core values
+  const founderSentence = core
+    ? `${capitalize(core.primary_motivation)}-driven, ${core.structure_preference?.toLowerCase().replace(/_/g, " ")}-structured, and ${core.collaboration_mode?.toLowerCase().replace(/_/g, " ")} by nature — you bring ${core.execution_bias?.toLowerCase().replace(/_/g, " ") || "focused execution"} to everything you build.`
+    : scores?.strengths_summary || "Your unique combination of drive, structure, and values defines how you work best.";
 
-  const riskLabel = scores ? (scores.risk_score >= 8 ? "High" : scores.risk_score >= 5 ? "Medium" : "Low") : "—";
-  const readinessLabel = scores ? (scores.readiness_score >= 7 ? "Ready" : scores.readiness_score >= 5 ? "Deciding" : "Exploring") : "—";
-  const structureLabel = scores ? (scores.structure_score >= 8 ? "Independent" : scores.structure_score >= 6 ? "Small Team" : "Collaborative") : "—";
-  const uncertaintyLabel = scores ? (scores.uncertainty_score >= 8 ? "High" : scores.uncertainty_score >= 5 ? "Medium" : "Low") : "—";
-
-  const headerDescription = coreItem?.description || scores?.strengths_summary || "Your unique strengths and energy patterns define how you work best.";
-  const motivationValue = coreItem?.key_signals?.find(s => s.label === "Primary Motivation")?.value || scores?.motivation_driver || "—";
-  const motivationDesc = coreItem?.key_signals?.find(s => s.label === "Primary Motivation")?.explanation || "What drives your decisions and actions.";
-  const strengthPatterns: string[] = coreItem?.strength_patterns || (scores?.energy_source ? [scores.energy_source.slice(0, 40)] : []);
+  const strengthPatterns: string[] = strengthProfile?.strengths?.slice(0, 5) || [];
 
   if (isLoading) {
     return (
@@ -62,7 +67,7 @@ export function YourCoreDetail() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-h-screen pb-20">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen pb-20">
       {/* Header */}
       <div
         className="relative pt-6 pb-8 px-2 rounded-t-4xl overflow-hidden shadow-lg mt-5"
@@ -80,8 +85,11 @@ export function YourCoreDetail() {
               Back to summary
             </button>
           </div>
-          <h2 className="text-4xl font-medium text-white mb-4 tracking-tight">Your Core</h2>
-          <p className="text-white/85 text-sm max-w-2xl leading-relaxed">{headerDescription}</p>
+          <div className="flex items-center gap-3 mb-4">
+            <img src="/figmaAssets/dna.svg" alt="" className="w-6 h-6 opacity-80" />
+            <h2 className="text-3xl font-medium text-white tracking-tight">Your Core</h2>
+          </div>
+          <p className="text-white/85 text-sm max-w-2xl leading-relaxed">{founderSentence}</p>
         </div>
       </div>
 
@@ -89,64 +97,79 @@ export function YourCoreDetail() {
       <div className="max-w-4xl px-8 mt-12">
         <h3 className="text-xl font-medium text-gray-900 mb-8">Key Signals</h3>
         <div className="flex flex-col">
+
           <MetricRow
             label="Primary Motivation"
-            value={motivationValue}
-            description={motivationDesc}
+            value={core?.primary_motivation || scores?.motivation_driver?.split(" ").slice(0, 2).join(" ") || "—"}
+            description={core?.description?.primary_motivation || "What drives your decisions and actions."}
           />
-          <MetricRow
-            label="Energy Source"
-            value={scores?.energy_source?.slice(0, 60) || "—"}
-            description="What fuels you and keeps you going."
-          />
-          <MetricRow
-            label="Energy Drains"
-            value={scores?.energy_drains?.slice(0, 60) || "—"}
-            description="What depletes your energy and focus."
-          />
-          <MetricRow
-            label="Strengths & Edges"
-            value={scores?.non_negotiable?.slice(0, 60) || "—"}
-            description="What you won't compromise on, and where you push hardest."
-          />
-
-          {/* Risk Profile */}
-          <div className="flex flex-col md:flex-row py-6 border-b border-gray-100">
-            <div className="w-full md:w-1/3 mb-2 md:mb-0">
-              <p className="font-medium text-sm text-gray-500">Risk Profile</p>
-            </div>
-            <div className="flex-1">
-              <div className="flex gap-12 mb-4">
-                <div>
-                  <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Risk Level</p>
-                  <p className="text-2xl font-semibold text-gray-900">{riskLabel}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Readiness</p>
-                  <p className="text-2xl font-semibold text-gray-900">{readinessLabel}</p>
-                </div>
-              </div>
-              <p className="text-gray-400 text-sm">How willing you are to take risks and how ready you are to act.</p>
-            </div>
-          </div>
 
           <MetricRow
             label="Structure Preference"
-            value={structureLabel}
-            description="How much you prefer clear frameworks and defined processes."
-            valueColor="text-emerald-600"
+            value={core?.structure_preference || "—"}
+            description={core?.description?.structure_preference || "How you prefer to organize your work."}
           />
+
           <MetricRow
-            label="Uncertainty Tolerance"
-            value={uncertaintyLabel}
-            description="How you handle ambiguity and unclear situations."
+            label="Collaboration Mode"
+            value={core?.collaboration_mode || "—"}
+            description={core?.description?.collaboration_mode || "How you work best with others."}
           />
+
+          <MetricRow
+            label="Ambiguity Tolerance"
+            value={core?.ambiguity_tolerance || "—"}
+            description={core?.description?.ambiguity_tolerance || "How you handle unclear or uncertain situations."}
+          />
+
+          {/* Risk Profile — two columns */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col md:flex-row py-6 border-b border-gray-100"
+          >
+            <div className="w-full md:w-1/3 mb-2 md:mb-0">
+              <p className="text-sm text-gray-500 font-medium">Risk Profile</p>
+            </div>
+            <div className="flex-1">
+              <div className="flex gap-12 mb-3">
+                <div>
+                  <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Emotional Risk</p>
+                  <p className={cn("text-2xl font-medium capitalize", valueColor(core?.risk_emotional || ""))}>
+                    {capitalize(core?.risk_emotional || scores?.risk_score?.toString() || "—")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Financial Risk</p>
+                  <p className={cn("text-2xl font-medium capitalize", valueColor(core?.risk_financial || ""))}>
+                    {capitalize(core?.risk_financial || "—")}
+                  </p>
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm">
+                {core?.description?.risk_emotional || "You're willing to take practical risks, but not chaotic ones."}
+              </p>
+            </div>
+          </motion.div>
+
+          <MetricRow
+            label="Time Availability"
+            value={core?.time_availability || "—"}
+            description={core?.description?.time_availability || "How much capacity you can commit to this work."}
+          />
+
+          <MetricRow
+            label="Readiness Level"
+            value={core?.readiness_level || "—"}
+            description={core?.description?.readiness_level || "Where you are on the path to taking action."}
+          />
+
         </div>
 
         {/* Strength Patterns */}
         {strengthPatterns.length > 0 && (
           <div className="mt-16">
-            <h3 className="text-xl font-medium text-gray-900 mb-6">Strength Patterns</h3>
+            <h3 className="text-xl font-medium text-gray-900 mb-6">Strength Pattern</h3>
             <div className="flex flex-wrap gap-3">
               {strengthPatterns.map((strength, index) => {
                 const variants = [
@@ -154,6 +177,7 @@ export function YourCoreDetail() {
                   "bg-blue-50 text-blue-700 border-blue-100",
                   "bg-purple-50 text-purple-700 border-purple-100",
                   "bg-amber-50 text-amber-700 border-amber-100",
+                  "bg-rose-50 text-rose-700 border-rose-100",
                 ];
                 return (
                   <span

@@ -115,7 +115,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                             : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"
                         }
                       >
-                        {message.content}
+                        {message.content.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1")}
                       </div>
                     </div>
                     {isConfirmBubble && (

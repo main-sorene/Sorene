@@ -217,7 +217,21 @@ export function Sidebar({
         };
       });
 
-      // Merge backend data + assessment conv + existing local-only chats
+      // Restore DNA chat conversations from localStorage
+      const dnaChatConvs: Conversation[] = [];
+      try {
+        const uidKey = authUser?.uid || "local";
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith(`dna_chat_${uidKey}_`))
+          .forEach((k) => {
+            try {
+              const c = JSON.parse(localStorage.getItem(k)!);
+              if (c?.id) dnaChatConvs.push(c);
+            } catch {}
+          });
+      } catch {}
+
+      // Merge backend data + assessment conv + DNA chats + existing local-only chats
       const merged = [...newConvs];
       prev.forEach((pc) => {
         if (!merged.find((m) => m.id === pc.id)) {
@@ -227,6 +241,11 @@ export function Sidebar({
       if (assessmentConv && !merged.find((m) => m.id === assessmentConv!.id)) {
         merged.push(assessmentConv);
       }
+      dnaChatConvs.forEach((dc) => {
+        if (!merged.find((m) => m.id === dc.id)) {
+          merged.push(dc);
+        }
+      });
 
       return merged.sort((a, b) => {
         const timeA = new Date(a.updatedAt).getTime();

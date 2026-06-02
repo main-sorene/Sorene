@@ -485,6 +485,7 @@ export function useAssessmentFlow() {
       model: "sorene-1",
       done: true,
       segment: "assessment",
+      isCreatedOnBackend: false, // prevents ChatPage from trying to fetch from backend
     };
     // Persist to localStorage so it survives page refreshes
     try {

@@ -9,22 +9,22 @@ import {
   conversationsAtom,
   isAssessmentCompleteAtom,
 } from "@/store/atoms";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
-  Shield,
+  User,
+  Settings,
+  Wrench,
   Bell,
+  Plug,
+  CreditCard,
+  Database,
   Lock,
   LogOut,
   X,
-  Moon,
-  Globe,
-  Trash2,
-  ChevronRight,
+  Check,
   AlertTriangle,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
 import { signOut } from "firebase/auth";
@@ -33,31 +33,43 @@ import { useRouter } from "next/navigation";
 import { saveUserProfile } from "@/lib/firestore";
 
 const SIDEBAR_ITEMS = [
-  { id: "Account", icon: <img src="/figmaAssets/user-circle.svg" alt="" />, label: "Account" },
-  { id: "Preferences", icon: <img src="/figmaAssets/paint-brush.svg" alt="" />, label: "Preferences" },
-  { id: "Personalization", icon: <img src="/figmaAssets/wrench.svg" alt="" />, label: "Personalization" },
-  { id: "Notifications", icon: <img src="/figmaAssets/bell.svg" alt="" />, label: "Notifications" },
-  { id: "Integrations", icon: <img src="/figmaAssets/plugs.svg" alt="" />, label: "Integrations" },
-  { id: "Manage Subscription", icon: <img src="/figmaAssets/gift.svg" alt="" />, label: "Manage Subscription" },
-  { id: "Data control", icon: <img src="/figmaAssets/database.svg" alt="" />, label: "Data control" },
-  { id: "Security", icon: <img src="/figmaAssets/key.svg" alt="" />, label: "Privacy & Security" },
+  { id: "Account", icon: User, label: "Account" },
+  { id: "Preferences", icon: Settings, label: "Preferences" },
+  { id: "Personalization", icon: Wrench, label: "Personalization" },
+  { id: "Notifications", icon: Bell, label: "Notifications" },
+  { id: "Integrations", icon: Plug, label: "Integrations" },
+  { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
+  { id: "Data control", icon: Database, label: "Data control" },
+  { id: "Security", icon: Lock, label: "Privacy & Security" },
+];
+
+const MODELS = [
+  { id: "sorene-1", label: "Sorene 1.0", description: "Most capable" },
+  { id: "sorene-1-mini", label: "Sorene 1.0 Mini", description: "Faster & lighter" },
+  { id: "sorene-lite", label: "Sorene Lite", description: "Balanced" },
 ];
 
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
   const { data: subscription } = useSubscriptionStatus();
-  const [darkMode, setDarkMode] = React.useState(false);
   const setConversations = useSetAtom(conversationsAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [, setUser] = useAtom(userAtom);
   const authUser = useAtomValue(userAtom);
   const { toast } = useToast();
   const router = useRouter();
-  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isClearing, setIsClearing] = React.useState(false);
+  const [selectedModel, setSelectedModel] = React.useState("sorene-1");
+
+  if (!isOpen) return null;
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setShowClearConfirm(false);
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -65,7 +77,6 @@ export function SettingsModal() {
       if (auth) await signOut(auth);
       setUser(null);
       setIsOpen(false);
-      setShowLogoutConfirm(false);
       router.push("/");
     } catch {
       toast({ title: "Error signing out", description: "Please try again.", variant: "destructive" });
@@ -77,13 +88,11 @@ export function SettingsModal() {
   const handleClearHistory = async () => {
     setIsClearing(true);
     try {
-      // Clear local state and persisted assessment session
       setConversations([]);
       setIsAssessmentComplete(false);
       try {
         Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
       } catch {}
-      // Reset Firestore profile so user starts fresh on next login
       if (authUser?.uid) {
         await saveUserProfile(authUser.uid, {
           onboardingComplete: false,
@@ -96,7 +105,7 @@ export function SettingsModal() {
       }
       setShowClearConfirm(false);
       setIsOpen(false);
-      toast({ description: "All history cleared. You will start fresh on next visit." });
+      toast({ description: "All history cleared." });
       router.push("/");
     } catch {
       toast({ description: "Failed to clear history.", variant: "destructive" });
@@ -110,29 +119,12 @@ export function SettingsModal() {
     return true;
   });
 
-  const renderContent = () => {
-    // Logout confirmation overlay
-    if (showLogoutConfirm) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full gap-6 py-20">
-          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
-            <LogOut size={24} className="text-red-500" />
-          </div>
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-[#151515] mb-2">Log out?</h2>
-            <p className="text-sm text-[#62646A]">Are you sure you want to log out of your account?</p>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => setShowLogoutConfirm(false)} className="px-5 py-2.5 rounded-xl border border-[#ECEDEE] text-sm font-medium text-[#151515] hover:bg-gray-50 transition-colors">Cancel</button>
-            <button onClick={handleLogout} disabled={isLoggingOut} className="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-60">
-              {isLoggingOut ? "Logging out…" : "Log out"}
-            </button>
-          </div>
-        </div>
-      );
-    }
+  // Derive display name and initial
+  const displayName = authUser?.displayName || authUser?.email?.split("@")[0] || "User";
+  const initial = displayName.charAt(0).toUpperCase();
+  const email = authUser?.email || "";
 
-    // Clear history confirmation overlay
+  const renderContent = () => {
     if (showClearConfirm) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-6 py-20">
@@ -141,7 +133,7 @@ export function SettingsModal() {
           </div>
           <div className="text-center max-w-sm">
             <h2 className="text-lg font-semibold text-[#151515] mb-2">Clear all history?</h2>
-            <p className="text-sm text-[#62646A]">This will delete all your conversations and reset your assessment. You'll start completely fresh on your next visit. This cannot be undone.</p>
+            <p className="text-sm text-[#62646A]">This will delete all your conversations and reset your assessment. You'll start completely fresh. This cannot be undone.</p>
           </div>
           <div className="flex gap-3">
             <button onClick={() => setShowClearConfirm(false)} className="px-5 py-2.5 rounded-xl border border-[#ECEDEE] text-sm font-medium text-[#151515] hover:bg-gray-50 transition-colors">Cancel</button>
@@ -154,72 +146,60 @@ export function SettingsModal() {
     }
 
     switch (activeTab) {
-      case "Manage Subscription":
-        return <SubscriptionContent />;
-      case "Preferences":
+      case "Account":
         return (
           <div className="space-y-6">
-            <h2 className="text-lg font-medium text-[#151515]">Preferences</h2>
-            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-              <button onClick={() => setDarkMode(p => !p)} className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
-                <div className="flex items-center gap-3">
-                  <Moon size={18} className="text-[#6B6B6B]" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[#151515]">Dark Mode</p>
-                    <p className="text-xs text-[#9B9B9B]">Toggle dark theme</p>
-                  </div>
-                </div>
-                <div className={cn("w-10 rounded-full transition-colors relative shrink-0", darkMode ? "bg-[#8A38F5]" : "bg-[#E8E5F0]")} style={{ height: "22px" }}>
-                  <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform", darkMode ? "translate-x-5" : "translate-x-0.5")} />
-                </div>
-              </button>
-              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
-                <div className="flex items-center gap-3">
-                  <Globe size={18} className="text-[#6B6B6B]" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[#151515]">Language</p>
-                    <p className="text-xs text-[#9B9B9B]">English (US)</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[#BCBCBC]" />
-              </button>
-              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <Bell size={18} className="text-[#6B6B6B]" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[#151515]">Notifications</p>
-                    <p className="text-xs text-[#9B9B9B]">Manage alerts</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[#BCBCBC]" />
-              </button>
+            <h2 className="text-lg font-semibold text-[#151515]">Account</h2>
+            {/* User card */}
+            <div className="rounded-2xl border border-[#ECEDEE] p-4 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white text-lg font-semibold shrink-0">
+                {initial}
+              </div>
+              <div>
+                <p className="font-medium text-[#151515] text-[15px]">{displayName}</p>
+                <p className="text-sm text-[#62646A]">{email}</p>
+              </div>
+            </div>
+            {/* Model selector */}
+            <div>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Default Model</p>
+              <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden divide-y divide-[#ECEDEE]">
+                {MODELS.map((model) => (
+                  <button
+                    key={model.id}
+                    onClick={() => setSelectedModel(model.id)}
+                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[#151515]">{model.label}</p>
+                      <p className="text-xs text-[#9B9B9B]">{model.description}</p>
+                    </div>
+                    {selectedModel === model.id && (
+                      <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center shrink-0">
+                        <Check size={13} className="text-white" strokeWidth={3} />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         );
+      case "Manage Subscription":
+        return <SubscriptionContent />;
       case "Security":
         return (
           <div className="space-y-6">
-            <h2 className="text-lg font-medium text-[#151515]">Privacy & Security</h2>
+            <h2 className="text-lg font-semibold text-[#151515]">Privacy & Security</h2>
             <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-              <button className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-[#F0EEF5]">
-                <div className="flex items-center gap-3">
-                  <Shield size={18} className="text-[#6B6B6B]" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-[#151515]">Privacy Settings</p>
-                    <p className="text-xs text-[#9B9B9B]">Control your data</p>
-                  </div>
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors text-left"
+              >
+                <div>
+                  <p className="text-sm font-medium text-red-500">Clear All History</p>
+                  <p className="text-xs text-[#9B9B9B]">Delete all conversations and reset account</p>
                 </div>
-                <ChevronRight size={16} className="text-[#BCBCBC]" />
-              </button>
-              <button onClick={() => setShowClearConfirm(true)} className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <Trash2 size={18} className="text-red-400" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-red-500">Clear All History</p>
-                    <p className="text-xs text-[#9B9B9B]">Delete all conversations and reset account</p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-[#BCBCBC]" />
               </button>
             </div>
           </div>
@@ -235,53 +215,61 @@ export function SettingsModal() {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setShowLogoutConfirm(false); setShowClearConfirm(false); } }}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-w-[900px] w-[95vw] h-[85vh] p-0 overflow-hidden border-none shadow-2xl rounded-4xl"
-      >
-        <div className="flex h-full bg-[#F7F7F7]">
-          {/* Sidebar */}
-          <aside className="w-14 sm:w-55 border-r border-gray-100 flex flex-col py-4 px-2 sm:px-3">
-            <div className="flex items-center mb-4">
-              <button onClick={() => setIsOpen(false)} className="p-2 text-[#151515] transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <nav className="flex-1 space-y-0.5">
-              {filteredSidebarItems.map((item) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+
+      {/* Modal */}
+      <div className="relative w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex overflow-hidden">
+        {/* Sidebar */}
+        <aside className="w-[220px] shrink-0 flex flex-col py-6 px-3 border-r border-[#F0F0F0]">
+          <div className="flex items-center justify-between px-2 mb-5">
+            <span className="text-base font-semibold text-[#151515]">Settings</span>
+          </div>
+          <nav className="flex-1 space-y-0.5">
+            {filteredSidebarItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id && !showClearConfirm;
+              return (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveTab(item.id); setShowLogoutConfirm(false); setShowClearConfirm(false); }}
+                  onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-2 sm:px-3 py-2 rounded-lg text-[14px] font-medium transition-all",
-                    activeTab === item.id && !showLogoutConfirm && !showClearConfirm
-                      ? "bg-gray-100 text-[#101828]"
-                      : "text-gray-600 hover:bg-gray-50 hover:text-[#101828]",
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-all text-left",
+                    isActive
+                      ? "bg-purple-50 text-purple-700"
+                      : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
                   )}
                 >
-                  {item.icon}
-                  <span className="hidden sm:inline">{item.label}</span>
+                  <Icon size={16} className={isActive ? "text-purple-600" : "text-[#6B6B6B]"} />
+                  {item.label}
                 </button>
-              ))}
-            </nav>
-            <button
-              onClick={() => { setShowClearConfirm(false); setShowLogoutConfirm(true); }}
-              className="mt-auto w-full flex items-center gap-3 px-2 sm:px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all"
-            >
-              <LogOut size={18} />
-              <span className="hidden sm:inline">Log out</span>
-            </button>
-          </aside>
+              );
+            })}
+          </nav>
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60"
+          >
+            <LogOut size={16} />
+            {isLoggingOut ? "Logging out…" : "Log out"}
+          </button>
+        </aside>
 
-          {/* Content Area */}
-          <main className="flex-1 flex flex-col m-1 rounded-4xl bg-white shadow-xl min-h-0 overflow-hidden">
-            <ScrollArea className="h-full">
-              <div className="p-5 sm:p-8">{renderContent()}</div>
-            </ScrollArea>
-          </main>
-        </div>
-      </DialogContent>
-    </Dialog>
+        {/* Content */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Close button */}
+          <div className="flex justify-end px-5 pt-4 pb-2 shrink-0">
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-8 pb-8">
+            {renderContent()}
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }

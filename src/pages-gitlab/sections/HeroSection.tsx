@@ -55,37 +55,35 @@ export const HeroSection = () => {
   };
 
   const handleGoogleSignup = async () => {
+    setError(null);
+    // Start popup synchronously before any state updates (keeps user gesture chain intact)
+    let signInPromise: Promise<any>;
     try {
-      setIsGoogleLoading(true);
-      const result = await signInWithGoogle();
+      signInPromise = signInWithGoogle();
+    } catch (err: any) {
+      setError(err?.message || "Failed to open Google sign-in.");
+      return;
+    }
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInPromise;
+      if (!result) return; // redirect case
       const user = result.user;
       const userUid = user.email || user.uid;
-      // Save/update profile with basic Google info
       if (user.photoURL || user.email) {
-        await saveUserProfile(userUid, {
-          photoUrl: user.photoURL || undefined,
-          email: user.email || "",
-        });
+        await saveUserProfile(userUid, { photoUrl: user.photoURL || undefined, email: user.email || "" });
       }
-
-      // Check Firestore for user profile
       const profile = await getUserProfile(userUid);
-
-      setUser({
-        uid: userUid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        profile: profile || undefined,
-      });
-
-      if (profile && profile.onboardingComplete) {
-        router.push("/chat");
+      setUser({ uid: userUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
+      router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
+    } catch (err: any) {
+      console.error("Google sign-in error:", err);
+      const code = err?.code || "";
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // User closed popup — no message needed
       } else {
-        router.push("/onBoarding");
+        setError(err?.message || "Google sign-in failed. Please try again.");
       }
-    } catch (error) {
-      console.error("Google sign-in error:", error);
     } finally {
       setIsGoogleLoading(false);
     }

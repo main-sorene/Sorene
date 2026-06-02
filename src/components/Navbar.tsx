@@ -31,9 +31,14 @@ export const Navbar = ({ isPolicyPage = false }) => {
       router.push("/chat");
       return;
     }
+    let signInPromise: Promise<any>;
     try {
-      setIsGoogleLoading(true);
-      const result = await signInWithGoogle();
+      signInPromise = signInWithGoogle();
+    } catch { return; }
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInPromise;
+      if (!result) return;
       const user = result.user;
       const userUid = user.email || user.uid;
       if (user.photoURL || user.email) {
@@ -42,7 +47,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
       const profile = await getUserProfile(userUid);
       setUser({ uid: userUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
       router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Google sign-in error:", e);
     } finally {
       setIsGoogleLoading(false);

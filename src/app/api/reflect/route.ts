@@ -5,7 +5,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
-    const { answer, signal, questionText, nextQuestion, nextChoices, forceLanguage } =
+    const { answer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage } =
       (await req.json()) as {
         answer: string;
         signal: string;
@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
         nextQuestion?: string;
         nextChoices?: string[];
         forceLanguage?: string;
+        preferredLanguage?: string;
       };
 
     const hasNextQuestion = nextQuestion && nextQuestion.trim().length > 0;
@@ -58,6 +59,10 @@ Output only the translated question, then the separator line "---CHOICES---", th
       });
     }
 
+    const languageContext = preferredLanguage
+      ? `The user has been communicating in ${preferredLanguage} in this session. Use their CURRENT message to determine the language. If their current message is in English, respond in English. If their current message is in ${preferredLanguage}, respond in ${preferredLanguage}. Always follow the language of the CURRENT message.`
+      : `Detect the language the user wrote in based on their current message.`;
+
     const prompt = hasNextQuestion
       ? `You are Sorene — a direct, warm entrepreneurship coach. The user just answered an assessment question.
 
@@ -69,21 +74,21 @@ Next question to ask (in English): """${nextQuestion}"""${
             : ""
         }
 
-Detect the language the user wrote in. Your output must have exactly ${hasChoices ? "four" : "three"} parts separated by blank lines:
+${languageContext} Your output must have exactly ${hasChoices ? "four" : "three"} parts separated by blank lines:
 
-Part 1 — The detected language name in English (e.g. "English", "Vietnamese", "Spanish"). One word or two words only.
+Part 1 — The language name you will respond in (e.g. "English", "Vietnamese", "Spanish"). One word or two words only.
 
-Part 2 — ONE short sentence (max 15 words) in the user's language that:
+Part 2 — ONE short sentence (max 15 words) in that language that:
 - Reflects back what you heard — specific to what they said, not generic
 - Feels like a real human noticing a pattern, not a chatbot confirming receipt
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
 
-Part 3 — The next question, translated/adapted into the user's language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If the user wrote in English, output the original question unchanged.${
+Part 3 — The next question, translated/adapted into that language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If responding in English, output the original question unchanged.${
           hasChoices
             ? `
 
-Part 4 — The multiple-choice options translated into the user's language, one per line, in the same order, no numbering or bullets. If the user wrote in English, output the original choices unchanged.`
+Part 4 — The multiple-choice options translated into that language, one per line, in the same order, no numbering or bullets. If responding in English, output the original choices unchanged.`
             : ""
         }
 
@@ -93,7 +98,7 @@ Output only these parts separated by blank lines. No labels, no extra text.`
 Signal being measured: ${signal}
 Their answer: "${answer}"
 
-IMPORTANT: Detect the language the user wrote in. Respond in that same language.
+${languageContext} Respond in that same language.
 
 Write ONE short sentence (max 15 words) that:
 - Reflects back what you heard — specific to what they said, not generic

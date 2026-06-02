@@ -38,6 +38,7 @@ async function fetchReflection(
   questionText: string,
   nextQuestion?: string,
   nextChoices?: string[],
+  preferredLanguage?: string,
 ): Promise<{
   reflection: string;
   translatedQuestion: string;
@@ -48,7 +49,7 @@ async function fetchReflection(
     const res = await fetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices }),
+      body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices, preferredLanguage }),
     });
     if (!res.ok) return { reflection: "", translatedQuestion: "", translatedChoices: [], detectedLanguage: "" };
     const data = await res.json();
@@ -63,13 +64,13 @@ async function fetchReflection(
   }
 }
 
-async function translateFollowUp(text: string, userAnswer: string): Promise<string> {
+async function translateFollowUp(text: string, userAnswer: string, preferredLanguage?: string): Promise<string> {
   // Detect language from the user's actual answer and translate the follow-up into it
   try {
     const res = await fetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: userAnswer, signal: "", questionText: "", nextQuestion: text }),
+      body: JSON.stringify({ answer: userAnswer, signal: "", questionText: "", nextQuestion: text, preferredLanguage }),
     });
     if (!res.ok) return text;
     const data = await res.json();
@@ -160,6 +161,7 @@ export function useAssessmentFlow() {
   // For non-English flows: translated choice labels parallel to currentNode.choices.
   // Index N in translatedChoices corresponds to index N in currentNode.choices.
   const [translatedChoices, setTranslatedChoices] = useState<string[]>([]);
+  const [preferredLanguage, setPreferredLanguage] = useState("");
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
@@ -299,7 +301,7 @@ export function useAssessmentFlow() {
         if (currentNode.followUp && currentNode.followUp.condition(answerForLogic)) {
           const rawFollowUpMsg = getFollowUpMessage(currentNode.followUp, answerForLogic);
           setIsReflecting(true);
-          const followUpMsg = await translateFollowUp(rawFollowUpMsg, text);
+          const followUpMsg = await translateFollowUp(rawFollowUpMsg, text, preferredLanguage);
           setIsReflecting(false);
           addMessage({ id: `fu-${Date.now()}`, role: "assistant", content: followUpMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "condition" });
@@ -308,7 +310,7 @@ export function useAssessmentFlow() {
 
         if (currentNode.alwaysFollowUp) {
           setIsReflecting(true);
-          const alwaysMsg = await translateFollowUp(currentNode.alwaysFollowUp.message, text);
+          const alwaysMsg = await translateFollowUp(currentNode.alwaysFollowUp.message, text, preferredLanguage);
           setIsReflecting(false);
           addMessage({ id: `afu-${Date.now()}`, role: "assistant", content: alwaysMsg });
           setFlowState({ phase: "question", nodeId, awaitingFollowUp: true, followUpType: "always" });
@@ -335,7 +337,7 @@ export function useAssessmentFlow() {
       setIsReflecting(true);
       // Fetch reflection for final answer + closing summary in parallel
       const [{ reflection: closingReflection }, summary] = await Promise.all([
-        fetchReflection(userAnswer, questionSignal, ""),
+        fetchReflection(userAnswer, questionSignal, "", undefined, undefined, preferredLanguage),
         fetchClosingSummary(firstName, currentAnswers, hasCv),
       ]);
       setIsReflecting(false);
@@ -375,14 +377,16 @@ export function useAssessmentFlow() {
 
     setIsReflecting(true);
     const nextQuestion = getNodeMessage(nextNode, ctx);
-    const { reflection, translatedQuestion, translatedChoices: nextTranslatedChoices } =
+    const { reflection, translatedQuestion, translatedChoices: nextTranslatedChoices, detectedLanguage } =
       await fetchReflection(
         userAnswer,
         questionSignal,
         nextQuestion,
         nextQuestion,
         nextNode.choices,
+        preferredLanguage,
       );
+    if (detectedLanguage) setPreferredLanguage(detectedLanguage);
     setIsReflecting(false);
 
     const questionToShow = translatedQuestion || nextQuestion;

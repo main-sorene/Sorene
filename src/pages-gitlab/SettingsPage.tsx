@@ -18,6 +18,9 @@ import {
   CreditCard,
   Lock,
   X,
+  Wrench,
+  Plug,
+  Database,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { signOut } from "firebase/auth";
@@ -28,7 +31,11 @@ import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 const NAV_ITEMS = [
   { id: "account", label: "Account", icon: User },
   { id: "preferences", label: "Preferences", icon: Settings },
+  { id: "personalization", label: "Personalization", icon: Wrench },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "integrations", label: "Integrations", icon: Plug },
   { id: "subscription", label: "Manage Subscription", icon: CreditCard },
+  { id: "datacontrol", label: "Data control", icon: Database },
   { id: "privacy", label: "Privacy & Security", icon: Lock },
 ];
 
@@ -208,6 +215,16 @@ export function SettingsPage() {
             <div className="max-w-lg">
               <h2 className="text-base font-semibold text-[#151515] mb-6">Manage Subscription</h2>
               <SubscriptionContent />
+            </div>
+          )}
+
+          {/* Placeholders */}
+          {(activeTab === "personalization" || activeTab === "notifications" || activeTab === "integrations" || activeTab === "datacontrol") && (
+            <div className="max-w-lg space-y-6">
+              <h2 className="text-base font-semibold text-[#151515] capitalize">{NAV_ITEMS.find(n => n.id === activeTab)?.label}</h2>
+              <div className="flex flex-col items-center justify-center py-20 text-[#9B9B9B]">
+                <p className="text-sm">This section is coming soon.</p>
+              </div>
             </div>
           )}
 

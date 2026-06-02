@@ -77,9 +77,12 @@ export function SettingsModal() {
   const handleClearHistory = async () => {
     setIsClearing(true);
     try {
-      // Clear local state
+      // Clear local state and persisted assessment session
       setConversations([]);
       setIsAssessmentComplete(false);
+      try {
+        Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+      } catch {}
       // Reset Firestore profile so user starts fresh on next login
       if (authUser?.uid) {
         await saveUserProfile(authUser.uid, {

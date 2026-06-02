@@ -146,15 +146,66 @@ export function useAssessmentFlow() {
   const hasCv = !!(authUser?.profile as any)?.cvData;
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
 
-  const [messages, setMessages] = useState<AssessmentMessage[]>(() =>
-    buildInitialMessages(firstName, hasCv, cvSummary)
-  );
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [flowState, setFlowState] = useState<FlowState>(() =>
-    hasCv
+  const SESSION_KEY = `assessment_state_${authUser?.uid || "guest"}`;
+
+  const [messages, setMessagesRaw] = useState<AssessmentMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages?.length) return parsed.messages;
+      }
+    } catch {}
+    return buildInitialMessages(firstName, hasCv, cvSummary);
+  });
+  const [answers, setAnswersRaw] = useState<Record<string, string>>(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) return JSON.parse(saved).answers || {};
+    } catch {}
+    return {};
+  });
+  const [flowState, setFlowStateRaw] = useState<FlowState>(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.flowState) return parsed.flowState;
+      }
+    } catch {}
+    return hasCv
       ? { phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false }
-      : { phase: "cv_request" }
-  );
+      : { phase: "cv_request" };
+  });
+
+  // Wrap setters to also persist to sessionStorage
+  const persist = (update: Partial<{ messages: AssessmentMessage[]; answers: Record<string, string>; flowState: FlowState }>) => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      const current = saved ? JSON.parse(saved) : {};
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...current, ...update }));
+    } catch {}
+  };
+
+  const setMessages = (updater: AssessmentMessage[] | ((prev: AssessmentMessage[]) => AssessmentMessage[])) => {
+    setMessagesRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      persist({ messages: next });
+      return next;
+    });
+  };
+  const setAnswers = (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
+    setAnswersRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      persist({ answers: next });
+      return next;
+    });
+  };
+  const setFlowState = (next: FlowState) => {
+    persist({ flowState: next });
+    setFlowStateRaw(next);
+  };
+
   const [isSaving, setIsSaving] = useState(false);
   const [isReflecting, setIsReflecting] = useState(false);
   const [isProcessingCv, setIsProcessingCv] = useState(false);
@@ -444,8 +495,9 @@ export function useAssessmentFlow() {
       }
       return [assessmentConv, ...prev];
     });
+    try { sessionStorage.removeItem(SESSION_KEY); } catch {}
     setIsAssessmentComplete(true);
-  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete]);
+  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete, SESSION_KEY]);
 
   return {
     messages,

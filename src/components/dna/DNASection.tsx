@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useDnaData } from "@/hooks/useDnaData";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { DNACoreItem } from "@/lib/dnaMapping";
+import { DNACoreItem, mapProfileToDNA } from "@/lib/dnaMapping";
 
 function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]>["dnaScores"]): DNACoreItem[] | null {
   if (!scores) return null;
@@ -106,7 +106,7 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
     },
     {
       core_id: "non_negotiable",
-      title: "Non-Negotiables & Edges",
+      title: "Strengths & Edges",
       variant: "standard" as const,
       isLarge: true,
       fullWidth: true,
@@ -343,7 +343,9 @@ export const DNASection = () => {
     );
   }
 
-  const dnaItems = buildDnaItems(profile?.dnaScores) || DEFAULT_DNA_ITEMS;
+  const dnaItems = (profile?.externalProfile ? mapProfileToDNA(profile.externalProfile) : null)
+    ?? buildDnaItems(profile?.dnaScores)
+    ?? DEFAULT_DNA_ITEMS;
 
   return (
     <AnimatePresence>

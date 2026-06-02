@@ -74,10 +74,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           opacity: !isAssessmentComplete ? 0 : 1,
         }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className={cn(
-          "hidden lg:flex flex-col shrink-0 h-full overflow-hidden",
-          !isAssessmentComplete && "pointer-events-none",
-        )}
+        className="hidden lg:flex flex-col shrink-0 h-full overflow-hidden"
+        style={{
+          pointerEvents: isAssessmentComplete ? "auto" : "none",
+        }}
       >
         <Sidebar
           collapsed={sidebarCollapsed}

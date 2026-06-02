@@ -270,7 +270,11 @@ export function Sidebar({
       label: "Your DIRECTION",
       path: "/direction",
     },
-    // { icon: "/figmaAssets/lightbulb.svg", label: "Explore", path: "/explore" },
+    {
+      icon: "/figmaAssets/rocket-launch-collapsed.svg",
+      label: "Execution Hub",
+      path: "/execution-hub",
+    },
   ];
 
   const [isLogoHovered, setIsLogoHovered] = useState(false);
@@ -427,7 +431,7 @@ export function Sidebar({
             ).length > 0 && (
               <div className="mb-4">
                 <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  Other
+                  Others
                 </p>
                 <div className="space-y-0.5">
                   {conversations

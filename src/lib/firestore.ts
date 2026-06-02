@@ -37,6 +37,16 @@ export interface UserProfile {
     success_feeling: string;
     energy_source: string;
     energy_drains: string;
+    // Derived text labels (added in later engine versions)
+    primary_motivation?: string;
+    collaboration_mode?: string;
+    structure_preference?: string;
+    ambiguity_tolerance?: string;
+    emotional_risk?: string;
+    financial_risk?: string;
+    time_availability?: string;
+    readiness_label?: string;
+    strength_patterns?: string[];
   };
   directionEligibility?: {
     eligible: boolean;

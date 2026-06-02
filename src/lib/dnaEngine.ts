@@ -14,6 +14,16 @@ export type DnaScores = {
   success_feeling: string;
   energy_source: string;
   energy_drains: string;
+  // Derived text labels for display
+  primary_motivation?: string;
+  collaboration_mode?: string;
+  structure_preference?: string;
+  ambiguity_tolerance?: string;
+  emotional_risk?: string;
+  financial_risk?: string;
+  time_availability?: string;
+  readiness_label?: string;
+  strength_patterns?: string[];
 };
 
 export type StructuralModel =
@@ -123,6 +133,47 @@ function computeScores(answers: RawAnswers): DnaScores {
   const energy_source = q1.slice(0, 150);
   const energy_drains = q1f.slice(0, 150);
 
+  // Derived text labels
+  const primary_motivation = q1.split(/[.,!?]/)[0].trim().slice(0, 50) || q1.slice(0, 50);
+
+  const collaboration_mode =
+    q8.includes("Alone, then share") ? "Independent" :
+    q8.includes("With a few trusted") || q8.includes("Alone at first, team later") ? "Small Group" :
+    q8.includes("With a team or community") ? "Collaborative" : "Small Group";
+
+  const structure_preference =
+    structure_score >= 9 ? "Independent" :
+    structure_score >= 6 ? "Small Team" : "Collaborative";
+
+  const ambiguity_tolerance =
+    uncertainty_score >= 9 ? "High" : uncertainty_score >= 5 ? "Medium" : "Low";
+
+  const emotional_risk =
+    risk_score >= 8 ? "High" : risk_score >= 5 ? "Medium" : "Low";
+
+  const financial_risk =
+    q5.includes("Within 3 months") ? "Low" :
+    q5.includes("12+ months") || q5.includes("Income isn't") ? "High" : "Medium";
+
+  const time_availability =
+    constraint_score >= 9 ? "High" : constraint_score >= 6 ? "Medium" : "Limited";
+
+  const readiness_label =
+    readiness_score >= 8 ? "Ready" : readiness_score >= 5 ? "Deciding" : "Exploring";
+
+  // Derive up to 5 strength patterns from answers
+  const rawStrengths: string[] = [];
+  if (q1) rawStrengths.push(q1.split(/[.,!?]/)[0].trim().slice(0, 40));
+  if (q2.includes("All the time") || q2.includes("Pretty often")) rawStrengths.push("Consistent energy");
+  if (q8.includes("Alone, then share")) rawStrengths.push("Deep focus");
+  if (q8.includes("With a few trusted")) rawStrengths.push("Collaborative builder");
+  if (uncertainty_score >= 9) rawStrengths.push("High adaptability");
+  if (risk_score >= 8) rawStrengths.push("Bold decision-making");
+  if (readiness_score >= 8) rawStrengths.push("Execution-ready");
+  if (q9) rawStrengths.push(q9.split(/[.,!?]/)[0].trim().slice(0, 40));
+  if (constraint_score >= 9) rawStrengths.push("High commitment");
+  const strength_patterns = [...new Set(rawStrengths)].slice(0, 5);
+
   return {
     risk_score,
     uncertainty_score,
@@ -136,6 +187,15 @@ function computeScores(answers: RawAnswers): DnaScores {
     success_feeling,
     energy_source,
     energy_drains,
+    primary_motivation,
+    collaboration_mode,
+    structure_preference,
+    ambiguity_tolerance,
+    emotional_risk,
+    financial_risk,
+    time_availability,
+    readiness_label,
+    strength_patterns,
   };
 }
 

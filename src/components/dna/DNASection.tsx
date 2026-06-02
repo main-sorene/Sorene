@@ -10,11 +10,16 @@ import { DNACoreItem, mapProfileToDNA } from "@/lib/dnaMapping";
 function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]>["dnaScores"]): DNACoreItem[] | null {
   if (!scores) return null;
   const riskLabel = scores.risk_score >= 8 ? "High" : scores.risk_score >= 5 ? "Medium" : "Low";
-  const structureLabel = scores.structure_score >= 8 ? "Independent" : scores.structure_score >= 6 ? "Small Team" : "Collaborative";
-  const uncertaintyLabel = scores.uncertainty_score >= 8 ? "High" : scores.uncertainty_score >= 5 ? "Medium" : "Low";
-  const readinessLabel = scores.readiness_score >= 7 ? "Ready" : scores.readiness_score >= 5 ? "Deciding" : "Exploring";
-  const timeLabel = scores.constraint_score >= 8 ? "High" : scores.constraint_score >= 5 ? "Medium" : "Limited";
+  const structureLabel = scores.structure_preference || (scores.structure_score >= 8 ? "Independent" : scores.structure_score >= 6 ? "Small Team" : "Collaborative");
+  const collaborationLabel = scores.collaboration_mode || structureLabel;
+  const uncertaintyLabel = scores.ambiguity_tolerance || (scores.uncertainty_score >= 8 ? "High" : scores.uncertainty_score >= 5 ? "Medium" : "Low");
+  const readinessLabel = scores.readiness_label || (scores.readiness_score >= 7 ? "Ready" : scores.readiness_score >= 5 ? "Deciding" : "Exploring");
+  const timeLabel = scores.time_availability || (scores.constraint_score >= 8 ? "High" : scores.constraint_score >= 5 ? "Medium" : "Limited");
   const energyStabilityLabel = scores.energy_stability_score >= 7 ? "Stable" : scores.energy_stability_score >= 4 ? "Variable" : "Depleted";
+  const emotionalRisk = scores.emotional_risk || riskLabel;
+  const financialRisk = scores.financial_risk || riskLabel;
+  const primaryMotivation = scores.primary_motivation || scores.energy_source?.split(/[.,!?]/)[0]?.trim().slice(0, 50) || "—";
+  const strengthPatterns = scores.strength_patterns?.length ? scores.strength_patterns : [energyStabilityLabel + " energy", structureLabel, collaborationLabel, uncertaintyLabel + " adaptability", readinessLabel].slice(0, 5);
 
   return [
     {
@@ -29,14 +34,16 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       description: scores.strengths_summary || "Your unique strengths and energy patterns shape how you work best.",
       summary: scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
       key_signals: [
-        { label: "Primary Motivation", value: scores.motivation_driver.slice(0, 40), explanation: scores.motivation_driver },
+        { label: "Primary Motivation", value: primaryMotivation, explanation: scores.motivation_driver },
         { label: "Structure Preference", value: structureLabel, explanation: "How you prefer to organize your work environment." },
+        { label: "Collaboration Mode", value: collaborationLabel, explanation: "How you work best with others." },
         { label: "Ambiguity Tolerance", value: uncertaintyLabel, explanation: "How you handle unclear or uncertain situations." },
-        { label: "Readiness Level", value: readinessLabel, explanation: "Where you are on the path to taking action." },
+        { label: "Emotional Risk", value: emotionalRisk, explanation: "Your tolerance for emotional risk and uncertainty." },
+        { label: "Financial Risk", value: financialRisk, explanation: "Your financial risk appetite and runway tolerance." },
         { label: "Time Availability", value: timeLabel, explanation: "How much capacity you can commit to this work." },
-        { label: "Energy Stability", value: energyStabilityLabel, explanation: scores.energy_source || "How consistently your energy shows up for this work." },
+        { label: "Readiness Level", value: readinessLabel, explanation: "Where you are on the path to taking action." },
       ],
-      strength_patterns: scores.energy_source ? [scores.energy_source.slice(0, 60)] : [],
+      strength_patterns: strengthPatterns,
     },
     {
       core_id: "what_drives_you",

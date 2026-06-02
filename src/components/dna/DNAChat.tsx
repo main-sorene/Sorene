@@ -10,6 +10,28 @@ import { useDnaEdit } from "@/hooks/useDnaEdit";
 
 const DNA_SUGGESTIONS = ["Explain My Core", "My Risk & Change Style"];
 
+function FormattedMessage({ content }: { content: string }) {
+  const paragraphs = content.split(/\n\n+/).filter(Boolean);
+  return (
+    <span className="space-y-2 block">
+      {paragraphs.map((para, i) => {
+        const parts = para.split(/(\*\*.*?\*\*)/g);
+        return (
+          <span key={i} className="block">
+            {parts.map((part, j) =>
+              part.startsWith("**") && part.endsWith("**") ? (
+                <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong>
+              ) : (
+                <span key={j}>{part}</span>
+              )
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 export function DNAChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -115,7 +137,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                             : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"
                         }
                       >
-                        {message.content.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1")}
+                        <FormattedMessage content={message.content} />
                       </div>
                     </div>
                     {isConfirmBubble && (

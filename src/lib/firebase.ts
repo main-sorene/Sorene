@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, UserCredential } from "firebase/auth";
+import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, UserCredential } from "firebase/auth";
 import { FirebaseStorage, getStorage } from "firebase/storage";
 import { Firestore, getFirestore } from "firebase/firestore";
 
@@ -43,22 +43,22 @@ function initializeFirebase() {
 
 initializeFirebase();
 
-/** Use redirect on mobile (popup is blocked), popup on desktop. */
+/**
+ * Sign in with Google.
+ * Tries popup first (works on most browsers including mobile).
+ * Falls back to redirect only if the popup is explicitly blocked by the browser.
+ */
 export async function signInWithGoogle(): Promise<UserCredential> {
   if (!auth || !provider) throw new Error("Firebase not initialized");
-  const isMobile = typeof window !== "undefined" && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    await signInWithRedirect(auth, provider);
-    // Page reloads; result is picked up by getGoogleRedirectResult on next load
-    return new Promise(() => {}); // never resolves — page will reload
+  try {
+    return await signInWithPopup(auth, provider);
+  } catch (err: any) {
+    if (err?.code === "auth/popup-blocked") {
+      await signInWithRedirect(auth, provider);
+      return new Promise(() => {}); // page will reload after redirect
+    }
+    throw err;
   }
-  return signInWithPopup(auth, provider);
-}
-
-/** Call on app mount to pick up redirect result after mobile Google sign-in. */
-export async function getGoogleRedirectResult() {
-  if (!auth) return null;
-  return getRedirectResult(auth);
 }
 
 export { app, auth, provider, storage, db };

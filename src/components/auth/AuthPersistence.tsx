@@ -17,21 +17,14 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Safety: never hang on loading more than 8 seconds
+    const fallbackTimer = setTimeout(() => setLoading(false), 8000);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          const idToken = await firebaseUser.getIdTokenResult();
-          console.log("[AuthDebug] Firebase User authenticated:", {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            claims: idToken.claims,
-          });
-
-          // Normalize UID: Use email if available, otherwise fallback to Firebase UID
           const appUid = firebaseUser.email || firebaseUser.uid;
-
           const profile = await getUserProfile(appUid);
-
           setUser({
             uid: appUid,
             email: firebaseUser.email,
@@ -46,6 +39,7 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
         console.error("Error restoring auth session:", error);
         setUser(null);
       } finally {
+        clearTimeout(fallbackTimer);
         setLoading(false);
       }
     });

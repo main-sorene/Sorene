@@ -14,8 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FormData } from "@/types/onboarding";
-import { useAtom } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtom, useSetAtom } from "jotai";
+import { userAtom, isAssessmentCompleteAtom } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 import { useRouter } from "next/navigation";
 import { OnboardingSideImage } from "./OnboardingSideImage";
@@ -40,6 +40,7 @@ export function OnboardingForm({
   onNext: (data: FormData) => void;
 }) {
   const [authUser, setAuthUser] = useAtom(userAtom);
+  const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [sexOpen, setSexOpen] = React.useState(false);
   const [occupationOpen, setOccupationOpen] = React.useState(false);
@@ -86,6 +87,11 @@ export function OnboardingForm({
         sex: data.sex,
         useCase: "general",
         onboardingComplete: true,
+        dnaAssessmentComplete: false,
+        dnaScores: null,
+        directionText: null,
+        directionAlternatives: null,
+        assessmentAnswers: null,
         photoUrl: authUser.photoURL || authUser.profile?.photoUrl || undefined,
       };
       if (cvData) profileData.cvData = cvData;
@@ -125,6 +131,7 @@ export function OnboardingForm({
         },
       });
 
+      setIsAssessmentComplete(false);
       onNext(data);
 
       router.push("/chat");

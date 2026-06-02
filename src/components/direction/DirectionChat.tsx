@@ -9,6 +9,7 @@ import {
   inputValueAtom,
 } from "@/store/atoms";
 import { Plus, X } from "lucide-react";
+import Link from "next/link";
 import { ChatInput } from "@/chat/ChatInput";
 import { MessageBubble } from "@/chat/MessageBubble";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -69,16 +70,18 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <Plus size={16} />
             New Chat
           </button>
-          <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shadow-sm">
-            <img
-              src={
-                authUser?.profile?.photoUrl ||
-                "https://i.pravatar.cc/150?u=justin"
-              }
-              alt="User Avatar"
-              className="w-full h-full object-cover"
-            />
-          </div>
+          <Link href="/settings">
+            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
+              <img
+                src={
+                  authUser?.profile?.photoUrl ||
+                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
+                }
+                alt="User Avatar"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </Link>
         </div>
       </div>
 

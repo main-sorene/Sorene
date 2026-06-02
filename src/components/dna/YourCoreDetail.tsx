@@ -75,8 +75,8 @@ export function YourCoreDetail() {
           background: "radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #16B364 0%, #ECFCCB 100%)",
         }}
       >
-        <div className="mx-6">
-          <div className="flex justify-between items-center mb-12">
+        <div className="mx-4 md:mx-6">
+          <div className="flex justify-between items-center mb-8 md:mb-12">
             <button
               onClick={() => router.push("/dna")}
               className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium"
@@ -94,7 +94,7 @@ export function YourCoreDetail() {
       </div>
 
       {/* Key Signals */}
-      <div className="max-w-4xl px-8 mt-12">
+      <div className="max-w-4xl px-4 md:px-8 mt-12">
         <h3 className="text-xl font-medium text-gray-900 mb-8">Key Signals</h3>
         <div className="flex flex-col">
 
@@ -132,7 +132,7 @@ export function YourCoreDetail() {
               <p className="text-sm text-gray-500 font-medium">Risk Profile</p>
             </div>
             <div className="flex-1">
-              <div className="flex gap-12 mb-3">
+              <div className="flex gap-8 md:gap-12 mb-3">
                 <div>
                   <p className="text-gray-400 text-xs font-semibold mb-2 uppercase tracking-wider">Emotional Risk</p>
                   <p className={cn("text-2xl font-medium capitalize", valueColor(core?.risk_emotional || ""))}>

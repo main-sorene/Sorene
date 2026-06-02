@@ -228,13 +228,13 @@ export function SettingsModal() {
       <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
 
       {/* Modal */}
-      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex overflow-hidden">
+      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-[220px] shrink-0 flex flex-col py-6 px-3 border-r border-[#F0F0F0]">
-          <div className="flex items-center justify-between px-2 mb-5">
+        <aside className="w-full sm:w-[220px] shrink-0 flex flex-col py-3 sm:py-6 px-3 border-b sm:border-b-0 sm:border-r border-[#F0F0F0] overflow-x-auto sm:overflow-visible">
+          <div className="hidden sm:flex items-center justify-between px-2 mb-5">
             <span className="text-base font-semibold text-[#151515]">Settings</span>
           </div>
-          <nav className="flex-1 space-y-0.5">
+          <nav className="flex sm:flex-col flex-row gap-1 sm:gap-0 sm:space-y-0.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 sm:flex-1">
             {filteredSidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id && !showClearConfirm;
@@ -243,7 +243,7 @@ export function SettingsModal() {
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-all text-left",
+                    "sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-[13px] sm:text-[14px] font-medium transition-all text-left whitespace-nowrap shrink-0 sm:shrink sm:whitespace-normal",
                     isActive
                       ? "bg-purple-50 text-purple-700"
                       : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
@@ -258,7 +258,7 @@ export function SettingsModal() {
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60"
+            className="hidden sm:flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60 whitespace-nowrap shrink-0"
           >
             <LogOut size={16} />
             {isLoggingOut ? "Logging out…" : "Log out"}

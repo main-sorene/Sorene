@@ -114,7 +114,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {!hasMessages ? (
-          <div className="flex-1 flex flex-col items-start px-12 pt-12">
+          <div className="flex-1 flex flex-col items-start px-6 md:px-12 pt-12">
             <img alt="Sorene logo" src="/figmaAssets/cube.svg" className="mb-6" />
             <h2 className="text-heading-small text-[#151515] leading-[1.1] tracking-tight mb-12">
               How do you feel today, {userName}?

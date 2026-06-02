@@ -328,7 +328,7 @@ export function Sidebar({
     <motion.div
       layout
       className={cn(
-        "flex flex-col h-full w-full  z-1 relative lg:bg-transparent bg-white",
+        "flex flex-col h-full w-full z-50 relative lg:bg-transparent bg-white",
         mobile ? "shadow-2xl h-screen overflow-hidden" : "",
       )}
     >

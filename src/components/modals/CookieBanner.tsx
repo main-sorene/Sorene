@@ -44,7 +44,7 @@ export function CookieBanner() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.97 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="fixed bottom-6 right-6 z-40 w-[min(320px,calc(100vw-3rem))]"
+          className="fixed bottom-6 left-6 z-40 w-[min(320px,calc(100vw-3rem))]"
         >
           <div className="bg-white border border-[#ECEDEE] rounded-2xl shadow-2xl p-5 space-y-4">
             {/* Header */}

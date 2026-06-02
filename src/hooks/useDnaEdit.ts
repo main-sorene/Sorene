@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useState, useCallback, useRef } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
 import { useQueryClient } from "@tanstack/react-query";
 import { saveUserProfile, clearDownstreamProfile } from "@/lib/firestore";
 import { useDnaData } from "./useDnaData";
@@ -26,19 +26,69 @@ type ApiResponse =
   | { intent: "edit"; field: string; fieldLabel: string; current: string; proposed: string; confirmMessage: string }
   | { intent: "chat"; reply: string };
 
+function makeId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useDnaEdit() {
   const user = useAtomValue(userAtom);
   const queryClient = useQueryClient();
   const { data: dnaData } = useDnaData();
+  const setConversations = useSetAtom(conversationsAtom);
 
   const [messages, setMessages] = useState<DnaEditMessage[]>([]);
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Stable conversation ID for this session
+  const convIdRef = useRef<string>(`dna-chat-${Date.now()}`);
+
+  const persistToSidebar = useCallback((msgs: DnaEditMessage[]) => {
+    const uid = user?.uid || "local";
+    const convId = convIdRef.current;
+
+    const sidebarMessages: Message[] = msgs.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: new Date(),
+      type: "chat" as const,
+    }));
+
+    const firstUserMsg = msgs.find((m) => m.role === "user")?.content || "DNA Chat";
+    const title = firstUserMsg.slice(0, 50) + (firstUserMsg.length > 50 ? "..." : "");
+
+    const conv: Conversation = {
+      id: convId,
+      title,
+      messages: sidebarMessages,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      model: "sorene-1",
+      segment: "dna",
+      isCreatedOnBackend: false,
+    };
+
+    setConversations((prev) => {
+      const existing = prev.findIndex((c) => c.id === convId);
+      if (existing === -1) return [conv, ...prev];
+      return prev.map((c) => (c.id === convId ? conv : c));
+    });
+
+    try {
+      localStorage.setItem(`dna_chat_${uid}_${convId}`, JSON.stringify(conv));
+    } catch {}
+  }, [user?.uid, setConversations]);
+
   const appendMessage = useCallback((msg: Omit<DnaEditMessage, "id">) => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setMessages((prev) => [...prev, { ...msg, id }]);
-  }, []);
+    const id = makeId();
+    const newMsg = { ...msg, id };
+    setMessages((prev) => {
+      const next = [...prev, newMsg];
+      persistToSidebar(next);
+      return next;
+    });
+  }, [persistToSidebar]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -56,9 +106,7 @@ export function useDnaEdit() {
           body: JSON.stringify({ message: text, dnaProfile }),
         });
 
-        if (!res.ok) {
-          throw new Error(`Request failed: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
 
         const data = (await res.json()) as ApiResponse;
 
@@ -76,10 +124,7 @@ export function useDnaEdit() {
         }
       } catch (error) {
         console.error("[useDnaEdit] sendMessage error:", error);
-        appendMessage({
-          role: "assistant",
-          content: "Sorry, I had trouble processing that. Please try again.",
-        });
+        appendMessage({ role: "assistant", content: "Sorry, I had trouble processing that. Please try again." });
       } finally {
         setIsProcessing(false);
       }
@@ -113,10 +158,7 @@ export function useDnaEdit() {
       });
     } catch (error) {
       console.error("[useDnaEdit] confirmEdit error:", error);
-      appendMessage({
-        role: "assistant",
-        content: "Sorry, I couldn't save that change. Please try again.",
-      });
+      appendMessage({ role: "assistant", content: "Sorry, I couldn't save that change. Please try again." });
     } finally {
       setIsProcessing(false);
     }
@@ -131,12 +173,5 @@ export function useDnaEdit() {
     });
   }, [pendingEdit, appendMessage]);
 
-  return {
-    messages,
-    pendingEdit,
-    isProcessing,
-    sendMessage,
-    confirmEdit,
-    cancelEdit,
-  };
+  return { messages, pendingEdit, isProcessing, sendMessage, confirmEdit, cancelEdit };
 }

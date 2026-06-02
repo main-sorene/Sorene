@@ -71,7 +71,9 @@ Do not include markdown, code fences, or anything outside the JSON object.`;
     });
 
     const block = msg.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "{}";
+    let raw = block && block.type === "text" ? block.text.trim() : "{}";
+    // Strip markdown code fences if Claude wraps the JSON
+    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
     let parsed: EditResponse | ChatResponse;
     try {

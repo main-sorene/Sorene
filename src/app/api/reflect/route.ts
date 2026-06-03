@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { answer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage } =
+    const { answer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage, previousAnswers, cvSummary } =
       (await req.json()) as {
         answer: string;
         signal: string;
@@ -20,7 +20,22 @@ export async function POST(req: NextRequest) {
         nextChoices?: string[];
         forceLanguage?: string;
         preferredLanguage?: string;
+        previousAnswers?: Record<string, string>;
+        cvSummary?: string;
       };
+
+    // Build context from what we know about the user so far
+    const priorContext = (() => {
+      const parts: string[] = [];
+      if (cvSummary) parts.push(`Background from their CV: ${cvSummary}`);
+      if (previousAnswers && Object.keys(previousAnswers).length > 0) {
+        const answerLines = Object.entries(previousAnswers)
+          .map(([key, val]) => `- ${key}: "${val}"`)
+          .join("\n");
+        parts.push(`Their previous answers in this assessment:\n${answerLines}`);
+      }
+      return parts.length > 0 ? parts.join("\n\n") : "";
+    })();
 
     const hasNextQuestion = nextQuestion && nextQuestion.trim().length > 0;
     const hasChoices = Array.isArray(nextChoices) && nextChoices.length > 0;
@@ -70,8 +85,9 @@ Output only the translated question, then the separator line "---CHOICES---", th
       : `Detect the language the user wrote in based on their current message.`;
 
     const prompt = hasNextQuestion
-      ? `You are Sorene — a direct, warm entrepreneurship coach. The user just answered an assessment question.
+      ? `You are Sorene — a direct, warm entrepreneurship coach who truly sees people. The user is going through an assessment and just answered a question.
 
+${priorContext ? `What you already know about this person:\n${priorContext}\n` : ""}
 Signal being measured: ${signal}
 Their answer: "${answer}"
 Next question to ask (in English): """${nextQuestion}"""${
@@ -84,9 +100,12 @@ ${languageContext} Your output must have exactly ${hasChoices ? "four" : "three"
 
 Part 1 — The language name you will respond in (e.g. "English", "Vietnamese", "Spanish"). One word or two words only.
 
-Part 2 — ONE short sentence (max 15 words) in that language that:
-- Reflects back what you heard — specific to what they said, not generic
-- Feels like a real human noticing a pattern, not a chatbot confirming receipt
+Part 2 — ONE short sentence (max 20 words) in that language that:
+- Connects their answer to a deeper pattern you've noticed from their background or previous answers
+- Shows you genuinely understand something about who they are — name specific details from their CV or prior answers when relevant
+- Feels like a perceptive friend noticing something they might not have seen about themselves
+- If they mention struggle, honor it — don't rush past it
+- If you see a contradiction or tension between answers, gently name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
 
@@ -99,16 +118,18 @@ Part 4 — The multiple-choice options translated into that language, one per li
         }
 
 Output only these parts separated by blank lines. No labels, no extra text.`
-      : `You are Sorene — a direct, warm entrepreneurship coach. The user just answered an assessment question.
+      : `You are Sorene — a direct, warm entrepreneurship coach who truly sees people. The user just answered the final assessment question.
 
+${priorContext ? `What you know about this person:\n${priorContext}\n` : ""}
 Signal being measured: ${signal}
 Their answer: "${answer}"
 
 ${languageContext} Respond in that same language.
 
-Write ONE short sentence (max 15 words) that:
-- Reflects back what you heard — specific to what they said, not generic
-- Feels like a real human noticing a pattern, not a chatbot confirming receipt
+Write ONE short sentence (max 20 words) that:
+- Connects their answer to a deeper pattern you've noticed across their journey — reference specific things they've shared
+- Feels like someone who has been truly listening and sees them clearly
+- If you see a thread connecting multiple answers, name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
 

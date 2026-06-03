@@ -40,6 +40,8 @@ async function fetchReflection(
   nextQuestion?: string,
   nextChoices?: string[],
   preferredLanguage?: string,
+  previousAnswers?: Record<string, string>,
+  cvSummary?: string,
 ): Promise<{
   reflection: string;
   translatedQuestion: string;
@@ -50,7 +52,7 @@ async function fetchReflection(
     const res = await authFetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices, preferredLanguage }),
+      body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices, preferredLanguage, previousAnswers, cvSummary }),
     });
     if (!res.ok) return { reflection: "", translatedQuestion: "", translatedChoices: [], detectedLanguage: "" };
     const data = await res.json();
@@ -389,7 +391,7 @@ export function useAssessmentFlow() {
       setIsReflecting(true);
       // Fetch reflection for final answer + closing summary in parallel
       const [{ reflection: closingReflection }, summary] = await Promise.all([
-        fetchReflection(userAnswer, questionSignal, "", undefined, undefined, preferredLanguage),
+        fetchReflection(userAnswer, questionSignal, "", undefined, undefined, preferredLanguage, currentAnswers, (authUser?.profile as any)?.cvSummary),
         fetchClosingSummary(firstName, currentAnswers, hasCv),
       ]);
       setIsReflecting(false);
@@ -437,6 +439,8 @@ export function useAssessmentFlow() {
         nextQuestion,
         nextNode.choices,
         preferredLanguage,
+        answers,
+        (authUser?.profile as any)?.cvSummary,
       );
     if (detectedLanguage) setPreferredLanguage(detectedLanguage);
     setIsReflecting(false);

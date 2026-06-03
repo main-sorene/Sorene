@@ -414,7 +414,16 @@ export function useAssessmentFlow() {
       try {
         const eligibility = computeDirection(currentAnswers);
         if (authUser?.uid) {
-          await saveAssessmentResults(authUser.uid, currentAnswers, eligibility);
+          // Generate AI narrative in parallel with saving
+          const narrativeResult = await authFetch("/api/dna-narrative", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              answers: currentAnswers,
+              cvSummary: (authUser?.profile as any)?.cvSummary,
+            }),
+          }).then((r) => r.json()).catch(() => ({ narrative: {} }));
+          await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
         }
         // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
         // this component and the user would never see the summary or nav buttons.

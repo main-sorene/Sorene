@@ -52,6 +52,7 @@ export interface UserProfile {
     readiness_label?: string;
     strength_patterns?: string[];
   };
+  dna_narrative?: Record<string, string>;
   directionEligibility?: {
     eligible: boolean;
     model?: string;
@@ -170,6 +171,7 @@ export async function saveAssessmentResults(
   uid: string,
   answers: Record<string, string>,
   eligibility: import("@/lib/dnaEngine").DirectionEligibility,
+  dna_narrative?: Record<string, string>,
 ): Promise<void> {
   const { scores } = eligibility;
   const { rankModels } = await import("@/lib/dnaEngine");
@@ -178,6 +180,7 @@ export async function saveAssessmentResults(
     assessmentAnswers: answers,
     dnaAssessmentComplete: true,
     dnaScores: scores,
+    ...(dna_narrative ? { dna_narrative } : {}),
     directionEligibility: eligibility.eligible
       ? { eligible: true, model: eligibility.model }
       : { eligible: false, reason: eligibility.reason },

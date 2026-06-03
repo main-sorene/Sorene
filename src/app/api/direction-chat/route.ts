@@ -64,14 +64,18 @@ Be direct, warm, and specific to their actual data. Use short paragraphs. Bold k
 
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
+      max_tokens: 1024,
       system: systemPrompt + jsonInstruction,
       messages,
     });
 
     const block = msg.content[0];
     let raw = block && block.type === "text" ? block.text.trim() : "{}";
+    // Strip markdown code fences if present
     raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    // Extract JSON object if there's surrounding text
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) raw = jsonMatch[0];
 
     let parsed: { reply: string };
     try {

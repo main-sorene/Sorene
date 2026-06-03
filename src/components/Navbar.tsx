@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { activeNavAtom, userAtom } from "@/store/atoms";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
-import { signInWithPopup } from "firebase/auth";
-import { auth, provider } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { scrollToSection } from "@/lib/utils";
 
@@ -32,10 +31,14 @@ export const Navbar = ({ isPolicyPage = false }) => {
       router.push("/chat");
       return;
     }
-    if (!auth || !provider) return;
+    let signInPromise: Promise<any>;
     try {
-      setIsGoogleLoading(true);
-      const result = await signInWithPopup(auth, provider);
+      signInPromise = signInWithGoogle();
+    } catch { return; }
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInPromise;
+      if (!result) return;
       const user = result.user;
       const userUid = user.email || user.uid;
       if (user.photoURL || user.email) {
@@ -44,7 +47,7 @@ export const Navbar = ({ isPolicyPage = false }) => {
       const profile = await getUserProfile(userUid);
       setUser({ uid: userUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
       router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Google sign-in error:", e);
     } finally {
       setIsGoogleLoading(false);

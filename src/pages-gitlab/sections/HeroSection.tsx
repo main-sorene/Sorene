@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { emailInputAtom, userAtom } from "@/store/atoms";
 import { useAtom, useSetAtom } from "jotai";
-import { signInWithPopup } from "firebase/auth";
-import { auth, provider } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useMutation } from "@tanstack/react-query";
 import { authApi } from "@/lib/authApi";
@@ -56,27 +55,23 @@ export const HeroSection = () => {
   };
 
   const handleGoogleSignup = async () => {
-    if (!auth || !provider) {
-      console.error("Firebase auth not initialized");
-      return;
-    }
-
+    let signInPromise: Promise<any>;
     try {
-      setIsGoogleLoading(true);
-      const result = await signInWithPopup(auth, provider);
+      signInPromise = signInWithGoogle();
+    } catch { return; }
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInPromise;
+      if (!result) return; // mobile redirect — page reloads
       const user = result.user;
       const userUid = user.email || user.uid;
-      // Save/update profile with basic Google info
       if (user.photoURL || user.email) {
         await saveUserProfile(userUid, {
           photoUrl: user.photoURL || undefined,
           email: user.email || "",
         });
       }
-
-      // Check Firestore for user profile
       const profile = await getUserProfile(userUid);
-
       setUser({
         uid: userUid,
         email: user.email,
@@ -84,12 +79,7 @@ export const HeroSection = () => {
         photoURL: user.photoURL,
         profile: profile || undefined,
       });
-
-      if (profile && profile.onboardingComplete) {
-        router.push("/chat");
-      } else {
-        router.push("/onBoarding");
-      }
+      router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
     } catch (error) {
       console.error("Google sign-in error:", error);
     } finally {

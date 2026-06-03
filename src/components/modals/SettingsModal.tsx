@@ -546,21 +546,6 @@ export function SettingsModal() {
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-[#151515]">Account</h2>
 
-            {/* User card */}
-            <div className="rounded-2xl border border-[#ECEDEE] p-4 flex items-center gap-4">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover bg-purple-100 shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white text-lg font-semibold shrink-0">
-                  {initial}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="font-medium text-[#151515] text-[15px] truncate">{authUser?.profile?.fullName || displayName}</p>
-                <p className="text-sm text-[#62646A] truncate">{email}</p>
-              </div>
-            </div>
-
             {/* Organization ID */}
             <div>
               <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2">Organization ID</p>
@@ -622,17 +607,7 @@ export function SettingsModal() {
         return (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-[#151515]">Privacy & Security</h2>
-            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-red-50 transition-colors text-left"
-              >
-                <div>
-                  <p className="text-sm font-medium text-red-500">Clear All History</p>
-                  <p className="text-xs text-[#9B9B9B]">Delete all conversations and reset account</p>
-                </div>
-              </button>
-            </div>
+            <p className="text-sm text-[#62646A]">No actions available at this time.</p>
           </div>
         );
 

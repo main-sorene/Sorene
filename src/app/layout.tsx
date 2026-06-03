@@ -4,8 +4,8 @@ import { Providers } from "@/components/Providers";
 import { ServiceWorkerKiller } from "@/components/ServiceWorkerKiller";
 
 export const metadata: Metadata = {
-  title: "Sorene",
-  description: "Sorene AI",
+  title: "Sorene | Your Business Companion",
+  description: "Sorene — your personalized entrepreneurship coach.",
 };
 
 export default function RootLayout({

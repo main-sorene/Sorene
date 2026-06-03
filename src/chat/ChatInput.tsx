@@ -14,9 +14,8 @@ import {
   cvTextAtom,
   isAddMoreInfoModeAtom,
   isAssessmentCompleteAtom,
-  isSettingsOpenAtom,
 } from "@/store/atoms";
-import { Plus, Mic, ArrowUp, Settings } from "lucide-react";
+import { Plus, Mic, ArrowUp } from "lucide-react";
 import { useRef, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -69,7 +68,6 @@ export function ChatInput({
     isAddMoreInfoModeAtom,
   );
   const [isAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
-  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const apiModel = toApiModel(selectedModel);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -648,14 +646,6 @@ export function ChatInput({
               title="Voice Input"
             >
               <Mic size={22} />
-            </button>
-
-            <button
-              data-testid="settings-button"
-              className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors"
-              title="Sorene Settings"
-            >
-              <Settings size={22} className="text-[#111111]" />
             </button>
 
             <button

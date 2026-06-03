@@ -1,13 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle } from "lucide-react";
 import { DirectionSection } from "@/components/direction/DirectionSection";
 import { DirectionChat } from "@/components/direction/DirectionChat";
+import { useSetAtom } from "jotai";
+import { recipeDirectionsAtom } from "@/store/atoms";
 
 export function DirectionPage() {
   const [chatOpen, setChatOpen] = useState(false);
+  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("recipeDirections");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) setRecipeDirections(parsed);
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#F9FAFB] relative">

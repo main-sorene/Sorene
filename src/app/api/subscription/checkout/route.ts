@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe, getPriceId } from "@/lib/stripe";
+import { getStripe, getPriceId } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -29,14 +29,14 @@ export async function POST(req: NextRequest) {
     // Reuse existing Stripe customer if available
     let customerId: string = userData.stripeCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({ email });
+      const customer = await getStripe().customers.create({ email });
       customerId = customer.id;
       await db.collection("users").doc(email).set({ stripeCustomerId: customerId }, { merge: true });
     }
 
     const priceId = getPriceId(plan, duration);
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],

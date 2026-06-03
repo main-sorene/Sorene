@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ has_payment_method: false });
     }
 
-    const methods = await stripe.customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
+    const methods = await getStripe().customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
     const card = methods.data[0]?.card;
 
     if (!card) return NextResponse.json({ has_payment_method: false });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     if (!customerId) return NextResponse.json({ invoices: [] });
 
-    const stripeInvoices = await stripe.invoices.list({ customer: customerId, limit });
+    const stripeInvoices = await getStripe().invoices.list({ customer: customerId, limit });
 
     const invoices = stripeInvoices.data.map((inv) => ({
       id: inv.id,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe, getPriceId } from "@/lib/stripe";
+import { getStripe, getPriceId } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     const priceId = getPriceId(plan, duration);
-    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const subscription = await getStripe().subscriptions.retrieve(stripeSubscriptionId);
     const itemId = subscription.items.data[0].id;
 
-    const updated = await stripe.subscriptions.update(stripeSubscriptionId, {
+    const updated = await getStripe().subscriptions.update(stripeSubscriptionId, {
       proration_behavior: prorate ? "create_prorations" : "none",
       items: [{ id: itemId, price: priceId }],
       metadata: { email, plan, duration: String(duration) },

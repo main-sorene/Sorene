@@ -7,6 +7,7 @@ import {
   ideationAtom,
   IdeationIdea,
   IdeationData,
+  recipeDirectionsAtom,
 } from "@/store/atoms";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ export const DirectionSection = () => {
     otherDirections,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
+  const [recipeDirections] = useAtom(recipeDirectionsAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const heroBadges = [
@@ -144,6 +146,18 @@ export const DirectionSection = () => {
                   title={alt.model}
                   description={alt.summary || "Sorene is generating this alternative direction…"}
                   score={String(alt.compatibility)}
+                  actionText="View detail"
+                />
+              ))}
+              {recipeDirections.map((rd) => (
+                <DirectionCard
+                  key={rd.id}
+                  variant="standard"
+                  title={rd.title}
+                  description={rd.description}
+                  whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                  keyRisks={rd.keyRisks}
+                  recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
                   actionText="View detail"
                 />
               ))}
@@ -234,6 +248,19 @@ export const DirectionSection = () => {
                 />
               </div>
             ))}
+          {recipeDirections.map((rd) => (
+            <div key={rd.id} className="col-span-1">
+              <DirectionCard
+                variant="standard"
+                title={rd.title}
+                description={rd.description}
+                whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                keyRisks={rd.keyRisks}
+                recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
+                actionText="View detail"
+              />
+            </div>
+          ))}
         </div>
       </section>
     </div>

@@ -13,13 +13,53 @@ import { useDnaData } from "@/hooks/useDnaData";
 const DIRECTION_RECIPES = [
   {
     label: "Brainstorm more ideas",
-    prompt:
-      "Help me brainstorm more ideas. For each turn: write 1-2 short paragraphs reflecting a pattern you notice about me from what I've shared so far (or from general context if this is the start), then ask exactly one question — bold it using **like this**. Ask up to 5 questions total, one per turn. Do not list multiple questions at once.",
+    prompt: `You are helping the user brainstorm business or project ideas. Follow this exact structure:
+
+PHASE 1 — QUESTIONS (turns 1–5):
+Each turn: write 1-2 short paragraphs noticing a pattern from what they've shared, then ask exactly one bolded question (**like this**) about their daily problems, frustrations, or things they're excited about. Ask questions 1 through 5, one per turn. Do not ask more than 5 questions total.
+
+PHASE 2 — DIRECTION CARD (after their answer to question 5):
+Stop asking questions. Generate a Direction Card with this exact structure:
+
+**Direction: [name the specific direction]**
+
+[2-3 sentences on why this fits their pattern and answers]
+
+**Why it fits you**
+[2-3 bullet points grounded in what they said]
+
+**Key risks**
+[1-2 bullet points]
+
+**Your first step**
+[One small, specific, reversible action — no quitting jobs, no investment]
+
+Start now with question 1.`,
   },
   {
     label: "Generate more direction",
-    prompt:
-      "Help me find new directions. For each turn: write 1-2 short paragraphs reflecting a pattern you notice about what I want or what feels missing from my current directions, then ask exactly one question — bold it using **like this**. Ask up to 5 questions total, one per turn. Do not list multiple questions at once.",
+    prompt: `You are helping the user discover new directions beyond what they already have. Follow this exact structure:
+
+PHASE 1 — QUESTIONS (turns 1–5):
+Each turn: write 1-2 short paragraphs noticing a pattern from what they've shared about their current directions, then ask exactly one bolded question (**like this**) about what feels missing, limiting, or unexplored. Ask questions 1 through 5, one per turn. Do not ask more than 5 questions total.
+
+PHASE 2 — DIRECTION CARD (after their answer to question 5):
+Stop asking questions. Generate a Direction Card with this exact structure:
+
+**Direction: [name the specific direction]**
+
+[2-3 sentences on why this fits their pattern and answers]
+
+**Why it fits you**
+[2-3 bullet points grounded in what they said]
+
+**Key risks**
+[1-2 bullet points]
+
+**Your first step**
+[One small, specific, reversible action — no quitting jobs, no investment]
+
+Start now with question 1.`,
   },
 ];
 

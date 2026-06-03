@@ -46,15 +46,11 @@ export function useDirectionResult() {
       return;
     }
 
-    // Legacy fallback: old streamed text
-    if (profile.directionText) {
+    // Legacy fallback: old streamed text — skip it and fall through to regenerate with new format
+    // (old directionText doesn't produce structured cards with full analysis)
+    if (profile.directionText && !profile.directionEligibility) {
       setStreamedText(profile.directionText);
       setHasStreamed(true);
-      const alts = profile.directionAlternatives || [];
-      const needSummaries = alts.filter((a) => a.model !== profile.directionEligibility?.model).slice(0, 2);
-      if (needSummaries.length > 0 && needSummaries.some((a) => !a.summary)) {
-        fetchLegacyAlternativeSummaries(needSummaries, profile);
-      }
       return;
     }
 
@@ -105,7 +101,8 @@ export function useDirectionResult() {
         if (cards.length > 0) {
           setDirectionCards(cards);
           if (user?.uid) {
-            await saveUserProfile(user.uid, { directionCards: cards });
+            // Save new cards and clear old directionText to prevent re-triggering legacy path
+            await saveUserProfile(user.uid, { directionCards: cards, directionText: "" });
           }
         }
       } finally {

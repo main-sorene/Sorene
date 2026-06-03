@@ -625,32 +625,6 @@ export function DirectionCard({
           <p className="text-[13px] text-[#62646A] leading-relaxed">{whyNowWorks}</p>
         </div>
       </motion.section>
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <div className="flex items-center justify-between mb-5">
-          <h4 className="text-[17px] font-semibold text-[#151515]">Recommended First Step</h4>
-          <div className="flex items-center gap-3">
-            <div className="w-24 h-2 bg-[#FFEEC2] rounded-full overflow-hidden">
-              <motion.div initial={{ width: 0 }} animate={{ width: `${recommendedFirstStep.progress}%` }} transition={{ delay: 0.35, duration: 0.6 }} className="h-full rounded-full" style={{ backgroundColor: getProgressColor(recommendedFirstStep.progress) }} />
-            </div>
-            <span className="text-[13px] text-[#62646A] font-medium">{recommendedFirstStep.progress}%</span>
-          </div>
-        </div>
-        <Separator className="bg-[#ECEDEE] mb-5" />
-        <div className="space-y-3">
-          {recommendedFirstStep.steps.map((step, idx) => (
-            <motion.div key={step.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + idx * 0.05 }} className="flex items-start gap-3">
-              <Checkbox id={`${title}-${step.id}`} checked={checkedSteps.includes(step.id)} onCheckedChange={() => toggleStep(step.id)} className="mt-0.5 border-[#151515] data-[state=checked]:bg-[#151515] data-[state=checked]:border-[#151515] data-[state=checked]:text-white" />
-              <label htmlFor={`${title}-${step.id}`} className={cn("text-[14px] font-medium leading-relaxed cursor-pointer transition-all", checkedSteps.includes(step.id) ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
-                {step.label}
-              </label>
-            </motion.div>
-          ))}
-        </div>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="mt-5 pt-4 border-t border-[#ECECEC]">
-          <span className="text-[12px] text-[#9A9A9A] font-medium block mb-1">Success metric</span>
-          <span className="text-[14px] text-[#32C382] font-medium">{successMetric}</span>
-        </motion.div>
-      </motion.section>
     </div>
   );
 

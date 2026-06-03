@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, UserCredential } from "firebase/auth";
+import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, setPersistence, indexedDBLocalPersistence, UserCredential } from "firebase/auth";
 import { FirebaseStorage, getStorage } from "firebase/storage";
 import { Firestore, getFirestore } from "firebase/firestore";
 
@@ -30,6 +30,8 @@ function initializeFirebase() {
   try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
+    // Use IndexedDB — Safari ITP clears localStorage on cross-origin redirect but not IndexedDB
+    setPersistence(auth, indexedDBLocalPersistence).catch(() => {});
     storage = getStorage(app);
     db = getFirestore(app);
     provider = new GoogleAuthProvider();

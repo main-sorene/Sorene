@@ -14,12 +14,12 @@ const DIRECTION_RECIPES = [
   {
     label: "Brainstorm more ideas",
     prompt:
-      "Help me brainstorm ideas. Ask me up to 5 short, focused questions one at a time — about problems I face or things I'm excited about. No preamble. Start with question 1.",
+      "Help me brainstorm more ideas. For each turn: write 1-2 short paragraphs reflecting a pattern you notice about me from what I've shared so far (or from general context if this is the start), then ask exactly one question — bold it using **like this**. Ask up to 5 questions total, one per turn. Do not list multiple questions at once.",
   },
   {
     label: "Generate more direction",
     prompt:
-      "Help me find new directions. Ask me up to 5 short, focused questions one at a time — about what my current directions lack and what I really want. No preamble. Start with question 1.",
+      "Help me find new directions. For each turn: write 1-2 short paragraphs reflecting a pattern you notice about what I want or what feels missing from my current directions, then ask exactly one question — bold it using **like this**. Ask up to 5 questions total, one per turn. Do not list multiple questions at once.",
   },
 ];
 

@@ -182,11 +182,10 @@ export function SettingsModal() {
       setIsAssessmentComplete(false);
       setShowDeleteConfirm(false);
       setIsOpen(false);
-      router.push("/");
-      toast({ description: "Your account has been deleted." });
+      // Use window.location for a full page reload to avoid AuthPersistence race conditions
+      window.location.href = "/";
     } catch {
       toast({ description: "Failed to delete account.", variant: "destructive" });
-    } finally {
       setIsDeleting(false);
     }
   };

@@ -2,17 +2,42 @@
 import { useEffect, useState } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LandingPageScreen } from "@/pages-gitlab/LandingPage";
 import { auth } from "@/lib/firebase";
+import { signInWithCustomToken } from "firebase/auth";
+import { Suspense } from "react";
 
-export default function Page() {
+function PageInner() {
   const authUser = useAtomValue(userAtom);
   const authLoading = useAtomValue(authLoadingAtom);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [debugLog, setDebugLog] = useState<string[]>(["page loaded"]);
 
   const addLog = (msg: string) => setDebugLog((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+
+  // Handle custom token from server-side OAuth callback
+  useEffect(() => {
+    const customToken = searchParams.get("custom_token");
+    const authError = searchParams.get("auth_error");
+
+    if (authError) {
+      addLog(`OAuth error: ${authError}`);
+      // Clean up URL
+      router.replace("/");
+      return;
+    }
+
+    if (customToken && auth) {
+      addLog("custom_token received, signing in...");
+      // Clean up URL immediately
+      router.replace("/");
+      signInWithCustomToken(auth, customToken)
+        .then(() => addLog("signInWithCustomToken success"))
+        .catch((e) => addLog(`signInWithCustomToken error: ${e.message}`));
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     addLog(`authLoading=${authLoading}, authUser=${authUser ? authUser.uid : "null"}`);
@@ -50,6 +75,14 @@ export default function Page() {
       {/* Temporary debug overlay — remove after fixing mobile auth */}
       <DebugPanel logs={debugLog} />
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <PageInner />
+    </Suspense>
   );
 }
 

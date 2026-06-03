@@ -4,15 +4,12 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { emailInputAtom, userAtom } from "@/store/atoms";
-import { useAtom, useSetAtom } from "jotai";
-import { signInWithGoogle } from "@/lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/lib/firestore";
+import { emailInputAtom } from "@/store/atoms";
+import { useAtom } from "jotai";
 import { useMutation } from "@tanstack/react-query";
 import { authApi } from "@/lib/authApi";
 import { Loader2 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/utils";
-import { GoogleOneTapButton } from "@/components/auth/GoogleOneTapButton";
 
 const trafficLights = [
   { bg: "bg-[#ff5e5d]", border: "border-[#e14942]" },
@@ -22,9 +19,7 @@ const trafficLights = [
 
 export const HeroSection = () => {
   const [emailInput, setEmailInput] = useAtom(emailInputAtom);
-  const setUser = useSetAtom(userAtom);
   const [error, setError] = React.useState<string | null>(null);
-  const [isGoogleLoading, setIsGoogleLoading] = React.useState<boolean>(false);
   const router = useRouter();
 
   const validateEmail = (email: string) => {
@@ -55,37 +50,9 @@ export const HeroSection = () => {
     sendOTP(emailInput);
   };
 
-  const handleGoogleSignup = async () => {
-    let signInPromise: Promise<any>;
-    try {
-      signInPromise = signInWithGoogle();
-    } catch { return; }
-    setIsGoogleLoading(true);
-    try {
-      const result = await signInPromise;
-      if (!result) return; // mobile redirect — page reloads
-      const user = result.user;
-      const userUid = user.email || user.uid;
-      if (user.photoURL || user.email) {
-        await saveUserProfile(userUid, {
-          photoUrl: user.photoURL || undefined,
-          email: user.email || "",
-        });
-      }
-      const profile = await getUserProfile(userUid);
-      setUser({
-        uid: userUid,
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        profile: profile || undefined,
-      });
-      router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-    } finally {
-      setIsGoogleLoading(false);
-    }
+  const handleGoogleSignup = () => {
+    // Use server-side OAuth flow — works on all browsers including mobile Safari
+    window.location.href = "/api/auth/google";
   };
 
   return (
@@ -122,43 +89,22 @@ export const HeroSection = () => {
             <div className="flex flex-col items-center gap-4 self-stretch w-full">
               <div className="flex w-full max-w-[550px] items-center justify-center gap-10 p-5 sm:p-6 bg-white rounded-3xl border border-solid border-[#FDC24C] shadow-yellow-shadow">
                 <div className="flex flex-col items-start gap-5 sm:gap-6 w-full">
-                  {/* Google — GIS button (works on mobile Safari) with popup fallback */}
-                  {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
-                    <div className="self-stretch w-full">
-                      {isGoogleLoading ? (
-                        <div className="flex items-center justify-center py-3">
-                          <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                          <span className="ml-2 text-sm text-gray-500">Signing in...</span>
-                        </div>
-                      ) : (
-                        <GoogleOneTapButton
-                          onLoadingChange={setIsGoogleLoading}
-                          onError={(msg) => setError(msg)}
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex justify-center gap-2 p-0.5 self-stretch w-full bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] shadow-shadow items-center">
-                      <button
-                        onClick={handleGoogleSignup}
-                        disabled={isGoogleLoading}
-                        className="flex items-center justify-center gap-2 px-4 sm:px-[18px] py-3 sm:py-3.5 flex-1 bg-white rounded-lg border-none cursor-pointer hover:bg-gray-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed w-full"
-                      >
-                        {isGoogleLoading ? (
-                          <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
-                        ) : (
-                          <img
-                            className="w-5 h-5"
-                            alt="Google"
-                            src="/figmaAssets/logo-6.svg"
-                          />
-                        )}
-                        <span className="text-body-medium-medium text-[#101010] text-sm sm:text-base text-center tracking-[0] leading-6">
-                          {isGoogleLoading ? "Signing in..." : "Continue with Google"}
-                        </span>
-                      </button>
-                    </div>
-                  )}
+                  {/* Google — server-side OAuth (works on all browsers including mobile Safari) */}
+                  <div className="flex justify-center gap-2 p-0.5 self-stretch w-full bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] shadow-shadow items-center">
+                    <button
+                      onClick={handleGoogleSignup}
+                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] py-3 sm:py-3.5 flex-1 bg-white rounded-lg border-none cursor-pointer hover:bg-gray-50 transition-colors w-full"
+                    >
+                      <img
+                        className="w-5 h-5"
+                        alt="Google"
+                        src="/figmaAssets/logo-6.svg"
+                      />
+                      <span className="text-body-medium-medium text-[#101010] text-sm sm:text-base text-center tracking-[0] leading-6">
+                        Continue with Google
+                      </span>
+                    </button>
+                  </div>
 
                   <div className="self-stretch font-normal text-[#101010] text-base text-center tracking-[0] leading-6">
                     OR

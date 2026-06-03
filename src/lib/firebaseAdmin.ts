@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 let app: App | undefined;
 let adminAuth: Auth | undefined;
 
-function getAdminAuth(): Auth {
+export function getAdminAuth(): Auth | null {
   if (adminAuth) return adminAuth;
 
   if (!getApps().length) {
@@ -22,7 +22,7 @@ function getAdminAuth(): Auth {
   }
 
   adminAuth = getAuth(app);
-  return adminAuth;
+  return adminAuth ?? null;
 }
 
 export async function verifyAuth(
@@ -33,7 +33,9 @@ export async function verifyAuth(
 
   const token = authHeader.slice(7);
   try {
-    const decoded = await getAdminAuth().verifyIdToken(token);
+    const auth = getAdminAuth();
+    if (!auth) return null;
+    const decoded = await auth.verifyIdToken(token);
     return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;

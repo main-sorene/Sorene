@@ -1,15 +1,12 @@
 "use client";
 
-import { Menu, X, Loader2 } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { activeNavAtom, userAtom } from "@/store/atoms";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
-import { signInWithGoogle } from "@/lib/firebase";
-import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { scrollToSection } from "@/lib/utils";
-import { GoogleOneTapButton } from "@/components/auth/GoogleOneTapButton";
 
 const navLinks = [
   { label: "Home" },
@@ -23,36 +20,14 @@ export const Navbar = ({ isPolicyPage = false }) => {
   const [activeNav, setActiveNav] = useAtom(activeNavAtom);
   const [menuOpen, setMenuOpen] = useState(false);
   const authUser = useAtomValue(userAtom);
-  const [, setUser] = useAtom(userAtom);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
 
-  const handleTrySorene = async () => {
+  const handleTrySorene = () => {
     if (authUser) {
       router.push("/chat");
       return;
     }
-    let signInPromise: Promise<any>;
-    try {
-      signInPromise = signInWithGoogle();
-    } catch { return; }
-    setIsGoogleLoading(true);
-    try {
-      const result = await signInPromise;
-      if (!result) return;
-      const user = result.user;
-      const userUid = user.email || user.uid;
-      if (user.photoURL || user.email) {
-        await saveUserProfile(userUid, { photoUrl: user.photoURL || undefined, email: user.email || "" });
-      }
-      const profile = await getUserProfile(userUid);
-      setUser({ uid: userUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
-      router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    } catch (e: any) {
-      console.error("Google sign-in error:", e);
-    } finally {
-      setIsGoogleLoading(false);
-    }
+    window.location.href = "/api/auth/google";
   };
 
   const sectionIdByLabel: Record<string, string> = {
@@ -147,10 +122,8 @@ export const Navbar = ({ isPolicyPage = false }) => {
         <div className="inline-flex justify-center gap-2 p-0.5 bg-white rounded-[8px] border-[0.5px] border-[#EDEDED] items-center">
           <button
             onClick={handleTrySorene}
-            disabled={isGoogleLoading}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a] transition-colors disabled:opacity-70"
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a] transition-colors"
           >
-            {isGoogleLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
             <span className="text-body-small-medium text-white">
               Try Sorene
             </span>
@@ -202,10 +175,8 @@ export const Navbar = ({ isPolicyPage = false }) => {
             <div className="flex justify-center gap-2 p-0.5 bg-white rounded-[10px] border border-solid border-[#ededed] shadow-shadow items-center">
               <button
                 onClick={() => { setMenuOpen(false); handleTrySorene(); }}
-                disabled={isGoogleLoading}
-                className="w-full text-center inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a] disabled:opacity-70"
+                className="w-full text-center inline-flex items-center justify-center gap-2 px-3.5 py-2 h-auto bg-[#101010] rounded-lg border-none hover:bg-[#2a2a2a]"
               >
-                {isGoogleLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />}
                 <span className="font-medium text-white text-sm">Try Sorene</span>
               </button>
             </div>

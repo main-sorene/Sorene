@@ -33,41 +33,41 @@ export const QUESTION_NODES: QuestionNode[] = [
   // Background questions — only used when user skips CV upload
   {
     id: "bg1_history",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage: (ctx) =>
-      `That's completely fine${ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""}. Let me get to know you through a few short questions instead.\n\nTo start — could you walk me through what you've been doing professionally over the last few years? Not the job titles, but what your days have actually looked like, what kind of work has filled your time.`,
+      `That's completely fine${ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""}. I'll get to know you through a few questions instead — starting with where you are right now.\n\nWhat's your current or most recent role, and what does it actually involve day-to-day? Give me the real version, not the job title.`,
     inputType: "freetext",
     next: "bg2_skills",
   },
   {
     id: "bg2_skills",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "Thank you for sharing that. When people come to you for help at work — colleagues, clients, friends — what do they tend to ask you about? What are the things you've quietly become good at over time, even if they don't feel like big achievements?",
+      "How many years have you been working professionally, and which fields or industries have you spent most of that time in?",
     inputType: "freetext",
     next: "bg3_pattern",
   },
   {
     id: "bg3_pattern",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "When you look back at the path you've taken — the roles, the shifts, the choices you made — does a thread run through it? Some quiet pattern in what kept pulling you forward, or in what you kept moving away from? Or has it felt more like one thing after another, without much shape?",
+      "What would you say you're genuinely expert in — not just experienced with, but the thing people come to you for when something important needs to get done right?",
     inputType: "freetext",
     next: "bg4_direction",
   },
   {
     id: "bg4_direction",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "Where do you feel yourself drifting these days — whether it's something you're quietly being drawn toward, or something you're slowly starting to step away from? Even if it's not fully formed yet, name what comes to mind.",
+      "What are the key skills and tools you use regularly? Think broadly — technical skills, domain knowledge, tools you rely on, and the interpersonal or leadership capabilities you've built.",
     inputType: "freetext",
     next: "bg5_turning",
   },
   {
     id: "bg5_turning",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "One last bit of context before we go deeper. Looking back, was there a moment — a project, a conversation, a season of your life — that quietly shifted how you saw your work, or what you wanted from it? Take your time with this one.",
+      "Last one on your background — walk me briefly through your career path. What roles or industries have shaped who you are professionally, and what's the arc of how you got here?",
     inputType: "freetext",
     next: "q1_energy",
   },
@@ -78,7 +78,7 @@ export const QUESTION_NODES: QuestionNode[] = [
       if (ctx.hasCv) {
         return `Think about a time when work didn't feel like work. When you were so absorbed that you lost track of time. What were you actually doing in that moment?`;
       }
-      return `Think of a specific moment in your work or life when you felt genuinely energized — like what you were doing actually mattered and didn't feel like a burden. What were you doing, and why did it feel that way?`;
+      return `Good — that gives me a solid picture of your background. Now I want to understand how you actually work, not just what you've done.\n\nThink of a specific moment when work felt genuinely energizing — like what you were doing actually mattered and didn't feel like a burden. What were you doing, and why did it feel that way?`;
     },
     inputType: "freetext",
     next: "q1_followup",

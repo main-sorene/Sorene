@@ -39,11 +39,11 @@ function buildUserMessage(
     const hasBg = bg1 || bg2 || bg3 || bg4 || bg5;
     if (hasBg) {
       const lines = [
-        bg1 ? `- Recent professional life: ${bg1}` : "",
-        bg2 ? `- What people come to them for: ${bg2}` : "",
-        bg3 ? `- Pattern across their path: ${bg3}` : "",
-        bg4 ? `- Where they're drifting: ${bg4}` : "",
-        bg5 ? `- Turning-point moment: ${bg5}` : "",
+        bg1 ? `- Current / most recent role: ${bg1}` : "",
+        bg2 ? `- Years of experience and fields: ${bg2}` : "",
+        bg3 ? `- Core expertise (what they're known for): ${bg3}` : "",
+        bg4 ? `- Key skills and tools: ${bg4}` : "",
+        bg5 ? `- Career arc: ${bg5}` : "",
       ].filter(Boolean).join("\n");
       cvBlock = `\n\nBackground context (from their own words — they did not share a CV):\n${lines}\n\nWeave 1-2 specific references to their actual history (real roles, real skills, real shifts) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`;
     }

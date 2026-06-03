@@ -24,11 +24,11 @@ function buildPrompt(
   const bgBlock = cvSummary?.trim()
     ? `CV/portfolio summary:\n${cvSummary.trim()}`
     : [
-        rawAnswers["bg1_history"] ? `- Recent professional life: ${rawAnswers["bg1_history"]}` : "",
-        rawAnswers["bg2_skills"] ? `- What people come to them for: ${rawAnswers["bg2_skills"]}` : "",
-        rawAnswers["bg3_pattern"] ? `- Career pattern: ${rawAnswers["bg3_pattern"]}` : "",
-        rawAnswers["bg4_direction"] ? `- Where they're drifting: ${rawAnswers["bg4_direction"]}` : "",
-        rawAnswers["bg5_turning"] ? `- Turning-point: ${rawAnswers["bg5_turning"]}` : "",
+        rawAnswers["bg1_history"] ? `- Current / most recent role: ${rawAnswers["bg1_history"]}` : "",
+        rawAnswers["bg2_skills"] ? `- Years of experience and fields: ${rawAnswers["bg2_skills"]}` : "",
+        rawAnswers["bg3_pattern"] ? `- Core expertise (what they're known for): ${rawAnswers["bg3_pattern"]}` : "",
+        rawAnswers["bg4_direction"] ? `- Key skills and tools: ${rawAnswers["bg4_direction"]}` : "",
+        rawAnswers["bg5_turning"] ? `- Career arc: ${rawAnswers["bg5_turning"]}` : "",
       ].filter(Boolean).join("\n");
 
   const modelList = models

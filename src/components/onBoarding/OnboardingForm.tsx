@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Controller, useForm } from "react-hook-form";
+import { authFetch } from "@/lib/authFetch";
 
 import { Button } from "@/components/ui/button";
 import { Calendar, ChevronDown, Loader2 } from "lucide-react";
@@ -104,7 +105,7 @@ export function OnboardingForm({
           const bytes = new Uint8Array(buf);
           for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
           const fileBase64 = btoa(binary);
-          const res = await fetch("/api/cv-summary", {
+          const res = await authFetch("/api/cv-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ fileBase64, mimeType: cvFile.type }),

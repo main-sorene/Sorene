@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic, Settings } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -89,7 +90,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     setIsProcessing(true);
 
     try {
-      const res = await fetch("/api/direction-chat", {
+      const res = await authFetch("/api/direction-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

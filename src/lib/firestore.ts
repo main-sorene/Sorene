@@ -105,7 +105,7 @@ export async function saveUserProfile(
     return;
   }
   try {
-    console.log("[Firestore] Saving profile for uid:", uid, data);
+    console.log("[Firestore] Saving profile for uid:", uid);
     const docRef = doc(firestore, "users", uid);
 
     // Remove undefined values to avoid Firebase error
@@ -151,7 +151,7 @@ export async function clearDownstreamProfile(uid: string): Promise<void> {
 
 export async function isOnboardingComplete(uid: string): Promise<boolean> {
   const profile = await getUserProfile(uid);
-  console.log("[Firestore] onboarding check for", uid, "profile:", profile);
+  console.log("[Firestore] onboarding check for", uid);
   if (!profile) return false;
   return profile.onboardingComplete === true;
 }

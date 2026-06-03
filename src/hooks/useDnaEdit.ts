@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { useQueryClient } from "@tanstack/react-query";
 import { saveUserProfile, clearDownstreamProfile } from "@/lib/firestore";
 import { useDnaData } from "./useDnaData";
@@ -100,7 +101,7 @@ export function useDnaEdit() {
       try {
         const dnaProfile = dnaData?.dnaScores ?? {};
 
-        const res = await fetch("/api/dna-edit", {
+        const res = await authFetch("/api/dna-edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text, dnaProfile }),

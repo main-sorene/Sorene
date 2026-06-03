@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 import {
   QUESTION_NODES,
   OPENING_MESSAGE,
@@ -46,7 +47,7 @@ async function fetchReflection(
   detectedLanguage: string;
 }> {
   try {
-    const res = await fetch("/api/reflect", {
+    const res = await authFetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices, preferredLanguage }),
@@ -67,7 +68,7 @@ async function fetchReflection(
 async function translateFollowUp(text: string, userAnswer: string, preferredLanguage?: string): Promise<string> {
   // Detect language from the user's actual answer and translate the follow-up into it
   try {
-    const res = await fetch("/api/reflect", {
+    const res = await authFetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answer: userAnswer, signal: "", questionText: "", nextQuestion: text, preferredLanguage }),
@@ -89,7 +90,7 @@ async function fetchClosingSummary(
   hasCv: boolean,
 ): Promise<string> {
   try {
-    const res = await fetch("/api/closing-summary", {
+    const res = await authFetch("/api/closing-summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ firstName, answers, hasCv }),
@@ -249,7 +250,7 @@ export function useAssessmentFlow() {
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
         const fileBase64 = btoa(binary);
 
-        const res = await fetch("/api/cv-summary", {
+        const res = await authFetch("/api/cv-summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileBase64, mimeType: file.type }),

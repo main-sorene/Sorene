@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic, Settings, Square } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -117,7 +118,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = (reader.result as string).split(",")[1];
-        const res = await fetch("/api/cv-summary", {
+        const res = await authFetch("/api/cv-summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileBase64: base64, mimeType: file.type }),

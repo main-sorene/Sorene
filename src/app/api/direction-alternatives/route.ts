@@ -1,10 +1,16 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
+import { verifyAuth } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { models, scores, firstName } = (await req.json()) as {
       models: { model: string; compatibility: number }[];

@@ -92,6 +92,14 @@ export const QUESTION_NODES: QuestionNode[] = [
       return `${preview ? `I hear you — that sense of things clicking into place. ` : ""}What drains you? What kind of work makes the day feel long and leaves you feeling empty — not physically tired, but emotionally flat?`;
     },
     inputType: "freetext",
+    next: "q1b_quit_reason",
+  },
+  {
+    id: "q1b_quit_reason",
+    signal: "Negative Filter",
+    soreneMessage:
+      "Now think about your most recent role — or the situation you're moving away from. What specifically pushed you out, or is pushing you out now? Not 'I needed a change' — but what was the thing you knew you couldn't keep doing?",
+    inputType: "freetext",
     next: "q2_pattern",
   },
   {

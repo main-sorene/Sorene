@@ -14,6 +14,7 @@ export type DnaScores = {
   success_feeling: string;
   energy_source: string;
   energy_drains: string;
+  quit_reason: string;
   // Derived text labels for display
   primary_motivation?: string;
   collaboration_mode?: string;
@@ -54,6 +55,7 @@ function snapRisk(value: number): 1 | 3 | 5 | 8 | 10 {
 function computeScores(answers: RawAnswers): DnaScores {
   const q1 = answers["q1_energy"] || "";
   const q1f = answers["q1_followup"] || "";
+  const q1b = answers["q1b_quit_reason"] || "";
   const q2 = answers["q2_pattern"] || "";
   const q3 = answers["q3_centrality"] || "";
   const q4 = answers["q4_time"] || "";
@@ -132,6 +134,7 @@ function computeScores(answers: RawAnswers): DnaScores {
   const success_feeling = q9.slice(0, 150);
   const energy_source = q1.slice(0, 150);
   const energy_drains = q1f.slice(0, 150);
+  const quit_reason = q1b.slice(0, 200);
 
   // Derived text labels
   const primary_motivation = q1.split(/[.,!?]/)[0].trim().slice(0, 50) || q1.slice(0, 50);
@@ -187,6 +190,7 @@ function computeScores(answers: RawAnswers): DnaScores {
     success_feeling,
     energy_source,
     energy_drains,
+<<<<<<< HEAD
     primary_motivation,
     collaboration_mode,
     structure_preference,
@@ -196,6 +200,9 @@ function computeScores(answers: RawAnswers): DnaScores {
     time_availability,
     readiness_label,
     strength_patterns,
+=======
+    quit_reason,
+>>>>>>> 1dcba53 (Add quit-reason question and negative filter to direction engine)
   };
 }
 

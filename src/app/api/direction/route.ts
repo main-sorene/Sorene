@@ -60,6 +60,7 @@ Reason: ${reason}
 DNA context:
 - Energy source: ${scores.energy_source}
 - Energy drains: ${scores.energy_drains}
+- Why they left / are leaving: ${scores.quit_reason || "not provided"}
 - Readiness: ${rawAnswers["q11_readiness"] || ""}
 - Constraints: ${rawAnswers["q4_time"] || ""} / ${rawAnswers["q5_finance"] || ""}
 
@@ -91,10 +92,14 @@ DNA scores:
 What they said:
 - What energizes them: ${scores.energy_source}
 - What drains them: ${scores.energy_drains}
+- Why they left / are leaving their last role: ${scores.quit_reason || "not provided"}
 - Value trade-off they chose: ${scores.non_negotiable}
 - What success feels like to them: ${scores.success_feeling}
 - Motivation driver: ${scores.motivation_driver}
 - Raw answers to key questions: q7=${rawAnswers["q7_uncertainty"] || ""}, q8=${rawAnswers["q8_workmode"] || ""}, q11=${rawAnswers["q11_readiness"] || ""}
+
+NEGATIVE FILTER — NON-NEGOTIABLE:
+The elements in "What drains them" and "Why they left" represent what this person is actively running away from. Any direction you suggest MUST NOT reproduce these conditions. If the quit reason or drain pattern names specific environments, dynamics, or task types (e.g. "constant reporting to management", "open-plan office politics", "reactive support work"), your suggested direction must structurally exclude them — not merely avoid mentioning them. If the selected model would naturally involve those elements, explain explicitly in the Fit Justification how this specific direction is architected to avoid them. Skill match alone is never sufficient justification if those skills were exercised in a context the person is fleeing.
 
 Write the Direction output following the 7-step protocol:
 1. Understanding Reflection (2-3 sentences): reflect how they operate — their energy, risk profile, constraints. Make them feel seen. Reference what they actually said.

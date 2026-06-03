@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, directionContext } = (await req.json()) as {
+    const { message, directionContext, systemOverride, history } = (await req.json()) as {
       message: string;
       directionContext: {
         recommendedModel: string | null;
@@ -20,13 +20,25 @@ export async function POST(req: NextRequest) {
         alternatives: { model: string; compatibility: number; summary?: string }[];
         dnaScores: Record<string, unknown>;
       };
+      systemOverride?: string;
+      history?: { role: "user" | "assistant"; content: string }[];
     };
 
-    const altsList = directionContext.alternatives
-      .map((a) => `- ${a.model} (${a.compatibility}% compatibility)${a.summary ? ": " + a.summary : ""}`)
-      .join("\n");
+    let systemPrompt: string;
+    let messages: { role: "user" | "assistant"; content: string }[];
 
-    const prompt = `You are Sorene, a warm and direct entrepreneurship coach. A user is viewing their Direction results — the business model paths that best fit their profile.
+    if (systemOverride) {
+      // Recipe mode: use the recipe prompt as the system, replay full history
+      systemPrompt = systemOverride;
+      const prior = (history ?? []).map((m) => ({ role: m.role, content: m.content }));
+      messages = [...prior, { role: "user" as const, content: message }];
+    } else {
+      // Default direction-chat mode
+      const altsList = directionContext.alternatives
+        .map((a) => `- ${a.model} (${a.compatibility}% compatibility)${a.summary ? ": " + a.summary : ""}`)
+        .join("\n");
+
+      systemPrompt = `You are Sorene, a warm and direct entrepreneurship coach. A user is viewing their Direction results — the business model paths that best fit their profile.
 
 Their recommended direction: ${directionContext.recommendedModel || "Not yet determined"} (${directionContext.compatibility}% compatibility)
 
@@ -38,22 +50,23 @@ ${altsList || "None available."}
 
 User's DNA signals: ${JSON.stringify(directionContext.dnaScores)}
 
-The user asks: "${message}"
+IMPORTANT: If the user expresses dissatisfaction with the suggested directions or asks for more options:
+1. Ask them to clarify WHY the current directions don't feel right.
+2. Suggest alternative directions that better address their concerns.
+3. Don't just repeat the existing alternatives.
 
-IMPORTANT: If the user expresses dissatisfaction with the suggested directions (e.g. "I don't like these", "these don't feel right", "not for me") or asks for more options (e.g. "can I have more directions?", "any other options?", "what else?"):
-1. First ask them to clarify WHY the current directions don't feel right — what specifically doesn't resonate? Is it the industry, the business model type, the workload, the risk level?
-2. Based on their answer, suggest alternative directions that better address their concerns, drawing from their DNA profile data.
-3. Don't just repeat the existing alternatives — think creatively about other paths that fit their profile.
+Be direct, warm, and specific to their actual data. Use short paragraphs. Bold key phrases with **text** syntax. No bullet lists, no headers. Under 200 words.`;
 
-Reply as Sorene. Be direct, warm, and specific to their actual data. Use short paragraphs separated by blank lines. Bold key phrases with **text** syntax. No bullet lists, no headers. Under 200 words.
+      messages = [{ role: "user" as const, content: message }];
+    }
 
-Respond ONLY with valid JSON — no markdown code fences, nothing outside the JSON:
-{"reply": "<your response>"}`;
+    const jsonInstruction = '\n\nRespond ONLY with valid JSON — no markdown code fences, nothing outside the JSON: {"reply": "<your response>"}';
 
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
+      system: systemPrompt + jsonInstruction,
+      messages,
     });
 
     const block = msg.content[0];

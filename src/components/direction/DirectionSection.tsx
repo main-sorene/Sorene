@@ -88,6 +88,32 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
   },
 };
 
+function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
+  hiddenIds: string[];
+  allCards: { id: string; title: string }[];
+  onShow: (id: string) => void;
+}) {
+  const hidden = allCards.filter((c) => hiddenIds.includes(c.id));
+  if (hidden.length === 0) return null;
+  return (
+    <div className="mt-4 pt-4 border-t border-[#ECEDEE]">
+      <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
+      <div className="flex flex-wrap gap-2">
+        {hidden.map((card) => (
+          <button
+            key={card.id}
+            onClick={() => onShow(card.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#62646A] hover:bg-[#F1F3F5] transition-all"
+          >
+            {card.title}
+            <span className="text-[#9CA3AF]">· Show</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const DirectionSection = () => {
   const {
     directionText,
@@ -99,7 +125,29 @@ export const DirectionSection = () => {
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("hiddenDirectionIds");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
 
+  const hideCard = (id: string) => {
+    setHiddenIds((prev) => {
+      const updated = [...prev, id];
+      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  const showCard = (id: string) => {
+    setHiddenIds((prev) => {
+      const updated = prev.filter((h) => h !== id);
+      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
 
   const heroBadges = [
     {
@@ -140,7 +188,7 @@ export const DirectionSection = () => {
               Other possible directions
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {otherDirections.map((alt) => (
+              {otherDirections.filter((alt) => !hiddenIds.includes(alt.model)).map((alt) => (
                 <DirectionCard
                   key={alt.model}
                   variant="standard"
@@ -148,9 +196,10 @@ export const DirectionSection = () => {
                   description={alt.summary || "Sorene is generating this alternative direction…"}
                   score={String(alt.compatibility)}
                   actionText="View detail"
+                  onHide={() => hideCard(alt.model)}
                 />
               ))}
-              {recipeDirections.map((rd) => (
+              {recipeDirections.filter((rd) => !hiddenIds.includes(rd.id)).map((rd) => (
                 <div
                   key={rd.id}
                   className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 sm:col-span-2" : "col-span-1")}
@@ -166,10 +215,15 @@ export const DirectionSection = () => {
                     actionText="View detail"
                     isExpanded={expandedId === rd.id}
                     onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
+                    onHide={() => hideCard(rd.id)}
                   />
                 </div>
               ))}
             </div>
+            <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
+              ...otherDirections.map((a) => ({ id: a.model, title: a.model })),
+              ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
+            ]} onShow={showCard} />
           </section>
         )}
       </div>
@@ -238,7 +292,7 @@ export const DirectionSection = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {otherIdeas
-            .filter((idea) => !expandedId || expandedId === idea.name)
+            .filter((idea) => !hiddenIds.includes(idea.name) && (!expandedId || expandedId === idea.name))
             .map((idea) => (
               <div
                 key={idea.name}
@@ -253,10 +307,11 @@ export const DirectionSection = () => {
                   {...mapIdeaToCardProps(idea)}
                   isExpanded={expandedId === idea.name}
                   onToggle={() => handleToggle(idea.name)}
+                  onHide={() => hideCard(idea.name)}
                 />
               </div>
             ))}
-          {recipeDirections.map((rd) => (
+          {recipeDirections.filter((rd) => !hiddenIds.includes(rd.id)).map((rd) => (
             <div
               key={rd.id}
               className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 md:col-span-2" : "col-span-1")}
@@ -272,10 +327,15 @@ export const DirectionSection = () => {
                 actionText="View detail"
                 isExpanded={expandedId === rd.id}
                 onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
+                onHide={() => hideCard(rd.id)}
               />
             </div>
           ))}
         </div>
+        <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
+          ...otherIdeas.map((i) => ({ id: i.name, title: i.name })),
+          ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
+        ]} onShow={showCard} />
       </section>
     </div>
   );

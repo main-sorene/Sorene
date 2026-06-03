@@ -543,17 +543,24 @@ export function Sidebar({
             collapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
           )}
         >
-          <img
-            src={
-              authUser?.profile?.photoUrl ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-            }
-            alt={authUser?.displayName || "User"}
+          <div
             className={cn(
-              "rounded-full shrink-0 bg-purple-100 transition-all duration-200 group-hover:ring-2 ring-black/5",
+              "rounded-full shrink-0 overflow-hidden bg-[#3D3D3D] flex items-center justify-center transition-all duration-200 group-hover:ring-2 ring-black/5",
               collapsed ? "w-10 h-10" : "w-8 h-8",
             )}
-          />
+          >
+            {authUser?.profile?.photoUrl || authUser?.photoURL ? (
+              <img
+                src={authUser.profile?.photoUrl || authUser.photoURL!}
+                alt={authUser?.displayName || "User"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-white font-semibold text-sm">
+                {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
           <AnimatePresence>
             {!collapsed && (
               <motion.div

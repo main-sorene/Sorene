@@ -31,10 +31,9 @@ import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
 import { signOut } from "firebase/auth";
-import { auth, storage } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
@@ -62,6 +61,43 @@ const WORK_TYPES = [
   "Legal",
   "Other",
 ];
+
+function resizeImage(file: File, maxSize: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// Birthday stored as MM/DD/YYYY in Firestore; <input type="date"> needs YYYY-MM-DD
+function birthdayToInputValue(birthday: string): string {
+  if (!birthday) return "";
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return birthday;
+  // MM/DD/YYYY format from onboarding
+  const [m, d, y] = birthday.split("/");
+  return y && m && d ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : "";
+}
+
+function inputValueToBirthday(value: string): string {
+  // Store as MM/DD/YYYY for consistency with onboarding
+  if (!value) return "";
+  const [y, m, d] = value.split("-");
+  return y && m && d ? `${m}/${d}/${y}` : "";
+}
 
 function generateOrgId(uid: string): string {
   const hash = uid.split("").reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
@@ -205,7 +241,7 @@ export function SettingsModal() {
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !authUser?.uid || !storage) return;
+    if (!file || !authUser?.uid) return;
 
     if (!file.type.startsWith("image/")) {
       toast({ description: "Please select an image file.", variant: "destructive" });
@@ -218,21 +254,21 @@ export function SettingsModal() {
 
     setIsUploadingAvatar(true);
     try {
-      const storageRef = ref(storage, `avatars/${authUser.uid}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      await saveUserProfile(authUser.uid, { photoUrl: downloadURL });
+      // Resize to max 256x256 and convert to data URL — stored in Firestore, no Storage needed
+      const dataUrl = await resizeImage(file, 256);
+      await saveUserProfile(authUser.uid, { photoUrl: dataUrl });
       setUser({
         ...authUser,
-        photoURL: downloadURL,
-        profile: authUser.profile ? { ...authUser.profile, photoUrl: downloadURL } : undefined,
+        photoURL: dataUrl,
+        profile: authUser.profile ? { ...authUser.profile, photoUrl: dataUrl } : undefined,
       });
       toast({ description: "Profile photo updated." });
     } catch {
       toast({ description: "Failed to upload photo.", variant: "destructive" });
     } finally {
       setIsUploadingAvatar(false);
+      // Reset input so same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -386,8 +422,8 @@ export function SettingsModal() {
               <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Birthday</label>
               <input
                 type="date"
-                value={birthday}
-                onChange={(e) => setBirthday(e.target.value)}
+                value={birthdayToInputValue(birthday)}
+                onChange={(e) => setBirthday(inputValueToBirthday(e.target.value))}
                 className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
               />
             </div>

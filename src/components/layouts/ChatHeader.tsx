@@ -113,15 +113,19 @@ export function ChatHeader() {
         <button
           onClick={() => setIsSettingsOpen(true)}
           data-testid="user-avatar"
+          className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shrink-0"
         >
-          <img
-            src={
-              authUser?.profile?.photoUrl ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-            }
-            alt="User Profile"
-            className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 transition-transform hover:scale-105 active:scale-95"
-          />
+          {authUser?.profile?.photoUrl || authUser?.photoURL ? (
+            <img
+              src={authUser.profile?.photoUrl || authUser.photoURL!}
+              alt="User Profile"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-[#3D3D3D] flex items-center justify-center text-white text-sm font-semibold">
+              {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+            </div>
+          )}
         </button>
       </div>
     </header>

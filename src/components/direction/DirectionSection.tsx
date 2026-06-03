@@ -177,9 +177,6 @@ export const DirectionSection = () => {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <section>
-          {heroHidden && (
-            <HiddenCardsPills hiddenIds={["__hero__"]} allCards={[{ id: "__hero__", title: model || "Your Direction" }]} onShow={showCard} />
-          )}
           {!heroHidden && (
             <DirectionCard
               variant="hero"
@@ -204,7 +201,7 @@ export const DirectionSection = () => {
           )}
         </section>
 
-        {(otherDirections.length > 0 || recipeDirections.length > 0) && (
+        {(otherDirections.length > 0 || recipeDirections.length > 0 || heroHidden) && (
           <section className="space-y-3">
             <h3 className="text-sm font-medium text-[#62646A] px-1">
               Other possible directions
@@ -243,6 +240,7 @@ export const DirectionSection = () => {
               ))}
             </div>
             <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
+              { id: "__hero__", title: model || "Your Direction" },
               ...otherDirections.map((a) => ({ id: a.model, title: a.model })),
               ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
             ]} onShow={showCard} />
@@ -304,9 +302,6 @@ export const DirectionSection = () => {
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
       {/* Hero Section */}
       <section>
-        {bestPickIdea && hiddenIds.includes(bestPickIdea.name) && (
-          <HiddenCardsPills hiddenIds={[bestPickIdea.name]} allCards={[{ id: bestPickIdea.name, title: bestPickIdea.name }]} onShow={showCard} />
-        )}
         {displayedHero && (
           <DirectionCard
             variant="hero"
@@ -367,6 +362,7 @@ export const DirectionSection = () => {
           ))}
         </div>
         <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
+          ...(bestPickIdea ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
           ...otherIdeas.map((i) => ({ id: i.name, title: i.name })),
           ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
         ]} onShow={showCard} />

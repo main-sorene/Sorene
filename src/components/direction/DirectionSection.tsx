@@ -9,7 +9,7 @@ import {
   IdeationData,
   recipeDirectionsAtom,
 } from "@/store/atoms";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 const DEFAULT_IDEATION_DATA: IdeationData = {
   user_id: "dummy",
@@ -100,21 +100,6 @@ export const DirectionSection = () => {
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Load persisted recipe directions from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("recipeDirections");
-      if (stored) setRecipeDirections(JSON.parse(stored));
-    } catch {}
-  }, []);
-
-  // Save recipe directions to localStorage whenever they change
-  useEffect(() => {
-    try {
-      if (recipeDirections.length > 0)
-        localStorage.setItem("recipeDirections", JSON.stringify(recipeDirections));
-    } catch {}
-  }, [recipeDirections]);
 
   const heroBadges = [
     {
@@ -149,7 +134,7 @@ export const DirectionSection = () => {
           />
         </section>
 
-        {otherDirections.length > 0 && (
+        {(otherDirections.length > 0 || recipeDirections.length > 0) && (
           <section className="space-y-3">
             <h3 className="text-sm font-medium text-[#62646A] px-1">
               Other possible directions

@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
-import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
 import { useDnaData } from "@/hooks/useDnaData";
@@ -43,6 +42,7 @@ function FormattedMessage({ content }: { content: string }) {
 export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
+  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const { model, bestCompatibility, directionText, otherDirections } = useDirectionResult();
   const { data: dnaData } = useDnaData();
 
@@ -148,15 +148,18 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <Plus size={16} />
             New Chat
           </button>
-          <Link href="/settings">
-            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:opacity-90 transition-opacity">
-              <img
-                src={authUser?.profile?.photoUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`}
-                alt="User Avatar"
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </Link>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+          >
+            {authUser?.profile?.photoUrl ? (
+              <img src={authUser.profile.photoUrl} alt="User Avatar" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-[#3D3D3D] flex items-center justify-center text-white text-sm font-semibold">
+                {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+              </div>
+            )}
+          </button>
         </div>
       </div>
 

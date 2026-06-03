@@ -11,8 +11,12 @@ export default function Page() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!authLoading && authUser && authUser.profile?.onboardingComplete) {
+    if (authLoading) return;
+    if (!authUser) return;
+    if (authUser.profile?.onboardingComplete) {
       router.replace("/chat");
+    } else {
+      router.replace("/onBoarding");
     }
   }, [authLoading, authUser, router]);
 

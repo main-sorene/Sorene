@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, getRedirectResult } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
@@ -15,6 +15,13 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
     if (!auth) { setLoading(false); return; }
 
     const fallbackTimer = setTimeout(() => setLoading(false), 8000);
+
+    // Explicitly process any pending redirect result from signInWithRedirect.
+    // This is needed on mobile where the page reloads after Google auth.
+    getRedirectResult(auth).catch(() => {
+      // Errors here (e.g. no pending redirect) are expected and safe to ignore.
+      // onAuthStateChanged handles the auth state regardless.
+    });
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {

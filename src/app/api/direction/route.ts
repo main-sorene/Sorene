@@ -49,7 +49,7 @@ function buildUserMessage(
     }
   }
 
-  if (!eligibility.eligible) {
+  if (eligibility.eligible === false) {
     const { reason, scores } = eligibility;
     return `The user's name is ${firstName}.${cvBlock}
 

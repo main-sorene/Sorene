@@ -179,14 +179,16 @@ export async function saveAssessmentResults(
   const { scores } = eligibility;
   const { rankModels } = await import("@/lib/dnaEngine");
   const ranked = eligibility.eligible ? rankModels(scores) : [];
+  const directionEligibility =
+    eligibility.eligible === true
+      ? { eligible: true as const, model: eligibility.model }
+      : { eligible: false as const, reason: eligibility.reason };
   await saveUserProfile(uid, {
     assessmentAnswers: answers,
     dnaAssessmentComplete: true,
     dnaScores: scores,
     ...(dna_narrative ? { dna_narrative } : {}),
-    directionEligibility: eligibility.eligible
-      ? { eligible: true, model: eligibility.model }
-      : { eligible: false, reason: eligibility.reason },
+    directionEligibility,
     directionAlternatives: ranked.map((r) => ({
       model: r.model,
       compatibility: r.compatibility,

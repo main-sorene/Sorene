@@ -68,19 +68,20 @@ Start now with turn 1.`,
 ];
 
 function parseDirectionCard(text: string): RecipeDirection | null {
-  const titleMatch = text.match(/\*\*Direction:\s*([^\n*]+)\*\*/i);
+  // Match "Direction:" with or without bold markers
+  const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
   if (!titleMatch) return null;
 
   const title = titleMatch[1].trim();
 
-  // Description: text between title line and first bold section
+  // Description: text between title line and first section header
   const afterTitle = text.slice(text.indexOf(titleMatch[0]) + titleMatch[0].length).trim();
-  const descEnd = afterTitle.search(/\*\*Why it fits you\*\*/i);
+  const descEnd = afterTitle.search(/\*{0,2}Why it fits you\*{0,2}/i);
   const description = (descEnd > 0 ? afterTitle.slice(0, descEnd) : afterTitle.slice(0, 300)).trim();
 
-  const whySection = afterTitle.match(/\*\*Why it fits you\*\*\n([\s\S]*?)(?=\*\*Key risks\*\*|\*\*Your first step\*\*|$)/i);
-  const risksSection = afterTitle.match(/\*\*Key risks\*\*\n([\s\S]*?)(?=\*\*Your first step\*\*|$)/i);
-  const stepSection = afterTitle.match(/\*\*Your first step\*\*\n([\s\S]*?)$/i);
+  const whySection = afterTitle.match(/\*{0,2}Why it fits you\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Key risks\*{0,2}|\*{0,2}Your first step\*{0,2}|$)/i);
+  const risksSection = afterTitle.match(/\*{0,2}Key risks\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Your first step\*{0,2}|$)/i);
+  const stepSection = afterTitle.match(/\*{0,2}Your first step\*{0,2}[:\n]+([\s\S]*?)$/i);
 
   const parseList = (s: string | undefined) =>
     (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);

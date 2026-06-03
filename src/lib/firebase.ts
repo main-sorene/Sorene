@@ -45,20 +45,19 @@ initializeFirebase();
 
 /**
  * Sign in with Google.
- * Tries popup first (works on most browsers including mobile).
- * Falls back to redirect only if the popup is explicitly blocked by the browser.
+ * Uses redirect on mobile (popup fails on iOS/Android due to cross-origin ITP).
+ * Uses popup on desktop.
  */
 export async function signInWithGoogle(): Promise<UserCredential> {
   if (!auth || !provider) throw new Error("Firebase not initialized");
-  try {
-    return await signInWithPopup(auth, provider);
-  } catch (err: any) {
-    if (err?.code === "auth/popup-blocked") {
-      await signInWithRedirect(auth, provider);
-      return new Promise(() => {}); // page will reload after redirect
-    }
-    throw err;
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(
+    typeof navigator !== "undefined" ? navigator.userAgent : ""
+  );
+  if (isMobile) {
+    await signInWithRedirect(auth, provider);
+    return new Promise(() => {}); // never resolves — page reloads after redirect
   }
+  return signInWithPopup(auth, provider);
 }
 
 export { app, auth, provider, storage, db };

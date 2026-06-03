@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -81,6 +81,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const { model, bestCompatibility, directionText, otherDirections } = useDirectionResult();
   const { data: dnaData } = useDnaData();
+  const resourcesConstraints = useAtomValue(resourcesConstraintsAtom);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -159,6 +160,15 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             directionText: directionText || "",
             alternatives: otherDirections.map((a: { model: string; compatibility: number; summary?: string }) => ({ model: a.model, compatibility: a.compatibility, summary: a.summary })),
             dnaScores: dnaData?.dnaScores ?? {},
+          },
+          userProfile: {
+            firstName: authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0],
+            occupation: (dnaData as Record<string, unknown>)?.occupation as string | undefined,
+            cvSummary: (dnaData as Record<string, unknown>)?.cvSummary as string | undefined,
+            assessmentAnswers: dnaData?.assessmentAnswers,
+            dnaScores: dnaData?.dnaScores,
+            dnaNarrative: dnaData?.dna_narrative,
+            resources: resourcesConstraints,
           },
           ...(activeRecipeId ? { recipeId: activeRecipeId, history } : {}),
         }),

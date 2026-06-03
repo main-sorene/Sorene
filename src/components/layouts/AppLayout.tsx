@@ -120,9 +120,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setIsSettingsOpen(true)}
               className="w-8 h-8 rounded-full overflow-hidden bg-[#3D3D3D] flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0"
             >
-              {authUser?.profile?.photoUrl || authUser?.photoURL ? (
+              {authUser?.profile?.photoUrl ? (
                 <img
-                  src={authUser.profile?.photoUrl || authUser.photoURL!}
+                  src={authUser.profile.photoUrl}
                   alt="User Avatar"
                   className="w-full h-full object-cover"
                 />

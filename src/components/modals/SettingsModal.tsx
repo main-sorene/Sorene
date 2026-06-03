@@ -311,7 +311,7 @@ export function SettingsModal() {
   const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || authUser?.email?.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
   const email = authUser?.email || "";
-  const avatarUrl = authUser?.profile?.photoUrl || authUser?.photoURL;
+  const avatarUrl = authUser?.profile?.photoUrl;
   const orgId = authUser?.profile?.orgId || (authUser?.uid ? generateOrgId(authUser.uid) : "—");
 
   const renderContent = () => {

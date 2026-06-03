@@ -549,9 +549,9 @@ export function Sidebar({
               collapsed ? "w-10 h-10" : "w-8 h-8",
             )}
           >
-            {authUser?.profile?.photoUrl || authUser?.photoURL ? (
+            {authUser?.profile?.photoUrl ? (
               <img
-                src={authUser.profile?.photoUrl || authUser.photoURL!}
+                src={authUser.profile.photoUrl}
                 alt={authUser?.displayName || "User"}
                 className="w-full h-full object-cover"
               />

@@ -111,9 +111,9 @@ export function ChatHeader() {
           data-testid="user-avatar"
           className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shrink-0"
         >
-          {authUser?.profile?.photoUrl || authUser?.photoURL ? (
+          {authUser?.profile?.photoUrl ? (
             <img
-              src={authUser.profile?.photoUrl || authUser.photoURL!}
+              src={authUser.profile.photoUrl}
               alt="User Profile"
               className="w-full h-full object-cover"
             />

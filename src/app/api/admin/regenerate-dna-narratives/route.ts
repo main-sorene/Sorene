@@ -9,7 +9,6 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || "sorene-admin-2024";
 
 async function generateNarrative(answers: Record<string, string>, cvSummary?: string): Promise<Record<string, string>> {
   const answersBlock = Object.entries(answers).map(([k, v]) => `${k}: "${v}"`).join("\n");
-
   const prompt = `You are Sorene, a warm and perceptive entrepreneurship coach. Based on the assessment answers below${cvSummary ? " and their background" : ""}, generate a rich DNA profile narrative.
 
 ${cvSummary ? `Their background:\n${cvSummary}\n\n` : ""}Assessment answers:
@@ -17,17 +16,17 @@ ${answersBlock}
 
 Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section: TITLE line, blank line, content.
 
-1. core_dna_label — 3-5 word identity naming their #1 entrepreneurial strength. Specific and ownable. NOT generic (no "Visionary", "Leader", "Creative"). Name the actual pattern you see. Example: "The Precision-Driven Builder", "The Mission-First Operator".
+1. core_dna_label — 3-5 word identity naming their #1 entrepreneurial strength. Specific and ownable. NOT generic (no "Visionary", "Leader", "Creative"). Name the actual pattern you see.
 
-2. your_core — 3 sentences: (1) name the strongest entrepreneurial signal across all answers, (2) echo their exact words, (3) what this means for the kind of venture that will work for them.
+2. your_core — 3 sentences: (1) strongest entrepreneurial signal, (2) echo their exact words, (3) what this means for the right kind of venture.
 
-3. what_drives_you — 2-3 sentences on their deepest motivation and what success would actually feel like. Pull from their words.
+3. what_drives_you — 2-3 sentences on deepest motivation and what success feels like.
 
-4. how_you_work — 2-3 sentences on their ideal environment, pace, collaboration style. Be specific and human.
+4. how_you_work — 2-3 sentences on ideal environment, pace, collaboration style.
 
-5. risk_and_change — 2-3 sentences on their relationship with risk. Name the specific trade-off they mentioned.
+5. risk_and_change — 2-3 sentences on relationship with risk and the key trade-off they named.
 
-6. your_energy — 2-3 sentences on what energizes and drains them. Be vivid.
+6. your_energy — 2-3 sentences on what energizes and drains them.
 
 7. strengths_and_edges — 2-3 sentences on real strengths and non-negotiables. End with an honest limit.
 
@@ -68,8 +67,7 @@ TITLE: strengths_and_edges
     messages: [{ role: "user", content: prompt }],
   });
 
-  const block = message.content[0];
-  const raw = block && block.type === "text" ? block.text.trim() : "";
+  const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
   const narrative: Record<string, string> = {};
   for (const section of raw.split("---SECTION---").map((s) => s.trim()).filter(Boolean)) {
     const lines = section.split("\n");
@@ -79,16 +77,9 @@ TITLE: strengths_and_edges
   return narrative;
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  if (body.secret !== ADMIN_SECRET) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Ensure admin app is initialized
-  getAdminAuth();
-  const apps = getApps();
-  if (!apps.length) {
+async function runRegeneration() {
+  getAdminAuth(); // ensures Firebase Admin is initialized
+  if (!getApps().length) {
     return Response.json({ error: "Firebase admin not initialized" }, { status: 500 });
   }
 
@@ -104,9 +95,8 @@ export async function POST(req: NextRequest) {
       results.push({ uid, status: "skipped (no assessment)" });
       continue;
     }
-
     if (data.dna_narrative?.core_dna_label) {
-      results.push({ uid, status: `skipped (already has: ${data.dna_narrative.core_dna_label})` });
+      results.push({ uid, status: `skipped — already has: ${data.dna_narrative.core_dna_label}` });
       continue;
     }
 
@@ -124,4 +114,20 @@ export async function POST(req: NextRequest) {
   }
 
   return Response.json({ total: usersSnap.size, results });
+}
+
+// GET: open in browser — https://sorene.ai/api/admin/regenerate-dna-narratives?secret=sorene-admin-2024
+export async function GET(req: NextRequest) {
+  if (req.nextUrl.searchParams.get("secret") !== ADMIN_SECRET) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runRegeneration();
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  if (body.secret !== ADMIN_SECRET) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runRegeneration();
 }

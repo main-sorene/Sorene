@@ -339,11 +339,11 @@ export const DNASection = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const authUser = useAtomValue(userAtom);
 
-  // If narrative exists but is missing the new core_dna_label, regenerate silently
+  // Regenerate narrative if missing entirely or missing the new core_dna_label
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if (!narrative || narrative.core_dna_label || !answers || !authUser?.uid) return;
+    if (narrative?.core_dna_label || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

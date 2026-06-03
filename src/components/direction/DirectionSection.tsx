@@ -169,10 +169,18 @@ export const DirectionSection = () => {
   }
 
   if (directionText) {
+    const heroHidden = hiddenIds.includes("__hero__");
+    const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));
+    const promotedAlt = heroHidden ? visibleAlts[0] ?? null : null;
+    const gridAlts = visibleAlts.filter((a) => a !== promotedAlt);
+
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <section>
-          {!hiddenIds.includes("__hero__") && (
+          {heroHidden && (
+            <HiddenCardsPills hiddenIds={["__hero__"]} allCards={[{ id: "__hero__", title: model || "Your Direction" }]} onShow={showCard} />
+          )}
+          {!heroHidden && (
             <DirectionCard
               variant="hero"
               title={model || "Your Direction"}
@@ -183,8 +191,16 @@ export const DirectionSection = () => {
               onHide={() => hideCard("__hero__")}
             />
           )}
-          {hiddenIds.includes("__hero__") && (
-            <HiddenCardsPills hiddenIds={["__hero__"]} allCards={[{ id: "__hero__", title: model || "Your Direction" }]} onShow={showCard} />
+          {promotedAlt && (
+            <DirectionCard
+              variant="hero"
+              title={promotedAlt.model}
+              description={promotedAlt.summary || ""}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(promotedAlt.compatibility)}
+              onHide={() => hideCard(promotedAlt.model)}
+            />
           )}
         </section>
 
@@ -194,7 +210,7 @@ export const DirectionSection = () => {
               Other possible directions
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {otherDirections.filter((alt) => !hiddenIds.includes(alt.model)).map((alt) => (
+              {gridAlts.map((alt) => (
                 <DirectionCard
                   key={alt.model}
                   variant="standard"
@@ -276,21 +292,29 @@ export const DirectionSection = () => {
     setExpandedId(expandedId === name ? null : name);
   };
 
+  // Determine the displayed hero: original best pick if not hidden, else promote first visible other
+  const heroIsHidden = bestPickIdea ? hiddenIds.includes(bestPickIdea.name) : false;
+  const visibleOtherIdeas = otherIdeas.filter((i) => !hiddenIds.includes(i.name));
+  const promotedHero = heroIsHidden ? visibleOtherIdeas[0] ?? null : null;
+  const displayedHero = heroIsHidden ? promotedHero : bestPickIdea ?? null;
+  // Ideas shown in the grid (exclude the promoted hero)
+  const gridIdeas = visibleOtherIdeas.filter((i) => i !== promotedHero);
+
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
       {/* Hero Section */}
       <section>
-        {bestPickIdea && !hiddenIds.includes(bestPickIdea.name) && (
-          <DirectionCard
-            variant="hero"
-            {...mapIdeaToCardProps(bestPickIdea)}
-            badges={heroBadges}
-            actionText="View detail"
-            onHide={() => hideCard(bestPickIdea.name)}
-          />
-        )}
         {bestPickIdea && hiddenIds.includes(bestPickIdea.name) && (
           <HiddenCardsPills hiddenIds={[bestPickIdea.name]} allCards={[{ id: bestPickIdea.name, title: bestPickIdea.name }]} onShow={showCard} />
+        )}
+        {displayedHero && (
+          <DirectionCard
+            variant="hero"
+            {...mapIdeaToCardProps(displayedHero)}
+            badges={heroBadges}
+            actionText="View detail"
+            onHide={() => hideCard(displayedHero.name)}
+          />
         )}
       </section>
 
@@ -301,8 +325,8 @@ export const DirectionSection = () => {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {otherIdeas
-            .filter((idea) => !hiddenIds.includes(idea.name) && (!expandedId || expandedId === idea.name))
+          {gridIdeas
+            .filter((idea) => !expandedId || expandedId === idea.name)
             .map((idea) => (
               <div
                 key={idea.name}

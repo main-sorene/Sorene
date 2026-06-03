@@ -137,3 +137,27 @@ export interface RecipeDirection {
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
+
+export interface ResourcesConstraints {
+  networks: string;
+  startingCapital: string;
+  financialRunway: string;
+  hoursPerWeek: string;
+  locationFlexibility: string;
+  familyCommitments: string;
+  incomeFloor: string;
+  onlineVsOffline: string;
+  growthAmbition: string;
+  clientInteraction: string;
+  travelTolerance: string;
+  otherNotes: string;
+}
+
+export const EMPTY_RESOURCES: ResourcesConstraints = {
+  networks: "", startingCapital: "", financialRunway: "", hoursPerWeek: "",
+  locationFlexibility: "", familyCommitments: "", incomeFloor: "",
+  onlineVsOffline: "", growthAmbition: "", clientInteraction: "",
+  travelTolerance: "", otherNotes: "",
+};
+
+export const resourcesConstraintsAtom = atom<ResourcesConstraints>(EMPTY_RESOURCES);

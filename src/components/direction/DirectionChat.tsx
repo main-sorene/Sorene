@@ -9,7 +9,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
 import { useDnaData } from "@/hooks/useDnaData";
 
-const DIRECTION_SUGGESTIONS = ["Why does this fit me?", "How do I start?"];
 
 const DIRECTION_RECIPES = [
   {
@@ -225,16 +224,6 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
               >
                 <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
                 {recipe.label}
-              </button>
-            ))}
-            {!hasMessages && DIRECTION_SUGGESTIONS.map((label) => (
-              <button
-                key={label}
-                onClick={() => sendMessage(label)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
-              >
-                <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
-                {label}
               </button>
             ))}
           </div>

@@ -117,6 +117,8 @@ function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
 
 export const DirectionSection = () => {
   const {
+    primaryCard,
+    altCards,
     directionText,
     isLoading: isDirectionLoading,
     model,
@@ -158,7 +160,7 @@ export const DirectionSection = () => {
   ];
 
   // If we have a streamed direction from our internal API, show it in the hero card
-  if (isDirectionLoading && !directionText) {
+  if (isDirectionLoading && !directionText && !primaryCard) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4 text-center">
@@ -169,6 +171,45 @@ export const DirectionSection = () => {
     );
   }
 
+  // ── New structured cards path ─────────────────────────────────────────────
+  if (primaryCard) {
+    return (
+      <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
+        <ResourcesConstraintsForm />
+        <section>
+          <DirectionCard
+            variant="hero"
+            title={primaryCard.title}
+            description={primaryCard.description}
+            badges={heroBadges}
+            actionText="View detail"
+            score={String(primaryCard.compatibility)}
+            cardData={primaryCard}
+          />
+        </section>
+        {altCards.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-medium text-[#62646A] px-1">Other possible directions</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {altCards.map((card) => (
+                <DirectionCard
+                  key={card.title}
+                  variant="standard"
+                  title={card.title}
+                  description={card.description}
+                  score={String(card.compatibility)}
+                  actionText="View detail"
+                  cardData={card}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
+  // ── Legacy streamed text path ──────────────────────────────────────────────
   if (directionText) {
     const heroHidden = hiddenIds.includes("__hero__");
     const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));

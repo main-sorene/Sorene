@@ -6,6 +6,8 @@ import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
+import type { DirectionCardData } from "@/lib/directionTypes";
+import type { StructuralModel } from "@/lib/dnaEngine";
 
 export type DirectionAlternative = {
   model: string;
@@ -15,9 +17,11 @@ export type DirectionAlternative = {
 
 export function useDirectionResult() {
   const user = useAtomValue(userAtom);
+  // Legacy streaming text — kept for users who have old cached data
   const [streamedText, setStreamedText] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasStreamed, setHasStreamed] = useState(false);
+  const [directionCards, setDirectionCards] = useState<DirectionCardData[]>([]);
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
 
   const { data: profile, isLoading } = useQuery({
@@ -30,86 +34,89 @@ export function useDirectionResult() {
   useEffect(() => {
     if (!profile || hasStreamed) return;
 
-    // Seed alternatives from cache if available
+    // Seed alternatives from cache
     if (profile.directionAlternatives && profile.directionAlternatives.length > 0) {
       setAlternatives(profile.directionAlternatives);
     }
 
-    // If we already have a cached direction text, use it
+    // New path: structured direction cards
+    if (profile.directionCards && profile.directionCards.length > 0) {
+      setDirectionCards(profile.directionCards);
+      setHasStreamed(true);
+      return;
+    }
+
+    // Legacy fallback: old streamed text
     if (profile.directionText) {
       setStreamedText(profile.directionText);
       setHasStreamed(true);
-
-      // If alternatives lack summaries, generate them
       const alts = profile.directionAlternatives || [];
       const needSummaries = alts.filter((a) => a.model !== profile.directionEligibility?.model).slice(0, 2);
       if (needSummaries.length > 0 && needSummaries.some((a) => !a.summary)) {
-        fetchAlternativeSummaries(needSummaries, profile);
+        fetchLegacyAlternativeSummaries(needSummaries, profile);
       }
       return;
     }
 
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
+    if (!profile.directionEligibility.eligible) return;
 
-    const stream = async () => {
+    const generate = async () => {
       setIsStreaming(true);
       setHasStreamed(true);
+
       try {
         const firstName = profile.firstName || "there";
-        const res = await authFetch("/api/direction", {
+        const primaryModel = profile.directionEligibility!.model as StructuralModel;
+        const allAlts = profile.directionAlternatives || [];
+
+        // Build models list: primary + up to 2 alternatives
+        const altModels = allAlts
+          .filter((a) => a.model !== primaryModel)
+          .slice(0, 2)
+          .map((a) => ({ model: a.model as StructuralModel, compatibility: a.compatibility, isPrimary: false }));
+
+        const primaryAlt = allAlts.find((a) => a.model === primaryModel);
+        const models = [
+          { model: primaryModel, compatibility: primaryAlt?.compatibility ?? 100, isPrimary: true },
+          ...altModels,
+        ];
+
+        const res = await authFetch("/api/direction-cards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            eligibility: {
-              eligible: profile.directionEligibility!.eligible,
-              model: profile.directionEligibility!.model,
-              reason: profile.directionEligibility!.reason,
-              scores: profile.dnaScores,
-            },
+            models,
+            scores: profile.dnaScores,
             firstName,
             rawAnswers: profile.assessmentAnswers,
             cvSummary: profile.cvSummary,
           }),
         });
 
-        if (!res.ok || !res.body) {
+        if (!res.ok) {
           setIsStreaming(false);
           return;
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "";
+        const data = (await res.json()) as { cards?: DirectionCardData[] };
+        const cards = data.cards || [];
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          fullText += chunk;
-          setStreamedText(fullText);
-        }
-
-        if (user?.uid && fullText) {
-          await saveUserProfile(user.uid, { directionText: fullText });
-        }
-
-        // After main direction streams, fetch alternative summaries
-        const alts = profile.directionAlternatives || [];
-        const altsToSummarize = alts
-          .filter((a) => a.model !== profile.directionEligibility?.model)
-          .slice(0, 2);
-        if (altsToSummarize.length > 0) {
-          fetchAlternativeSummaries(altsToSummarize, profile);
+        if (cards.length > 0) {
+          setDirectionCards(cards);
+          if (user?.uid) {
+            await saveUserProfile(user.uid, { directionCards: cards });
+          }
         }
       } finally {
         setIsStreaming(false);
       }
     };
 
-    stream();
+    generate();
   }, [profile, hasStreamed, user]);
 
-  async function fetchAlternativeSummaries(
+  async function fetchLegacyAlternativeSummaries(
     alts: DirectionAlternative[],
     profileSnapshot: NonNullable<typeof profile>,
   ) {
@@ -127,7 +134,6 @@ export function useDirectionResult() {
       const data = (await res.json()) as { summaries?: string[] };
       if (!data.summaries || data.summaries.length === 0) return;
       const updated = alts.map((a, i) => ({ ...a, summary: data.summaries![i] || a.summary }));
-      // Merge updated alternatives back into full list
       const fullList = (profileSnapshot.directionAlternatives || []).map((a) => {
         const match = updated.find((u) => u.model === a.model);
         return match || a;
@@ -141,17 +147,26 @@ export function useDirectionResult() {
     }
   }
 
-  const model = profile?.directionEligibility?.eligible ? profile.directionEligibility.model : null;
+  const eligibleModel = profile?.directionEligibility?.eligible ? profile.directionEligibility.model : null;
+  const primaryCard = directionCards.find((c) => c.title) ? directionCards[0] : null;
+  const altCards = directionCards.slice(1);
+
+  // Legacy
   const otherDirections = alternatives
-    .filter((a) => a.model !== model)
+    .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
   return {
+    // Structured cards (new path)
+    primaryCard,
+    altCards,
+    // Legacy text path
     directionText: streamedText,
+    // Shared
     isLoading: isLoading || isStreaming,
     eligibility: profile?.directionEligibility,
-    model,
-    bestCompatibility: alternatives.find((a) => a.model === model)?.compatibility ?? 100,
+    model: eligibleModel,
+    bestCompatibility: alternatives.find((a) => a.model === eligibleModel)?.compatibility ?? 100,
     otherDirections,
   };
 }

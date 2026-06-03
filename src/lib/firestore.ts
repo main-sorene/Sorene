@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import type { DirectionCardData } from "./directionTypes";
 
 export interface UserProfile {
   firstName: string;
@@ -65,6 +66,7 @@ export interface UserProfile {
     compatibility: number;
     summary?: string;
   }[];
+  directionCards?: DirectionCardData[];
 }
 
 function getDb() {

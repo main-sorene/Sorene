@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, setPersistence, indexedDBLocalPersistence, UserCredential } from "firebase/auth";
+import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, UserCredential } from "firebase/auth";
 import { FirebaseStorage, getStorage } from "firebase/storage";
 import { Firestore, getFirestore } from "firebase/firestore";
 
@@ -30,8 +30,6 @@ function initializeFirebase() {
   try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
-    // Use IndexedDB — Safari ITP clears localStorage on cross-origin redirect but not IndexedDB
-    setPersistence(auth, indexedDBLocalPersistence).catch(() => {});
     storage = getStorage(app);
     db = getFirestore(app);
     provider = new GoogleAuthProvider();
@@ -45,20 +43,8 @@ function initializeFirebase() {
 
 initializeFirebase();
 
-/**
- * Sign in with Google.
- * Uses redirect on mobile (popup fails on iOS/Android due to cross-origin ITP).
- * Uses popup on desktop.
- */
 export async function signInWithGoogle(): Promise<UserCredential> {
   if (!auth || !provider) throw new Error("Firebase not initialized");
-  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(
-    typeof navigator !== "undefined" ? navigator.userAgent : ""
-  );
-  if (isMobile) {
-    await signInWithRedirect(auth, provider);
-    return new Promise(() => {}); // never resolves — page reloads after redirect
-  }
   return signInWithPopup(auth, provider);
 }
 

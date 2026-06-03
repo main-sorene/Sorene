@@ -69,10 +69,22 @@ TITLE: strengths_and_edges
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
   const narrative: Record<string, string> = {};
-  for (const section of raw.split("---SECTION---").map((s) => s.trim()).filter(Boolean)) {
-    const lines = section.split("\n");
-    const m = lines[0]?.match(/^TITLE:\s*(\S+)/);
-    if (m) narrative[m[1].trim()] = lines.slice(1).join("\n").trim();
+  for (const section of raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean)) {
+    const lines = section.split("\n").filter(l => l.trim() !== "");
+    // Match "TITLE: key" anywhere in the first few lines
+    let titleKey = "";
+    let contentStartIdx = 0;
+    for (let i = 0; i < Math.min(3, lines.length); i++) {
+      const m = lines[i].match(/TITLE:\s*(\w+)/i);
+      if (m) { titleKey = m[1].trim(); contentStartIdx = i + 1; break; }
+    }
+    if (titleKey) {
+      narrative[titleKey] = lines.slice(contentStartIdx).join("\n").trim();
+    }
+  }
+  // Log for debugging
+  if (!narrative.core_dna_label) {
+    console.error("[dna-narrative] parse failed, raw:", raw.slice(0, 500));
   }
   return narrative;
 }
@@ -95,7 +107,7 @@ async function runRegeneration() {
       results.push({ uid, status: "skipped (no assessment)" });
       continue;
     }
-    if (data.dna_narrative?.core_dna_label) {
+    if (data.dna_narrative?.core_dna_label && data.dna_narrative?.your_core) {
       results.push({ uid, status: `skipped — already has: ${data.dna_narrative.core_dna_label}` });
       continue;
     }

@@ -87,16 +87,19 @@ TITLE: strengths_and_edges
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";
 
-    const sections = raw.split("---SECTION---").map((s) => s.trim()).filter(Boolean);
+    const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
     const narrative: Record<string, string> = {};
     for (const section of sections) {
-      const lines = section.split("\n");
-      const titleLine = lines[0]?.match(/^TITLE:\s*(\S+)/);
-      if (titleLine) {
-        const key = titleLine[1].trim();
-        const content = lines.slice(1).join("\n").trim();
-        narrative[key] = content;
+      const lines = section.split("\n").filter(l => l.trim() !== "");
+      let titleKey = "";
+      let contentStartIdx = 0;
+      for (let i = 0; i < Math.min(3, lines.length); i++) {
+        const m = lines[i].match(/TITLE:\s*(\w+)/i);
+        if (m) { titleKey = m[1].trim(); contentStartIdx = i + 1; break; }
+      }
+      if (titleKey) {
+        narrative[titleKey] = lines.slice(contentStartIdx).join("\n").trim();
       }
     }
 

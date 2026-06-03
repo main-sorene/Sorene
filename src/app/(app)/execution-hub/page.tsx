@@ -287,10 +287,20 @@ function LaunchpadContent() {
 // ─────────────────────────────────────────────
 
 function DirectSyncContent() {
-  const channels = [
+  const [linkState, setLinkState] = useState<Record<"telegram" | "whatsapp", "idle" | "loading" | "linked">>({
+    telegram: "idle",
+    whatsapp: "idle",
+  });
+
+  const channels: Array<{
+    name: string;
+    platform: "telegram" | "whatsapp";
+    description: string;
+    icon: React.ReactNode;
+  }> = [
     {
       name: "WhatsApp",
-      href: "https://wa.me/",
+      platform: "whatsapp",
       description: "Weekly check-ins with Sorene",
       icon: (
         <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
@@ -301,7 +311,7 @@ function DirectSyncContent() {
     },
     {
       name: "Telegram",
-      href: "https://t.me/",
+      platform: "telegram",
       description: "Instant messaging with Sorene",
       icon: (
         <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
@@ -311,6 +321,30 @@ function DirectSyncContent() {
       ),
     },
   ];
+
+  const handleChannelClick = async (platform: "telegram" | "whatsapp") => {
+    setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch("/api/messaging/generate-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ platform }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        window.open(data.deepLink, "_blank");
+        setLinkState((prev) => ({ ...prev, [platform]: "linked" }));
+      } else {
+        setLinkState((prev) => ({ ...prev, [platform]: "idle" }));
+      }
+    } catch {
+      setLinkState((prev) => ({ ...prev, [platform]: "idle" }));
+    }
+  };
 
   return (
     <div className="p-6 space-y-8">
@@ -323,24 +357,34 @@ function DirectSyncContent() {
           Sorene checks in with you every week on your preferred platform. Tap to open a direct conversation.
         </p>
         <div className="divide-y divide-gray-100 border-t border-gray-100">
-          {channels.map((ch) => (
-            <a
-              key={ch.name}
-              href={ch.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-4 py-4 group hover:opacity-80 transition-opacity"
-            >
-              <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                {ch.icon}
-              </div>
-              <div className="flex-1">
-                <p className="text-body-small-medium text-[#151515]">Chat on {ch.name}</p>
-                <p className="text-label-medium text-[#62646A]">{ch.description}</p>
-              </div>
-              <ArrowRight size={15} className="text-gray-300 group-hover:text-[#151515] transition-colors" />
-            </a>
-          ))}
+          {channels.map((ch) => {
+            const state = linkState[ch.platform];
+            return (
+              <button
+                key={ch.name}
+                onClick={() => handleChannelClick(ch.platform)}
+                disabled={state === "loading"}
+                className="w-full flex items-center gap-4 py-4 group hover:opacity-80 transition-opacity text-left disabled:opacity-60"
+              >
+                <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  {ch.icon}
+                </div>
+                <div className="flex-1">
+                  {state === "linked" ? (
+                    <p className="text-body-small-medium text-[#32C382]">Link sent — complete in {ch.name}</p>
+                  ) : (
+                    <p className="text-body-small-medium text-[#151515]">Chat on {ch.name}</p>
+                  )}
+                  <p className="text-label-medium text-[#62646A]">{ch.description}</p>
+                </div>
+                {state === "loading" ? (
+                  <Loader2 size={15} className="text-gray-300 animate-spin" />
+                ) : (
+                  <ArrowRight size={15} className="text-gray-300 group-hover:text-[#151515] transition-colors" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
     </div>

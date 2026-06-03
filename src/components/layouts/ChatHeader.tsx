@@ -94,20 +94,16 @@ export function ChatHeader() {
 
       {/* Right: New Chat + avatar */}
       <div className="flex items-center gap-3">
-        <button
-          data-testid="new-chat-header"
-          onClick={handleNewChat}
-          disabled={!isAssessmentComplete}
-          className={cn(
-            "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors",
-            isAssessmentComplete
-              ? "bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
-              : "bg-[#111111] text-white cursor-not-allowed opacity-50",
-          )}
-        >
-          <Plus size={18} />
-          New Chat
-        </button>
+        {isAssessmentComplete && (
+          <button
+            data-testid="new-chat-header"
+            onClick={handleNewChat}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
+          >
+            <Plus size={18} />
+            New Chat
+          </button>
+        )}
 
         {/* User avatar */}
         <button

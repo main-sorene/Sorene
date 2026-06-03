@@ -47,6 +47,8 @@ const SIDEBAR_ITEMS = [
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
 
+const GENDER_OPTIONS = ["Male", "Female"];
+
 const WORK_TYPES = [
   "Product management",
   "Engineering",
@@ -84,13 +86,18 @@ export function SettingsModal() {
   const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false);
 
   // General form state
-  const [fullName, setFullName] = React.useState(authUser?.profile?.fullName || authUser?.displayName || "");
+  const [firstName, setFirstName] = React.useState(authUser?.profile?.firstName || "");
+  const [lastName, setLastName] = React.useState(authUser?.profile?.lastName || "");
+  const [birthday, setBirthday] = React.useState(authUser?.profile?.birthday || "");
+  const [gender, setGender] = React.useState(authUser?.profile?.sex || "");
+  const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
   const [nickname, setNickname] = React.useState(authUser?.profile?.nickname || "");
   const [workType, setWorkType] = React.useState(authUser?.profile?.workType || "");
   const [workDropdownOpen, setWorkDropdownOpen] = React.useState(false);
   const [customWork, setCustomWork] = React.useState("");
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const genderDropdownRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [mounted, setMounted] = React.useState(false);
@@ -99,17 +106,23 @@ export function SettingsModal() {
   // Sync form state when user data changes
   React.useEffect(() => {
     if (authUser) {
-      setFullName(authUser.profile?.fullName || authUser.displayName || "");
+      setFirstName(authUser.profile?.firstName || "");
+      setLastName(authUser.profile?.lastName || "");
+      setBirthday(authUser.profile?.birthday || "");
+      setGender(authUser.profile?.sex || "");
       setNickname(authUser.profile?.nickname || "");
       setWorkType(authUser.profile?.workType || "");
     }
   }, [authUser]);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   React.useEffect(() => {
     const handle = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setWorkDropdownOpen(false);
+      }
+      if (genderDropdownRef.current && !genderDropdownRef.current.contains(e.target as Node)) {
+        setGenderDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handle);
@@ -229,15 +242,21 @@ export function SettingsModal() {
     try {
       const finalWorkType = workType === "Other" ? customWork : workType;
       await saveUserProfile(authUser.uid, {
-        fullName,
+        firstName,
+        lastName,
+        birthday,
+        sex: gender,
         nickname,
         workType: finalWorkType,
+        occupation: WORK_TYPES.indexOf(finalWorkType) >= 0
+          ? finalWorkType.toLowerCase().replace(/ /g, "_")
+          : finalWorkType,
       });
       setUser({
         ...authUser,
-        displayName: fullName || authUser.displayName,
+        displayName: `${firstName} ${lastName}`.trim() || authUser.displayName,
         profile: authUser.profile
-          ? { ...authUser.profile, fullName, nickname, workType: finalWorkType }
+          ? { ...authUser.profile, firstName, lastName, birthday, sex: gender, nickname, workType: finalWorkType }
           : undefined,
       });
       toast({ description: "Settings saved." });
@@ -253,8 +272,8 @@ export function SettingsModal() {
     return true;
   });
 
-  const displayName = authUser?.displayName || authUser?.email?.split("@")[0] || "User";
-  const initial = (authUser?.profile?.fullName || displayName).charAt(0).toUpperCase();
+  const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || authUser?.email?.split("@")[0] || "User";
+  const initial = displayName.charAt(0).toUpperCase();
   const email = authUser?.email || "";
   const avatarUrl = authUser?.profile?.photoUrl || authUser?.photoURL;
   const orgId = authUser?.profile?.orgId || (authUser?.uid ? generateOrgId(authUser.uid) : "—");
@@ -312,15 +331,9 @@ export function SettingsModal() {
               <div className="flex items-center gap-4">
                 <div className="relative group">
                   {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Avatar"
-                      className="w-16 h-16 rounded-full object-cover bg-purple-100"
-                    />
+                    <img src={avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover bg-purple-100" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-xl font-semibold">
-                      {initial}
-                    </div>
+                    <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-xl font-semibold">{initial}</div>
                   )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -329,13 +342,7 @@ export function SettingsModal() {
                   >
                     <Camera size={18} className="text-white" />
                   </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                 </div>
                 <div>
                   <button
@@ -350,16 +357,89 @@ export function SettingsModal() {
               </div>
             </div>
 
-            {/* Full Name */}
+            {/* First Name & Last Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">First Name</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First name"
+                  className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Last Name</label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last name"
+                  className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Birthday */}
             <div>
-              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Full Name</label>
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Birthday</label>
               <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Enter your full name"
-                className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
               />
+            </div>
+
+            {/* Gender */}
+            <div ref={genderDropdownRef} className="relative">
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Gender</label>
+              <button
+                onClick={() => setGenderDropdownOpen(!genderDropdownOpen)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-left hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all"
+              >
+                <span className={gender ? "text-[#151515] capitalize" : "text-[#9B9B9B]"}>
+                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : "Select gender"}
+                </span>
+                <ChevronDown size={16} className={cn("text-[#9B9B9B] transition-transform", genderDropdownOpen && "rotate-180")} />
+              </button>
+              {genderDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white rounded-xl border border-[#ECEDEE] shadow-lg overflow-hidden">
+                  {GENDER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => { setGender(opt.toLowerCase()); setGenderDropdownOpen(false); }}
+                      className={cn(
+                        "w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors flex items-center justify-between",
+                        gender === opt.toLowerCase() && "bg-purple-50 text-purple-700",
+                      )}
+                    >
+                      {opt}
+                      {gender === opt.toLowerCase() && <Check size={14} className="text-purple-600" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CV / Portfolio */}
+            <div>
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">CV / Portfolio</label>
+              {authUser?.profile?.cvData?.file_name ? (
+                <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
+                  <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#151515] truncate">{authUser.profile.cvData.file_name}</p>
+                    <p className="text-xs text-[#9B9B9B]">Uploaded during onboarding</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-[#D0D0D0] px-4 py-4 text-center">
+                  <p className="text-sm text-[#9B9B9B]">No CV uploaded yet</p>
+                  <p className="text-xs text-[#BCBCBC] mt-1">Upload during onboarding to see it here</p>
+                </div>
+              )}
             </div>
 
             {/* Nickname */}
@@ -391,11 +471,7 @@ export function SettingsModal() {
                   {WORK_TYPES.map((type) => (
                     <button
                       key={type}
-                      onClick={() => {
-                        setWorkType(type);
-                        setWorkDropdownOpen(false);
-                        if (type !== "Other") setCustomWork("");
-                      }}
+                      onClick={() => { setWorkType(type); setWorkDropdownOpen(false); if (type !== "Other") setCustomWork(""); }}
                       className={cn(
                         "w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors flex items-center justify-between",
                         workType === type && "bg-purple-50 text-purple-700",

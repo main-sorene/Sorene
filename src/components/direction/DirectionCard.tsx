@@ -386,6 +386,44 @@ export function DirectionCard({
   // ── Structured expanded content (new path) ──────────────────────────────────
   const structuredContent = cardData ? (
     <div className="p-3 md:p-4 space-y-8">
+      {/* Why This Fits You + Key Risks — 2 column */}
+      {((cardData.why_fits_you?.length ?? 0) > 0 || (cardData.key_risks?.length ?? 0) > 0) && (
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+          <div className="flex flex-col md:flex-row gap-4">
+            {(cardData.why_fits_you?.length ?? 0) > 0 && (
+              <div className="flex-1">
+                <h4 className="text-base font-medium text-[#151515] mb-4">Why This Fits You</h4>
+                <Separator className="bg-[#ECEDEE] mb-5" />
+                <div className="space-y-3">
+                  {cardData.why_fits_you.map((item, idx) => (
+                    <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
+                      <CircleCheck size={18} className="text-[#32C382] shrink-0 mt-0.5" />
+                      <p className="text-[13px] text-[#62646A] leading-relaxed">{item}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(cardData.key_risks?.length ?? 0) > 0 && (
+              <div className="flex-1">
+                <h4 className="text-base font-medium text-[#151515] mb-4">Key Risks</h4>
+                <Separator className="bg-[#ECEDEE] mb-5" />
+                <div className="space-y-3">
+                  {cardData.key_risks.map((risk, idx) => (
+                    <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
+                      <CircleX size={18} className="text-[#DC2626] shrink-0 mt-0.5" />
+                      <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.section>
+      )}
+
+      {((cardData.why_fits_you?.length ?? 0) > 0 || (cardData.key_risks?.length ?? 0) > 0) && <Separator className="bg-[#ECEDEE]" />}
+
       {/* Positioning + Unfair Advantage */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-4">
         <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">

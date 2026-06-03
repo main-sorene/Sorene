@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { signInWithGoogle } from "@/lib/firebase";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { scrollToSection } from "@/lib/utils";
+import { GoogleOneTapButton } from "@/components/auth/GoogleOneTapButton";
 
 const navLinks = [
   { label: "Home" },

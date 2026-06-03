@@ -136,36 +136,251 @@ export function DirectionCard({
   const toggleStep = (id: string) =>
     setCheckedSteps((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
+  // Section-aware renderer for full Direction Engine output (recipe cards / rawContent path)
   const renderRaw = (text: string) => {
-    const lines = text.split("\n");
-    return (
-      <div className="space-y-1.5 text-sm text-[#374151] leading-relaxed">
-        {lines.map((line, i) => {
-          const trimmed = line.trim();
-          if (!trimmed) return <div key={i} className="h-2" />;
-          if (/^\*{2}[^*]+\*{2}$/.test(trimmed) || /^#{1,3}\s/.test(trimmed)) {
-            const label = trimmed.replace(/^\*{2}|\*{2}$|^#{1,3}\s/g, "").trim();
-            return <p key={i} className="font-semibold text-[#111111] mt-4 first:mt-0">{label}</p>;
-          }
-          if (/^[-*•]\s/.test(trimmed)) {
-            const content = trimmed.replace(/^[-*•]\s/, "");
-            const parts = content.split(/(\*\*.*?\*\*)/g);
-            return (
-              <div key={i} className="flex gap-2">
-                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" />
-                <span>{parts.map((p, j) => p.startsWith("**") && p.endsWith("**")
-                  ? <strong key={j} className="text-[#111111]">{p.slice(2, -2)}</strong>
-                  : <span key={j}>{p}</span>)}</span>
-              </div>
-            );
-          }
-          const parts = trimmed.split(/(\*\*.*?\*\*)/g);
-          return <p key={i}>{parts.map((p, j) => p.startsWith("**") && p.endsWith("**")
-            ? <strong key={j} className="text-[#111111]">{p.slice(2, -2)}</strong>
-            : <span key={j}>{p}</span>)}</p>;
-        })}
-      </div>
+    interface RawSection { header: string; body: string[]; }
+    const sections: RawSection[] = [];
+    let cur: RawSection = { header: "__intro__", body: [] };
+    for (const line of text.split("\n")) {
+      const tr = line.trim();
+      if (/^\*{2}[^*]+\*{2}$/.test(tr)) {
+        sections.push(cur);
+        cur = { header: tr.replace(/^\*{2}|\*{2}$/g, "").trim(), body: [] };
+      } else {
+        cur.body.push(line);
+      }
+    }
+    sections.push(cur);
+
+    const ib = (s: string) => s.split(/(\*\*.*?\*\*)/g).map((p, j) =>
+      p.startsWith("**") && p.endsWith("**")
+        ? <strong key={j} className="font-semibold text-[#111111]">{p.slice(2, -2)}</strong>
+        : <span key={j}>{p}</span>
     );
+    const bodyText = (body: string[]) => body.filter(l => l.trim()).join(" ").trim();
+    const buls = (body: string[], iconType: "check" | "x" | "warn" | "dot") =>
+      body.filter(l => /^[-*•]/.test(l.trim())).map((l, j) => {
+        const content = l.trim().replace(/^[-*•]\s*/, "");
+        return (
+          <div key={j} className="flex gap-3 items-start">
+            {iconType === "check" && <CircleCheck size={18} className="shrink-0 mt-0.5 text-[#32C382]" />}
+            {iconType === "x" && <CircleX size={18} className="shrink-0 mt-0.5 text-[#DC2626]" />}
+            {iconType === "warn" && <AlertTriangle size={14} className="shrink-0 mt-0.5 text-[#D97706]" />}
+            {iconType === "dot" && <span className="mt-2 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" />}
+            <span className="text-[13px] text-[#62646A] leading-relaxed">{ib(content)}</span>
+          </div>
+        );
+      });
+
+    const nodes: React.ReactNode[] = [];
+    let i = 0;
+    while (i < sections.length) {
+      const sec = sections[i];
+      const h = sec.header.toLowerCase();
+      const next = sections[i + 1];
+      const nh = next?.header.toLowerCase() ?? "";
+
+      if (sec.header === "__intro__" || /^direction[:\s]/i.test(sec.header)) { i++; continue; }
+
+      // Why Fits + Key Risks — 2-column
+      if ((h.includes("why it fit") || h.includes("why this fit")) && nh.includes("key risk")) {
+        nodes.push(
+          <div key={i} className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <h4 className="text-base font-medium text-[#151515] mb-4">Why This Fits You</h4>
+              <Separator className="bg-[#ECEDEE] mb-5" />
+              <div className="space-y-3">{buls(sec.body, "check")}</div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-base font-medium text-[#151515] mb-4">Key Risks</h4>
+              <Separator className="bg-[#ECEDEE] mb-5" />
+              <div className="space-y-3">{buls(next.body, "x")}</div>
+            </div>
+          </div>
+        );
+        i += 2; continue;
+      }
+
+      if (h.includes("why now")) {
+        nodes.push(
+          <div key={i}>
+            <h4 className="text-base font-medium text-[#151515] mb-2">Why Now</h4>
+            <p className="text-[13px] text-[#62646A] leading-relaxed">{bodyText(sec.body)}</p>
+          </div>
+        );
+      } else if (h.includes("position")) {
+        nodes.push(
+          <p key={i} className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
+            {bodyText(sec.body)}
+          </p>
+        );
+      } else if (h.includes("advantage")) {
+        nodes.push(
+          <div key={i}>
+            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Your Unfair Advantage</h5>
+            <p className="text-[13px] text-[#151515] leading-relaxed">{bodyText(sec.body)}</p>
+          </div>
+        );
+      } else if (h.includes("filter")) {
+        const filterLines = sec.body.filter(l => /^[-*]\s*(Alignment|Skills|Lifestyle|Financial|Market)/i.test(l.trim()));
+        nodes.push(
+          <div key={i}>
+            <h4 className="text-base font-medium text-[#151515] mb-4">Fit Filters</h4>
+            <Separator className="bg-[#ECEDEE] mb-4" />
+            <div className="space-y-3">
+              {filterLines.map((l, j) => {
+                const clean = l.trim().replace(/^[-*]\s*/, "");
+                const m = clean.match(/^([^:]+):\s*(\d+)\s*[—\-–]\s*(.*)/);
+                if (!m) return <p key={j} className="text-[13px] text-[#62646A]">{clean}</p>;
+                const [, name, scoreStr, rationale] = m;
+                const s = parseInt(scoreStr);
+                const cls = s >= 70 ? "text-[#32C382]" : s >= 40 ? "text-[#F5B100]" : "text-[#DF2E16]";
+                return (
+                  <div key={j} className="flex items-start gap-3">
+                    <span className={`font-semibold text-[13px] w-8 shrink-0 text-right ${cls}`}>{scoreStr}</span>
+                    <div className="flex-1 text-[13px]">
+                      <span className="font-medium text-[#151515]">{name.trim()}</span>
+                      <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{rationale}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      } else if (h.includes("composite")) {
+        const s = parseInt(bodyText(sec.body)) || 0;
+        const cls = s >= 70 ? "text-[#32C382]" : s >= 40 ? "text-[#F5B100]" : "text-[#DF2E16]";
+        nodes.push(
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-[11px] text-[#9A9A9A]">Composite</span>
+            <span className={`text-[18px] font-semibold ${cls}`}>{s}</span>
+          </div>
+        );
+      } else if (h.includes("high-risk") || (h.includes("risk") && h.includes("flag"))) {
+        const flags = sec.body.filter(l => /^[-*•]/.test(l.trim()));
+        const hasNone = flags.length === 0 || flags.some(f => /none/i.test(f));
+        if (!hasNone) {
+          nodes.push(
+            <div key={i} className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+              {buls(sec.body, "warn")}
+            </div>
+          );
+        }
+      } else if (h.includes("metric")) {
+        const ms = sec.body.filter(l => /^[-*•]/.test(l.trim())).map(l => {
+          const clean = l.trim().replace(/^[-*•]\s*/, "");
+          const idx2 = clean.indexOf(":");
+          return idx2 > -1 ? { k: clean.slice(0, idx2).trim(), v: clean.slice(idx2 + 1).trim() } : { k: clean, v: "" };
+        });
+        nodes.push(
+          <div key={i} className="grid grid-cols-3 gap-3">
+            {ms.map((m, j) => {
+              const icons = [<DollarSign key="d" size={14} />, <Clock key="c" size={14} />, <Zap key="z" size={14} />];
+              return (
+                <div key={j} className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+                  <div className="flex items-center gap-1 text-[#9A9A9A]">
+                    {icons[j] ?? null}
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{m.k}</span>
+                  </div>
+                  <p className="text-[13px] font-medium text-[#151515]">{m.v}</p>
+                </div>
+              );
+            })}
+          </div>
+        );
+      } else if (h.includes("constraint")) {
+        const txt = bodyText(sec.body);
+        const status = /^pass/i.test(txt) ? "Pass" : /^warn/i.test(txt) ? "Warn" : "Fail";
+        const reason = txt.replace(/^(pass|warn|fail)\s*[—\-–]?\s*/i, "");
+        const col = constraintColor(status);
+        nodes.push(
+          <div key={i} className="flex items-start gap-3 p-3 rounded-xl border"
+            style={{ borderColor: col, backgroundColor: `${col}15` }}>
+            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0" style={{ backgroundColor: col }}>{status}</span>
+            {reason && <p className="text-[12px] text-[#62646A] leading-relaxed">{reason}</p>}
+          </div>
+        );
+      } else if (h.includes("first 10") || (h.includes("customer") && !h.includes("complaint"))) {
+        nodes.push(
+          <div key={i}>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Users size={13} className="text-[#9A9A9A]" />
+              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">First 10 Customers</span>
+            </div>
+            <p className="text-[13px] text-[#62646A] leading-relaxed">{bodyText(sec.body)}</p>
+          </div>
+        );
+      } else if (h.includes("competition") || h.includes("competitor")) {
+        const layers = sec.body.filter(l => l.trim());
+        nodes.push(
+          <div key={i}>
+            <h4 className="text-base font-medium text-[#151515] mb-3">Market Reality</h4>
+            <Separator className="bg-[#ECEDEE] mb-3" />
+            <div className="space-y-2">
+              {layers.map((l, j) => (
+                <div key={j}>
+                  <p className="text-[13px] text-[#62646A] leading-relaxed">{ib(l.trim())}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      } else if (h.includes("economic") || h.includes("urgency")) {
+        nodes.push(
+          <div key={i} className="flex-1 p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+            <div className="flex items-center gap-1.5">
+              <DollarSign size={13} className="text-[#151515]" />
+              <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
+            </div>
+            <p className="text-[12px] text-[#151515] leading-relaxed">{bodyText(sec.body)}</p>
+          </div>
+        );
+      } else if (h.includes("ocean")) {
+        const txt = bodyText(sec.body);
+        const type = /blue/i.test(txt) ? "Blue" : /purple/i.test(txt) ? "Purple" : "Red";
+        const density = txt.replace(/^(blue|purple|red)\s*[—\-–]?\s*/i, "");
+        nodes.push(
+          <div key={i} className="p-3 rounded-xl border-2 flex flex-col items-start gap-1"
+            style={{ borderColor: oceanColor(type) }}>
+            <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: oceanColor(type) }}>{type} Ocean</span>
+            <span className="text-[12px] text-[#9A9A9A]">{density}</span>
+          </div>
+        );
+      } else if (h.includes("window")) {
+        nodes.push(
+          <div key={i} className="flex items-start gap-2 p-3 rounded-xl bg-[#FFFBEB] border border-[#FDE68A]">
+            <Clock size={13} className="text-[#D97706] shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[11px] font-semibold text-[#D97706] uppercase tracking-wide">Window Risk</span>
+              <p className="text-[12px] text-[#92400E] mt-0.5 leading-relaxed">{bodyText(sec.body)}</p>
+            </div>
+          </div>
+        );
+      } else if (h.includes("trend") || h.includes("complaint")) {
+        const label = h.includes("trend") ? "Trend" : "Complaint Source";
+        nodes.push(
+          <div key={i}>
+            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">{label}</span>
+            <p className="text-[13px] text-[#62646A] mt-0.5">{bodyText(sec.body)}</p>
+          </div>
+        );
+      } else if (sec.body.some(l => l.trim())) {
+        nodes.push(
+          <div key={i} className="space-y-2">
+            {sec.body.filter(l => l.trim()).map((l, j) => {
+              const tr = l.trim();
+              return /^[-*•]/.test(tr)
+                ? <div key={j} className="flex gap-2 items-start"><span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" /><span className="text-[13px] text-[#62646A]">{ib(tr.replace(/^[-*•]\s*/, ""))}</span></div>
+                : <p key={j} className="text-[13px] text-[#62646A] leading-relaxed">{ib(tr)}</p>;
+            })}
+          </div>
+        );
+      }
+      i++;
+    }
+
+    return <div className="space-y-6">{nodes}</div>;
   };
 
   // ── Structured expanded content (new path) ──────────────────────────────────

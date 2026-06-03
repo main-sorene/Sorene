@@ -36,7 +36,7 @@ function parseDirectionCard(text: string): RecipeDirection | null {
     (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
 
   // Extract composite score if present
-  const scoreMatch = text.match(/composite score[:\s]+(\d+)/i);
+  const scoreMatch = text.match(/\*{0,2}Composite Score\*{0,2}[:\s]*\n?\s*(\d+)/i);
   const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 85;
 
   return {

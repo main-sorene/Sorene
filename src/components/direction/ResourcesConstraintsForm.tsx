@@ -18,7 +18,7 @@ function parseDirectionCard(text: string): RecipeDirection | null {
   const stepSection = afterTitle.match(/\*{0,2}Your first step\*{0,2}[:\n]+([\s\S]*?)$/i);
   const parseList = (s: string | undefined) =>
     (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
-  const scoreMatch = text.match(/composite score[:\s]+(\d+)/i);
+  const scoreMatch = text.match(/\*{0,2}Composite Score\*{0,2}[:\s]*\n?\s*(\d+)/i);
   const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 90;
 
   return {

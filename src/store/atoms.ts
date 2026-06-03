@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { UserProfile } from "@/lib/firestore";
 
 export interface AuthUser {
@@ -136,4 +137,4 @@ export interface RecipeDirection {
   score: number;
 }
 
-export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
+export const recipeDirectionsAtom = atomWithStorage<RecipeDirection[]>("recipeDirections", []);

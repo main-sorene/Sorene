@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+
+export const maxDuration = 60;
 import { getApps, getApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
@@ -82,9 +84,8 @@ TITLE: strengths_and_edges
       narrative[titleKey] = lines.slice(contentStartIdx).join("\n").trim();
     }
   }
-  // Log for debugging
   if (!narrative.core_dna_label) {
-    console.error("[dna-narrative] parse failed, raw:", raw.slice(0, 500));
+    (narrative as any).__raw_debug = raw.slice(0, 600);
   }
   return narrative;
 }
@@ -115,10 +116,12 @@ async function runRegeneration() {
     try {
       const narrative = await generateNarrative(data.assessmentAnswers, data.cvSummary);
       if (narrative.core_dna_label) {
-        await db.collection("users").doc(uid).set({ dna_narrative: narrative }, { merge: true });
+        const toSave = { ...narrative };
+        delete (toSave as any).__raw_debug;
+        await db.collection("users").doc(uid).set({ dna_narrative: toSave }, { merge: true });
         results.push({ uid, status: `✓ ${narrative.core_dna_label}` });
       } else {
-        results.push({ uid, status: "failed — no label generated" });
+        results.push({ uid, status: `failed — raw: ${(narrative as any).__raw_debug || "empty"}` });
       }
     } catch (err) {
       results.push({ uid, status: `error: ${String(err)}` });

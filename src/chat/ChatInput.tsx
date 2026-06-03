@@ -379,7 +379,7 @@ export function ChatInput({
           ),
         );
         // Speed control: adjust for longer messages if needed
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await new Promise((resolve) => setTimeout(resolve, 5.25));
       }
 
       // Finalize message

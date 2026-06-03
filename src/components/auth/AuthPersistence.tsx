@@ -26,11 +26,16 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
           if (firebaseUser.email) {
             await saveUserProfile(appUid, {
               email: firebaseUser.email,
-              photoUrl: firebaseUser.photoURL || undefined,
             });
           }
 
           const profile = await getUserProfile(appUid);
+          // Clear any Google-sourced photo URL that was previously auto-saved
+          // Only data URLs (uploaded by user) should remain
+          if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {
+            await saveUserProfile(appUid, { photoUrl: undefined });
+            if (profile) profile.photoUrl = undefined;
+          }
           setUser({
             uid: appUid,
             email: firebaseUser.email,

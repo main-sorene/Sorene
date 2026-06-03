@@ -25,9 +25,11 @@ export async function POST(req: NextRequest) {
 ${cvSummary ? `Their background:\n${cvSummary}\n\n` : ""}Their assessment answers:
 ${answersBlock}
 
-Generate EXACTLY 6 sections, each separated by "---SECTION---". Each section has a TITLE line, then a blank line, then the content. The sections must be in this exact order:
+Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has a TITLE line, then a blank line, then the content. The sections must be in this exact order:
 
-1. your_core — A 2-3 sentence narrative about who this person fundamentally is as an entrepreneur. What drives them at their core. Reference specific things they said. No generic phrases.
+1. core_dna_label — A 3-5 word identity that names their #1 entrepreneurial strength. This is the headline of their Entrepreneurial DNA — bold, specific, and ownable. Examples: "The Precision-Driven Builder", "The Deep-Work Founder", "The Mission-First Operator". Do NOT use generic words like "Visionary", "Leader", "Entrepreneur", "Creative". It must name the actual pattern you see in their answers.
+
+2. your_core — First sentence: name the single strongest entrepreneurial signal you see across all their answers — the one thing that most defines how they're wired to build. Second sentence: connect it to something specific they said (quote or echo their exact words). Third sentence: name what this means for the kind of venture or role that will actually work for them.
 
 2. what_drives_you — 2-3 sentences on their deepest motivation. What lights them up. What kind of success would actually satisfy them. Pull directly from their words — name the tension or longing they expressed.
 
@@ -48,9 +50,13 @@ Rules:
 - No filler phrases like "It's clear that", "This shows", "As an entrepreneur"
 
 Output format (use exactly these separators):
+TITLE: core_dna_label
+
+[3-5 words only]
+---SECTION---
 TITLE: your_core
 
-[2-3 sentences]
+[3 sentences]
 ---SECTION---
 TITLE: what_drives_you
 
@@ -74,7 +80,7 @@ TITLE: strengths_and_edges
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1200,
+      max_tokens: 1400,
       messages: [{ role: "user", content: prompt }],
     });
 

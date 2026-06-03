@@ -3,7 +3,10 @@
 import { DNACard } from "./DNACard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDnaData } from "@/hooks/useDnaData";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { cn } from "@/lib/utils";
 import { DNACoreItem, mapProfileToDNA } from "@/lib/dnaMapping";
 
@@ -30,9 +33,9 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       fullWidth: true,
       gradient: `radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #16B364 0%, #ECFCCB 100%)`,
       icon: "/figmaAssets/dna.svg",
-      hero_statement: scores.motivation_driver.slice(0, 80),
+      hero_statement: narrative?.core_dna_label || scores.motivation_driver.slice(0, 80),
       description: narrative?.your_core || scores.strengths_summary || "Your unique strengths and energy patterns shape how you work best.",
-      summary: narrative?.your_core?.split(". ")[0] || scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
+      summary: narrative?.core_dna_label ? `${narrative.core_dna_label} — ${narrative.your_core?.split(". ")[0] || ""}` : scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
       key_signals: [
         { label: "Primary Motivation", value: primaryMotivation, explanation: scores.motivation_driver },
         { label: "Structure Preference", value: structureLabel, explanation: "How you prefer to organize your work environment." },
@@ -43,7 +46,7 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
         { label: "Time Availability", value: timeLabel, explanation: "How much capacity you can commit to this work." },
         { label: "Readiness Level", value: readinessLabel, explanation: "Where you are on the path to taking action." },
       ],
-      strength_patterns: strengthPatterns,
+      strength_patterns: narrative?.core_dna_label ? [narrative.core_dna_label, ...strengthPatterns.slice(0, 4)] : strengthPatterns,
     },
     {
       core_id: "what_drives_you",
@@ -332,8 +335,30 @@ const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
 ];
 
 export const DNASection = () => {
-  const { data: profile, isLoading } = useDnaData();
+  const { data: profile, isLoading, refetch } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const authUser = useAtomValue(userAtom);
+
+  // If narrative exists but is missing the new core_dna_label, regenerate silently
+  useEffect(() => {
+    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    const answers = profile?.assessmentAnswers;
+    if (!narrative || narrative.core_dna_label || !answers || !authUser?.uid) return;
+    authFetch("/api/dna-narrative", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers, cvSummary: (profile as any)?.cvSummary }),
+    })
+      .then((r) => r.json())
+      .then(async ({ narrative: newNarrative }) => {
+        if (newNarrative?.core_dna_label) {
+          const { saveUserProfile } = await import("@/lib/firestore");
+          await saveUserProfile(authUser.uid, { dna_narrative: newNarrative });
+          refetch();
+        }
+      })
+      .catch(() => {});
+  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);

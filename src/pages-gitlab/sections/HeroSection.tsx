@@ -55,35 +55,33 @@ export const HeroSection = () => {
   };
 
   const handleGoogleSignup = async () => {
-    setError(null);
-    // Start popup synchronously before any state updates (keeps user gesture chain intact)
     let signInPromise: Promise<any>;
     try {
       signInPromise = signInWithGoogle();
-    } catch (err: any) {
-      setError(err?.message || "Failed to open Google sign-in.");
-      return;
-    }
+    } catch { return; }
     setIsGoogleLoading(true);
     try {
       const result = await signInPromise;
-      if (!result) return; // redirect case
+      if (!result) return; // mobile redirect — page reloads
       const user = result.user;
       const userUid = user.email || user.uid;
       if (user.photoURL || user.email) {
-        await saveUserProfile(userUid, { photoUrl: user.photoURL || undefined, email: user.email || "" });
+        await saveUserProfile(userUid, {
+          photoUrl: user.photoURL || undefined,
+          email: user.email || "",
+        });
       }
       const profile = await getUserProfile(userUid);
-      setUser({ uid: userUid, email: user.email, displayName: user.displayName, photoURL: user.photoURL, profile: profile || undefined });
+      setUser({
+        uid: userUid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        profile: profile || undefined,
+      });
       router.push(profile?.onboardingComplete ? "/chat" : "/onBoarding");
-    } catch (err: any) {
-      console.error("Google sign-in error:", err);
-      const code = err?.code || "";
-      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
-        // User closed popup — no message needed
-      } else {
-        setError(err?.message || "Google sign-in failed. Please try again.");
-      }
+    } catch (error) {
+      console.error("Google sign-in error:", error);
     } finally {
       setIsGoogleLoading(false);
     }

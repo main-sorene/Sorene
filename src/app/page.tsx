@@ -39,10 +39,7 @@ export default function Page() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-white">
         <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
-        {/* Temporary debug overlay */}
-        <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-green-400 text-xs p-3 max-h-40 overflow-y-auto z-[9999] font-mono">
-          {debugLog.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
+        <DebugPanel logs={debugLog} />
       </div>
     );
   }
@@ -51,9 +48,23 @@ export default function Page() {
     <>
       <LandingPageScreen />
       {/* Temporary debug overlay — remove after fixing mobile auth */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/80 text-green-400 text-xs p-3 max-h-40 overflow-y-auto z-[9999] font-mono">
-        {debugLog.map((l, i) => <div key={i}>{l}</div>)}
-      </div>
+      <DebugPanel logs={debugLog} />
     </>
+  );
+}
+
+function DebugPanel({ logs }: { logs: string[] }) {
+  const [allLogs, setAllLogs] = useState<string[]>([]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const authLogs: string[] = (window as any).__authDebug || [];
+      setAllLogs([...authLogs, ...logs]);
+    }, 500);
+    return () => clearInterval(id);
+  }, [logs]);
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-black/90 text-green-400 text-xs p-3 max-h-48 overflow-y-auto z-[9999] font-mono">
+      {allLogs.map((l, i) => <div key={i}>{l}</div>)}
+    </div>
   );
 }

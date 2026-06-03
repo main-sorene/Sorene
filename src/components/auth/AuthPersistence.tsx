@@ -7,23 +7,36 @@ import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 
+// Temporary debug helper — writes to a global array read by page.tsx
+function dbg(msg: string) {
+  if (typeof window !== "undefined") {
+    (window as any).__authDebug = (window as any).__authDebug || [];
+    (window as any).__authDebug.push(`${new Date().toLocaleTimeString()}: ${msg}`);
+  }
+}
+
 export function AuthPersistence({ children }: { children: React.ReactNode }) {
   const setUser = useSetAtom(userAtom);
   const setLoading = useSetAtom(authLoadingAtom);
 
   useEffect(() => {
-    if (!auth) { setLoading(false); return; }
+    if (!auth) { dbg("no auth"); setLoading(false); return; }
 
-    const fallbackTimer = setTimeout(() => setLoading(false), 8000);
+    dbg(`auth initialized, authDomain=${auth.config.authDomain}`);
 
-    // Explicitly process any pending redirect result from signInWithRedirect.
-    // This is needed on mobile where the page reloads after Google auth.
-    getRedirectResult(auth).catch(() => {
-      // Errors here (e.g. no pending redirect) are expected and safe to ignore.
-      // onAuthStateChanged handles the auth state regardless.
+    const fallbackTimer = setTimeout(() => {
+      dbg("8s fallback timer fired");
+      setLoading(false);
+    }, 8000);
+
+    getRedirectResult(auth).then((result) => {
+      dbg(`getRedirectResult: ${result ? result.user.email : "null (no pending redirect)"}`);
+    }).catch((err) => {
+      dbg(`getRedirectResult error: ${err.code || err.message}`);
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      dbg(`onAuthStateChanged: ${firebaseUser ? firebaseUser.email : "null"}`);
       try {
         if (firebaseUser) {
           const appUid = firebaseUser.email || firebaseUser.uid;
@@ -36,6 +49,7 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
           }
 
           const profile = await getUserProfile(appUid);
+          dbg(`profile loaded: onboardingComplete=${profile?.onboardingComplete}`);
 
           setUser({
             uid: appUid,
@@ -47,7 +61,8 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null);
         }
-      } catch {
+      } catch (e: any) {
+        dbg(`auth error: ${e.message}`);
         setUser(null);
       } finally {
         clearTimeout(fallbackTimer);

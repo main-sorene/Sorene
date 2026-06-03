@@ -448,6 +448,15 @@ export function DirectionCard({
 
             <AnimatePresence mode="wait">
               {!isExpanded && (
+                <div className="flex items-center gap-2">
+                  {onHide && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onHide(); }}
+                      className="text-[13px] text-[#9CA3AF] hover:text-[#6B7280] transition-colors font-medium"
+                    >
+                      Hide
+                    </button>
+                  )}
                 <motion.button
                   layout
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -468,6 +477,7 @@ export function DirectionCard({
                     <ArrowRight size={16} />
                   </motion.span>
                 </motion.button>
+                </div>
               )}
             </AnimatePresence>
           </div>

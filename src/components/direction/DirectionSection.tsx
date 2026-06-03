@@ -172,14 +172,20 @@ export const DirectionSection = () => {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <section>
-          <DirectionCard
-            variant="hero"
-            title={model || "Your Direction"}
-            description={directionText}
-            badges={heroBadges}
-            actionText="View detail"
-            score={String(bestCompatibility ?? 100)}
-          />
+          {!hiddenIds.includes("__hero__") && (
+            <DirectionCard
+              variant="hero"
+              title={model || "Your Direction"}
+              description={directionText}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(bestCompatibility ?? 100)}
+              onHide={() => hideCard("__hero__")}
+            />
+          )}
+          {hiddenIds.includes("__hero__") && (
+            <HiddenCardsPills hiddenIds={["__hero__"]} allCards={[{ id: "__hero__", title: model || "Your Direction" }]} onShow={showCard} />
+          )}
         </section>
 
         {(otherDirections.length > 0 || recipeDirections.length > 0) && (
@@ -274,13 +280,17 @@ export const DirectionSection = () => {
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
       {/* Hero Section */}
       <section>
-        {bestPickIdea && (
+        {bestPickIdea && !hiddenIds.includes(bestPickIdea.name) && (
           <DirectionCard
             variant="hero"
             {...mapIdeaToCardProps(bestPickIdea)}
             badges={heroBadges}
             actionText="View detail"
+            onHide={() => hideCard(bestPickIdea.name)}
           />
+        )}
+        {bestPickIdea && hiddenIds.includes(bestPickIdea.name) && (
+          <HiddenCardsPills hiddenIds={[bestPickIdea.name]} allCards={[{ id: bestPickIdea.name, title: bestPickIdea.name }]} onShow={showCard} />
         )}
       </section>
 

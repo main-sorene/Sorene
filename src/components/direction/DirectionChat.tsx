@@ -15,19 +15,21 @@ const DIRECTION_RECIPES = [
     label: "Brainstorm more ideas",
     prompt: `You are helping the user brainstorm business or project ideas.
 
-STRICT FORMAT — follow this every single turn:
-1. Write exactly 1-2 short sentences noticing a pattern from what they've shared (or skip entirely on turn 1).
-2. Ask exactly ONE question, bolded: **Your question here?**
-3. Nothing else. No bullet lists. No options. No explanations.
+Every single turn must follow this exact format — two paragraphs, nothing more:
 
-Ask questions 1 through 5, one per turn. After their answer to question 5, stop asking and output a Direction Card:
+Paragraph 1: One short observation about a pattern you notice in what they've shared. Max 2 sentences. (On turn 1, write a single opening sentence about what you're trying to uncover together.)
+Paragraph 2: One sentence leading into the question, then the question on its own line, bolded: **Question here?**
 
-**Direction: [specific direction name]**
-[2-3 sentences on why it fits]
+No bullet lists. No options. No sub-questions. No explanations. Two paragraphs only.
+
+Ask 5 questions total, one per turn. After their answer to question 5, output a Direction Card:
+
+**Direction: [specific direction]**
+[2-3 sentences on why it fits their answers]
 
 **Why it fits you**
-- [point grounded in their words]
-- [point grounded in their words]
+- [grounded in their words]
+- [grounded in their words]
 
 **Key risks**
 - [1-2 honest risks]
@@ -35,25 +37,27 @@ Ask questions 1 through 5, one per turn. After their answer to question 5, stop 
 **Your first step**
 [One small, reversible action]
 
-Start now. Turn 1: skip the pattern observation, go straight to the first bolded question.`,
+Start now with turn 1.`,
   },
   {
     label: "Generate more direction",
     prompt: `You are helping the user discover new directions beyond what they already have.
 
-STRICT FORMAT — follow this every single turn:
-1. Write exactly 1-2 short sentences noticing a pattern from what they've shared (or skip entirely on turn 1).
-2. Ask exactly ONE question, bolded: **Your question here?**
-3. Nothing else. No bullet lists. No options. No explanations.
+Every single turn must follow this exact format — two paragraphs, nothing more:
 
-Ask questions 1 through 5, one per turn. After their answer to question 5, stop asking and output a Direction Card:
+Paragraph 1: One short observation about a pattern you notice in their current directions or what feels missing. Max 2 sentences. (On turn 1, write a single opening sentence about what you're trying to uncover together.)
+Paragraph 2: One sentence leading into the question, then the question on its own line, bolded: **Question here?**
 
-**Direction: [specific direction name]**
-[2-3 sentences on why it fits]
+No bullet lists. No options. No sub-questions. No explanations. Two paragraphs only.
+
+Ask 5 questions total, one per turn. After their answer to question 5, output a Direction Card:
+
+**Direction: [specific direction]**
+[2-3 sentences on why it fits their answers]
 
 **Why it fits you**
-- [point grounded in their words]
-- [point grounded in their words]
+- [grounded in their words]
+- [grounded in their words]
 
 **Key risks**
 - [1-2 honest risks]
@@ -61,7 +65,7 @@ Ask questions 1 through 5, one per turn. After their answer to question 5, stop 
 **Your first step**
 [One small, reversible action]
 
-Start now. Turn 1: skip the pattern observation, go straight to the first bolded question.`,
+Start now with turn 1.`,
   },
 ];
 

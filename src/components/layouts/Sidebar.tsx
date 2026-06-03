@@ -347,6 +347,11 @@ export function Sidebar({
       label: "Execution Hub",
       path: "/execution-hub",
     },
+    {
+      icon: "/figmaAssets/lightbulb.svg",
+      label: "Education",
+      path: "/education",
+    },
   ];
 
   const [isLogoHovered, setIsLogoHovered] = useState(false);

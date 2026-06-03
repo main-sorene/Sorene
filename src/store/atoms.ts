@@ -83,7 +83,7 @@ export const inputValueAtom = atom<string>("");
 
 export const cvTextAtom = atom<string | null>(null);
 export const isSettingsOpenAtom = atom<boolean>(false);
-export const settingsTabAtom = atom<string>("Manage Subscription");
+export const settingsTabAtom = atom<string>("General");
 export const isLogoutConfirmOpenAtom = atom<boolean>(false);
 export const isCancelSubscriptionOpenAtom = atom<boolean>(false);
 export const isManagePaymentOpenAtom = atom<boolean>(false);

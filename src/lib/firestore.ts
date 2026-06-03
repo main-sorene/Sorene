@@ -13,6 +13,10 @@ export interface UserProfile {
   useCase: string;
   onboardingComplete: boolean;
   dnaAssessmentComplete?: boolean;
+  fullName?: string;
+  nickname?: string;
+  workType?: string;
+  orgId?: string;
   cvData?: {
     file_name: string;
     file_path: string;

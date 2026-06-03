@@ -24,19 +24,22 @@ import {
   X,
   Check,
   AlertTriangle,
+  Camera,
+  ChevronDown,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
 import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, storage } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { saveUserProfile } from "@/lib/firestore";
+import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const SIDEBAR_ITEMS = [
+  { id: "General", icon: Settings, label: "General" },
   { id: "Account", icon: User, label: "Account" },
-  { id: "Preferences", icon: Settings, label: "Preferences" },
-  { id: "Personalization", icon: Wrench, label: "Personalization" },
+  { id: "Preferences", icon: Wrench, label: "Preferences" },
   { id: "Notifications", icon: Bell, label: "Notifications" },
   { id: "Integrations", icon: Plug, label: "Integrations" },
   { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
@@ -44,11 +47,24 @@ const SIDEBAR_ITEMS = [
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
 
-const MODELS = [
-  { id: "sorene-1", label: "Sorene 1.0", description: "Most capable" },
-  { id: "sorene-1-mini", label: "Sorene 1.0 Mini", description: "Faster & lighter" },
-  { id: "sorene-lite", label: "Sorene Lite", description: "Balanced" },
+const WORK_TYPES = [
+  "Product management",
+  "Engineering",
+  "Human resources",
+  "Finance",
+  "Marketing",
+  "Sales",
+  "Operations",
+  "Data science",
+  "Design",
+  "Legal",
+  "Other",
 ];
+
+function generateOrgId(uid: string): string {
+  const hash = uid.split("").reduce((acc, c) => ((acc << 5) - acc + c.charCodeAt(0)) | 0, 0);
+  return `ORG-${Math.abs(hash).toString(36).toUpperCase().slice(0, 8)}`;
+}
 
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
@@ -61,18 +77,51 @@ export function SettingsModal() {
   const { toast } = useToast();
   const router = useRouter();
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [isClearing, setIsClearing] = React.useState(false);
-  const [selectedModel, setSelectedModel] = React.useState("sorene-1");
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false);
+
+  // General form state
+  const [fullName, setFullName] = React.useState(authUser?.profile?.fullName || authUser?.displayName || "");
+  const [nickname, setNickname] = React.useState(authUser?.profile?.nickname || "");
+  const [workType, setWorkType] = React.useState(authUser?.profile?.workType || "");
+  const [workDropdownOpen, setWorkDropdownOpen] = React.useState(false);
+  const [customWork, setCustomWork] = React.useState("");
+  const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => { setMounted(true); }, []);
+
+  // Sync form state when user data changes
+  React.useEffect(() => {
+    if (authUser) {
+      setFullName(authUser.profile?.fullName || authUser.displayName || "");
+      setNickname(authUser.profile?.nickname || "");
+      setWorkType(authUser.profile?.workType || "");
+    }
+  }, [authUser]);
+
+  // Close dropdown on outside click
+  React.useEffect(() => {
+    const handle = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setWorkDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
 
   if (!isOpen || !mounted) return null;
 
   const handleClose = () => {
     setIsOpen(false);
     setShowClearConfirm(false);
+    setShowDeleteConfirm(false);
   };
 
   const handleLogout = async () => {
@@ -93,7 +142,6 @@ export function SettingsModal() {
     setIsClearing(true);
     const uid = authUser?.uid;
     try {
-      // Sign out first so AppLayout doesn't redirect to /onBoarding on profile update
       if (auth) await signOut(auth);
       setUser(null);
       setConversations([]);
@@ -102,7 +150,6 @@ export function SettingsModal() {
         Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
         Object.keys(localStorage).filter(k => k.startsWith("assessment_conv_")).forEach(k => localStorage.removeItem(k));
       } catch {}
-      // Reset Firestore in background — user is already signed out
       if (uid) {
         saveUserProfile(uid, {
           onboardingComplete: false,
@@ -122,15 +169,96 @@ export function SettingsModal() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    const uid = authUser?.uid;
+    try {
+      if (uid) {
+        await deleteUserProfile(uid);
+      }
+      if (auth) await signOut(auth);
+      setUser(null);
+      setConversations([]);
+      setIsAssessmentComplete(false);
+      setShowDeleteConfirm(false);
+      setIsOpen(false);
+      router.push("/");
+      toast({ description: "Your account has been deleted." });
+    } catch {
+      toast({ description: "Failed to delete account.", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !authUser?.uid || !storage) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ description: "Image must be under 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const storageRef = ref(storage, `avatars/${authUser.uid}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      await saveUserProfile(authUser.uid, { photoUrl: downloadURL });
+      setUser({
+        ...authUser,
+        photoURL: downloadURL,
+        profile: authUser.profile ? { ...authUser.profile, photoUrl: downloadURL } : undefined,
+      });
+      toast({ description: "Profile photo updated." });
+    } catch {
+      toast({ description: "Failed to upload photo.", variant: "destructive" });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleSaveGeneral = async () => {
+    if (!authUser?.uid) return;
+    setIsSavingGeneral(true);
+    try {
+      const finalWorkType = workType === "Other" ? customWork : workType;
+      await saveUserProfile(authUser.uid, {
+        fullName,
+        nickname,
+        workType: finalWorkType,
+      });
+      setUser({
+        ...authUser,
+        displayName: fullName || authUser.displayName,
+        profile: authUser.profile
+          ? { ...authUser.profile, fullName, nickname, workType: finalWorkType }
+          : undefined,
+      });
+      toast({ description: "Settings saved." });
+    } catch {
+      toast({ description: "Failed to save settings.", variant: "destructive" });
+    } finally {
+      setIsSavingGeneral(false);
+    }
+  };
+
   const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
     if (item.id === "Manage Subscription") return !!subscription?.active;
     return true;
   });
 
-  // Derive display name and initial
   const displayName = authUser?.displayName || authUser?.email?.split("@")[0] || "User";
-  const initial = displayName.charAt(0).toUpperCase();
+  const initial = (authUser?.profile?.fullName || displayName).charAt(0).toUpperCase();
   const email = authUser?.email || "";
+  const avatarUrl = authUser?.profile?.photoUrl || authUser?.photoURL;
+  const orgId = authUser?.profile?.orgId || (authUser?.uid ? generateOrgId(authUser.uid) : "—");
 
   const renderContent = () => {
     if (showClearConfirm) {
@@ -153,48 +281,232 @@ export function SettingsModal() {
       );
     }
 
+    if (showDeleteConfirm) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-6 py-20">
+          <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+            <AlertTriangle size={24} className="text-red-500" />
+          </div>
+          <div className="text-center max-w-sm">
+            <h2 className="text-lg font-semibold text-[#151515] mb-2">Delete your account?</h2>
+            <p className="text-sm text-[#62646A]">This will permanently delete all your data, conversations, DNA profile, and direction results. This action cannot be undone.</p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setShowDeleteConfirm(false)} className="px-5 py-2.5 rounded-xl border border-[#ECEDEE] text-sm font-medium text-[#151515] hover:bg-gray-50 transition-colors">Cancel</button>
+            <button onClick={handleDeleteAccount} disabled={isDeleting} className="px-5 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-60">
+              {isDeleting ? "Deleting…" : "Yes, delete my account"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
+      case "General":
+        return (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold text-[#151515]">General</h2>
+
+            {/* Avatar */}
+            <div>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Profile Photo</p>
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      className="w-16 h-16 rounded-full object-cover bg-purple-100"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-xl font-semibold">
+                      {initial}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                  >
+                    <Camera size={18} className="text-white" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+                <div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                  >
+                    {isUploadingAvatar ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
+                  </button>
+                  <p className="text-xs text-[#9B9B9B] mt-0.5">JPG, PNG. Max 5MB.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Full Name */}
+            <div>
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">Full Name</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Enter your full name"
+                className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+              />
+            </div>
+
+            {/* Nickname */}
+            <div>
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">What should Sorene call you?</label>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="e.g. Mai, Boss, Captain"
+                className="w-full px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+              />
+            </div>
+
+            {/* Work Type */}
+            <div ref={dropdownRef} className="relative">
+              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">What best describes your work?</label>
+              <button
+                onClick={() => setWorkDropdownOpen(!workDropdownOpen)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-left hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all"
+              >
+                <span className={workType ? "text-[#151515]" : "text-[#9B9B9B]"}>
+                  {workType || "Select your work type"}
+                </span>
+                <ChevronDown size={16} className={cn("text-[#9B9B9B] transition-transform", workDropdownOpen && "rotate-180")} />
+              </button>
+              {workDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white rounded-xl border border-[#ECEDEE] shadow-lg max-h-64 overflow-y-auto">
+                  {WORK_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setWorkType(type);
+                        setWorkDropdownOpen(false);
+                        if (type !== "Other") setCustomWork("");
+                      }}
+                      className={cn(
+                        "w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors flex items-center justify-between",
+                        workType === type && "bg-purple-50 text-purple-700",
+                      )}
+                    >
+                      {type}
+                      {workType === type && <Check size={14} className="text-purple-600" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {workType === "Other" && (
+                <input
+                  type="text"
+                  value={customWork}
+                  onChange={(e) => setCustomWork(e.target.value)}
+                  placeholder="Describe your work"
+                  className="w-full mt-2 px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+                />
+              )}
+            </div>
+
+            {/* Save */}
+            <button
+              onClick={handleSaveGeneral}
+              disabled={isSavingGeneral}
+              className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {isSavingGeneral ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        );
+
       case "Account":
         return (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-[#151515]">Account</h2>
+
             {/* User card */}
             <div className="rounded-2xl border border-[#ECEDEE] p-4 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white text-lg font-semibold shrink-0">
-                {initial}
-              </div>
-              <div>
-                <p className="font-medium text-[#151515] text-[15px]">{displayName}</p>
-                <p className="text-sm text-[#62646A]">{email}</p>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover bg-purple-100 shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center text-white text-lg font-semibold shrink-0">
+                  {initial}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-medium text-[#151515] text-[15px] truncate">{authUser?.profile?.fullName || displayName}</p>
+                <p className="text-sm text-[#62646A] truncate">{email}</p>
               </div>
             </div>
-            {/* Model selector */}
+
+            {/* Organization ID */}
             <div>
-              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Default Model</p>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2">Organization ID</p>
+              <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center justify-between">
+                <span className="text-sm font-mono text-[#151515]">{orgId}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(orgId);
+                    toast({ description: "Organization ID copied." });
+                  }}
+                  className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            {/* Log out of all devices */}
+            <div>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Session</p>
               <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden divide-y divide-[#ECEDEE]">
-                {MODELS.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => setSelectedModel(model.id)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[#151515]">{model.label}</p>
-                      <p className="text-xs text-[#9B9B9B]">{model.description}</p>
-                    </div>
-                    {selectedModel === model.id && (
-                      <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center shrink-0">
-                        <Check size={13} className="text-white" strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                ))}
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-left disabled:opacity-60"
+                >
+                  <LogOut size={16} className="text-[#151515]" />
+                  <div>
+                    <p className="text-sm font-medium text-[#151515]">{isLoggingOut ? "Logging out…" : "Log out of all devices"}</p>
+                    <p className="text-xs text-[#9B9B9B]">Sign out from this and all other sessions</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Danger zone */}
+            <div>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Danger Zone</p>
+              <div className="rounded-2xl border border-red-200 overflow-hidden">
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition-colors text-left"
+                >
+                  <AlertTriangle size={16} className="text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-red-500">Delete your account</p>
+                    <p className="text-xs text-[#9B9B9B]">Permanently delete all your data</p>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
         );
+
       case "Manage Subscription":
         return <SubscriptionContent />;
+
       case "Security":
         return (
           <div className="space-y-6">
@@ -212,6 +524,7 @@ export function SettingsModal() {
             </div>
           </div>
         );
+
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -237,11 +550,11 @@ export function SettingsModal() {
           <nav className="flex sm:flex-col flex-row gap-1 sm:gap-0 sm:space-y-0.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 sm:flex-1">
             {filteredSidebarItems.map((item) => {
               const Icon = item.icon;
-              const isActive = activeTab === item.id && !showClearConfirm;
+              const isActive = activeTab === item.id && !showClearConfirm && !showDeleteConfirm;
               return (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); }}
+                  onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
                   className={cn(
                     "sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-[13px] sm:text-[14px] font-medium transition-all text-left whitespace-nowrap shrink-0 sm:shrink sm:whitespace-normal",
                     isActive

@@ -9,7 +9,7 @@ import {
   IdeationData,
   recipeDirectionsAtom,
 } from "@/store/atoms";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 const DEFAULT_IDEATION_DATA: IdeationData = {
   user_id: "dummy",
@@ -97,8 +97,24 @@ export const DirectionSection = () => {
     otherDirections,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
-  const [recipeDirections] = useAtom(recipeDirectionsAtom);
+  const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Load persisted recipe directions from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("recipeDirections");
+      if (stored) setRecipeDirections(JSON.parse(stored));
+    } catch {}
+  }, []);
+
+  // Save recipe directions to localStorage whenever they change
+  useEffect(() => {
+    try {
+      if (recipeDirections.length > 0)
+        localStorage.setItem("recipeDirections", JSON.stringify(recipeDirections));
+    } catch {}
+  }, [recipeDirections]);
 
   const heroBadges = [
     {

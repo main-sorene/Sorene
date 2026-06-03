@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
+  ArrowRight,
   CheckCircle2,
   Circle,
+  ChevronLeft,
   ChevronDown,
   Users,
   Search,
@@ -13,16 +16,16 @@ import {
   Rocket,
   MessageCircle,
   BarChart3,
-  ArrowRight,
   Lock,
   PenSquare,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, activeConversationIdAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { useRouter } from "next/navigation";
 
 // ─────────────────────────────────────────────
-// Idea Validator content
+// Idea Validator
 // ─────────────────────────────────────────────
 
 const VIBE_STEPS = [
@@ -116,95 +119,114 @@ const VIBE_STEPS = [
 
 function IdeaValidatorContent() {
   const [openStep, setOpenStep] = useState<number | null>(null);
-
   return (
-    <div className="space-y-5">
-      {/* VIBE pills */}
-      <div className="flex flex-wrap gap-2">
-        {[
-          { letter: "V", label: "Validate" },
-          { letter: "I", label: "Interview" },
-          { letter: "B", label: "Build demo" },
-          { letter: "E", label: "Experiment" },
-        ].map(({ letter, label }, i, arr) => (
-          <div key={letter} className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F7F7F7] border border-[#EDEDED]">
-              <span className="text-[13px] font-bold text-[#151515]">{letter}</span>
-              <span className="text-[12px] text-[#62646A]">{label}</span>
+    <div className="p-6 space-y-8">
+      {/* VIBE framework */}
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">
+          The VIBE Framework
+        </h4>
+        <Separator className="bg-gray-100 mb-5" />
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[
+            { letter: "V", label: "Validate" },
+            { letter: "I", label: "Interview" },
+            { letter: "B", label: "Build demo" },
+            { letter: "E", label: "Experiment" },
+          ].map(({ letter, label }) => (
+            <div key={letter} className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-small-medium shadow-sm">
+              <span className="font-bold">{letter}</span>
+              <span className="text-[#62646A]">{label}</span>
             </div>
-            {i < arr.length - 1 && <span className="text-[#CCCCCC]">·</span>}
-          </div>
-        ))}
-      </div>
-      <p className="text-[12px] text-[#9A9A9A]">
-        4-step framework · 2–4 weeks · zero code required
-      </p>
+          ))}
+        </div>
+        <p className="text-label-medium text-[#62646A] leading-relaxed">
+          AI cannot validate your idea — only real people can. Sorene makes that process structured, fast, and interpretable. 4 steps · 2–4 weeks · zero code required.
+        </p>
+      </section>
 
       {/* Steps */}
-      <div className="space-y-2">
-        {VIBE_STEPS.map((step) => {
-          const Icon = step.icon;
-          const isOpen = openStep === step.id;
-          return (
-            <div key={step.id} className="rounded-xl border border-[#EDEDED] overflow-hidden">
-              <button
-                onClick={() => setOpenStep(isOpen ? null : step.id)}
-                className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-[#F7F7F7] transition-colors"
-              >
-                <div className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-                  <Icon size={13} className="text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] text-[#9A9A9A] mr-2">Step {step.id} · {step.vibe}</span>
-                  <span className="text-[13px] font-medium text-[#151515]">{step.title}</span>
-                </div>
-                <span className="text-[11px] text-[#9A9A9A] shrink-0 mr-2">{step.duration}</span>
-                <ChevronDown
-                  size={14}
-                  className={cn("text-[#9A9A9A] shrink-0 transition-transform", isOpen && "rotate-180")}
-                />
-              </button>
-              {isOpen && (
-                <div className="px-4 pb-4 border-t border-[#F0F0F0] grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">Sorene provides</p>
-                    <ul className="space-y-1.5">
-                      {step.soreneDoes.map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-[12px] text-[#151515]">
-                          <CheckCircle2 size={12} className="text-[#151515] shrink-0 mt-0.5" />
-                          {s}
-                        </li>
-                      ))}
-                    </ul>
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">
+          4-Step Process
+        </h4>
+        <Separator className="bg-gray-100 mb-4" />
+        <div className="space-y-2">
+          {VIBE_STEPS.map((step) => {
+            const Icon = step.icon;
+            const isOpen = openStep === step.id;
+            return (
+              <div key={step.id} className="rounded-2xl border border-gray-100 overflow-hidden">
+                <button
+                  onClick={() => setOpen(step.id, isOpen, setOpenStep)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+                    <Icon size={13} className="text-white" />
                   </div>
-                  <div className="pt-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">You must do</p>
-                    <ul className="space-y-1.5">
-                      {step.userDoes.map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-[12px] text-[#62646A]">
-                          <Circle size={12} className="text-[#CCCCCC] shrink-0 mt-0.5" />
-                          {s}
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[11px] text-[#9A9A9A] mr-2 uppercase tracking-wide">Step {step.id} · {step.vibe}</span>
+                    <span className="text-body-small-medium text-[#151515]">{step.title}</span>
                   </div>
-                  {step.insight && (
-                    <div className="sm:col-span-2 rounded-lg bg-[#F7F7F7] px-4 py-3">
-                      <p className="text-[12px] text-[#62646A] leading-5">{step.insight}</p>
-                    </div>
+                  <span className="text-[11px] text-[#9A9A9A] shrink-0 mr-2">{step.duration}</span>
+                  <ChevronDown size={14} className={cn("text-[#9A9A9A] shrink-0 transition-transform", isOpen && "rotate-180")} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-4 pb-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="pt-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">Sorene provides</p>
+                          <ul className="space-y-2">
+                            {step.soreneDoes.map((s, i) => (
+                              <li key={i} className="flex items-start gap-2 text-label-medium text-[#151515]">
+                                <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
+                                {s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="pt-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">You must do</p>
+                          <ul className="space-y-2">
+                            {step.userDoes.map((s, i) => (
+                              <li key={i} className="flex items-start gap-2 text-label-medium text-[#62646A]">
+                                <Circle size={13} className="text-gray-300 shrink-0 mt-0.5" />
+                                {s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        {step.insight && (
+                          <div className="sm:col-span-2 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p className="text-label-medium text-[#62646A] leading-relaxed">{step.insight}</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
                   )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
 
+function setOpen(id: number, isOpen: boolean, setter: (v: number | null) => void) {
+  setter(isOpen ? null : id);
+}
+
 // ─────────────────────────────────────────────
-// Launchpad content
+// Launchpad
 // ─────────────────────────────────────────────
 
 function LaunchpadContent() {
@@ -215,53 +237,51 @@ function LaunchpadContent() {
     { label: "Brand Kit", icon: "🎨" },
     { label: "Content Plan", icon: "✍️" },
   ];
-
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#62646A] mb-1.5">
+    <div className="p-6 space-y-8">
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">
           Elevator Pitch
-        </p>
-        <p className="text-[12px] text-[#9A9A9A] mb-2">
-          Describe your business idea in 3 sentences — what it is, who it's for, and the key benefit.
+        </h4>
+        <Separator className="bg-gray-100 mb-5" />
+        <p className="text-label-medium text-[#62646A] mb-3 leading-relaxed">
+          Describe your business in 3 sentences — what it is, who it's for, and the key benefit.
         </p>
         <textarea
           value={pitch}
           onChange={(e) => setPitch(e.target.value)}
           placeholder="We help [who] to [do what] so that [key outcome]…"
           rows={4}
-          className="w-full rounded-xl border border-[#EDEDED] bg-[#F7F7F7] px-4 py-3 text-[13px] text-[#151515] placeholder-[#CCCCCC] resize-none focus:outline-none focus:border-[#151515] transition-colors"
+          className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-body-small text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors"
         />
         <div className="flex justify-end mt-1">
-          <span className={cn("text-[11px]", pitch.length > 400 ? "text-red-400" : "text-[#9A9A9A]")}>
+          <span className={cn("text-[11px]", pitch.length > 400 ? "text-[#DF2E16]" : "text-[#9A9A9A]")}>
             {pitch.length} / 400
           </span>
         </div>
-      </div>
+      </section>
 
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#62646A] mb-3">
-          Instantly generate
-        </p>
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">
+          Instantly Generate
+        </h4>
+        <Separator className="bg-gray-100 mb-5" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {tools.map((t) => (
-            <div
-              key={t.label}
-              className="flex flex-col items-center gap-2 rounded-xl border border-[#EDEDED] bg-[#F7F7F7] p-4 opacity-50 cursor-not-allowed"
-            >
+            <div key={t.label} className="flex flex-col items-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-5 opacity-50 cursor-not-allowed">
               <span className="text-2xl">{t.icon}</span>
-              <span className="text-[12px] font-medium text-[#151515]">{t.label}</span>
+              <span className="text-body-small-medium text-[#151515]">{t.label}</span>
               <span className="text-[10px] text-[#9A9A9A]">Coming soon</span>
             </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// Direct Sync content
+// Direct Sync
 // ─────────────────────────────────────────────
 
 function DirectSyncContent() {
@@ -269,6 +289,7 @@ function DirectSyncContent() {
     {
       name: "WhatsApp",
       href: "https://wa.me/",
+      description: "Weekly check-ins with Sorene",
       icon: (
         <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
           <circle cx="16" cy="16" r="16" fill="#25D366" />
@@ -279,6 +300,7 @@ function DirectSyncContent() {
     {
       name: "Telegram",
       href: "https://t.me/",
+      description: "Instant messaging with Sorene",
       icon: (
         <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
           <circle cx="16" cy="16" r="16" fill="#229ED9" />
@@ -289,37 +311,42 @@ function DirectSyncContent() {
   ];
 
   return (
-    <div className="space-y-3">
-      <p className="text-[13px] text-[#62646A] leading-5">
-        Click below to open a conversation with Sorene on your preferred app.
-        Weekly accountability check-ins keep you on track.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {channels.map((ch) => (
-          <a
-            key={ch.name}
-            href={ch.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-4 rounded-xl border border-[#EDEDED] p-4 hover:border-[#151515] hover:shadow-sm transition-all group"
-          >
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#F7F7F7] group-hover:scale-105 transition-transform">
-              {ch.icon}
-            </div>
-            <div className="flex-1">
-              <p className="text-[13px] font-semibold text-[#151515]">Chat on {ch.name}</p>
-              <p className="text-[12px] text-[#9A9A9A]">Weekly check-ins with Sorene</p>
-            </div>
-            <ArrowRight size={14} className="text-[#CCCCCC] group-hover:text-[#151515] transition-colors" />
-          </a>
-        ))}
-      </div>
+    <div className="p-6 space-y-8">
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">
+          Weekly Accountability
+        </h4>
+        <Separator className="bg-gray-100 mb-5" />
+        <p className="text-label-medium text-[#62646A] leading-relaxed mb-6">
+          Sorene checks in with you every week on your preferred platform. Tap to open a direct conversation.
+        </p>
+        <div className="divide-y divide-gray-100 border-t border-gray-100">
+          {channels.map((ch) => (
+            <a
+              key={ch.name}
+              href={ch.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-4 py-4 group hover:opacity-80 transition-opacity"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                {ch.icon}
+              </div>
+              <div className="flex-1">
+                <p className="text-body-small-medium text-[#151515]">Chat on {ch.name}</p>
+                <p className="text-label-medium text-[#62646A]">{ch.description}</p>
+              </div>
+              <ArrowRight size={15} className="text-gray-300 group-hover:text-[#151515] transition-colors" />
+            </a>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// Go/No-Go content
+// Go/No-Go
 // ─────────────────────────────────────────────
 
 const GO_CHECKS = [
@@ -333,21 +360,21 @@ const GO_CHECKS = [
   {
     id: "problem",
     label: "Problem & Solution Clarity",
-    description: "Can you clearly define the problem and solution from real conversations — not AI-generated assumptions?",
+    description: "Problem and solution defined from real market conversations — not AI-generated assumptions.",
     icon: Search,
     items: ["Problem defined from real conversations", "Solution tested with at least one real person", "Clear who the customer is", "Painkiller problem identified"],
   },
   {
     id: "learning",
     label: "Foundation Learning",
-    description: "Completion of the core learning module that prepares you to run a business, not just an idea.",
+    description: "Completion of the core learning module that prepares you to run a business.",
     icon: CheckCircle2,
     items: ["Completed foundation module", "Understand the VIBE framework", "Understand MVO (minimum viable offer)", "Know your DNA + Direction"],
   },
   {
     id: "finance",
     label: "Finance Readiness",
-    description: "A basic assessment of whether you are financially positioned to commit to building this.",
+    description: "A basic assessment of whether you are financially positioned to commit.",
     icon: DollarSign,
     items: ["Personal runway assessed", "Startup cost estimate done", "First revenue target set", "Funding / bootstrap path chosen"],
   },
@@ -368,105 +395,198 @@ function GoNoGoContent() {
   const pct = Math.round((checked / total) * 100);
   const ready = pct >= 80;
 
+  const scoreColor = ready ? "#32C382" : pct >= 50 ? "#F5B100" : "#151515";
+
   return (
-    <div className="space-y-4">
-      {/* Progress */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-[12px]">
-          <span className="text-[#62646A]">{checked} of {total} criteria met</span>
-          <span className={cn("font-semibold", ready ? "text-[#16A34A]" : "text-[#151515]")}>{pct}%</span>
+    <div className="p-6 space-y-8">
+      {/* Score header */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-body-medium-medium text-[#151515] tracking-widest uppercase">Readiness Score</h4>
+          <span className="text-[28px] font-medium leading-none" style={{ color: scoreColor }}>{pct}%</span>
         </div>
-        <div className="h-1.5 rounded-full bg-[#F0F0F0] overflow-hidden">
-          <div
-            className={cn("h-full rounded-full transition-all duration-500", ready ? "bg-[#16A34A]" : pct >= 50 ? "bg-[#CA8A04]" : "bg-[#151515]")}
-            style={{ width: `${pct}%` }}
+        <Separator className="bg-gray-100 mb-5" />
+        <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-4">
+          <motion.div
+            className="h-full rounded-full"
+            style={{ backgroundColor: scoreColor }}
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.5 }}
           />
         </div>
-        <div className={cn("rounded-lg px-3 py-2 text-[12px] font-medium flex items-center gap-2", ready ? "bg-[#DCFCE7] text-[#166534]" : "bg-[#F7F7F7] text-[#62646A]")}>
-          {ready ? <CheckCircle2 size={13} /> : <Lock size={13} />}
-          {ready ? "You're ready to launch. All core criteria are met." : "Complete the criteria below to unlock your Go / No-Go verdict."}
+        <div className={cn("rounded-xl px-4 py-3 text-label-medium font-medium flex items-center gap-2",
+          ready ? "bg-[#CEF2E2] text-[#196141]" : "bg-gray-50 text-[#62646A]")}>
+          {ready ? <CheckCircle2 size={14} /> : <Lock size={14} />}
+          {ready
+            ? "You're ready to launch. All core criteria are met."
+            : `Complete ${total - checked} more criteria to unlock your Go / No-Go verdict.`}
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {GO_CHECKS.map((check) => {
-          const Icon = check.icon;
-          const groupChecked = check.items.filter((i) => scores[check.id]?.[i]).length;
-          return (
-            <div key={check.id} className="rounded-xl border border-[#EDEDED] p-4 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-[#F7F7F7] flex items-center justify-center shrink-0">
-                  <Icon size={13} className="text-[#151515]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-semibold text-[#151515]">{check.label}</p>
-                    <span className="text-[11px] text-[#9A9A9A]">{groupChecked}/{check.items.length}</span>
-                  </div>
-                  <p className="text-[11px] text-[#9A9A9A] leading-4 mt-0.5">{check.description}</p>
-                </div>
+      {/* Criteria groups */}
+      {GO_CHECKS.map((check, idx) => {
+        const Icon = check.icon;
+        const groupChecked = check.items.filter((i) => scores[check.id]?.[i]).length;
+        return (
+          <motion.section
+            key={check.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Icon size={14} className="text-[#62646A]" />
+                <h5 className="text-body-small-medium text-[#151515]">{check.label}</h5>
               </div>
-              <div className="space-y-1.5 border-t border-[#F0F0F0] pt-2.5">
-                {check.items.map((item) => {
-                  const on = scores[check.id]?.[item] ?? false;
-                  return (
-                    <button key={item} onClick={() => toggle(check.id, item)} className="w-full flex items-center gap-2 text-left group">
-                      <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", on ? "bg-[#151515] border-[#151515]" : "border-[#CCCCCC] group-hover:border-[#151515]")}>
-                        {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                      <span className={cn("text-[12px] transition-colors", on ? "text-[#9A9A9A] line-through" : "text-[#62646A]")}>{item}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="text-[12px] text-[#9A9A9A]">{groupChecked}/{check.items.length}</span>
             </div>
-          );
-        })}
-      </div>
+            <p className="text-label-medium text-[#62646A] leading-relaxed mb-3">{check.description}</p>
+            <Separator className="bg-gray-100 mb-3" />
+            <div className="space-y-2.5">
+              {check.items.map((item) => {
+                const on = scores[check.id]?.[item] ?? false;
+                return (
+                  <button key={item} onClick={() => toggle(check.id, item)} className="w-full flex items-center gap-3 text-left group">
+                    <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                      on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
+                      {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                    <span className={cn("text-label-medium transition-colors",
+                      on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.section>
+        );
+      })}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// Folder card
+// Folder card — DNA/Direction style
 // ─────────────────────────────────────────────
 
-interface Folder {
+interface FolderDef {
   id: string;
-  icon: React.ReactNode;
+  gradient: string;
+  iconSrc?: string;
+  iconNode?: React.ReactNode;
   title: string;
+  tagline: string;
   description: string;
   content: React.ReactNode;
+  strengthTags?: string[];
 }
 
-function FolderCard({ folder }: { folder: Folder }) {
-  const [open, setOpen] = useState(false);
+function FolderCard({ folder }: { folder: FolderDef }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExpanded((v) => !v);
+  };
 
   return (
-    <div className={cn("rounded-2xl border border-[#EDEDED] bg-white overflow-hidden transition-shadow", open && "shadow-sm")}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-4 px-5 py-5 text-left hover:bg-[#FAFAFA] transition-colors"
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
+    >
+      {/* Gradient header */}
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col", isExpanded ? "p-6 pb-8" : "p-6")}
+        style={{ background: isExpanded ? folder.gradient : "transparent" }}
       >
-        <div className="w-11 h-11 rounded-2xl bg-[#F7F7F7] flex items-center justify-center shrink-0">
-          {folder.icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-[#151515]">{folder.title}</p>
-          <p className="text-[13px] text-[#62646A] mt-0.5 leading-5">{folder.description}</p>
-        </div>
-        <ChevronDown
-          size={16}
-          className={cn("text-[#9A9A9A] shrink-0 transition-transform duration-200", open && "rotate-180")}
-        />
-      </button>
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              onClick={handleToggle}
+              className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-body-small-medium mb-8 w-fit"
+            >
+              <ChevronLeft size={20} />
+              Back to summary
+            </motion.button>
+          )}
+        </AnimatePresence>
 
-      {open && (
-        <div className="px-5 pb-6 border-t border-[#F0F0F0]">
-          <div className="pt-5">{folder.content}</div>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+              isExpanded ? "bg-white/20" : "bg-gray-100")}>
+              {folder.iconNode && (
+                <span className={isExpanded ? "text-white [&>svg]:text-white" : "text-[#151515]"}>
+                  {folder.iconNode}
+                </span>
+              )}
+            </div>
+            <h3 className={cn("text-heading-xsmall font-medium leading-tight tracking-tight",
+              isExpanded ? "text-white" : "text-[#151515]")}>
+              {folder.title}
+            </h3>
+          </div>
+          {!isExpanded && (
+            <motion.button
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              onClick={handleToggle}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-gray-100 hover:bg-gray-50 transition-all shadow-sm shrink-0"
+            >
+              Open <ArrowRight size={14} />
+            </motion.button>
+          )}
         </div>
-      )}
-    </div>
+      </motion.div>
+
+      {/* Collapsed body */}
+      <AnimatePresence>
+        {!isExpanded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            layout="position"
+            className="px-6 pb-6 flex flex-col flex-1"
+          >
+            <p className="text-[11px] text-[#9A9A9A] font-medium mb-1 uppercase tracking-wide">{folder.tagline}</p>
+            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">{folder.description}</p>
+            {folder.strengthTags && (
+              <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                {folder.strengthTags.map((tag) => (
+                  <span key={tag} className="px-3 py-1 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-xsmall-medium shadow-sm">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Expanded detail body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white"
+          >
+            {folder.content}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -485,51 +605,63 @@ export default function Page() {
     router.push("/chat");
   };
 
-  const folders: Folder[] = [
+  const folders: FolderDef[] = [
     {
       id: "idea-validator",
-      icon: <Search size={20} className="text-[#151515]" />,
+      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #A3E635 34.62%, #16B364 100%)`,
+      iconNode: <Search size={18} />,
       title: "Idea Validator",
-      description: "Validate your idea with real people using the VIBE framework — before writing a single line of code.",
+      tagline: "VIBE Framework · 2–4 weeks",
+      description: "Validate your idea with real people before building anything. Sorene structures the process — you have the conversations.",
       content: <IdeaValidatorContent />,
+      strengthTags: ["Validate", "Interview", "Build", "Experiment"],
     },
     {
       id: "launchpad",
-      icon: <Rocket size={20} className="text-[#151515]" />,
+      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #FAC515 34.62%, #EF6820 100%)`,
+      iconNode: <Rocket size={18} />,
       title: "The Launchpad",
-      description: "Write your elevator pitch and instantly spin up your business plan, pitch deck, brand, and content.",
+      tagline: "Elevator pitch · Business tools",
+      description: "Write your 3-sentence elevator pitch and instantly spin up your business plan, pitch deck, brand, and content.",
       content: <LaunchpadContent />,
+      strengthTags: ["Business Plan", "Pitch Deck", "Brand Kit"],
     },
     {
       id: "direct-sync",
-      icon: <MessageCircle size={20} className="text-[#151515]" />,
+      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #2DD4BF 34.62%, #0891B2 100%)`,
+      iconNode: <MessageCircle size={18} />,
       title: "Direct Sync",
-      description: "Weekly accountability check-ins with Sorene via WhatsApp or Telegram — tap to chat directly.",
+      tagline: "WhatsApp · Telegram",
+      description: "Weekly accountability check-ins with Sorene, delivered directly to your preferred messaging app.",
       content: <DirectSyncContent />,
+      strengthTags: ["WhatsApp", "Telegram"],
     },
     {
       id: "go-no-go",
-      icon: <BarChart3 size={20} className="text-[#151515]" />,
+      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #F38744 34.62%, #EF4444 100%)`,
+      iconNode: <BarChart3 size={18} />,
       title: "The Go / No-Go Check",
-      description: "A crystal-clear health check that tells you if you're ready to launch a business.",
+      tagline: "Launch readiness · Health check",
+      description: "A crystal-clear assessment that tells you if you're ready to launch — measured across market validation, problem clarity, learning, and finance.",
       content: <GoNoGoContent />,
+      strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
   ];
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
         <div>
-          <h1 className="text-[22px] font-semibold text-[#151515]">Execution Hub</h1>
-          <p className="text-[13px] text-[#62646A] mt-0.5">
-            Turn your Direction into momentum. Open a section to get started.
+          <h1 className="text-heading-small text-[#151515] tracking-tight">Execution Hub</h1>
+          <p className="text-label-medium text-[#62646A] mt-0.5">
+            Turn your Direction into momentum.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleNewChat}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-body-small-medium hover:bg-[#2a2a2a] transition-colors"
           >
             <PenSquare size={14} />
             New Chat
@@ -551,9 +683,9 @@ export default function Page() {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 pb-24">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="max-w-5xl mx-auto px-4 pb-24 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {folders.map((folder) => (
               <FolderCard key={folder.id} folder={folder} />
             ))}

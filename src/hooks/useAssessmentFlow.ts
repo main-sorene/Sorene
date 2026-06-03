@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { authFetch } from "@/lib/authFetch";
 import {
   QUESTION_NODES,
   OPENING_MESSAGE,
@@ -46,7 +47,7 @@ async function fetchReflection(
   detectedLanguage: string;
 }> {
   try {
-    const res = await fetch("/api/reflect", {
+    const res = await authFetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answer, signal, questionText, nextQuestion, nextChoices, preferredLanguage }),
@@ -67,7 +68,7 @@ async function fetchReflection(
 async function translateFollowUp(text: string, userAnswer: string, preferredLanguage?: string): Promise<string> {
   // Detect language from the user's actual answer and translate the follow-up into it
   try {
-    const res = await fetch("/api/reflect", {
+    const res = await authFetch("/api/reflect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answer: userAnswer, signal: "", questionText: "", nextQuestion: text, preferredLanguage }),
@@ -89,7 +90,7 @@ async function fetchClosingSummary(
   hasCv: boolean,
 ): Promise<string> {
   try {
-    const res = await fetch("/api/closing-summary", {
+    const res = await authFetch("/api/closing-summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ firstName, answers, hasCv }),
@@ -249,7 +250,7 @@ export function useAssessmentFlow() {
         for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
         const fileBase64 = btoa(binary);
 
-        const res = await fetch("/api/cv-summary", {
+        const res = await authFetch("/api/cv-summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileBase64, mimeType: file.type }),
@@ -470,11 +471,9 @@ export function useAssessmentFlow() {
       : canonicalChoices;
 
   const completeAssessment = useCallback(() => {
-    // Inject a local "User Assessment Phase" entry into the sidebar Others
-    // section so the user can revisit the conversation later. This is local
-    // only — the chat history API doesn't store assessments.
+    const uid = authUser?.uid || "local";
     const assessmentConv: Conversation = {
-      id: `assessment-${authUser?.uid || "local"}-${Date.now()}`,
+      id: `assessment-${uid}`,
       title: "User Assessment Phase",
       messages: messages.map((m) => ({
         id: m.id,
@@ -486,13 +485,15 @@ export function useAssessmentFlow() {
       updatedAt: new Date(),
       model: "sorene-1",
       done: true,
-      segment: "assessment", // not "dna" or "ideation" → renders under Others
+      segment: "assessment",
+      isCreatedOnBackend: false, // prevents ChatPage from trying to fetch from backend
     };
+    // Persist to localStorage so it survives page refreshes
+    try {
+      localStorage.setItem(`assessment_conv_${uid}`, JSON.stringify(assessmentConv));
+    } catch {}
     setConversations((prev) => {
-      // Avoid duplicate inserts if the user clicks both nav buttons
-      if (prev.some((c) => c.title === "User Assessment Phase" && c.segment === "assessment")) {
-        return prev;
-      }
+      if (prev.some((c) => c.segment === "assessment")) return prev;
       return [assessmentConv, ...prev];
     });
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}

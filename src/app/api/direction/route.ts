@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
+import { verifyAuth } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -108,6 +109,11 @@ Keep the total response under 500 words. Write as Sorene speaking directly to ${
 }
 
 export async function POST(req: NextRequest) {
+  const authedUser = await verifyAuth(req);
+  if (!authedUser) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
   try {
     const body = await req.json() as {
       eligibility: DirectionEligibility;

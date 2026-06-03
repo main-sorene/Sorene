@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
 
@@ -55,7 +56,7 @@ export function useDirectionResult() {
       setHasStreamed(true);
       try {
         const firstName = profile.firstName || "there";
-        const res = await fetch("/api/direction", {
+        const res = await authFetch("/api/direction", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -113,7 +114,7 @@ export function useDirectionResult() {
     profileSnapshot: NonNullable<typeof profile>,
   ) {
     try {
-      const res = await fetch("/api/direction-alternatives", {
+      const res = await authFetch("/api/direction-alternatives", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

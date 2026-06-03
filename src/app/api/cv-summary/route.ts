@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyAuth } from "@/lib/firebaseAdmin";
 
 export const maxDuration = 60;
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB base64 limit
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -24,6 +27,11 @@ Style rules:
 Output only the summary text, nothing else.`;
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { fileBase64, mimeType } = (await req.json()) as {
       fileBase64?: string;
@@ -32,6 +40,10 @@ export async function POST(req: NextRequest) {
 
     if (!fileBase64 || !mimeType) {
       return Response.json({ error: "Missing file" }, { status: 400 });
+    }
+
+    if (fileBase64.length > MAX_FILE_SIZE_BYTES) {
+      return Response.json({ error: "File too large" }, { status: 413 });
     }
 
     const isPdf = mimeType === "application/pdf";
@@ -83,7 +95,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("[cv-summary] error:", error);
     return Response.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Failed to process file" },
       { status: 500 },
     );
   }

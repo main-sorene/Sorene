@@ -1,9 +1,15 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { verifyAuth } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { firstName, answers, hasCv } = (await req.json()) as {
       firstName: string;
@@ -30,10 +36,10 @@ Rules:
 - No bullet points, no headers, no markdown
 - No phrases like "I can see", "It's clear", "You've got this", "Let's dive in"
 - Speak directly to ${firstName}
-- Under 150 words total
-- End naturally — do not say "let's explore" or point them anywhere
+- Under 150 words total for the two paragraphs
+- After the two paragraphs, add one short line asking if they want to add anything or are ready to explore their DNA Page. Keep it simple and warm — one sentence only.
 
-Output only the two paragraphs.`;
+Output only the two paragraphs followed by the one closing question.`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",

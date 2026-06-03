@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 export interface UserProfile {
@@ -37,6 +37,16 @@ export interface UserProfile {
     success_feeling: string;
     energy_source: string;
     energy_drains: string;
+    // Derived text labels (added in later engine versions)
+    primary_motivation?: string;
+    collaboration_mode?: string;
+    structure_preference?: string;
+    ambiguity_tolerance?: string;
+    emotional_risk?: string;
+    financial_risk?: string;
+    time_availability?: string;
+    readiness_label?: string;
+    strength_patterns?: string[];
   };
   directionEligibility?: {
     eligible: boolean;
@@ -95,7 +105,7 @@ export async function saveUserProfile(
     return;
   }
   try {
-    console.log("[Firestore] Saving profile for uid:", uid, data);
+    console.log("[Firestore] Saving profile for uid:", uid);
     const docRef = doc(firestore, "users", uid);
 
     // Remove undefined values to avoid Firebase error
@@ -128,9 +138,20 @@ export async function saveUserProfile(
   }
 }
 
+export async function clearDownstreamProfile(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  const docRef = doc(firestore, "users", uid);
+  await updateDoc(docRef, {
+    directionText: deleteField(),
+    directionAlternatives: deleteField(),
+    directionEligibility: deleteField(),
+  });
+}
+
 export async function isOnboardingComplete(uid: string): Promise<boolean> {
   const profile = await getUserProfile(uid);
-  console.log("[Firestore] onboarding check for", uid, "profile:", profile);
+  console.log("[Firestore] onboarding check for", uid);
   if (!profile) return false;
   return profile.onboardingComplete === true;
 }

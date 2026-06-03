@@ -5,30 +5,28 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 
 export function AuthPersistence({ children }: { children: React.ReactNode }) {
   const setUser = useSetAtom(userAtom);
   const setLoading = useSetAtom(authLoadingAtom);
 
   useEffect(() => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
+    if (!auth) { setLoading(false); return; }
+
+    const fallbackTimer = setTimeout(() => setLoading(false), 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         if (firebaseUser) {
-          const idToken = await firebaseUser.getIdTokenResult();
-          console.log("[AuthDebug] Firebase User authenticated:", {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            claims: idToken.claims,
-          });
-
-          // Normalize UID: Use email if available, otherwise fallback to Firebase UID
           const appUid = firebaseUser.email || firebaseUser.uid;
+
+          if (firebaseUser.email) {
+            await saveUserProfile(appUid, {
+              email: firebaseUser.email,
+              photoUrl: firebaseUser.photoURL || undefined,
+            });
+          }
 
           const profile = await getUserProfile(appUid);
 
@@ -42,16 +40,16 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null);
         }
-      } catch (error) {
-        console.error("Error restoring auth session:", error);
+      } catch {
         setUser(null);
       } finally {
+        clearTimeout(fallbackTimer);
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [setUser, setLoading]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <>{children}</>;
 }

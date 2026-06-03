@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Controller, useForm } from "react-hook-form";
+import { authFetch } from "@/lib/authFetch";
 
 import { Button } from "@/components/ui/button";
 import { Calendar, ChevronDown, Loader2 } from "lucide-react";
@@ -14,8 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FormData } from "@/types/onboarding";
-import { useAtom } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtom, useSetAtom } from "jotai";
+import { userAtom, isAssessmentCompleteAtom } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 import { useRouter } from "next/navigation";
 import { OnboardingSideImage } from "./OnboardingSideImage";
@@ -40,6 +41,7 @@ export function OnboardingForm({
   onNext: (data: FormData) => void;
 }) {
   const [authUser, setAuthUser] = useAtom(userAtom);
+  const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [sexOpen, setSexOpen] = React.useState(false);
   const [occupationOpen, setOccupationOpen] = React.useState(false);
@@ -86,6 +88,11 @@ export function OnboardingForm({
         sex: data.sex,
         useCase: "general",
         onboardingComplete: true,
+        dnaAssessmentComplete: false,
+        dnaScores: null,
+        directionText: null,
+        directionAlternatives: null,
+        assessmentAnswers: null,
         photoUrl: authUser.photoURL || authUser.profile?.photoUrl || undefined,
       };
       if (cvData) profileData.cvData = cvData;
@@ -98,7 +105,7 @@ export function OnboardingForm({
           const bytes = new Uint8Array(buf);
           for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
           const fileBase64 = btoa(binary);
-          const res = await fetch("/api/cv-summary", {
+          const res = await authFetch("/api/cv-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ fileBase64, mimeType: cvFile.type }),
@@ -125,6 +132,7 @@ export function OnboardingForm({
         },
       });
 
+      setIsAssessmentComplete(false);
       onNext(data);
 
       router.push("/chat");

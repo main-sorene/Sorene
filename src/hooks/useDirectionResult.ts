@@ -40,8 +40,11 @@ export function useDirectionResult() {
     }
 
     // New path: structured direction cards
-    if (profile.directionCards && profile.directionCards.length > 0) {
-      setDirectionCards(profile.directionCards);
+    // Skip if cards are old format (missing why_fits_you = pre-v2 cards) — fall through to regenerate
+    const cachedCards = profile.directionCards;
+    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you;
+    if (cardsAreUpToDate) {
+      setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;
     }

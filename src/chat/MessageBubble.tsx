@@ -37,12 +37,30 @@ const formatInline = (text: string): ReactNode[] => {
   });
 };
 
+// Auto-bold important phrases: em dashes introduce key info, roles/titles, proper nouns after "at/as/from"
+const autoBoldContent = (text: string): string => {
+  // Don't double-process if already has markdown bold
+  if (text.includes("**")) return text;
+
+  // Bold text around em dashes that introduce key descriptions
+  let result = text.replace(
+    /—\s*([^—.!?]{10,80}?)(?=\s*—|\.|!|\?|$)/g,
+    (match, group) => `— **${group.trim()}**`,
+  );
+
+  // Bold key patterns: "as a [Role]", "at [Company]", "from [Place]"
+  result = result.replace(
+    /\b(as (?:a |an )?)([\w\s&]+?(?:Manager|Director|COO|CEO|CTO|CFO|Lead|Head|Officer|Consultant|Specialist))/gi,
+    (_, prefix, role) => `${prefix}**${role}**`,
+  );
+
+  return result;
+};
+
 const formatContent = (content: string): ReactNode[] => {
   if (!content) return [];
 
-  // Split on double newlines OR single newlines to create shorter paragraphs
   const paragraphs = content.split(/\n\n+/g);
-
   const result: ReactNode[] = [];
 
   paragraphs.forEach((para, i) => {
@@ -54,14 +72,20 @@ const formatContent = (content: string): ReactNode[] => {
       return;
     }
 
-    // Split long paragraphs at sentence boundaries (~3 sentences per block)
-    const sentences = trimmed.split(/(?<=[.!?])\s+/);
+    // Apply auto-bolding to long paragraphs without existing markdown
+    const processed = trimmed.length > 150 ? autoBoldContent(trimmed) : trimmed;
+
+    // Split at sentence boundaries — max ~2 sentences per paragraph for readability
+    const sentences = processed.split(/(?<=[.!?])\s+/);
     const chunks: string[] = [];
     let current = "";
+    let sentenceCount = 0;
     for (const s of sentences) {
-      if (current && (current + " " + s).length > 200) {
+      sentenceCount++;
+      if (current && (sentenceCount > 2 || (current + " " + s).length > 150)) {
         chunks.push(current);
         current = s;
+        sentenceCount = 1;
       } else {
         current = current ? current + " " + s : s;
       }

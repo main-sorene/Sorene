@@ -27,11 +27,17 @@ const SEX_OPTIONS = [
   { value: "prefer_not_to_tell", label: "Prefer not to tell" },
 ];
 
-const OCCUPATION_OPTIONS = [
-  { value: "developer", label: "Developer" },
-  { value: "designer", label: "Designer" },
-  { value: "product_manager", label: "Product Manager" },
+const WORK_TYPE_OPTIONS = [
+  { value: "product_management", label: "Product management" },
+  { value: "engineering", label: "Engineering" },
+  { value: "human_resources", label: "Human resources" },
+  { value: "finance", label: "Finance" },
   { value: "marketing", label: "Marketing" },
+  { value: "sales", label: "Sales" },
+  { value: "operations", label: "Operations" },
+  { value: "data_science", label: "Data science" },
+  { value: "design", label: "Design" },
+  { value: "legal", label: "Legal" },
   { value: "other", label: "Other" },
 ];
 
@@ -85,6 +91,7 @@ export function OnboardingForm({
         email: authUser.uid || "",
         birthday: data.birthday,
         occupation: data.occupation,
+        workType: WORK_TYPE_OPTIONS.find((o) => o.value === data.occupation)?.label || data.occupation,
         sex: data.sex,
         useCase: "general",
         onboardingComplete: true,
@@ -296,17 +303,17 @@ export function OnboardingForm({
               )}
             </div>
 
-            {/* Occupation Dropdown */}
+            {/* Work Type Dropdown */}
             <div>
               <label className="text-sm font-medium text-[#151515]">
-                Occupation
+                What best describes your work?
               </label>
               <Controller
                 control={control}
                 name="occupation"
-                rules={{ required: "Occupation is required" }}
+                rules={{ required: "This field is required" }}
                 render={({ field }) => {
-                  const selected = OCCUPATION_OPTIONS.find(
+                  const selected = WORK_TYPE_OPTIONS.find(
                     (o) => o.value === field.value,
                   );
                   return (
@@ -335,7 +342,7 @@ export function OnboardingForm({
                         className="w-(--radix-dropdown-menu-trigger-width) rounded-xl shadow-lg border border-gray-100 p-1"
                         align="start"
                       >
-                        {OCCUPATION_OPTIONS.map((option) => (
+                        {WORK_TYPE_OPTIONS.map((option) => (
                           <DropdownMenuItem
                             key={option.value}
                             className="cursor-pointer rounded-md px-3 py-2 text-xs text-[#151515] font-medium hover:bg-gray-50 focus:bg-gray-50"

@@ -15,12 +15,12 @@ const DIRECTION_RECIPES = [
   {
     label: "Brainstorm more ideas",
     prompt:
-      "I want to brainstorm more ideas. Please ask me 5 to 10 questions — one at a time — to help uncover daily problems I want to solve, interests I'm excited about, or opportunities I haven't explored yet. Start with your first question now.",
+      "Help me brainstorm ideas. Ask me up to 5 short, focused questions one at a time — about problems I face or things I'm excited about. No preamble. Start with question 1.",
   },
   {
     label: "Generate more direction",
     prompt:
-      "I want to explore new directions. Please ask me 5 to 10 questions — one at a time — about what feels missing or limiting in my current directions, what outcomes I'm really after, and what kind of work energises me. Start with your first question now.",
+      "Help me find new directions. Ask me up to 5 short, focused questions one at a time — about what my current directions lack and what I really want. No preamble. Start with question 1.",
   },
 ];
 

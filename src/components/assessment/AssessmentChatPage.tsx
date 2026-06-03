@@ -3,11 +3,9 @@
 import { useRef, useEffect, useState } from "react";
 import { useAssessmentFlow } from "@/hooks/useAssessmentFlow";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Mic, Plus, Settings, Copy, Sparkles } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Plus, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useSetAtom } from "jotai";
-import { isSettingsOpenAtom } from "@/store/atoms";
 
 function SoreneMessage({ content }: { content: string }) {
   const lines = content.split("\n");
@@ -96,7 +94,6 @@ export function AssessmentChatPage() {
     isDone, isCvRequest, currentChoices, canonicalChoices,
   } = useAssessmentFlow();
   const router = useRouter();
-  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -251,9 +248,6 @@ export function AssessmentChatPage() {
               <div className="flex items-center gap-1">
                 <button type="button" className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111] opacity-40" disabled>
                   <Mic size={20} />
-                </button>
-                <button type="button" onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-[#111111]">
-                  <Settings size={20} />
                 </button>
                 <button
                   onClick={() => handleSend(inputValue)}

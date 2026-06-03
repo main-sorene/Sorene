@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, conversationsAtom, Conversation, Message } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { Plus, X, ArrowUp, Loader2, Mic, Settings } from "lucide-react";
+import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -234,9 +234,6 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <div className="flex items-center gap-1">
               <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
                 <Mic size={16} />
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
-                <Settings size={16} />
               </button>
               <button
                 onClick={handleSend}

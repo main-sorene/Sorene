@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { Plus, X, ArrowUp, Loader2, Mic, Settings, Square } from "lucide-react";
+import { Plus, X, ArrowUp, Loader2, Mic, Square } from "lucide-react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDnaEdit } from "@/hooks/useDnaEdit";
@@ -295,9 +295,6 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                 title={isRecording ? "Stop recording" : "Record voice"}
               >
                 {isRecording ? <Square size={14} className="fill-current" /> : <Mic size={16} />}
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#111111]">
-                <Settings size={16} />
               </button>
               <button
                 onClick={handleSend}

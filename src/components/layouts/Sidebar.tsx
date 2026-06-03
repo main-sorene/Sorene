@@ -156,17 +156,39 @@ export function Sidebar({
     enabled: Boolean(authUser?.uid),
   });
 
-  // Handle refetch after login and clear history on logout
+  const convoStorageKey = authUser?.uid ? `convos_${authUser.uid}` : null;
+
+  // Restore conversations from localStorage on login
   useEffect(() => {
-    if (authUser?.uid) {
-      // Clear existing conversations immediately when user ID changes
-      // to prevent showing previous user's chats while loading.
+    if (!authUser?.uid) {
       setConversations([]);
-      refetchConvo();
-    } else if (!authUser) {
-      setConversations([]);
+      // Clear any leftover storage (logout case handled by uid change)
+      return;
     }
-  }, [authUser?.uid, authUser, refetchConvo, setConversations]);
+    const key = `convos_${authUser.uid}`;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Conversation[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setConversations(parsed.map((c) => ({
+            ...c,
+            createdAt: new Date(c.createdAt),
+            updatedAt: new Date(c.updatedAt),
+          })));
+        }
+      }
+    } catch {}
+    refetchConvo();
+  }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist conversations to localStorage whenever they change
+  useEffect(() => {
+    if (!convoStorageKey || conversations.length === 0) return;
+    try {
+      localStorage.setItem(convoStorageKey, JSON.stringify(conversations));
+    } catch {}
+  }, [conversations, convoStorageKey]);
 
   useEffect(() => {
     if (!convoData?.chats) return;

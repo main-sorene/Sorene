@@ -2,16 +2,100 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const RECIPE_PROMPTS: Record<string, string> = {
+  "check-my-idea": `You are helping the user stress-test a specific business or project idea they have in mind.
+
+Every single turn: write exactly two short paragraphs, nothing more.
+- First paragraph: one sharp observation about what they've shared — a strength, a gap, or a pattern (max 2 sentences). On turn 1, write a single opening sentence inviting them to share their idea.
+- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
+
+No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
+
+Ask exactly 5 questions, one per turn — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card:
+
+**Direction: [name of their idea, sharpened]**
+[2-3 sentences on the idea's core potential and why it could work]
+
+**Why it fits you**
+- [grounded in what they shared about themselves]
+- [grounded in their words]
+
+**Key risks**
+- [1-2 honest, specific risks for this idea]
+
+**Your first step**
+[One small, concrete action to validate the idea this week]
+
+Start now with turn 1.`,
+
+  "brainstorm-new-idea": `You are helping the user brainstorm business or project ideas.
+
+Every single turn: write exactly two short paragraphs, nothing more.
+- First paragraph: one observation about a pattern in what they've shared (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
+- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
+
+No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
+
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
+
+**Direction: [specific direction]**
+[2-3 sentences on why it fits]
+
+**Why it fits you**
+- [grounded in their words]
+- [grounded in their words]
+
+**Key risks**
+- [1-2 honest risks]
+
+**Your first step**
+[One small, reversible action]
+
+Start now with turn 1.`,
+
+  "generate-new-direction": `You are helping the user discover new directions beyond what they already have.
+
+Every single turn: write exactly two short paragraphs, nothing more.
+- First paragraph: one observation about a pattern in what they've shared about their current directions or what feels missing (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
+- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
+
+No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
+
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
+
+**Direction: [specific direction]**
+[2-3 sentences on why it fits]
+
+**Why it fits you**
+- [grounded in their words]
+- [grounded in their words]
+
+**Key risks**
+- [1-2 honest risks]
+
+**Your first step**
+[One small, reversible action]
+
+Start now with turn 1.`,
+};
+
+let _client: Anthropic | null = null;
+function getClient() {
+  if (!_client) {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
+    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _client;
+}
 
 export async function POST(req: NextRequest) {
-  const user = await verifyAuth(req);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    const { message, directionContext, systemOverride, history } = (await req.json()) as {
+    const user = await verifyAuth(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { message, directionContext, recipeId, history } = (await req.json()) as {
       message: string;
       directionContext: {
         recommendedModel: string | null;
@@ -20,16 +104,17 @@ export async function POST(req: NextRequest) {
         alternatives: { model: string; compatibility: number; summary?: string }[];
         dnaScores: Record<string, unknown>;
       };
-      systemOverride?: string;
+      recipeId?: string;
       history?: { role: "user" | "assistant"; content: string }[];
     };
 
     let systemPrompt: string;
     let messages: { role: "user" | "assistant"; content: string }[];
 
-    if (systemOverride) {
-      // Recipe mode: use the recipe prompt as the system, replay full history
-      systemPrompt = systemOverride;
+    const recipePrompt = recipeId ? RECIPE_PROMPTS[recipeId] : null;
+    if (recipePrompt) {
+      // Recipe mode: look up prompt server-side, replay full history
+      systemPrompt = recipePrompt;
       const prior = (history ?? []).map((m) => ({ role: m.role, content: m.content }));
       messages = [...prior, { role: "user" as const, content: message }];
     } else {
@@ -60,7 +145,7 @@ Be direct, warm, and specific to their actual data. Use short paragraphs. Bold k
       messages = [{ role: "user" as const, content: message }];
     }
 
-    const msg = await client.messages.create({
+    const msg = await getClient().messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       system: systemPrompt,

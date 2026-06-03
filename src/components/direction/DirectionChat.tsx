@@ -11,87 +11,9 @@ import { useDnaData } from "@/hooks/useDnaData";
 
 
 const DIRECTION_RECIPES = [
-  {
-    label: "Brainstorm new idea",
-    prompt: `You are helping the user brainstorm business or project ideas.
-
-Every single turn: write exactly two short paragraphs, nothing more.
-- First paragraph: one observation about a pattern in what they've shared (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
-- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
-
-No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
-
-Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
-
-**Direction: [specific direction]**
-[2-3 sentences on why it fits]
-
-**Why it fits you**
-- [grounded in their words]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest risks]
-
-**Your first step**
-[One small, reversible action]
-
-Start now with turn 1.`,
-  },
-  {
-    label: "Check my idea",
-    prompt: `You are helping the user stress-test a specific business or project idea they have in mind.
-
-Every single turn: write exactly two short paragraphs, nothing more.
-- First paragraph: one sharp observation about what they've shared — a strength, a gap, or a pattern (max 2 sentences). On turn 1, write a single opening sentence inviting them to share their idea.
-- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
-
-No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
-
-Ask exactly 5 questions, one per turn — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card:
-
-**Direction: [name of their idea, sharpened]**
-[2-3 sentences on the idea's core potential and why it could work]
-
-**Why it fits you**
-- [grounded in what they shared about themselves]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest, specific risks for this idea]
-
-**Your first step**
-[One small, concrete action to validate the idea this week]
-
-Start now with turn 1.`,
-  },
-  {
-    label: "Generate new direction",
-    prompt: `You are helping the user discover new directions beyond what they already have.
-
-Every single turn: write exactly two short paragraphs, nothing more.
-- First paragraph: one observation about a pattern in what they've shared about their current directions or what feels missing (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
-- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
-
-No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
-
-Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
-
-**Direction: [specific direction]**
-[2-3 sentences on why it fits]
-
-**Why it fits you**
-- [grounded in their words]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest risks]
-
-**Your first step**
-[One small, reversible action]
-
-Start now with turn 1.`,
-  },
+  { label: "Brainstorm new idea", id: "brainstorm-new-idea" },
+  { label: "Check my idea",       id: "check-my-idea" },
+  { label: "Generate new direction", id: "generate-new-direction" },
 ];
 
 function parseDirectionCard(text: string): RecipeDirection | null {
@@ -197,19 +119,18 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     try { localStorage.setItem(`direction_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
   };
 
-  // displayText is what appears in the chat bubble; recipePrompt activates recipe mode.
-  const sendMessage = async (displayText: string, recipePrompt?: string) => {
+  // displayText is what appears in the chat bubble; recipeId activates recipe mode.
+  const sendMessage = async (displayText: string, recipeId?: string) => {
     if (!displayText.trim() || isProcessing) return;
 
-    // If a new recipe is starting, reset the conversation and assign a new ID
-    const isNewRecipe = !!recipePrompt;
-    const systemOverride = recipePrompt ?? activeRecipePromptRef.current ?? undefined;
-    if (recipePrompt) {
-      setActiveRecipePrompt(recipePrompt);
-      activeRecipePromptRef.current = recipePrompt;
+    // Starting a new recipe = fresh conversation
+    const isNewRecipe = !!recipeId;
+    const activeRecipeId = recipeId ?? activeRecipePromptRef.current ?? undefined;
+    if (recipeId) {
+      setActiveRecipePrompt(recipeId);
+      activeRecipePromptRef.current = recipeId;
     }
 
-    // New recipe = fresh conversation; ongoing recipe = keep prior history
     const priorMessages = isNewRecipe ? [] : messages;
     if (isNewRecipe) {
       setMessages([]);
@@ -222,8 +143,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     persistToSidebar(next);
     setIsProcessing(true);
 
-    // Build history for recipe mode (exclude the current user message, it's sent as `message`)
-    const history = systemOverride
+    const history = activeRecipeId
       ? priorMessages.map((m) => ({ role: m.role, content: m.content }))
       : undefined;
 
@@ -240,7 +160,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             alternatives: otherDirections.map((a: { model: string; compatibility: number; summary?: string }) => ({ model: a.model, compatibility: a.compatibility, summary: a.summary })),
             dnaScores: dnaData?.dnaScores ?? {},
           },
-          ...(systemOverride ? { systemOverride, history } : {}),
+          ...(activeRecipeId ? { recipeId: activeRecipeId, history } : {}),
         }),
       });
       const data = (await res.json()) as { reply: string };
@@ -358,7 +278,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             {DIRECTION_RECIPES.map((recipe) => (
               <button
                 key={recipe.label}
-                onClick={() => sendMessage(recipe.label, recipe.prompt)}
+                onClick={() => sendMessage(recipe.label, recipe.id)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
               >
                 <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />

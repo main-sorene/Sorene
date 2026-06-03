@@ -6,6 +6,13 @@ import { ServiceWorkerKiller } from "@/components/ServiceWorkerKiller";
 export const metadata: Metadata = {
   title: "Sorene | Your Business Companion",
   description: "Sorene — your personalized entrepreneurship coach.",
+  icons: {
+    icon: [
+      { url: "/figmaAssets/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/figmaAssets/favicon.ico",
+  },
 };
 
 export default function RootLayout({

@@ -88,9 +88,9 @@ export async function POST(req: NextRequest) {
         break;
       }
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice;
+        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
         if (invoice.subscription) {
-          const sub = await getStripe().subscriptions.retrieve(invoice.subscription as string);
+          const sub = await getStripe().subscriptions.retrieve(invoice.subscription);
           await upsertSubscription(db, sub);
         }
         break;

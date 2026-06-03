@@ -652,7 +652,6 @@ export function ChatInput({
 
             <button
               data-testid="settings-button"
-              onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 rounded-xl hover:bg-gray-100 transition-colors"
               title="Sorene Settings"
             >

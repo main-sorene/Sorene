@@ -17,45 +17,67 @@ interface MessageBubbleProps {
  * - Italic: *text*
  * - Horizontal Rule: --- (on its own line/paragraph)
  */
+const formatInline = (text: string): ReactNode[] => {
+  const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+  return parts.map((part, j) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={j} className="font-semibold text-[#151515]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    } else if (part.startsWith("*") && part.endsWith("*")) {
+      return (
+        <em key={j} className="italic text-[#151515]">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    return part;
+  });
+};
+
 const formatContent = (content: string): ReactNode[] => {
   if (!content) return [];
 
-  // Split content into paragraphs by double newlines
+  // Split on double newlines OR single newlines to create shorter paragraphs
   const paragraphs = content.split(/\n\n+/g);
 
-  return paragraphs.map((para, i) => {
-    const trimmed = para.trim();
+  const result: ReactNode[] = [];
 
-    // Support horizontal rules (---)
+  paragraphs.forEach((para, i) => {
+    const trimmed = para.trim();
+    if (!trimmed) return;
+
     if (trimmed === "---") {
-      return <hr key={i} className="my-6 border-t border-gray-100" />;
+      result.push(<hr key={i} className="my-6 border-t border-gray-100" />);
+      return;
     }
 
-    // Split each paragraph by markdown tokens (**bold**, *italic*)
-    // Use a regex that captures the tokens and the content between them
-    const parts = para.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    // Split long paragraphs at sentence boundaries (~3 sentences per block)
+    const sentences = trimmed.split(/(?<=[.!?])\s+/);
+    const chunks: string[] = [];
+    let current = "";
+    for (const s of sentences) {
+      if (current && (current + " " + s).length > 200) {
+        chunks.push(current);
+        current = s;
+      } else {
+        current = current ? current + " " + s : s;
+      }
+    }
+    if (current) chunks.push(current);
 
-    return (
-      <p key={i} className="whitespace-pre-wrap leading-7 mb-4 last:mb-0">
-        {parts.map((part, j) => {
-          if (part.startsWith("**") && part.endsWith("**")) {
-            return (
-              <strong key={j} className="font-semibold text-[#151515]">
-                {part.slice(2, -2)}
-              </strong>
-            );
-          } else if (part.startsWith("*") && part.endsWith("*")) {
-            return (
-              <em key={j} className="italic text-[#151515]">
-                {part.slice(1, -1)}
-              </em>
-            );
-          }
-          return part;
-        })}
-      </p>
-    );
+    chunks.forEach((chunk, ci) => {
+      result.push(
+        <p key={`${i}-${ci}`} className="whitespace-pre-wrap leading-7 mb-4 last:mb-0">
+          {formatInline(chunk)}
+        </p>,
+      );
+    });
   });
+
+  return result;
 };
 
 export function MessageBubble({ message }: MessageBubbleProps) {

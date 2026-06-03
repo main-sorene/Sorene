@@ -113,7 +113,6 @@ export function ChatHeader() {
         <button
           onClick={() => setIsSettingsOpen(true)}
           data-testid="user-avatar"
-          className="hidden sm:block"
         >
           <img
             src={

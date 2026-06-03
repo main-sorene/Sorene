@@ -70,17 +70,30 @@ TITLE: strengths_and_edges
   });
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
+  const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges"]);
   const narrative: Record<string, string> = {};
-  for (const section of raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean)) {
-    const lines = section.split("\n").filter(l => l.trim() !== "");
-    // Match "TITLE: key" anywhere in the first few lines
+  const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
+  for (let si = 0; si < sections.length; si++) {
+    const lines = sections[si].split("\n").filter(l => l.trim() !== "");
     let titleKey = "";
     let contentStartIdx = 0;
     for (let i = 0; i < Math.min(3, lines.length); i++) {
-      const m = lines[i].match(/TITLE:\s*(\w+)/i);
-      if (m) { titleKey = m[1].trim(); contentStartIdx = i + 1; break; }
+      const m = lines[i].match(/TITLE:\s*(.+)/i);
+      if (m) {
+        const val = m[1].trim();
+        if (KNOWN_KEYS.has(val)) {
+          titleKey = val;
+        } else if (si === 0) {
+          narrative["core_dna_label"] = val;
+          titleKey = "__skip__";
+        } else {
+          titleKey = val.split(/\s+/)[0].toLowerCase();
+        }
+        contentStartIdx = i + 1;
+        break;
+      }
     }
-    if (titleKey) {
+    if (titleKey && titleKey !== "__skip__") {
       narrative[titleKey] = lines.slice(contentStartIdx).join("\n").trim();
     }
   }

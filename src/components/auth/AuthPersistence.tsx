@@ -31,6 +31,10 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
           const profile = await getUserProfile(appUid);
 
+          // Set user BEFORE clearing authLoading so page guards never see
+          // authLoading=false with authUser=null in between.
+          // Navigation is handled by each page's own useEffect (client-side,
+          // so Jotai state is preserved — no re-auth needed on the new page).
           setUser({
             uid: appUid,
             email: firebaseUser.email,
@@ -38,16 +42,6 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
             photoURL: firebaseUser.photoURL,
             profile: profile || undefined,
           });
-
-          // After mobile Google redirect, router.replace is unreliable.
-          // Use window.location for a guaranteed hard navigation.
-          const onLandingPage = typeof window !== "undefined" &&
-            (window.location.pathname === "/" || window.location.pathname === "");
-          if (onLandingPage) {
-            const dest = profile?.onboardingComplete ? "/chat" : "/onBoarding";
-            window.location.replace(dest);
-            return;
-          }
         } else {
           setUser(null);
         }

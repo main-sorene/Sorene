@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Plus } from "lucide-react";
+import { Menu } from "lucide-react";
 import {
   activeConversationAtom,
   activeConversationIdAtom,
@@ -94,16 +94,14 @@ export function ChatHeader() {
 
       {/* Right: New Chat + avatar */}
       <div className="flex items-center gap-3">
-        {isAssessmentComplete && (
-          <button
-            data-testid="new-chat-header"
-            onClick={handleNewChat}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
-          >
-            <Plus size={18} />
-            New Chat
-          </button>
-        )}
+        <a
+          href="https://discord.gg/2YtvCm2SWp"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
+        >
+          Product Feedback
+        </a>
 
         {/* User avatar */}
         <button

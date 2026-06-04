@@ -216,30 +216,28 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {!hasMessages && (
-            <div className="flex flex-wrap gap-2">
-              {DIRECTION_RECIPES.map((recipe) => (
-                <button
-                  key={recipe.label}
-                  onClick={() => sendMessage(recipe.label, recipe.prompt)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
-                  {recipe.label}
-                </button>
-              ))}
-              {DIRECTION_SUGGESTIONS.map((label) => (
-                <button
-                  key={label}
-                  onClick={() => sendMessage(label)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {DIRECTION_RECIPES.map((recipe) => (
+              <button
+                key={recipe.label}
+                onClick={() => sendMessage(recipe.label, recipe.prompt)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                {recipe.label}
+              </button>
+            ))}
+            {!hasMessages && DIRECTION_SUGGESTIONS.map((label) => (
+              <button
+                key={label}
+                onClick={() => sendMessage(label)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                {label}
+              </button>
+            ))}
+          </div>
           <textarea
             ref={textareaRef}
             value={inputValue}

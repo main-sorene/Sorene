@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event;
   try {
     const body = await req.text();
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
+    event = getStripe().webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Webhook verification failed";
     console.error("[webhook] signature error:", message);
@@ -71,10 +71,10 @@ export async function POST(req: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode === "subscription" && session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+          const sub = await getStripe().subscriptions.retrieve(session.subscription as string);
           // Ensure metadata is set from session
           if (session.metadata?.email && !sub.metadata?.email) {
-            await stripe.subscriptions.update(sub.id, { metadata: session.metadata });
+            await getStripe().subscriptions.update(sub.id, { metadata: session.metadata });
             sub.metadata = session.metadata;
           }
           await upsertSubscription(db, sub);
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         if (invoice.subscription) {
-          const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          const sub = await getStripe().subscriptions.retrieve(invoice.subscription as string);
           await upsertSubscription(db, sub);
         }
         break;

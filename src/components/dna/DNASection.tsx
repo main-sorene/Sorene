@@ -239,10 +239,38 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
         : scores.energy_source || "Energy patterns shape what kind of work sustains you."),
       summary: truncateSummary(narrative?.your_energy || `${energyStabilityLabel} energy pattern`),
       key_signals: [
-        { label: "Energy Source", value: scores.energy_source ? scores.energy_source.slice(0, 30) : "—", explanation: "What you said gives you energy." },
-        { label: "Energy Stability", value: energyStabilityLabel, explanation: `Stability score: ${scores.energy_stability_score}/10.` },
+        {
+          label: "Energy Source",
+          value: narrative?.energy_source_label || "—",
+          explanation: "The kind of work and environment that genuinely lights you up.",
+        },
+        {
+          label: "Energy Drain",
+          value: narrative?.energy_drain_label || "—",
+          explanation: "What pulls you down and costs you more than it gives back.",
+        },
+        {
+          label: "Energy Stability",
+          value: energyStabilityLabel,
+          explanation: energyStabilityLabel === "Stable"
+            ? "Your energy is consistent — you can build in sustained sprints without crashing."
+            : energyStabilityLabel === "Variable"
+            ? "Your energy comes in waves — structure that respects your rhythm will serve you better."
+            : "You're running on low right now — the right work needs to restore you, not deplete you further.",
+        },
+        {
+          label: "Flow Conditions",
+          value: energyStabilityLabel === "Stable" ? "Deep Focus" : energyStabilityLabel === "Variable" ? "Flexible Rhythm" : "Recovery First",
+          explanation: energyStabilityLabel === "Stable"
+            ? "You enter deep focus naturally — protect that space and you'll do your best work."
+            : energyStabilityLabel === "Variable"
+            ? "You need permission to ebb and flow — not a rigid schedule but an honest one."
+            : "Before building, you need to recover — the foundation needs to be solid first.",
+        },
       ],
-      strength_patterns: scores.energy_source ? [scores.energy_source.slice(0, 50)] : [],
+      strength_patterns: narrative?.your_energy_strengths
+        ? narrative.your_energy_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [energyStabilityLabel + " energy"],
     },
     {
       core_id: "non_negotiable",
@@ -468,6 +496,30 @@ export const DNASection = () => {
   const { data: profile, isLoading, refetch } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const authUser = useAtomValue(userAtom);
+
+  // Backfill energy labels if missing
+  useEffect(() => {
+    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    const answers = profile?.assessmentAnswers;
+    if ((narrative?.energy_source_label && narrative?.energy_drain_label && narrative?.your_energy_strengths) || !answers || !authUser?.uid) return;
+    authFetch("/api/dna-labels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers, mode: "energy" }),
+    })
+      .then((r) => r.json())
+      .then(async (labels) => {
+        const { energy_source_label, energy_drain_label, your_energy_strengths } = labels;
+        if (energy_source_label || energy_drain_label || your_energy_strengths) {
+          const { saveUserProfile } = await import("@/lib/firestore");
+          await saveUserProfile(authUser.uid, {
+            dna_narrative: { ...(narrative || {}), energy_source_label, energy_drain_label, your_energy_strengths },
+          });
+          refetch();
+        }
+      })
+      .catch(() => {});
+  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Backfill success_vision_label and non_negotiable_label if missing via lightweight endpoint
   useEffect(() => {

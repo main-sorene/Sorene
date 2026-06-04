@@ -55,6 +55,12 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 13. non_negotiable_label — A beautiful 3-6 word phrase that names what this person refuses to trade away, reworded from their raw answer. Examples: "Moral Integrity Over Revenue", "Wellbeing Above Output", "Autonomy at All Costs", "Creativity Without Compromise". Not a quote — a principled stance.
 
+14. energy_source_label — A beautiful 2-5 word label that captures what gives this person energy, distilled from their answer. Examples: "Creative Craft & Making", "Solving Real Problems", "Building With Purpose", "Painting & Creative Flow". Not a raw quote — an elegant label.
+
+15. energy_drain_label — A beautiful 2-5 word label naming what drains this person, distilled from their answer. Examples: "Political Toxicity", "Bureaucratic Friction", "Values Misalignment", "Chaotic Environments". Not a raw quote — a crisp label.
+
+16. your_energy_strengths — Exactly 3-4 energy-related strength labels, comma-separated, each 2-5 words. Reflect what this person brings when energized — their creative output, focus quality, or impact style. Examples: "Creative Flow State", "Sustained Deep Work", "Craft-First Thinking", "Purpose-Driven Output". No raw quotes. Ownable and beautiful.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -118,11 +124,23 @@ TITLE: success_vision_label
 ---SECTION---
 TITLE: non_negotiable_label
 
-[3-6 words only]`;
+[3-6 words only]
+---SECTION---
+TITLE: energy_source_label
+
+[2-5 words only]
+---SECTION---
+TITLE: energy_drain_label
+
+[2-5 words only]
+---SECTION---
+TITLE: your_energy_strengths
+
+[3-4 labels, comma-separated]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 3600,
+      max_tokens: 4200,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -131,7 +149,7 @@ TITLE: non_negotiable_label
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths","success_vision_label","non_negotiable_label"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths","success_vision_label","non_negotiable_label","energy_source_label","energy_drain_label","your_energy_strengths"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

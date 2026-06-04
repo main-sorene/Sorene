@@ -9,8 +9,45 @@ export async function POST(req: NextRequest) {
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { answers } = (await req.json()) as { answers: Record<string, string> };
+    const { answers, mode } = (await req.json()) as { answers: Record<string, string>; mode?: string };
 
+    if (mode === "energy") {
+      const energy = answers["q1_energy"] || "";
+      const energyDrain = answers["q1_followup"] || "";
+      const quitReason = answers["q1b_quit_reason"] || "";
+
+      const prompt = `You are Sorene, a sharp and warm entrepreneurship coach. Based on these raw answers, generate three outputs about this person's energy profile.
+
+Their energy source (what they enjoy/energizes them): "${energy}"
+Their energy drain (what drains them): "${energyDrain}"
+Their quit reason: "${quitReason}"
+
+Generate exactly 3 outputs, each on its own line:
+ENERGY_SOURCE: [2-5 word elegant label for what gives them energy. Examples: "Creative Craft & Making", "Solving Real Problems", "Building With Purpose". Not a quote.]
+ENERGY_DRAIN: [2-5 word elegant label for what drains them. Examples: "Political Toxicity", "Values Misalignment", "Chaotic Environments". Not a quote.]
+ENERGY_STRENGTHS: [3-4 strength labels comma-separated, each 2-5 words, reflecting what they bring when energized. Examples: "Creative Flow State, Sustained Deep Work, Craft-First Thinking". Not quotes. Ownable.]
+
+No explanation. No extra lines. Just the three labeled outputs.`;
+
+      const message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 180,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
+      const sourceMatch = raw.match(/ENERGY_SOURCE:\s*(.+)/i);
+      const drainMatch = raw.match(/ENERGY_DRAIN:\s*(.+)/i);
+      const strengthsMatch = raw.match(/ENERGY_STRENGTHS:\s*(.+)/i);
+
+      return Response.json({
+        energy_source_label: sourceMatch?.[1]?.trim() || null,
+        energy_drain_label: drainMatch?.[1]?.trim() || null,
+        your_energy_strengths: strengthsMatch?.[1]?.trim() || null,
+      });
+    }
+
+    // Default mode: success + non-negotiable labels
     const successFeeling = answers["q9_success"] || "";
     const nonNegotiable = (answers["q6_tradeoff"] || "") + " " + (answers["q6_tradeoff_followup"] || "");
     const energy = answers["q1_energy"] || "";
@@ -45,6 +82,6 @@ No explanation. No extra lines. Just the two labeled outputs.`;
     });
   } catch (err) {
     console.error("[dna-labels] error:", err);
-    return Response.json({ success_vision_label: null, non_negotiable_label: null });
+    return Response.json({});
   }
 }

@@ -43,6 +43,8 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 7. primary_motivation_label — A 2-4 word evocative label for their primary motivation. Examples: "Creative Expression", "Purpose & Impact", "Craft & Mastery", "Freedom Through Work", "Building With Meaning". No verbs, no "I", not a sentence — just the label itself.
 
+8. strength_patterns_labels — Exactly 4-5 distinct strength labels, comma-separated, each 2-5 words. These should read like beautiful, ownable strengths — specific to what this person actually said. Examples: "Systems Thinking", "Creative Depth", "Empathic Leadership", "Strategic Patience", "Execution Under Pressure". No raw quotes from the user. No generic words like "hardworking" or "motivated". Each label should feel like something this specific person would be proud to own.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -82,7 +84,11 @@ TITLE: strengths_and_edges
 ---SECTION---
 TITLE: primary_motivation_label
 
-[2-4 words only]`;
+[2-4 words only]
+---SECTION---
+TITLE: strength_patterns_labels
+
+[4-5 labels, comma-separated]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -95,7 +101,7 @@ TITLE: primary_motivation_label
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

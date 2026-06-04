@@ -74,6 +74,17 @@ export function useProblemScan() {
     }
   }, [user?.uid]);
 
+  // Auto-generate on first visit when profile is ready and no cached report
+  useEffect(() => {
+    if (!user?.uid || !profile || status !== "idle" || report) return;
+    const hasP = !!(profile.dnaAssessmentComplete || profile.dnaScores);
+    if (!hasP) return;
+    const cached = loadFromCache(user.uid);
+    if (cached) return;
+    generate();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, profile, status, report]);
+
   const hasProfile = !!(profile?.dnaAssessmentComplete || profile?.dnaScores);
   const canGenerate = !!user?.uid && hasProfile && status !== "loading";
   const lastRun = report?.generated_at ?? null;

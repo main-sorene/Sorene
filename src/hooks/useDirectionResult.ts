@@ -78,10 +78,13 @@ export function useDirectionResult() {
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
     if (!profile.directionEligibility.eligible) return;
 
-    // Don't auto-generate until user explicitly clicks "Generate Direction".
-    // R&C data being present is not enough — we require the explicit intent flag.
+    // Auto-generate on first visit: if user has never generated and has no cards,
+    // kick off generation immediately (R&C form is optional — user can refine later).
     const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
-    if (!hasGenerationIntent) { setNeedsRC(true); return; }
+    if (!hasGenerationIntent) {
+      // Set the flag so subsequent visits don't re-trigger, then fall through to generate.
+      try { localStorage.setItem("rcGenerationRequested", "true"); } catch {}
+    }
 
     const generate = async () => {
       setIsStreaming(true);

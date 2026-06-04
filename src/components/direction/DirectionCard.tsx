@@ -570,14 +570,13 @@ export function DirectionCard({
                   Hide
                 </button>
               )}
-              {cardData ? (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
-                  style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                  {cardData.constraint_check.status}
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#CEF2E2] text-[#196141] text-[13px] font-medium">
-                  Easy to start
+              {cardData && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-[#9A9A9A] font-medium">Constraint Check</span>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                    style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                    {cardData.constraint_check.status}
+                  </div>
                 </div>
               )}
             </div>
@@ -876,199 +875,261 @@ export function DirectionCard({
 
   // ── Standard variant ─────────────────────────────────────────────────────────
   const expandedDetailContent = rawContent_rendered ?? (cardData ? (
-    <div className="p-3 md:p-4 space-y-8">
+    <div className="divide-y divide-[#ECEDEE]">
+
       {/* Section 1: Why This Fits You */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-          {cardData.composite_score != null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-[#9A9A9A]">Composite</span>
-              <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                {cardData.composite_score}
-              </span>
-            </div>
-          )}
-        </div>
-        <Separator className="bg-[#ECEDEE]" />
-        {isLoadingDetail && !cardData.ikigai_filters ? (
-          <div className="flex items-center gap-2 py-4 justify-center">
+      <div className="p-4 pb-6 space-y-4">
+        {isLoadingDetail && !cardData?.ikigai_filters ? (
+          <div className="flex items-center gap-2 py-8 justify-center">
             <Spinner />
             <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {(cardData.ikigai_filters
-              ? [
-                  ["What You Love", cardData.ikigai_filters.what_you_love],
-                  ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
-                  ["What The World Needs", cardData.ikigai_filters.what_world_needs],
-                  ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
-                  ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
-                ]
-              : [
-                  ["What You Love", cardData.four_filters?.alignment],
-                  ["What You're Good At", cardData.four_filters?.skills_match],
-                  ["What The World Needs", cardData.four_filters?.market_potential],
-                  ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
-                  ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
-                ]
-            ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
-            .map(([label, item], idx) => (
-              <motion.div key={label} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex items-start gap-3">
-                <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
-                <div className="flex-1">
-                  <span className="text-[13px] font-medium text-[#151515]">{label}</span>
-                  <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-        {(cardData.high_risk_flags?.length ?? 0) > 0 && (
-          <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
-            {cardData.high_risk_flags!.map((flag, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[#DF2E16]">{flag}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {cardData.unfair_advantage && (
-          <div>
-            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-            <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-          </div>
-        )}
-      </motion.section>
-
-      {/* Section 3: Market Reality */}
-      {(cardData.trend_connection || cardData.ocean_classification || cardData.key_competitors || cardData.competition || cardData.economic_urgency) && (
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-5">
-          <h4 className="text-base font-medium text-[#151515]">Market Reality</h4>
-          <Separator className="bg-[#ECEDEE]" />
-          {cardData.trend_connection && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
-              <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
-            </div>
-          )}
-          {cardData.ocean_classification && (
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
-                style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: oceanColor(cardData.ocean_classification.type) }}>
-                  {cardData.ocean_classification.type} Ocean
+        ) : (cardData.ikigai_filters || cardData.four_filters) ? (
+          <>
+            <div className="flex justify-between items-center">
+              <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
+              {cardData.composite_score != null && (
+                <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
+                  {cardData.composite_score}
                 </span>
-              </div>
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
+              )}
             </div>
-          )}
-          {(cardData.key_competitors || cardData.competition) && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
-              <div className="mt-2 space-y-2">
-                {(cardData.key_competitors && cardData.key_competitors.length > 0
-                  ? cardData.key_competitors
-                  : cardData.competition
-                    ? [
-                        { name: "Current workaround", what_they_do: cardData.competition.layer1_workaround },
-                        { name: "Main incumbent", what_they_do: cardData.competition.layer2_incumbent },
-                        { name: "Simple alternatives", what_they_do: cardData.competition.layer3_simple_competitors },
-                      ]
-                    : []
-                ).map((c, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                    <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+            <Separator className="bg-[#ECEDEE]" />
+            <div className="space-y-3">
+              {(cardData.ikigai_filters
+                ? [
+                    ["What You Love", cardData.ikigai_filters.what_you_love],
+                    ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                    ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                    ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                    ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+                  ]
+                : [
+                    ["What You Love", cardData.four_filters?.alignment],
+                    ["What You're Good At", cardData.four_filters?.skills_match],
+                    ["What The World Needs", cardData.four_filters?.market_potential],
+                    ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                    ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+                  ]
+              ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+              .map(([label, item]) => (
+                <div key={label} className="flex gap-3">
+                  <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
+                  <div>
+                    <span className="text-[13px] font-medium text-[#151515]">{label}</span>
+                    <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {(cardData.high_risk_flags?.length ?? 0) > 0 && (
+              <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+                {cardData.high_risk_flags!.map((flag, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-[#DF2E16]">{flag}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          {cardData.economic_urgency && (
-            <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
-              <div className="flex items-center gap-1.5">
-                <DollarSign size={13} className="text-[#151515]" />
-                <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
+            )}
+            {cardData.unfair_advantage && (
+              <div>
+                <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+                <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
               </div>
-              <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
-            </div>
-          )}
-          {(cardData.key_risks?.length ?? 0) > 0 && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
-              <div className="mt-2 space-y-2">
-                {cardData.key_risks!.map((risk, idx) => (
-                  <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
-                    <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
-                    <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          )}
-        </motion.section>
-      )}
+            )}
+          </>
+        ) : null}
+      </div>
 
-      {/* Section 4: Operations */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
-        <h4 className="text-base font-medium text-[#151515]">Operations</h4>
-        <Separator className="bg-[#ECEDEE]" />
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { icon: <DollarSign size={14} />, label: "Startup Cost", value: cardData.startup_cost_usd },
-            { icon: <Clock size={14} />, label: "First Revenue", value: cardData.time_to_first_revenue_weeks },
-            { icon: <Zap size={14} />, label: "Hrs/Week", value: cardData.hours_per_week },
-          ].map(({ icon, label, value }, i) => (
-            <div key={i} className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
-              <div className="flex items-center gap-1 text-[#9A9A9A]">
-                {icon}
-                <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
+      {/* Section 2: Market Reality accordion */}
+      <div>
+        <button
+          onClick={handleSection3Click}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Market Reality</span>
+          {isLoadingSection3 ? (
+            <Spinner />
+          ) : section3Open ? (
+            <ChevronUp size={16} className="text-[#9CA3AF]" />
+          ) : (
+            <ChevronDown size={16} className="text-[#9CA3AF]" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {section3Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 pt-0 space-y-5">
+                {isLoadingSection3 && !(cardData.ocean_classification || cardData.trend_connection) ? (
+                  <div className="flex items-center gap-2 py-8 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Analysing market reality…</span>
+                  </div>
+                ) : (
+                  <>
+                    {cardData.trend_connection && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
+                        <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
+                      </div>
+                    )}
+                    {cardData.ocean_classification && (
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
+                          style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
+                          <span className="text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: oceanColor(cardData.ocean_classification.type) }}>
+                            {cardData.ocean_classification.type} Ocean
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
+                      </div>
+                    )}
+                    {(cardData.key_competitors && cardData.key_competitors.length > 0) && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
+                        <div className="mt-2 space-y-2">
+                          {cardData.key_competitors.map((c, i) => (
+                            <div key={i} className="flex gap-2 items-start">
+                              <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
+                              <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {cardData.economic_urgency && (
+                      <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={13} className="text-[#151515]" />
+                          <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
+                        </div>
+                        <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
+                      </div>
+                    )}
+                    {(cardData.key_risks?.length ?? 0) > 0 && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
+                        <div className="mt-2 space-y-2">
+                          {cardData.key_risks!.map((risk, idx) => (
+                            <div key={idx} className="flex gap-3 items-start">
+                              <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
+                              <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-              <p className="text-[13px] font-medium text-[#151515]">{value || "—"}</p>
-            </div>
-          ))}
-        </div>
-        {cardData.constraint_check && (
-          <div>
-            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
-            <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
-              style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
-              <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
-                style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                {cardData.constraint_check.status}
-              </span>
-              {cardData.constraint_check.reason && (
-                <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-              )}
-            </div>
-          </div>
-        )}
-        {cardData.first_10_customers && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Users size={13} className="text-[#9A9A9A]" />
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">First 10 Customers</span>
-            </div>
-            <p className="text-[13px] text-[#62646A] leading-relaxed">{cardData.first_10_customers}</p>
-          </div>
-        )}
-        {cardData.distribution_path && (
-          <div>
-            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Distribution Path</span>
-            <p className="text-[13px] text-[#62646A] mt-0.5 leading-relaxed">{cardData.distribution_path}</p>
-          </div>
-        )}
-      </motion.section>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Section 3: Operations accordion */}
+      <div>
+        <button
+          onClick={handleSection4Click}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Operations</span>
+          {isLoadingSection4 ? (
+            <Spinner />
+          ) : section4Open ? (
+            <ChevronUp size={16} className="text-[#9CA3AF]" />
+          ) : (
+            <ChevronDown size={16} className="text-[#9CA3AF]" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {section4Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 pt-0 space-y-5">
+                {isLoadingSection4 && !cardData.startup_cost_usd ? (
+                  <div className="flex items-center gap-2 py-8 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Calculating operations…</span>
+                  </div>
+                ) : (
+                  <>
+                    {(cardData.startup_cost_usd || cardData.time_to_first_revenue_weeks || cardData.hours_per_week) && (
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { icon: <DollarSign size={14} />, label: "Startup Cost", value: cardData.startup_cost_usd },
+                          { icon: <Clock size={14} />, label: "First Revenue", value: cardData.time_to_first_revenue_weeks },
+                          { icon: <Zap size={14} />, label: "Hrs/Week", value: cardData.hours_per_week },
+                        ].map(({ icon, label, value }, i) => (
+                          <div key={i} className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+                            <div className="flex items-center gap-1 text-[#9A9A9A]">
+                              {icon}
+                              <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
+                            </div>
+                            <p className="text-[13px] font-medium text-[#151515]">{value || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cardData.constraint_check && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
+                        <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
+                          style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
+                          <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
+                            style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                            {cardData.constraint_check.status}
+                          </span>
+                          {cardData.constraint_check.reason && (
+                            <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {cardData.first_10_customers && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Users size={13} className="text-[#9A9A9A]" />
+                          <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">First 10 Customers</span>
+                        </div>
+                        <p className="text-[13px] text-[#62646A] leading-relaxed">{cardData.first_10_customers}</p>
+                      </div>
+                    )}
+                    {cardData.distribution_path && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Distribution Path</span>
+                        <p className="text-[13px] text-[#62646A] mt-0.5 leading-relaxed">{cardData.distribution_path}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Start Validation CTA */}
-      <button onClick={goValidate}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
-        Start Validation
-      </button>
+      <div className="p-4">
+        <button onClick={goValidate}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+          Start Validation
+        </button>
+      </div>
+
     </div>
   ) : legacyContent);
 
@@ -1136,9 +1197,12 @@ export function DirectionCard({
                   </button>
                 )}
                 {cardData && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
-                    style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                    {cardData.constraint_check.status}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-[#9A9A9A] font-medium">Constraint Check</span>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                      style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                      {cardData.constraint_check.status}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type MouseEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -531,7 +531,7 @@ interface FolderDef {
 function FolderCard({ folder }: { folder: FolderDef }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const handleToggle = (e: MouseEvent) => {
     e.stopPropagation();
     setIsExpanded((v) => !v);
   };

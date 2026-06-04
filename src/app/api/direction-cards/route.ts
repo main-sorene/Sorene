@@ -84,6 +84,7 @@ function buildPrompt(
     onlineVsOffline?: string; growthAmbition?: string; clientInteraction?: string;
     travelTolerance?: string; otherNotes?: string;
   },
+  cardIndex = 0,
 ): string {
   const or = (v: unknown, fallback = "Not provided") =>
     v && String(v).trim() ? String(v) : fallback;
@@ -101,14 +102,11 @@ function buildPrompt(
         rawAnswers["bg5_turning"] ? `- Career arc: ${rawAnswers["bg5_turning"]}` : "",
       ].filter(Boolean).join("\n");
 
-  const modelList = models
-    .map((m, i) => {
-      const pathLabel = i === 0 ? "Path A (Safe)" : i === 1 ? "Path B (Aligned)" : "Path C (Stretch)";
-      return `${pathLabel}: ${m.model} (compatibility: ${m.compatibility}%)${m.isPrimary ? " ← PRIMARY DNA FIT" : ""}`;
-    })
-    .join("\n");
+  const pathLabel = cardIndex === 0 ? "Path A (Safe)" : cardIndex === 1 ? "Path B (Aligned)" : "Path C (Stretch)";
+  const m = models[0];
+  const modelLine = `${pathLabel}: ${m.model} (compatibility: ${m.compatibility}%)${m.isPrimary ? " ← PRIMARY DNA FIT" : ""}`;
 
-  return `Generate ${models.length} direction card(s) for ${firstName}.
+  return `Generate 1 direction card for ${firstName}.
 
 ━━━ DNA PROFILE ━━━
 Name: ${firstName}
@@ -158,10 +156,10 @@ Desired client interaction: ${or(res.clientInteraction)}
 Travel tolerance: ${or(res.travelTolerance)}
 Target income: ${or(rawAnswers["q5_finance"])}
 
-${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}━━━ MODELS TO GENERATE ━━━
-${modelList}
+${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}━━━ MODEL ━━━
+${modelLine}
 
-For EACH model, produce a DirectionCardData object with ALL of these fields:
+Produce exactly 1 DirectionCardData object with ALL of these fields:
 
 - title: string — specific business name, max 10 words, NOT a category
 - compatibility: number — use the provided compatibility score exactly
@@ -193,12 +191,12 @@ For EACH model, produce a DirectionCardData object with ALL of these fields:
 - industry_shift: string — which of the Step 0 shifts this direction specifically rides (name the tool, platform, or event)
 - complaint_source: string — which specific validated complaint this is rooted in
 - window_risk: string — what closes this window and roughly when
-- path_label: "Safe" | "Aligned" | "Stretch" — assign per the path ordering above
+- path_label: "${cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch"}" — use exactly this value
 - market_signal_confidence: "Complaint-validated" | "Inferred" | "Insufficient signal" — how well-validated the market demand is
 - liked_work_check: string | null — if the direction aligns with what they liked about their last job, note it briefly; if it risks repeating what they disliked, flag it explicitly; null if no relevant overlap
 
 Return JSON only, exactly this shape (no markdown fences):
-{"cards": [/* one object per model */]}`;
+{"cards": [/* the single card object */]}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -229,25 +227,30 @@ export async function POST(req: NextRequest) {
       return Response.json({ cards: [] });
     }
 
-    const prompt = buildPrompt(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources);
+    // Generate each card in parallel — cuts total time to ~1 card's worth
+    const results = await Promise.allSettled(
+      models.map((model, i) => {
+        const prompt = buildPrompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, i);
+        return client.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1500,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: prompt }],
+        }).then((msg) => {
+          const block = msg.content[0];
+          const raw = block?.type === "text" ? block.text.trim() : "";
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) return null;
+          const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
+          return Array.isArray(parsed.cards) ? parsed.cards[0] ?? null : null;
+        });
+      })
+    );
 
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const cards = results
+      .map((r) => (r.status === "fulfilled" ? r.value : null))
+      .filter((c): c is DirectionCardData => c !== null);
 
-    const block = message.content[0];
-    const raw = block?.type === "text" ? block.text.trim() : "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("[direction-cards] no JSON in response:", raw.slice(0, 200));
-      return Response.json({ cards: [] });
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
-    const cards = Array.isArray(parsed.cards) ? parsed.cards : [];
     return Response.json({ cards });
   } catch (err) {
     console.error("[direction-cards] error:", err);

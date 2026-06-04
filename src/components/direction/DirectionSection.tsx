@@ -132,6 +132,7 @@ export const DirectionSection = () => {
     needsRC,
     generateMore,
     isGeneratingMore,
+    generateError,
     canGenerateMore,
     directionCardsCount,
     loadCardDetail,
@@ -194,6 +195,11 @@ export const DirectionSection = () => {
               Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
             </p>
           </div>
+          {generateError && (
+            <div className="rounded-xl border border-[#F3C0B8] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#B42318]">
+              {generateError}
+            </div>
+          )}
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         </div>
       </div>
@@ -247,6 +253,11 @@ export const DirectionSection = () => {
               Review your resources and constraints, then generate a direction that fits your real life.
             </p>
           </div>
+          {generateError && (
+            <div className="rounded-xl border border-[#F3C0B8] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#B42318]">
+              {generateError}
+            </div>
+          )}
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         </div>
       </div>

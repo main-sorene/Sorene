@@ -25,6 +25,7 @@ export function useDirectionResult() {
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
   const [needsRC, setNeedsRC] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
   const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
   const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
@@ -192,12 +193,24 @@ export function useDirectionResult() {
   };
 
   const generateMore = async () => {
-    if (!profile || isGeneratingMore) return;
+    if (isGeneratingMore) return;
+    setGenerateError(null);
+
+    if (!profile) {
+      setGenerateError("Your profile is still loading. Please wait a moment and try again.");
+      return;
+    }
+
     // Cap at 2 (Stretch) for path label, but allow unlimited cards
     const nextIndex = Math.min(directionCards.length, 2);
 
     const basePayloadBase = buildBasePayload();
-    if (!basePayloadBase) return;
+    if (!basePayloadBase) {
+      setGenerateError(
+        "We couldn't find your assessment results (DNA / eligibility). Complete the assessment first, then try again."
+      );
+      return;
+    }
 
     const basePayload = { ...basePayloadBase, cardIndex: nextIndex };
 
@@ -210,7 +223,11 @@ export function useDirectionResult() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...basePayload, phase: 1 }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        setGenerateError(`Generation failed (${res.status}). ${detail || "Please try again."}`);
+        return;
+      }
       const data = (await res.json()) as { cards?: DirectionCardData[] };
       const newCard = data.cards?.[0];
       if (newCard) {
@@ -219,7 +236,14 @@ export function useDirectionResult() {
           if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
           return updated;
         });
+      } else {
+        setGenerateError("The engine returned no direction. Please try again.");
       }
+    } catch (err) {
+      console.error("[generateMore] failed:", err);
+      setGenerateError(
+        err instanceof Error ? err.message : "Something went wrong while generating. Please try again."
+      );
     } finally {
       setIsGeneratingMore(false);
     }
@@ -393,6 +417,7 @@ export function useDirectionResult() {
     needsRC,
     generateMore,
     isGeneratingMore,
+    generateError,
     canGenerateMore,
     directionCardsCount: directionCards.length,
     loadCardDetail,

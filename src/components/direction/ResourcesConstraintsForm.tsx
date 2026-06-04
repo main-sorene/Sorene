@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { resourcesConstraintsAtom, EMPTY_RESOURCES, ResourcesConstraints, recipeDirectionsAtom, RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 function parseDirectionCard(text: string): RecipeDirection | null {
   const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
@@ -13,36 +15,25 @@ function parseDirectionCard(text: string): RecipeDirection | null {
   const afterTitle = text.slice(text.indexOf(titleMatch[0]) + titleMatch[0].length).trim();
   const descEnd = afterTitle.search(/\*{0,2}Why it fits you\*{0,2}/i);
   const description = (descEnd > 0 ? afterTitle.slice(0, descEnd) : afterTitle.slice(0, 300)).trim();
-  const whySection = afterTitle.match(/\*{0,2}Why it fits you\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Key risks\*{0,2}|\*{0,2}Your first step\*{0,2}|$)/i);
-  const risksSection = afterTitle.match(/\*{0,2}Key risks\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Your first step\*{0,2}|$)/i);
-  const stepSection = afterTitle.match(/\*{0,2}Your first step\*{0,2}[:\n]+([\s\S]*?)$/i);
+  const whySection = afterTitle.match(/\*{0,2}Why it fits you\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Key risks\*{0,2}|$)/i);
+  const risksSection = afterTitle.match(/\*{0,2}Key risks\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}|$)/i);
   const parseList = (s: string | undefined) =>
     (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
   const scoreMatch = text.match(/\*{0,2}Composite Score\*{0,2}[:\s]*\n?\s*(\d+)/i);
   const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 90;
-
   return {
     id: `rc-${Date.now()}`,
     title,
     description,
     whyFitsYou: parseList(whySection?.[1]),
     keyRisks: parseList(risksSection?.[1]),
-    firstStep: (stepSection?.[1] ?? "").trim(),
+    firstStep: "",
     score,
     rawContent: text,
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-[#62646A]">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const inputCls = "w-full px-3 py-2 text-sm text-[#111111] bg-[#F8F9FA] border border-[#ECEDEE] rounded-lg outline-none focus:border-[#D1D5DB] focus:bg-white transition-colors placeholder:text-[#9CA3AF]";
+const inputCls = "w-full px-3 py-2.5 text-[13px] text-[#151515] bg-white border border-[#ECEDEE] rounded-xl outline-none focus:border-[#D1D5DB] transition-colors placeholder:text-[#9CA3AF]";
 const selectCls = inputCls + " appearance-none cursor-pointer";
 
 const SELECT_OPTS = {
@@ -53,6 +44,20 @@ const SELECT_OPTS = {
   travel: ["No travel", "Occasional (1–2x/year)", "Regular (monthly)", "Frequent"],
 };
 
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div>
+        <label className="text-[12px] font-semibold text-[#151515]">{label}</label>
+        {hint && <p className="text-[11px] text-[#9A9A9A] mt-0.5">{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+const GRADIENT = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #6366F1 34.62%, #8B5CF6 100%)";
+
 export function ResourcesConstraintsForm() {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
@@ -60,16 +65,12 @@ export function ResourcesConstraintsForm() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Load from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem("resourcesConstraints");
       if (stored) {
         const parsed = JSON.parse(stored);
         setForm(parsed);
-        // If they have data, open the form
-        const hasData = Object.values(parsed).some((v) => (v as string).trim() !== "");
-        if (hasData) setIsOpen(true);
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,6 +86,8 @@ export function ResourcesConstraintsForm() {
   };
 
   const hasAnyData = Object.values(form).some((v) => v.trim() !== "");
+
+  const filledCount = Object.values(form).filter((v) => v.trim() !== "").length;
 
   const buildMessage = (f: ResourcesConstraints) => {
     const lines: string[] = [];
@@ -127,123 +130,176 @@ export function ResourcesConstraintsForm() {
           return updated;
         });
         setSaved(true);
+        setIsOpen(false);
       }
     } catch {}
     finally { setIsGenerating(false); }
   };
 
   return (
-    <div className="mx-3 mb-2 lg:mx-0 rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
-      {/* Header */}
-      <button
-        onClick={() => setIsOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-[#F9FAFB] transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-[#111111]">Resources &amp; Constraints</span>
-          {hasAnyData && !isOpen && (
-            <span className="text-xs text-[#9CA3AF] font-normal">saved</span>
-          )}
-        </div>
-        {isOpen ? <ChevronUp size={16} className="text-[#9CA3AF]" /> : <ChevronDown size={16} className="text-[#9CA3AF]" />}
-      </button>
-
-      {isOpen && (
-        <div className="px-5 pb-5 space-y-6 border-t border-[#F3F4F6]">
-          {/* What you have */}
-          <div className="pt-4 space-y-4">
-            <p className="text-xs font-semibold text-[#111111] uppercase tracking-wide">What you have</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Networks + existing assets">
-                <textarea
-                  className={inputCls + " resize-none"}
-                  rows={2}
-                  placeholder="e.g. 500 LinkedIn contacts in finance, existing client list…"
-                  value={form.networks}
-                  onChange={(e) => update("networks", e.target.value)}
-                />
-              </Field>
-              <Field label="Available starting capital">
-                <input className={inputCls} placeholder="e.g. $5,000" value={form.startingCapital} onChange={(e) => update("startingCapital", e.target.value)} />
-              </Field>
-              <Field label="Financial runway (months)">
-                <input className={inputCls} type="number" min={0} placeholder="e.g. 6" value={form.financialRunway} onChange={(e) => update("financialRunway", e.target.value)} />
-              </Field>
-              <Field label="Hours available per week">
-                <input className={inputCls} type="number" min={0} placeholder="e.g. 20" value={form.hoursPerWeek} onChange={(e) => update("hoursPerWeek", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          {/* Your constraints */}
-          <div className="space-y-4">
-            <p className="text-xs font-semibold text-[#111111] uppercase tracking-wide">Your constraints</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Location flexibility">
-                <select className={selectCls} value={form.locationFlexibility} onChange={(e) => update("locationFlexibility", e.target.value)}>
-                  <option value="">Select…</option>
-                  {SELECT_OPTS.location.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
-              <Field label="Family or time commitments">
-                <input className={inputCls} placeholder="e.g. two young kids, caregiver role…" value={form.familyCommitments} onChange={(e) => update("familyCommitments", e.target.value)} />
-              </Field>
-              <Field label="Minimum income floor needed">
-                <input className={inputCls} placeholder="e.g. $3,000/month" value={form.incomeFloor} onChange={(e) => update("incomeFloor", e.target.value)} />
-              </Field>
-              <Field label="Online vs offline preference">
-                <select className={selectCls} value={form.onlineVsOffline} onChange={(e) => update("onlineVsOffline", e.target.value)}>
-                  <option value="">Select…</option>
-                  {SELECT_OPTS.online.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
-              <Field label="Growth ambition level">
-                <select className={selectCls} value={form.growthAmbition} onChange={(e) => update("growthAmbition", e.target.value)}>
-                  <option value="">Select…</option>
-                  {SELECT_OPTS.growth.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
-              <Field label="Desired client interaction">
-                <select className={selectCls} value={form.clientInteraction} onChange={(e) => update("clientInteraction", e.target.value)}>
-                  <option value="">Select…</option>
-                  {SELECT_OPTS.client.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
-              <Field label="Travel tolerance">
-                <select className={selectCls} value={form.travelTolerance} onChange={(e) => update("travelTolerance", e.target.value)}>
-                  <option value="">Select…</option>
-                  {SELECT_OPTS.travel.map((o) => <option key={o}>{o}</option>)}
-                </select>
-              </Field>
-            </div>
-          </div>
-
-          {/* Other notes */}
-          <div className="space-y-4">
-            <p className="text-xs font-semibold text-[#111111] uppercase tracking-wide">Other notes</p>
-            <textarea
-              className={inputCls + " resize-none w-full"}
-              rows={3}
-              placeholder="Anything else Sorene should know about your situation…"
-              value={form.otherNotes}
-              onChange={(e) => update("otherNotes", e.target.value)}
-            />
-          </div>
-
-          {/* Action */}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || !hasAnyData}
-              className="flex items-center gap-2 px-5 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? <Loader2 size={15} className="animate-spin" /> : null}
-              {isGenerating ? "Generating…" : "Generate Direction"}
-            </button>
-            {saved && <span className="text-xs text-[#6B7280]">New direction card added below ↓</span>}
-          </div>
-        </div>
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }}
+      className={cn(
+        "relative rounded-[20px] overflow-hidden shadow-sm border border-gray-100 flex flex-col",
+        isOpen ? "bg-white" : "cursor-pointer"
       )}
-    </div>
+      style={!isOpen ? { background: GRADIENT } : undefined}
+      onClick={!isOpen ? () => setIsOpen(true) : undefined}
+    >
+      {/* Spotlight overlay when collapsed */}
+      {!isOpen && (
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.3)_0%,transparent_70%)] pointer-events-none z-0" />
+      )}
+
+      <AnimatePresence mode="wait">
+        {isOpen ? (
+          /* ── Expanded ── */
+          <motion.div key="expanded" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Gradient header */}
+            <div className="p-5 pb-4 flex flex-col" style={{ background: GRADIENT }}>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
+                  className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors text-[13px] font-medium"
+                >
+                  <ChevronLeft size={16} />
+                  Back
+                </button>
+                {saved && (
+                  <span className="text-[12px] text-white/70">Direction card added ↓</span>
+                )}
+              </div>
+              <h3 className="text-[18px] font-medium text-white leading-snug tracking-tight">
+                Resources &amp; Constraints
+              </h3>
+              <p className="text-[13px] text-white/70 mt-1">
+                Help Sorene find directions that actually fit your life.
+              </p>
+            </div>
+
+            {/* Form body */}
+            <div className="p-5 space-y-7 bg-[#F9FAFB]">
+
+              {/* What you have */}
+              <section className="space-y-4">
+                <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-widest">What you have</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Networks & existing assets" hint="Contacts, communities, platforms you already have access to">
+                    <textarea
+                      className={inputCls + " resize-none"}
+                      rows={2}
+                      placeholder="e.g. 500 LinkedIn contacts in finance, existing client list…"
+                      value={form.networks}
+                      onChange={(e) => update("networks", e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Available starting capital" hint="Budget you can commit without strain">
+                    <input className={inputCls} placeholder="e.g. $5,000" value={form.startingCapital} onChange={(e) => update("startingCapital", e.target.value)} />
+                  </Field>
+                  <Field label="Financial runway" hint="Months you can go without stable income">
+                    <input className={inputCls} type="number" min={0} placeholder="e.g. 6 months" value={form.financialRunway} onChange={(e) => update("financialRunway", e.target.value)} />
+                  </Field>
+                  <Field label="Hours per week" hint="Realistic hours you can commit right now">
+                    <input className={inputCls} type="number" min={0} placeholder="e.g. 20 hrs/week" value={form.hoursPerWeek} onChange={(e) => update("hoursPerWeek", e.target.value)} />
+                  </Field>
+                </div>
+              </section>
+
+              {/* Your constraints */}
+              <section className="space-y-4">
+                <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-widest">Your constraints</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Location flexibility">
+                    <select className={selectCls} value={form.locationFlexibility} onChange={(e) => update("locationFlexibility", e.target.value)}>
+                      <option value="">Select…</option>
+                      {SELECT_OPTS.location.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Family or time commitments" hint="Caregiving, school runs, fixed commitments">
+                    <input className={inputCls} placeholder="e.g. two young kids, caregiver role…" value={form.familyCommitments} onChange={(e) => update("familyCommitments", e.target.value)} />
+                  </Field>
+                  <Field label="Minimum income floor" hint="The number you must hit to feel safe">
+                    <input className={inputCls} placeholder="e.g. $3,000/month" value={form.incomeFloor} onChange={(e) => update("incomeFloor", e.target.value)} />
+                  </Field>
+                  <Field label="Online vs offline preference">
+                    <select className={selectCls} value={form.onlineVsOffline} onChange={(e) => update("onlineVsOffline", e.target.value)}>
+                      <option value="">Select…</option>
+                      {SELECT_OPTS.online.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Growth ambition">
+                    <select className={selectCls} value={form.growthAmbition} onChange={(e) => update("growthAmbition", e.target.value)}>
+                      <option value="">Select…</option>
+                      {SELECT_OPTS.growth.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Client interaction">
+                    <select className={selectCls} value={form.clientInteraction} onChange={(e) => update("clientInteraction", e.target.value)}>
+                      <option value="">Select…</option>
+                      {SELECT_OPTS.client.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Travel tolerance">
+                    <select className={selectCls} value={form.travelTolerance} onChange={(e) => update("travelTolerance", e.target.value)}>
+                      <option value="">Select…</option>
+                      {SELECT_OPTS.travel.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              </section>
+
+              {/* Other notes */}
+              <section className="space-y-4">
+                <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-widest">Anything else</p>
+                <textarea
+                  className={inputCls + " resize-none w-full"}
+                  rows={3}
+                  placeholder="Anything else Sorene should know about your situation…"
+                  value={form.otherNotes}
+                  onChange={(e) => update("otherNotes", e.target.value)}
+                />
+              </section>
+
+              {/* Action */}
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !hasAnyData}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-[#151515] text-white text-[13px] font-semibold rounded-xl hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isGenerating && <Loader2 size={14} className="animate-spin" />}
+                {isGenerating ? "Generating direction…" : "Generate Direction from My Constraints"}
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          /* ── Collapsed card ── */
+          <motion.div key="collapsed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="relative z-10 p-5 flex flex-col min-h-[140px]">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1">
+                <h3 className="text-[18px] font-medium text-white leading-snug tracking-tight">
+                  Resources &amp; Constraints
+                </h3>
+                <p className="text-[13px] text-white/70 mt-1 leading-relaxed">
+                  Tell Sorene what you have and what limits you — get directions that fit your real life.
+                </p>
+              </div>
+            </div>
+            <div className="mt-auto flex items-center justify-between">
+              {hasAnyData ? (
+                <span className="text-[12px] text-white/60">{filledCount} field{filledCount !== 1 ? "s" : ""} saved</span>
+              ) : (
+                <span className="text-[12px] text-white/50">Not filled in yet</span>
+              )}
+              <div className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">
+                Fill in
+                <ChevronDown size={14} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

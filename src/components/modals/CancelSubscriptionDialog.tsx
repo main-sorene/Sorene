@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useAtom } from "jotai";
-import { isCancelSubscriptionOpenAtom } from "@/store/atoms";
+import { useAtom, useAtomValue } from "jotai";
+import { isCancelSubscriptionOpenAtom, userAtom } from "@/store/atoms";
 import {
   Dialog,
   DialogContent,
@@ -10,18 +10,33 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { createPortalSession } from "@/lib/subscriptionApi";
 
 export function CancelSubscriptionDialog() {
   const [isOpen, setIsOpen] = useAtom(isCancelSubscriptionOpenAtom);
+  const user = useAtomValue(userAtom);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const handleCancel = () => {
     setIsOpen(false);
   };
 
-  const handleConfirmCancel = () => {
-    // Handle subscription cancellation logic here
-    console.log("Subscription cancelled");
-    setIsOpen(false);
+  const handleConfirmCancel = async () => {
+    const email = user?.email ?? user?.profile?.email;
+    if (!email || isLoading) return;
+    setIsLoading(true);
+    try {
+      const result = await createPortalSession({
+        email,
+        return_url: window.location.href,
+      });
+      window.location.href = result.url;
+    } catch (err) {
+      console.error("Failed to open portal for cancellation:", err);
+    } finally {
+      setIsLoading(false);
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -50,9 +65,10 @@ export function CancelSubscriptionDialog() {
           </Button>
           <Button
             onClick={handleConfirmCancel}
+            disabled={isLoading}
             className="h-10 px-4 rounded-xl text-[#DF2E16] border border-[#ECEDEE] text-sm font-medium shadow-sm"
           >
-            Cancel Subscription
+            {isLoading ? "Loading..." : "Cancel Subscription"}
           </Button>
         </div>
       </DialogContent>

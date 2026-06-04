@@ -51,6 +51,10 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 11. risk_and_change_strengths — Exactly 3-4 risk-related strength labels, comma-separated, each 2-5 words. Reflect their specific relationship with risk, uncertainty, and change — not generic. Examples: "Calculated Risk Taker", "Grounded Under Pressure", "Clarity-Seeking Strategist", "Emotionally Honest Mover", "Deliberate Change Maker". No raw quotes. Ownable and honest.
 
+12. success_vision_label — A beautiful 3-6 word phrase that captures what success truly means for this person, reworded from their raw answer into something aspirational and elegant. Examples: "Work That Restores & Sustains", "Creative Freedom With Income", "Building Something That Matters", "Stability Through Meaningful Craft". Not a quote — a distilled vision.
+
+13. non_negotiable_label — A beautiful 3-6 word phrase that names what this person refuses to trade away, reworded from their raw answer. Examples: "Moral Integrity Over Revenue", "Wellbeing Above Output", "Autonomy at All Costs", "Creativity Without Compromise". Not a quote — a principled stance.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -106,11 +110,19 @@ TITLE: how_you_work_strengths
 ---SECTION---
 TITLE: risk_and_change_strengths
 
-[3-4 labels, comma-separated]`;
+[3-4 labels, comma-separated]
+---SECTION---
+TITLE: success_vision_label
+
+[3-6 words only]
+---SECTION---
+TITLE: non_negotiable_label
+
+[3-6 words only]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 3200,
+      max_tokens: 3600,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -119,7 +131,7 @@ TITLE: risk_and_change_strengths
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths","success_vision_label","non_negotiable_label"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

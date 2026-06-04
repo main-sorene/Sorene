@@ -90,14 +90,14 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
             : "This fits into a fuller life rather than defining it.",
         },
         {
-          label: "Success Feels Like",
-          value: scores.success_feeling ? truncateSummary(scores.success_feeling, 60) : "—",
-          explanation: "Your own words for what winning actually looks like.",
+          label: "Success Vision",
+          value: narrative?.success_vision_label || (scores.success_feeling ? truncateSummary(scores.success_feeling, 50) : "—"),
+          explanation: "What winning actually looks like for you — in your own terms.",
         },
         {
           label: "Non-Negotiable",
-          value: scores.non_negotiable ? truncateSummary(scores.non_negotiable, 60) : "—",
-          explanation: "The trade-off you named as the hardest to live with.",
+          value: narrative?.non_negotiable_label || (scores.non_negotiable ? truncateSummary(scores.non_negotiable, 50) : "—"),
+          explanation: "The line you named as the hardest to cross — what you won't trade away.",
         },
         {
           label: "Readiness",
@@ -473,7 +473,7 @@ export const DNASection = () => {
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !answers || !authUser?.uid) return;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths && narrative?.success_vision_label && narrative?.non_negotiable_label) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

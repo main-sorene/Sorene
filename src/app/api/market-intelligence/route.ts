@@ -3,15 +3,27 @@ import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 import type { MIEReport } from "@/types/mie";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT_LIVE = `You are Sorene's Market Intelligence Engine. Your job is to research live market trends and surface personalised signals and business opportunities for a specific user.
+const SYSTEM_PROMPT_LIVE = `You are Sorene's Market Intelligence Engine. Your job is to research live market trends and surface personalised signals and business opportunities for a specific user — focused on niches with real demand but thin or weak supply.
 
-Your job:
-1. Use the web_search tool to scan for current market trends, industry shifts, emerging tools, and demand signals relevant to the user's domain and skills. Search across news, Reddit, LinkedIn, Product Hunt, and industry publications.
-2. After searching, synthesise the live data into a structured report personalised to this user's DNA profile.
+Your process (stay within the search budget below):
+
+STEP 1 — DEMAND SEARCH (max 3 searches):
+Search for current trends, demand signals, complaints, and workarounds relevant to the user's domain and skills. Search across news, Reddit, LinkedIn, Product Hunt, and industry publications. Look for repeated frustration patterns and "does anyone know a tool for X" signals.
+
+STEP 2 — SUPPLY CHECK (max 1 search per top-5 candidate, max 5 searches total):
+For each strong demand signal, search "[problem] tool" or "[problem] software". Classify supply as:
+- LOW: fewer than 3 credible solutions, or only generic/expensive ones
+- MEDIUM: 3–8 solutions but with clear gaps (price, niche, UX, audience)
+- HIGH: well-served, multiple mature products, big incumbents present
+Deprioritise HIGH supply opportunities.
+
+STEP 3 — SYNTHESISE into the JSON report personalised to this user's DNA profile.
+
+Total search budget: max 8 searches across all steps. Stop searching and synthesise once budget is reached.
 
 Output ONLY valid JSON after searching. No markdown, no prose, no code fences.
 
@@ -21,21 +33,25 @@ RULES:
 - Base signals on actual search results — cite real trends you found
 - Personalise EVERYTHING to the specific user's DNA scores, skills, and background
 - dna_fit_score: skill match (25%) + capital fit (20%) + lifestyle fit (20%) + values alignment (20%) + market timing (15%)
-- Be specific: name actual industries, real roles, concrete first steps
+- Penalise HIGH supply opportunities in dna_fit_score even if skill match is strong
+- Prioritise LOW and MEDIUM supply opportunities in ranking
+- Be specific: name actual industries, real roles, real competitor names, concrete first steps
 - No hype words: no "game-changing", "revolutionary", "disruptive potential"
 - Output ONLY the JSON object after searching. Nothing else.`;
 
-const SYSTEM_PROMPT_FALLBACK = `You are Sorene's Market Intelligence Engine. Your job is to analyse a user's professional DNA and surface personalised market signals and business opportunities.
+const SYSTEM_PROMPT_FALLBACK = `You are Sorene's Market Intelligence Engine. Your job is to analyse a user's professional DNA and surface personalised market signals and business opportunities — focused on niches with real demand but thin or weak supply.
 
 You must output ONLY valid JSON — no markdown, no prose, no code fences. The JSON must exactly match the schema below.
 
 ${SCHEMA_BLOCK()}
 
-IMPORTANT RULES:
+RULES:
 - Personalise EVERYTHING to the specific user's DNA scores, skills, background, and constraints
-- The dna_fit_score must reflect real alignment: skill match (25%), capital fit (20%), lifestyle fit (20%), values alignment (20%), market timing (15%)
-- Be specific: name actual industries, real roles, concrete first steps
-- Avoid hype words: no "game-changing", "revolutionary", "disruptive potential"
+- dna_fit_score: skill match (25%) + capital fit (20%) + lifestyle fit (20%) + values alignment (20%) + market timing (15%)
+- Prioritise opportunities where supply_level is Low or Medium — deprioritise well-saturated markets
+- Penalise HIGH supply opportunities in dna_fit_score even if skill match is strong
+- Be specific: name actual industries, real roles, real competitor names, concrete first steps
+- No hype words: no "game-changing", "revolutionary", "disruptive potential"
 - Output ONLY the JSON object. Nothing else.`;
 
 function SCHEMA_BLOCK() {
@@ -54,7 +70,9 @@ Each rising/falling signal:
   "category": string,
   "velocity": "V2" | "V3",
   "confidence": "Medium" | "High" | "Very High",
-  "relevance_to_user": string
+  "relevance_to_user": string,
+  "supply_level": "Low" | "Medium" | "High",
+  "why_underserved": string
 }
 
 Each opportunity:
@@ -66,6 +84,9 @@ Each opportunity:
   "dna_fit_score": number,
   "fit_explanation": string,
   "velocity_tier": "V1" | "V2" | "V3",
+  "supply_level": "Low" | "Medium" | "High",
+  "competitor_count": number,
+  "gap_description": string,
   "startup_cost": "Low" | "Medium" | "High",
   "startup_cost_range": string,
   "time_to_revenue": string,
@@ -78,7 +99,8 @@ Each horizon signal:
 {
   "title": string,
   "description": string,
-  "horizon": string
+  "horizon": string,
+  "supply_level": "Low" | "Medium" | "High"
 }`;
 }
 
@@ -96,8 +118,8 @@ function buildUserMessage(
     .join("\n");
 
   const task = withSearch
-    ? "Search for live market trends and signals relevant to this person's domain and skills. Then generate a personalised Market Intelligence Report. Output only the JSON."
-    : "Generate a personalised Market Intelligence Report for this specific user. Return only the JSON.";
+    ? "Search for live market trends and signals relevant to this person's domain and skills. Prioritise niches with strong demand but low or medium supply. Then generate a personalised Market Intelligence Report. Output only the JSON."
+    : "Generate a personalised Market Intelligence Report for this specific user. Prioritise niches with strong demand but low or medium supply. Return only the JSON.";
 
   return `User: ${firstName}
 
@@ -151,7 +173,7 @@ async function generateWithSearch(userMessage: string): Promise<string> {
 async function generateFallback(userMessage: string): Promise<string> {
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 4096,
+    max_tokens: 8096,
     system: SYSTEM_PROMPT_FALLBACK,
     messages: [
       { role: "user", content: userMessage },

@@ -5,6 +5,8 @@ export interface MIESignal {
   velocity: "V2" | "V3";
   confidence: "Medium" | "High" | "Very High";
   relevance_to_user: string;
+  supply_level?: "Low" | "Medium" | "High";
+  why_underserved?: string;
 }
 
 export interface MIEOpportunity {
@@ -15,6 +17,9 @@ export interface MIEOpportunity {
   dna_fit_score: number;
   fit_explanation: string;
   velocity_tier: "V1" | "V2" | "V3";
+  supply_level?: "Low" | "Medium" | "High";
+  competitor_count?: number;
+  gap_description?: string;
   startup_cost: "Low" | "Medium" | "High";
   startup_cost_range: string;
   time_to_revenue: string;
@@ -27,6 +32,7 @@ export interface MIEHorizonSignal {
   title: string;
   description: string;
   horizon: string;
+  supply_level?: "Low" | "Medium" | "High";
 }
 
 export interface MIEReport {

@@ -15,17 +15,16 @@ const DIRECTION_RECIPES = [
     label: "Brainstorm more ideas",
     prompt: `You are helping the user brainstorm business or project ideas.
 
-Every single turn must follow this exact format — two paragraphs, nothing more:
+Every single turn: write exactly two short paragraphs, nothing more.
+- First paragraph: one observation about a pattern in what they've shared (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
+- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
 
-Paragraph 1: One short observation about a pattern you notice in what they've shared. Max 2 sentences. (On turn 1, write a single opening sentence about what you're trying to uncover together.)
-Paragraph 2: One sentence leading into the question, then the question on its own line, bolded: **Question here?**
+No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-No bullet lists. No options. No sub-questions. No explanations. Two paragraphs only.
-
-Ask 5 questions total, one per turn. After their answer to question 5, output a Direction Card:
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
 
 **Direction: [specific direction]**
-[2-3 sentences on why it fits their answers]
+[2-3 sentences on why it fits]
 
 **Why it fits you**
 - [grounded in their words]
@@ -43,17 +42,16 @@ Start now with turn 1.`,
     label: "Generate more direction",
     prompt: `You are helping the user discover new directions beyond what they already have.
 
-Every single turn must follow this exact format — two paragraphs, nothing more:
+Every single turn: write exactly two short paragraphs, nothing more.
+- First paragraph: one observation about a pattern in what they've shared about their current directions or what feels missing (max 2 sentences). On turn 1, write a single opening sentence about what you want to uncover.
+- Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
 
-Paragraph 1: One short observation about a pattern you notice in their current directions or what feels missing. Max 2 sentences. (On turn 1, write a single opening sentence about what you're trying to uncover together.)
-Paragraph 2: One sentence leading into the question, then the question on its own line, bolded: **Question here?**
+No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-No bullet lists. No options. No sub-questions. No explanations. Two paragraphs only.
-
-Ask 5 questions total, one per turn. After their answer to question 5, output a Direction Card:
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
 
 **Direction: [specific direction]**
-[2-3 sentences on why it fits their answers]
+[2-3 sentences on why it fits]
 
 **Why it fits you**
 - [grounded in their words]

@@ -157,8 +157,7 @@ Be direct, warm, and specific to their actual data. Use short paragraphs. Bold k
 
     return NextResponse.json({ reply });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
     console.error("[direction-chat] error:", error);
-    return NextResponse.json({ reply: `Debug error: ${msg}` }, { status: 500 });
+    return NextResponse.json({ reply: "Sorry, I had trouble with that. Please try again." }, { status: 500 });
   }
 }

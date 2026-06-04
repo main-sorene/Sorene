@@ -607,15 +607,6 @@ export function useAssessmentFlow() {
             }),
           }).then((r) => r.json()).catch(() => ({ narrative: {} }));
           await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
-          // Update atom so Settings modal can show professional background answers immediately
-          setAuthUser({
-            ...authUser,
-            profile: {
-              ...(authUser.profile as any),
-              assessmentAnswers: currentAnswers,
-              dnaAssessmentComplete: true,
-            },
-          });
           // Generate polished background summary for users who answered bg questions (no CV)
           if (!hasCv) {
             authFetch("/api/bg-summary", {
@@ -636,9 +627,24 @@ export function useAssessmentFlow() {
         // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
         // this component and the user would never see the summary or nav buttons.
         // The atom flips when the user clicks a nav button (see AssessmentChatPage).
+        // setFlowState writes to sessionStorage (via persist) before calling React setter,
+        // so the SESSION_KEY guard in AppLayout/chat/page is always set before any
+        // dnaAssessmentComplete Firestore listener can fire.
         setFlowState({ phase: "done" });
       } finally {
         setIsSaving(false);
+      }
+      // Update atom AFTER isSaving=false so Settings modal sees correct data but the
+      // "Explore My DNA" button is already visible when this fires.
+      if (authUser?.uid) {
+        setAuthUser({
+          ...authUser,
+          profile: {
+            ...(authUser.profile as any),
+            assessmentAnswers: currentAnswers,
+            dnaAssessmentComplete: true,
+          },
+        });
       }
       return;
     }

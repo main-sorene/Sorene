@@ -91,12 +91,12 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
         },
         {
           label: "Success Vision",
-          value: narrative?.success_vision_label || (scores.success_feeling ? truncateSummary(scores.success_feeling, 50) : "—"),
+          value: narrative?.success_vision_label || "—",
           explanation: "What winning actually looks like for you — in your own terms.",
         },
         {
           label: "Non-Negotiable",
-          value: narrative?.non_negotiable_label || (scores.non_negotiable ? truncateSummary(scores.non_negotiable, 50) : "—"),
+          value: narrative?.non_negotiable_label || "—",
           explanation: "The line you named as the hardest to cross — what you won't trade away.",
         },
         {
@@ -469,11 +469,34 @@ export const DNASection = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const authUser = useAtomValue(userAtom);
 
-  // Regenerate narrative if missing entirely or missing the new core_dna_label
+  // Backfill success_vision_label and non_negotiable_label if missing via lightweight endpoint
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths && narrative?.success_vision_label && narrative?.non_negotiable_label) || !answers || !authUser?.uid) return;
+    if ((narrative?.success_vision_label && narrative?.non_negotiable_label) || !answers || !authUser?.uid) return;
+    authFetch("/api/dna-labels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    })
+      .then((r) => r.json())
+      .then(async ({ success_vision_label, non_negotiable_label }) => {
+        if (success_vision_label || non_negotiable_label) {
+          const { saveUserProfile } = await import("@/lib/firestore");
+          await saveUserProfile(authUser.uid, {
+            dna_narrative: { ...(narrative || {}), success_vision_label, non_negotiable_label },
+          });
+          refetch();
+        }
+      })
+      .catch(() => {});
+  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Regenerate full narrative if missing entirely or missing key fields
+  useEffect(() => {
+    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    const answers = profile?.assessmentAnswers;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

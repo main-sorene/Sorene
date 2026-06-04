@@ -217,7 +217,7 @@ export function ResourcesConstraintsForm() {
               <section className="space-y-4">
                 <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-widest">Your constraints</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Location flexibility">
+                  <Field label="Location flexibility" hint="Where you can work from and how tied you are to a place">
                     <select className={selectCls} value={form.locationFlexibility} onChange={(e) => update("locationFlexibility", e.target.value)}>
                       <option value="">Select…</option>
                       {SELECT_OPTS.location.map((o) => <option key={o}>{o}</option>)}
@@ -229,25 +229,25 @@ export function ResourcesConstraintsForm() {
                   <Field label="Minimum income floor" hint="The number you must hit to feel safe">
                     <input className={inputCls} placeholder="e.g. $3,000/month" value={form.incomeFloor} onChange={(e) => update("incomeFloor", e.target.value)} />
                   </Field>
-                  <Field label="Online vs offline preference">
+                  <Field label="Online vs offline preference" hint="How you prefer to deliver your work or serve clients">
                     <select className={selectCls} value={form.onlineVsOffline} onChange={(e) => update("onlineVsOffline", e.target.value)}>
                       <option value="">Select…</option>
                       {SELECT_OPTS.online.map((o) => <option key={o}>{o}</option>)}
                     </select>
                   </Field>
-                  <Field label="Growth ambition">
+                  <Field label="Growth ambition" hint="Where you want this to go in 2–3 years">
                     <select className={selectCls} value={form.growthAmbition} onChange={(e) => update("growthAmbition", e.target.value)}>
                       <option value="">Select…</option>
                       {SELECT_OPTS.growth.map((o) => <option key={o}>{o}</option>)}
                     </select>
                   </Field>
-                  <Field label="Client interaction">
+                  <Field label="Client interaction" hint="How much direct contact you want with the people you serve">
                     <select className={selectCls} value={form.clientInteraction} onChange={(e) => update("clientInteraction", e.target.value)}>
                       <option value="">Select…</option>
                       {SELECT_OPTS.client.map((o) => <option key={o}>{o}</option>)}
                     </select>
                   </Field>
-                  <Field label="Travel tolerance">
+                  <Field label="Travel tolerance" hint="How often you're willing to travel for work">
                     <select className={selectCls} value={form.travelTolerance} onChange={(e) => update("travelTolerance", e.target.value)}>
                       <option value="">Select…</option>
                       {SELECT_OPTS.travel.map((o) => <option key={o}>{o}</option>)}
@@ -259,13 +259,15 @@ export function ResourcesConstraintsForm() {
               {/* Other notes */}
               <section className="space-y-4">
                 <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-widest">Anything else</p>
-                <textarea
-                  className={inputCls + " resize-none w-full"}
-                  rows={3}
-                  placeholder="Anything else Sorene should know about your situation…"
-                  value={form.otherNotes}
-                  onChange={(e) => update("otherNotes", e.target.value)}
-                />
+                <Field label="Other context" hint="Health considerations, visa status, industry you want to stay in or avoid, anything that shapes what's possible">
+                  <textarea
+                    className={inputCls + " resize-none w-full"}
+                    rows={3}
+                    placeholder="Anything else Sorene should know about your situation…"
+                    value={form.otherNotes}
+                    onChange={(e) => update("otherNotes", e.target.value)}
+                  />
+                </Field>
               </section>
 
               {/* Action */}

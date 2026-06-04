@@ -41,6 +41,8 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 6. strengths_and_edges — 2-3 sentences on their real strengths (not generic ones) and what they genuinely won't compromise on. End with an honest observation about where they may hit limits.
 
+7. primary_motivation_label — A 2-4 word evocative label for their primary motivation. Examples: "Creative Expression", "Purpose & Impact", "Craft & Mastery", "Freedom Through Work", "Building With Meaning". No verbs, no "I", not a sentence — just the label itself.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -76,7 +78,11 @@ TITLE: your_energy
 ---SECTION---
 TITLE: strengths_and_edges
 
-[2-3 sentences]`;
+[2-3 sentences]
+---SECTION---
+TITLE: primary_motivation_label
+
+[2-4 words only]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -89,7 +95,7 @@ TITLE: strengths_and_edges
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

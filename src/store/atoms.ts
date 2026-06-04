@@ -138,6 +138,8 @@ export interface RecipeDirection {
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
+// Set to the ID of a newly-added recipe card so DirectionSection can auto-expand it
+export const newRecipeCardIdAtom = atom<string | null>(null);
 
 export interface ResourcesConstraints {
   networks: string;

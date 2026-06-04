@@ -10,8 +10,9 @@ import {
   recipeDirectionsAtom,
   resourcesConstraintsAtom,
   userAtom,
+  newRecipeCardIdAtom,
 } from "@/store/atoms";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils"
 import { ResourcesConstraintsForm } from "./ResourcesConstraintsForm";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,11 +138,20 @@ export const DirectionSection = () => {
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
+  const [newRecipeCardId, setNewRecipeCardId] = useAtom(newRecipeCardIdAtom);
   const user = useAtomValue(userAtom);
   const queryClient = useQueryClient();
   const rcForm = useAtomValue(resourcesConstraintsAtom);
   const hasRCData = Object.values(rcForm).some((v) => v.trim() !== "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Auto-expand a newly added recipe card and clear the signal
+  useEffect(() => {
+    if (newRecipeCardId) {
+      setExpandedId(newRecipeCardId);
+      setNewRecipeCardId(null);
+    }
+  }, [newRecipeCardId, setNewRecipeCardId]);
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem("hiddenDirectionIds");

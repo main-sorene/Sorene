@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
-import { DNAReveal } from "@/components/dna/DNAReveal";
 
 function renderInline(text: string) {
   return text.split(/\*\*(.*?)\*\*/g).map((part, j) =>
@@ -202,20 +201,12 @@ export function AssessmentChatPage() {
     setIsSending(false);
   };
 
-  const [revealingDna, setRevealingDna] = useState(false);
-
   const handleExploreDna = () => {
-    sessionStorage.setItem("dna-revealed", "1"); // prevent double reveal on DNA page
-    setRevealingDna(true);
-  };
-
-  const handleRevealComplete = () => {
     queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
-    // Navigate first — completeAssessment() flips isAssessmentCompleteAtom which would
-    // re-render this page to <HomePage> before navigation, causing a visible flash.
-    // dnaAssessmentComplete is already persisted in Firestore at this point, so
-    // AppLayout's useEffect will sync the atom once the DNA page mounts.
+    // Navigate first so the re-render from completeAssessment() happens on /dna, not /chat.
+    // DNA page has its own reveal animation (DNAPage checks sessionStorage "dna-revealed").
     router.push("/dna");
+    completeAssessment(); // saves history to sidebar + flips isAssessmentCompleteAtom
   };
 
   // When done, textarea is disabled but input area stays visible for the DNA button
@@ -227,7 +218,6 @@ export function AssessmentChatPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white relative">
-      {revealingDna && <DNAReveal onComplete={handleRevealComplete} />}
       {/* "Conversation saved" note — sits just above the phase bar */}
       {showPhaseLabel && (
         <div className="shrink-0 px-4 sm:px-6 pt-3 pb-0">

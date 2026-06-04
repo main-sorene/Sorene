@@ -13,7 +13,13 @@ export default function Page() {
 
   useEffect(() => {
     if (user?.profile?.dnaAssessmentComplete) {
-      setAssessmentComplete(true);
+      // Don't flip while the assessment session is still live in sessionStorage —
+      // doing so would replace AssessmentChatPage with HomePage mid-session.
+      const sessionKey = `assessment_state_${user.uid}`;
+      const hasActiveSession = sessionStorage.getItem(sessionKey);
+      if (!hasActiveSession) {
+        setAssessmentComplete(true);
+      }
     }
   }, [user, setAssessmentComplete]);
 

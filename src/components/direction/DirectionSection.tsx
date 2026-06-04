@@ -173,13 +173,13 @@ export const DirectionSection = () => {
   if (needsRC) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 pb-24">
-        <div className="max-w-lg mx-auto space-y-6 pt-8">
-          <div className="text-center space-y-2">
+        <div className="max-w-5xl mx-auto space-y-4 pt-6">
+          <div className="space-y-1">
             <p className="text-[18px] font-medium text-[#151515] tracking-tight">
               You're ready for your first direction
             </p>
             <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
-              Tell Sorene about your resources and constraints — what you have and what limits you — so it can suggest a direction that fits your real life.
+              Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
             </p>
           </div>
           <ResourcesConstraintsForm />
@@ -207,13 +207,13 @@ export const DirectionSection = () => {
     if (!hasRCData) {
       return (
         <div className="p-3 lg:py-6 lg:px-3 pb-24">
-          <div className="max-w-lg mx-auto space-y-6 pt-8">
-            <div className="text-center space-y-2">
+          <div className="max-w-5xl mx-auto space-y-4 pt-6">
+            <div className="space-y-1">
               <p className="text-[18px] font-medium text-[#151515] tracking-tight">
                 You're ready for your first direction
               </p>
               <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
-                Tell Sorene about your resources and constraints — what you have and what limits you — so it can suggest a direction that fits your real life.
+                Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
               </p>
             </div>
             <ResourcesConstraintsForm />

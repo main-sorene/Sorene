@@ -15,6 +15,10 @@ const DIRECTION_RECIPES = [
   { label: "Check my idea",       id: "check-my-idea" },
 ];
 
+// Emitted by the recipe prompts once enough info is gathered; signals the UI to
+// show a "Generate" button instead of producing the card automatically.
+const READY_MARKER = "[[READY_TO_GENERATE]]";
+
 function parseDirectionCard(text: string): RecipeDirection | null {
   // Match "Direction:" with or without bold markers
   const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
@@ -99,6 +103,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeRecipePrompt, setActiveRecipePrompt] = useState<string | null>(null);
   const activeRecipePromptRef = useRef<string | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasMessages = messages.length > 0;
@@ -149,6 +154,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     const next = [...priorMessages, userMsg];
     setMessages(next);
     persistToSidebar(next);
+    setShowGenerate(false);
     setIsProcessing(true);
 
     const history = activeRecipeId
@@ -183,9 +189,15 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       const data = (await res.json()) as { reply: string };
       const reply = data.reply || "Sorry, I couldn't respond. Try again.";
 
+      // If the AI signalled it's ready, strip the marker and show a Generate button
+      let displayReply = reply;
+      if (reply.includes(READY_MARKER)) {
+        displayReply = reply.split(READY_MARKER).join("").trim();
+        setShowGenerate(true);
+      }
+
       // If AI returned a Direction Card, extract it and show it in the left column
       const parsed = activeRecipePromptRef.current ? parseDirectionCard(reply) : null;
-      let displayReply = reply;
       if (parsed) {
         setRecipeDirections((prev) => {
           const updated = [...prev, parsed];
@@ -282,6 +294,17 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                   <div className="px-4 py-3 rounded-2xl bg-[#F8F9FA]">
                     <Loader2 size={16} className="animate-spin text-[#6B7280]" />
                   </div>
+                </div>
+              )}
+              {showGenerate && !isProcessing && (
+                <div className="flex justify-start">
+                  <button
+                    onClick={() => sendMessage("Generate my direction")}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+                  >
+                    <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5" alt="" />
+                    Generate
+                  </button>
                 </div>
               )}
               <div ref={bottomRef} />

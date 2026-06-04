@@ -202,11 +202,15 @@ export function AssessmentChatPage() {
   };
 
   const handleExploreDna = () => {
-    queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
-    // Navigate first so the re-render from completeAssessment() happens on /dna, not /chat.
-    // DNA page has its own reveal animation (DNAPage checks sessionStorage "dna-revealed").
+    // Mark animation as seen so DNA page doesn't replay the 3-second reveal
+    sessionStorage.setItem("dna-revealed", "1");
+    // Pre-populate the DNA query cache with in-memory profile data so the page
+    // loads instantly without a Firestore round-trip.
+    if (user?.uid && user.profile) {
+      queryClient.setQueryData(["dna", user.uid], { ...user.profile, externalProfile: null });
+    }
+    completeAssessment(); // saves history to sidebar + flips isAssessmentCompleteAtom + removes session key
     router.push("/dna");
-    completeAssessment(); // saves history to sidebar + flips isAssessmentCompleteAtom
   };
 
   // When done, textarea is disabled but input area stays visible for the DNA button

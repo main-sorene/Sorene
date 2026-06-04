@@ -26,8 +26,11 @@ export default function Page() {
   // Still loading auth
   if (authLoading) return null;
 
-  // Assessment not done — show the 12-question flow
-  if (!isAssessmentComplete && !user?.profile?.dnaAssessmentComplete) {
+  // Only use the atom for the render decision.
+  // The useEffect above guards against flipping the atom while a session is live,
+  // so this correctly shows AssessmentChatPage until the user explicitly clicks
+  // "Explore My DNA" (which calls completeAssessment → flips the atom).
+  if (!isAssessmentComplete) {
     return <AssessmentChatPage />;
   }
 

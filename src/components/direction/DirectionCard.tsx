@@ -833,15 +833,18 @@ export function DirectionCard({
                                   </div>
                                 )}
                                 {cardData.constraint_check && (
-                                  <div className="flex items-start gap-3 p-3 rounded-xl border"
-                                    style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
-                                    <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
-                                      style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                                      {cardData.constraint_check.status}
-                                    </span>
-                                    {cardData.constraint_check.reason && (
-                                      <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-                                    )}
+                                  <div>
+                                    <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
+                                    <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
+                                      style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
+                                      <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
+                                        style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                                        {cardData.constraint_check.status}
+                                      </span>
+                                      {cardData.constraint_check.reason && (
+                                        <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                                 {cardData.first_10_customers && (
@@ -1048,15 +1051,18 @@ export function DirectionCard({
           ))}
         </div>
         {cardData.constraint_check && (
-          <div className="flex items-start gap-3 p-3 rounded-xl border"
-            style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
-              style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-              {cardData.constraint_check.status}
-            </span>
-            {cardData.constraint_check.reason && (
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-            )}
+          <div>
+            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
+            <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
+              style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
+              <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
+                style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                {cardData.constraint_check.status}
+              </span>
+              {cardData.constraint_check.reason && (
+                <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+              )}
+            </div>
           </div>
         )}
         {cardData.first_10_customers && (

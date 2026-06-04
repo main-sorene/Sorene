@@ -49,6 +49,7 @@ interface DirectionCardProps {
   successMetric?: string;
   isExpanded?: boolean;
   onToggle?: () => void;
+  onHide?: () => void;
 }
 
 export function DirectionCard({
@@ -116,6 +117,7 @@ export function DirectionCard({
   successMetric = "Organic requests within 30 days",
   isExpanded: isExpandedProp,
   onToggle,
+  onHide,
 }: DirectionCardProps) {
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<string[]>(
@@ -603,7 +605,15 @@ export function DirectionCard({
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">
               {description}
             </p>
-            <div className="mt-auto flex items-center justify-end">
+            <div className="mt-auto flex items-center justify-between">
+              {onHide ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onHide(); }}
+                  className="text-[13px] text-[#9CA3AF] hover:text-[#6B7280] transition-colors font-medium"
+                >
+                  Hide
+                </button>
+              ) : <div />}
               <button
                 onClick={(e) => {
                   e.stopPropagation();

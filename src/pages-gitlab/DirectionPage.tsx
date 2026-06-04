@@ -40,7 +40,7 @@ export function DirectionPage() {
       </div>
 
       {/* Right Column: Chat Interface — desktop only */}
-      <div className="w-112.5 mt-6 h-full shrink-0 hidden xl:block">
+      <div className="w-112.5 mt-6 shrink-0 hidden xl:block" style={{ height: "calc(100% - 1.5rem)" }}>
         <DirectionChat />
       </div>
 

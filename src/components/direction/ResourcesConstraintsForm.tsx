@@ -1,38 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { resourcesConstraintsAtom, EMPTY_RESOURCES, ResourcesConstraints, recipeDirectionsAtom, RecipeDirection } from "@/store/atoms";
-import { authFetch } from "@/lib/authFetch";
+import { useAtom, useAtomValue } from "jotai";
+import { resourcesConstraintsAtom, ResourcesConstraints, recipeDirectionsAtom } from "@/store/atoms";
 import { Loader2, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
-
-function parseDirectionCard(text: string): RecipeDirection | null {
-  const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
-  if (!titleMatch) return null;
-  const title = titleMatch[1].trim().replace(/^["'"']+|["'"']+$/g, "").trim();
-  const afterTitle = text.slice(text.indexOf(titleMatch[0]) + titleMatch[0].length).trim();
-  const descEnd = afterTitle.search(/\*{0,2}Why it fits you\*{0,2}/i);
-  const description = (descEnd > 0 ? afterTitle.slice(0, descEnd) : afterTitle.slice(0, 300)).trim();
-  const whySection = afterTitle.match(/\*{0,2}Why it fits you\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Key risks\*{0,2}|$)/i);
-  const risksSection = afterTitle.match(/\*{0,2}Key risks\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}|$)/i);
-  const parseList = (s: string | undefined) =>
-    (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
-  const scoreMatch = text.match(/\*{0,2}Composite Score\*{0,2}[:\s]*\n?\s*(\d+)/i);
-  const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 90;
-  return {
-    id: `rc-${Date.now()}`,
-    title,
-    description,
-    whyFitsYou: parseList(whySection?.[1]),
-    keyRisks: parseList(risksSection?.[1]),
-    firstStep: "",
-    score,
-    rawContent: text,
-  };
-}
 
 const inputCls = "w-full px-3 py-2.5 text-[13px] text-[#151515] bg-white border border-[#ECEDEE] rounded-xl outline-none focus:border-[#D1D5DB] transition-colors placeholder:text-[#9CA3AF]";
 const selectCls = inputCls + " appearance-none cursor-pointer";
@@ -68,11 +42,9 @@ interface ResourcesConstraintsFormProps {
 
 export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = false, canGenerateMore = false, directionCardsCount = 0 }: ResourcesConstraintsFormProps) {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
-  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
   const { primaryCard } = useDirectionResult();
   const [isOpen, setIsOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const hasNoDirections = !primaryCard && recipeDirections.length === 0;
@@ -118,37 +90,12 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
     return lines.join("\n");
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     const msg = buildMessage(form);
     if (!msg.trim()) return;
     try { localStorage.setItem("rcGenerationRequested", "true"); } catch {}
-    setIsGenerating(true);
-    try {
-      const res = await authFetch("/api/direction-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          directionContext: { recommendedModel: null, compatibility: 0, directionText: "", alternatives: [], dnaScores: {} },
-          recipeId: "generate-from-constraints",
-          history: [],
-        }),
-      });
-      const data = (await res.json()) as { reply: string };
-      const card = parseDirectionCard(data.reply || "");
-      if (card) {
-        setRecipeDirections((prev) => {
-          const updated = [...prev, card];
-          try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
-          return updated;
-        });
-        setSaved(true);
-        setIsOpen(false);
-        // Scroll down so the new card is visible
-        setTimeout(() => window.scrollBy({ top: 300, behavior: "smooth" }), 150);
-      }
-    } catch {}
-    finally { setIsGenerating(false); }
+    generateMore?.();
+    setIsOpen(false);
   };
 
   return (
@@ -281,11 +228,10 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
               {/* Action */}
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !hasAnyData}
+                disabled={!hasAnyData}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-[#151515] text-white text-[13px] font-semibold rounded-xl hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isGenerating && <Loader2 size={14} className="animate-spin" />}
-                {isGenerating ? "Generating direction…" : "Generate Direction"}
+                Generate Direction
               </button>
             </div>
           </motion.div>

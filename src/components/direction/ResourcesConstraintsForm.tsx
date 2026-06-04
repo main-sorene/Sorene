@@ -59,11 +59,17 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const GRADIENT = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #6366F1 34.62%, #8B5CF6 100%)";
 
-export function ResourcesConstraintsForm() {
+interface ResourcesConstraintsFormProps {
+  generateMore?: () => void;
+  isGeneratingMore?: boolean;
+  canGenerateMore?: boolean;
+}
+
+export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = false, canGenerateMore = false }: ResourcesConstraintsFormProps) {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
-  const { primaryCard, generateMore, isGeneratingMore, canGenerateMore } = useDirectionResult();
+  const { primaryCard } = useDirectionResult();
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -307,7 +313,7 @@ export function ResourcesConstraintsForm() {
               <div className="flex items-center gap-2">
                 {canGenerateMore && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); generateMore(); }}
+                    onClick={(e) => { e.stopPropagation(); generateMore?.(); }}
                     disabled={isGeneratingMore}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >

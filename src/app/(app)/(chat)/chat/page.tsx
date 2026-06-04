@@ -1,6 +1,6 @@
 "use client";
 import { useAtomValue, useSetAtom } from "jotai";
-import { isAssessmentCompleteAtom, userAtom, authLoadingAtom } from "@/store/atoms";
+import { isAssessmentCompleteAtom, isAssessmentInProgressAtom, userAtom, authLoadingAtom } from "@/store/atoms";
 import { useEffect } from "react";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
 import { HomePage } from "@/pages-gitlab/HomePage";
@@ -9,19 +9,18 @@ export default function Page() {
   const user = useAtomValue(userAtom);
   const authLoading = useAtomValue(authLoadingAtom);
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
+  const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const setAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
 
   useEffect(() => {
-    if (user?.profile?.dnaAssessmentComplete) {
-      // Don't flip while the assessment session is still live in sessionStorage —
-      // doing so would replace AssessmentChatPage with HomePage mid-session.
+    if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
       const sessionKey = `assessment_state_${user.uid}`;
       const hasActiveSession = sessionStorage.getItem(sessionKey);
       if (!hasActiveSession) {
         setAssessmentComplete(true);
       }
     }
-  }, [user, setAssessmentComplete]);
+  }, [user, isAssessmentInProgress, setAssessmentComplete]);
 
   // Still loading auth
   if (authLoading) return null;

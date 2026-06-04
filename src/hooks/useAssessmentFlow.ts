@@ -16,7 +16,7 @@ import {
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
+import { userAtom, isAssessmentCompleteAtom, isAssessmentInProgressAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
@@ -146,7 +146,16 @@ function buildInitialMessages(
 export function useAssessmentFlow() {
   const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
+  const setIsAssessmentInProgress = useSetAtom(isAssessmentInProgressAtom);
   const setConversations = useSetAtom(conversationsAtom);
+
+  // Mark assessment as in-progress for the duration this hook is mounted.
+  // This is a reliable in-memory guard: even if sessionStorage fails, guards in
+  // AppLayout/chat-page check this atom and won't flip isAssessmentCompleteAtom.
+  useEffect(() => {
+    setIsAssessmentInProgress(true);
+    return () => setIsAssessmentInProgress(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
@@ -740,8 +749,9 @@ export function useAssessmentFlow() {
       return [assessmentConv, ...without];
     });
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+    setIsAssessmentInProgress(false);
     setIsAssessmentComplete(true);
-  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete, SESSION_KEY]);
+  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete, setIsAssessmentInProgress, SESSION_KEY]);
 
   return {
     messages,

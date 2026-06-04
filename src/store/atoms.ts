@@ -91,6 +91,10 @@ export const isManagePaymentOpenAtom = atom<boolean>(false);
 export const isHistoryLoadingAtom = atom<boolean>(false);
 export const isAddMoreInfoModeAtom = atom<boolean>(false);
 export const isAssessmentCompleteAtom = atom<boolean>(false);
+// True while AssessmentChatPage is mounted and the user hasn't clicked "Explore My DNA".
+// Used by auto-flip guards so a mid-assessment Firestore save can't prematurely
+// switch the page to HomePage before the button is visible.
+export const isAssessmentInProgressAtom = atom<boolean>(false);
 export interface IdeationIdea {
   difficulty: string;
   first_validation_step: string;

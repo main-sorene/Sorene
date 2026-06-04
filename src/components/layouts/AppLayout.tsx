@@ -14,6 +14,7 @@ import {
   userAtom,
   authLoadingAtom,
   isAssessmentCompleteAtom,
+  isAssessmentInProgressAtom,
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useRouter } from "next/navigation";
@@ -29,6 +30,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const authLoading = useAtomValue(authLoadingAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [isAssessmentComplete, setIsAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
+  const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -45,13 +47,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // but only when no active assessment session is live in sessionStorage,
   // otherwise the assessment page gets replaced before the user can click the button.
   useEffect(() => {
-    if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete) {
+    if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete && !isAssessmentInProgress) {
       const sessionKey = `assessment_state_${authUser.uid}`;
       if (!sessionStorage.getItem(sessionKey)) {
         setIsAssessmentComplete(true);
       }
     }
-  }, [authUser, isAssessmentComplete, setIsAssessmentComplete]);
+  }, [authUser, isAssessmentComplete, isAssessmentInProgress, setIsAssessmentComplete]);
 
   useEffect(() => {
     setSidebarOpen(false);

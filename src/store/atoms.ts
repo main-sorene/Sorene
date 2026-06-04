@@ -136,4 +136,16 @@ export interface RecipeDirection {
   score: number;
 }
 
-export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
+function loadRecipeDirections(): RecipeDirection[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem("recipeDirections");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export const recipeDirectionsAtom = atom<RecipeDirection[]>(loadRecipeDirections());

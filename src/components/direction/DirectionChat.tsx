@@ -141,6 +141,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeRecipePrompt, setActiveRecipePrompt] = useState<string | null>(null);
+  const activeRecipePromptRef = useRef<string | null>(null);
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasMessages = messages.length > 0;
@@ -174,8 +175,11 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     if (!displayText.trim() || isProcessing) return;
 
     // If a recipe is starting, store its prompt for all subsequent turns
-    const systemOverride = recipePrompt ?? activeRecipePrompt ?? undefined;
-    if (recipePrompt) setActiveRecipePrompt(recipePrompt);
+    const systemOverride = recipePrompt ?? activeRecipePromptRef.current ?? undefined;
+    if (recipePrompt) {
+      setActiveRecipePrompt(recipePrompt);
+      activeRecipePromptRef.current = recipePrompt;
+    }
 
     const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: displayText };
     const next = [...messages, userMsg];
@@ -208,10 +212,14 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       const reply = data.reply || "Sorry, I couldn't respond. Try again.";
 
       // If AI returned a Direction Card, extract it and show it in the left column
-      const parsed = activeRecipePrompt ? parseDirectionCard(reply) : null;
+      const parsed = activeRecipePromptRef.current ? parseDirectionCard(reply) : null;
       let displayReply = reply;
       if (parsed) {
-        setRecipeDirections((prev) => [...prev, parsed]);
+        setRecipeDirections((prev) => {
+          const updated = [...prev, parsed];
+          try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+          return updated;
+        });
         displayReply = `Your new direction card **"${parsed.title}"** has been added to the left panel. Click "View detail" to explore it.`;
       }
 
@@ -252,7 +260,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         ) : <div />}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { setMessages([]); setActiveRecipePrompt(null); convIdRef.current = `direction-chat-${Date.now()}`; }}
+            onClick={() => { setMessages([]); setActiveRecipePrompt(null); activeRecipePromptRef.current = null; convIdRef.current = `direction-chat-${Date.now()}`; }}
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all"
           >
             <Plus size={16} />

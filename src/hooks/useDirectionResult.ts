@@ -53,16 +53,6 @@ export function useDirectionResult() {
       setAlternatives(profile.directionAlternatives);
     }
 
-    // Check whether user has filled in R&C (localStorage)
-    const hasRCData = (() => {
-      try {
-        const stored = localStorage.getItem("resourcesConstraints");
-        if (!stored) return false;
-        const rc = JSON.parse(stored);
-        return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
-      } catch { return false; }
-    })();
-
     // New path: structured direction cards
     // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
     const cachedCards = profile.directionCards;
@@ -70,16 +60,8 @@ export function useDirectionResult() {
       ((cachedCards[0].title && cachedCards[0].constraint_check) ||
        (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
     if (cardsAreUpToDate) {
-      if (!hasRCData) {
-        // Cards exist but no R&C — clear them and prompt R&C form
-        setDirectionCards([]);
-        setNeedsRC(true);
-        if (user?.uid) {
-          saveUserProfile(user.uid, { directionCards: [] as any, directionText: "" });
-        }
-        setHasStreamed(true);
-        return;
-      }
+      // Show existing direction cards regardless of R&C status.
+      // The R&C card appears below direction cards in the layout, so users can fill it any time.
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;

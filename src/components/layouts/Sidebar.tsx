@@ -184,6 +184,17 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
+// Detects users whose firstName was captured as an affirmative ("yes", "ok", etc.)
+// or whose profile is missing a last name after completing the assessment.
+const AFFIRMATIVE_RE = /^(yes|yeah|yep|yup|correct|right|ok|okay|sure|no|nope|👍|✓)$/i;
+function isProfileStale(authUser: ReturnType<typeof useAtomValue<typeof userAtom>>): boolean {
+  if (!authUser?.profile?.dnaAssessmentComplete) return false;
+  const fn = (authUser.profile.firstName || "").trim();
+  if (!fn || AFFIRMATIVE_RE.test(fn)) return true;
+  if (!authUser.profile.lastName) return true;
+  return false;
+}
+
 export function Sidebar({
   mobile = false,
   collapsed = false,
@@ -613,29 +624,35 @@ export function Sidebar({
       <div className="shrink-0 border-t border-black/5 px-2 py-3">
         <button
           type="button"
-          onClick={() => setIsSettingsOpen(true)}
+          onClick={() => { setSettingsTab("General"); setIsSettingsOpen(true); }}
           data-testid="user-profile-trigger"
           className={cn(
             "w-full flex items-center rounded-xl transition-colors group outline-none hover:bg-black/5 cursor-pointer text-left",
             collapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
           )}
         >
-          <div
-            className={cn(
-              "rounded-full shrink-0 overflow-hidden bg-[#3D3D3D] flex items-center justify-center transition-all duration-200 group-hover:ring-2 ring-black/5",
-              collapsed ? "w-10 h-10" : "w-8 h-8",
-            )}
-          >
-            {authUser?.profile?.photoUrl ? (
-              <img
-                src={authUser.profile.photoUrl}
-                alt={authUser?.displayName || "User"}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="text-white font-semibold text-sm">
-                {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
-              </span>
+          {/* Avatar with stale-profile dot indicator */}
+          <div className="relative shrink-0">
+            <div
+              className={cn(
+                "rounded-full overflow-hidden bg-[#3D3D3D] flex items-center justify-center transition-all duration-200 group-hover:ring-2 ring-black/5",
+                collapsed ? "w-10 h-10" : "w-8 h-8",
+              )}
+            >
+              {authUser?.profile?.photoUrl ? (
+                <img
+                  src={authUser.profile.photoUrl}
+                  alt={authUser?.displayName || "User"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-white font-semibold text-sm">
+                  {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+            {isProfileStale(authUser) && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-orange-400 border-2 border-white" />
             )}
           </div>
           <AnimatePresence>
@@ -647,14 +664,25 @@ export function Sidebar({
                 className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-label-medium text-[#151515] truncate">
-                    {authUser?.profile
-                      ? `${authUser.profile.firstName} ${authUser.profile.lastName}`
-                      : authUser?.displayName || "User"}
-                  </p>
-                  <p className="text-body-xsmall text-[#62646A] truncate">
-                    {authUser?.profile?.email || authUser?.email || "No email"}
-                  </p>
+                  {isProfileStale(authUser) ? (
+                    <>
+                      <p className="text-label-medium text-orange-500 truncate">Update your name →</p>
+                      <p className="text-body-xsmall text-[#62646A] truncate">
+                        {authUser?.profile?.email || authUser?.email || ""}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-label-medium text-[#151515] truncate">
+                        {authUser?.profile
+                          ? `${authUser.profile.firstName} ${authUser.profile.lastName}`.trim() || authUser.displayName || "User"
+                          : authUser?.displayName || "User"}
+                      </p>
+                      <p className="text-body-xsmall text-[#62646A] truncate">
+                        {authUser?.profile?.email || authUser?.email || "No email"}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <ChevronDown
                   size={14}

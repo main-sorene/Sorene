@@ -456,10 +456,27 @@ export function SettingsModal() {
     }
 
     switch (activeTab) {
-      case "General":
+      case "General": {
+        const AFFIRMATIVE_RE = /^(yes|yeah|yep|yup|correct|right|ok|okay|sure|no|nope|👍|✓)$/i;
+        const firstNameLooksStale = AFFIRMATIVE_RE.test((authUser?.profile?.firstName || "").trim());
+        const profileNeedsUpdate = (authUser?.profile as any)?.dnaAssessmentComplete &&
+          (firstNameLooksStale || !authUser?.profile?.lastName);
         return (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-[#151515]">General</h2>
+
+            {/* Stale-profile nudge for users who completed assessment before name collection was added */}
+            {profileNeedsUpdate && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-3">
+                <span className="text-orange-400 mt-0.5 text-base leading-none">●</span>
+                <div>
+                  <p className="text-sm font-medium text-orange-700">Please update your name</p>
+                  <p className="text-xs text-orange-600 mt-0.5">
+                    We weren't able to capture your full name during your assessment. Update it below and hit Save.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Profile card — avatar + full name */}
             <div>
@@ -585,6 +602,7 @@ export function SettingsModal() {
             </button>
           </div>
         );
+      }
 
       case "Account":
         return (

@@ -480,7 +480,7 @@ export function SettingsModal() {
 
             {/* Profile card — avatar + full name */}
             <div>
-              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Full Name</p>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Profile Picture</p>
               <div className="flex items-center gap-4">
                 <div className="relative group shrink-0">
                   {avatarUrl ? (

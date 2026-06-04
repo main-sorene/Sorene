@@ -8,8 +8,8 @@ export type DirectionCardData = {
   compatibility: number;
   oneliner: string;
   description: string;
-  why_fits_you: string[];
-  key_risks: string[];
+  why_fits_you?: string[];
+  key_risks?: string[];
   why_now?: string;
   simple_positioning?: string;
   unfair_advantage?: string;
@@ -30,14 +30,14 @@ export type DirectionCardData = {
   };
   composite_score?: number;
   high_risk_flags?: string[];
-  startup_cost_usd: string;
-  time_to_first_revenue_weeks: string;
-  hours_per_week: string;
+  startup_cost_usd?: string;
+  time_to_first_revenue_weeks?: string;
+  hours_per_week?: string;
   constraint_check: {
     status: "Pass" | "Warn" | "Fail";
     reason?: string;
   };
-  first_10_customers: string;
+  first_10_customers?: string;
   competition?: {
     layer1_workaround: string;
     layer2_incumbent: string;

@@ -211,7 +211,7 @@ function buildPhase2Prompt(
 ): string {
   const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
 
-  return `Perform deep market analysis for this direction for ${firstName}.
+  return `Perform fit analysis for this direction for ${firstName}.
 
 Direction: "${phase1Card.title}"
 Summary: ${phase1Card.oneliner}
@@ -219,23 +219,80 @@ ${phase1Card.description}
 
 ${context}
 
-Return the analysis as JSON {"cards": [{ "title": "${phase1Card.title}", ...analysis fields }]} with ONLY these fields (no other fields):
+Return JSON {"cards": [{ "title": "${phase1Card.title}", ...fields }]} with ONLY these fields (no other fields):
+- why_fits_you: string[] — 3 specific bullets referencing exact credentials/tools from their profile
 - ikigai_filters: object with five keys (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for, lifestyle_fit), each { score: 0-100, reason: "1 sentence grounded in their exact data" }
-- composite_score: arithmetic mean of all five ikigai scores, subtract 3 for each circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) below 60. Round to nearest integer.
+- composite_score: arithmetic mean of all five ikigai scores, subtract 3 for each circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) below 60. Exclude lifestyle_fit from penalty. Round to nearest integer.
 - high_risk_flags: string[] — one entry per filter scored below 60, format "FilterName (score): specific reason"
+- unfair_advantage: why ${firstName} specifically — reference exact credential or tool, NEVER "your background"
 - simple_positioning: "It is like [bloated incumbent] but only does [the one thing the complainant actually needs]"
-- why_now: what changed in the last 12-18 months that makes this viable today?
-- competition: { layer1_workaround: string, layer2_incumbent: string, layer3_simple_competitors: string }
+
+Return JSON only, no markdown fences.`;
+}
+
+function buildPhase3Prompt(
+  phase1Card: Partial<DirectionCardData>,
+  models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+  cardIndex = 0,
+): string {
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+
+  return `Perform market reality analysis for this direction for ${firstName}.
+
+Direction: "${phase1Card.title}"
+Summary: ${phase1Card.oneliner}
+${phase1Card.description}
+
+${context}
+
+Return JSON {"cards": [{ "title": "${phase1Card.title}", ...fields }]} with ONLY these fields (no other fields):
+- key_risks: string[] — 2 specific risks for this direction
+- trend_connection: which macro industry shift does this connect to
+- ocean_classification: { type: "Blue"|"Purple"|"Red", density: string }
 - key_competitors: array of exactly 3 objects { name: string, what_they_do: string }
 - economic_urgency: what does the buyer's current workaround cost per month?
-- ocean_classification: { type: "Blue"|"Purple"|"Red", density: string }
-- trend_connection: which macro industry shift does this connect to
 - industry_shift: which specific tool/platform/event this direction rides
 - complaint_source: which specific validated complaint this is rooted in
 - window_risk: what closes this window and roughly when
 - market_signal_confidence: "Complaint-validated"|"Inferred"|"Insufficient signal"
-- distribution_path: specific community/subreddit/Facebook group/event/association for first 100 customers
 - liked_work_check: null or brief note on alignment/conflict with what they liked/disliked about last job
+
+Return JSON only, no markdown fences.`;
+}
+
+function buildPhase4Prompt(
+  phase1Card: Partial<DirectionCardData>,
+  models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+  cardIndex = 0,
+): string {
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+
+  return `Perform operations analysis for this direction for ${firstName}.
+
+Direction: "${phase1Card.title}"
+Summary: ${phase1Card.oneliner}
+${phase1Card.description}
+
+${context}
+
+Return JSON {"cards": [{ "title": "${phase1Card.title}", ...fields }]} with ONLY these fields (no other fields):
+- startup_cost_usd: string — e.g. "$0–$500"
+- time_to_first_revenue_weeks: string — e.g. "6–10 weeks"
+- hours_per_week: string — at 1-client scale, e.g. "8–12 hrs/week"
+- first_10_customers: string — 1 sentence, specific channel
+- distribution_path: string — specific community/subreddit/group
 
 Return JSON only, no markdown fences.`;
 }
@@ -322,7 +379,7 @@ export async function POST(req: NextRequest) {
       dnaNarrative?: Record<string, string>;
       resources?: Record<string, string>;
       cardIndex?: number;
-      phase?: 1 | 2;
+      phase?: 1 | 2 | 3 | 4;
       phase1Card?: Partial<DirectionCardData>;
     };
 
@@ -365,6 +422,38 @@ export async function POST(req: NextRequest) {
       const msg = await client.messages.create({
         model: selectedModel,
         max_tokens: 1500,
+        system: SYSTEM_PROMPT_CACHED,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const block = msg.content[0];
+      const raw = block?.type === "text" ? block.text : "";
+      const card = parseCard(raw);
+      return Response.json({ cards: card ? [card] : [] });
+    }
+
+    if (phase === 3) {
+      // Phase 3: market reality using Haiku
+      const phase1Card = body.phase1Card ?? {};
+      const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const msg = await client.messages.create({
+        model: fastModel,
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT_CACHED,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const block = msg.content[0];
+      const raw = block?.type === "text" ? block.text : "";
+      const card = parseCard(raw);
+      return Response.json({ cards: card ? [card] : [] });
+    }
+
+    if (phase === 4) {
+      // Phase 4: operations using Haiku
+      const phase1Card = body.phase1Card ?? {};
+      const prompt = buildPhase4Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const msg = await client.messages.create({
+        model: fastModel,
+        max_tokens: 600,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });

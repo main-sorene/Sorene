@@ -284,10 +284,51 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       description: narrative?.strengths_and_edges || scores.non_negotiable || "The trade-offs that matter most to you — and the edges of what's tolerable.",
       summary: narrative?.strengths_and_edges?.split(". ")[0] || scores.non_negotiable?.slice(0, 100) || "",
       key_signals: [
-        { label: "Core Trade-off", value: scores.non_negotiable?.slice(0, 30) || "Authenticity", explanation: "The compromise you said would be hardest to live with." },
-        { label: "Readiness", value: readinessLabel, explanation: `Readiness score: ${scores.readiness_score}/10.` },
+        {
+          label: "Core Strength",
+          value: narrative?.primary_motivation_label || primaryMotivation || "—",
+          explanation: "The most consistent strength pattern visible across everything you shared.",
+        },
+        {
+          label: "Non-Negotiable",
+          value: narrative?.non_negotiable_label || "—",
+          explanation: "The line you named as the hardest to cross — what you simply won't trade away.",
+        },
+        {
+          label: "Growth Edge",
+          value: uncertaintyLabel === "Low" ? "Sitting With Ambiguity" : riskLabel === "Low" ? "Taking Bigger Swings" : energyStabilityLabel === "Depleted" ? "Rebuilding Energy First" : "Scaling Without Losing Craft",
+          explanation: uncertaintyLabel === "Low"
+            ? "You work best with clarity — the edge is learning to move before all the answers are in."
+            : riskLabel === "Low"
+            ? "You're careful and considered — the edge is trusting yourself enough to bet bigger."
+            : energyStabilityLabel === "Depleted"
+            ? "Your biggest lever right now isn't strategy — it's restoring what drains you."
+            : "Your craft is strong — the challenge will be maintaining quality as the work grows.",
+        },
+        {
+          label: "Readiness",
+          value: readinessLabel,
+          explanation: readinessLabel === "Ready"
+            ? "You're not waiting for permission — you're looking for the right direction to move."
+            : readinessLabel === "Deciding"
+            ? "You're in the gap between knowing and committing — closer than you think."
+            : "You're still forming the picture — and that honesty is itself a strength.",
+        },
+        {
+          label: "Activation Mode",
+          value: energyStabilityLabel === "Stable" && readinessLabel === "Ready" ? "Launch Ready" : readinessLabel === "Deciding" ? "Clarifying" : energyStabilityLabel === "Depleted" ? "Restore First" : "Building Momentum",
+          explanation: energyStabilityLabel === "Stable" && readinessLabel === "Ready"
+            ? "Your energy and readiness are aligned — the conditions to move are as good as they'll get."
+            : readinessLabel === "Deciding"
+            ? "The next step is a commitment decision, not a research one."
+            : energyStabilityLabel === "Depleted"
+            ? "The smartest move right now is recovering capacity before building anything new."
+            : "You're gaining ground — each step is strengthening the foundation.",
+        },
       ],
-      strength_patterns: scores.non_negotiable ? [scores.non_negotiable.slice(0, 50)] : [],
+      strength_patterns: narrative?.strengths_edges_strengths
+        ? narrative.strengths_edges_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [readinessLabel, energyStabilityLabel + " energy"].filter(Boolean),
     },
   ];
 }
@@ -496,6 +537,29 @@ export const DNASection = () => {
   const { data: profile, isLoading, refetch } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const authUser = useAtomValue(userAtom);
+
+  // Backfill strengths_edges_strengths if missing
+  useEffect(() => {
+    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    const answers = profile?.assessmentAnswers;
+    if (narrative?.strengths_edges_strengths || !answers || !authUser?.uid) return;
+    authFetch("/api/dna-labels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers, mode: "strengths" }),
+    })
+      .then((r) => r.json())
+      .then(async ({ strengths_edges_strengths }) => {
+        if (strengths_edges_strengths) {
+          const { saveUserProfile } = await import("@/lib/firestore");
+          await saveUserProfile(authUser.uid, {
+            dna_narrative: { ...(narrative || {}), strengths_edges_strengths },
+          });
+          refetch();
+        }
+      })
+      .catch(() => {});
+  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Backfill energy labels if missing
   useEffect(() => {

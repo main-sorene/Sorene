@@ -61,6 +61,8 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 16. your_energy_strengths — Exactly 3-4 energy-related strength labels, comma-separated, each 2-5 words. Reflect what this person brings when energized — their creative output, focus quality, or impact style. Examples: "Creative Flow State", "Sustained Deep Work", "Craft-First Thinking", "Purpose-Driven Output". No raw quotes. Ownable and beautiful.
 
+17. strengths_edges_strengths — Exactly 3-4 core strength labels, comma-separated, each 2-5 words. These are the real, specific strengths that show up across their entire profile — not generic. Examples: "Operational Creative Depth", "Values-Driven Execution", "Strategic Clarity Under Pressure", "Integrity-First Leadership". No raw quotes. These should feel like something only this person could own.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -136,11 +138,15 @@ TITLE: energy_drain_label
 ---SECTION---
 TITLE: your_energy_strengths
 
+[3-4 labels, comma-separated]
+---SECTION---
+TITLE: strengths_edges_strengths
+
 [3-4 labels, comma-separated]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 4200,
+      max_tokens: 4600,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -149,7 +155,7 @@ TITLE: your_energy_strengths
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths","success_vision_label","non_negotiable_label","energy_source_label","energy_drain_label","your_energy_strengths"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths","success_vision_label","non_negotiable_label","energy_source_label","energy_drain_label","your_energy_strengths","strengths_edges_strengths"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

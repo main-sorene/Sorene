@@ -47,6 +47,37 @@ No explanation. No extra lines. Just the three labeled outputs.`;
       });
     }
 
+    if (mode === "strengths") {
+      const energy = answers["q1_energy"] || "";
+      const success = answers["q9_success"] || "";
+      const nonNeg = (answers["q6_tradeoff"] || "") + " " + (answers["q6_tradeoff_followup"] || "");
+      const workMode = answers["q8_workmode"] || "";
+      const quit = answers["q1b_quit_reason"] || "";
+
+      const prompt = `You are Sorene, a sharp entrepreneurship coach. Based on these answers, generate 3-4 core strength labels that reflect what this person genuinely brings.
+
+Their energy source: "${energy}"
+Their success vision: "${success}"
+Their non-negotiable: "${nonNeg.trim()}"
+Their work mode: "${workMode}"
+Their quit reason: "${quit}"
+
+Generate exactly 1 output:
+STRENGTHS_EDGES: [3-4 strength labels comma-separated, each 2-5 words, specific to this person. Examples: "Operational Creative Depth, Values-Driven Execution, Strategic Clarity Under Pressure". Not generic. Not quotes. Ownable.]
+
+No explanation. No extra lines. Just the one labeled output.`;
+
+      const message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 120,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
+      const match = raw.match(/STRENGTHS_EDGES:\s*(.+)/i);
+      return Response.json({ strengths_edges_strengths: match?.[1]?.trim() || null });
+    }
+
     // Default mode: success + non-negotiable labels
     const successFeeling = answers["q9_success"] || "";
     const nonNegotiable = (answers["q6_tradeoff"] || "") + " " + (answers["q6_tradeoff_followup"] || "");

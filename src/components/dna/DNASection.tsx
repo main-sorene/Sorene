@@ -89,10 +89,46 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       description: narrative?.how_you_work || `You work best ${structureLabel === "Independent" ? "alone, sharing once it's ready" : structureLabel === "Small Team" ? "alongside a few trusted collaborators" : "with the energy of a team or community"}. You have ${timeLabel.toLowerCase()} capacity right now.`,
       summary: truncateSummary(narrative?.how_you_work || `${structureLabel} • ${timeLabel} capacity`),
       key_signals: [
-        { label: "Work Mode", value: structureLabel, explanation: `Structure score: ${scores.structure_score}/10.` },
-        { label: "Capacity", value: timeLabel, explanation: `Constraint score: ${scores.constraint_score}/10.` },
+        {
+          label: "Work Mode",
+          value: structureLabel,
+          explanation: structureLabel === "Independent"
+            ? "You think deepest alone — you share when it's ready, not during the messy middle."
+            : structureLabel === "Small Team"
+            ? "You thrive alongside 1-2 trusted people who can keep up, not in large or political structures."
+            : "You're energized by shared thinking and collective ownership of the work.",
+        },
+        {
+          label: "Collaboration Style",
+          value: collaborationLabel,
+          explanation: collaborationLabel === "Independent"
+            ? "You protect your focus and bring others in at the right moment."
+            : collaborationLabel === "Small Group"
+            ? "You do your best work with a tight, trusted circle — quality over quantity."
+            : "You draw energy from working alongside others and build best in community.",
+        },
+        {
+          label: "Capacity",
+          value: timeLabel,
+          explanation: timeLabel === "High"
+            ? "You have serious hours to commit — this can be central, not a side project."
+            : timeLabel === "Medium"
+            ? "You have real room to build without burning out — enough for real momentum."
+            : "Your time is tight right now — the model needs to fit around your life, not compete with it.",
+        },
+        {
+          label: "Energy Rhythm",
+          value: energyStabilityLabel,
+          explanation: energyStabilityLabel === "Stable"
+            ? "Your energy is consistent — you can build in sustained sprints without crashing."
+            : energyStabilityLabel === "Variable"
+            ? "Your energy comes in waves — you work best with flexibility built into the structure."
+            : "You're running lean right now — the right work needs to restore you, not drain you further.",
+        },
       ],
-      strength_patterns: [structureLabel, `${timeLabel} capacity`],
+      strength_patterns: narrative?.how_you_work_strengths
+        ? narrative.how_you_work_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [structureLabel, `${timeLabel} capacity`],
     },
     {
       core_id: "risk_and_change",
@@ -357,7 +393,7 @@ export const DNASection = () => {
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths) || !answers || !authUser?.uid) return;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

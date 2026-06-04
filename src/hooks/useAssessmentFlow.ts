@@ -182,7 +182,15 @@ export function useAssessmentFlow() {
       const saved = sessionStorage.getItem(SESSION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.flowState) return parsed.flowState;
+        if (parsed.flowState) {
+          const fs = parsed.flowState;
+          // Migrate stale settings_review phase (removed feature) → advance to next node
+          if ((fs as any).phase === "settings_review") {
+            const nextId = (fs as any).nextNodeId || "q1_energy";
+            return { phase: "question", nodeId: nextId, awaitingFollowUp: false };
+          }
+          return fs;
+        }
       }
     } catch {}
     // Always start with CV request — profile fields (name/birthday/gender)

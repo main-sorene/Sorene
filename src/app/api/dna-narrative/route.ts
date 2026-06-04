@@ -92,7 +92,7 @@ TITLE: strength_patterns_labels
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1400,
+      max_tokens: 2200,
       messages: [{ role: "user", content: prompt }],
     });
 

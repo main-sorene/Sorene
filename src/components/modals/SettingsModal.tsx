@@ -104,6 +104,117 @@ function generateOrgId(uid: string): string {
   return `ORG-${Math.abs(hash).toString(36).toUpperCase().slice(0, 8)}`;
 }
 
+const BG_QUESTION_LABELS: Record<string, string> = {
+  bg1_history: "Current / most recent role",
+  bg2_skills: "Years of experience & industries",
+  bg3_pattern: "Core expertise",
+  bg4_direction: "Key skills & tools",
+  bg5_turning: "Career path",
+};
+
+function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
+  const setUser = useSetAtom(userAtom);
+  const { toast } = useToast();
+  const [isUploadingCv, setIsUploadingCv] = React.useState(false);
+  const cvInputRef = React.useRef<HTMLInputElement>(null);
+
+  const assessmentAnswers = (authUser?.profile as any)?.assessmentAnswers as Record<string, string> | undefined;
+  const bgAnswers = assessmentAnswers
+    ? Object.entries(BG_QUESTION_LABELS)
+        .map(([key, label]) => ({ key, label, answer: assessmentAnswers[key] }))
+        .filter((e) => e.answer)
+    : [];
+
+  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !authUser?.uid) return;
+    setIsUploadingCv(true);
+    try {
+      const buf = await file.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const fileBase64 = btoa(binary);
+      const { authFetch: af } = await import("@/lib/authFetch");
+      const res = await af("/api/cv-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileBase64, mimeType: file.type }),
+      });
+      let summary = "";
+      if (res.ok) {
+        const data = await res.json();
+        summary = (data?.summary || "").trim();
+      }
+      const cvDataPayload = { file_name: file.name, file_path: "", status: "uploaded", text_length: file.size };
+      const { saveUserProfile: svp } = await import("@/lib/firestore");
+      await svp(authUser.uid, { cvData: cvDataPayload, ...(summary ? { cvSummary: summary } : {}) } as any);
+      setUser({
+        ...authUser,
+        profile: { ...(authUser.profile as any), cvData: cvDataPayload, ...(summary ? { cvSummary: summary } : {}) },
+      });
+      toast({ description: "CV uploaded successfully." });
+    } catch {
+      toast({ description: "Failed to upload CV.", variant: "destructive" });
+    } finally {
+      setIsUploadingCv(false);
+      if (cvInputRef.current) cvInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3 block">Professional Experience</label>
+
+      {/* CV */}
+      <div className="mb-3">
+        {authUser?.profile?.cvData?.file_name ? (
+          <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
+            <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[#151515] truncate">{authUser.profile.cvData.file_name}</p>
+              <p className="text-xs text-[#9B9B9B]">CV on file</p>
+            </div>
+            <button
+              onClick={() => cvInputRef.current?.click()}
+              disabled={isUploadingCv}
+              className="text-xs text-purple-600 hover:text-purple-700 font-medium shrink-0"
+            >
+              Replace
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => cvInputRef.current?.click()}
+            disabled={isUploadingCv}
+            className="w-full rounded-xl border border-dashed border-[#D0D0D0] px-4 py-4 text-center hover:border-purple-300 hover:bg-purple-50/30 transition-colors"
+          >
+            <p className="text-sm text-[#62646A] font-medium">{isUploadingCv ? "Uploading…" : "Upload your CV or portfolio"}</p>
+            <p className="text-xs text-[#9B9B9B] mt-1">PDF • helps Sorene understand your background</p>
+          </button>
+        )}
+        <input ref={cvInputRef} type="file" accept=".pdf,application/pdf" onChange={handleCvUpload} className="hidden" />
+      </div>
+
+      {/* Background Q&A summary */}
+      {bgAnswers.length > 0 && (
+        <div className="rounded-xl border border-[#ECEDEE] divide-y divide-[#F5F5F5] overflow-hidden">
+          {bgAnswers.map(({ key, label, answer }) => (
+            <div key={key} className="px-4 py-3">
+              <p className="text-xs font-medium text-[#9B9B9B] mb-1">{label}</p>
+              <p className="text-sm text-[#151515] leading-relaxed">{answer}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {bgAnswers.length === 0 && !authUser?.profile?.cvData?.file_name && (
+        <p className="text-xs text-[#BCBCBC] mt-2">Your experience summary from the assessment will appear here.</p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
@@ -497,24 +608,8 @@ export function SettingsModal() {
               )}
             </div>
 
-            {/* CV / Portfolio */}
-            <div>
-              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">CV / Portfolio</label>
-              {authUser?.profile?.cvData?.file_name ? (
-                <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
-                  <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#151515] truncate">{authUser.profile.cvData.file_name}</p>
-                    <p className="text-xs text-[#9B9B9B]">Uploaded during onboarding</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-[#D0D0D0] px-4 py-4 text-center">
-                  <p className="text-sm text-[#9B9B9B]">No CV uploaded yet</p>
-                  <p className="text-xs text-[#BCBCBC] mt-1">Upload during onboarding to see it here</p>
-                </div>
-              )}
-            </div>
+            {/* Professional Experience */}
+            <ProfessionalExperienceSection authUser={authUser} />
 
             {/* Nickname */}
             <div>

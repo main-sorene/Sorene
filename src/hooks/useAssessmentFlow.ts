@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
 import {
   QUESTION_NODES,
@@ -15,7 +15,7 @@ import {
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
+import { userAtom, isAssessmentCompleteAtom, isSettingsOpenAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
@@ -30,6 +30,7 @@ type FlowState =
   | { phase: "opening" }
   | { phase: "question"; nodeId: string; awaitingFollowUp: false }
   | { phase: "question"; nodeId: string; awaitingFollowUp: true; followUpType: "condition" | "always" }
+  | { phase: "settings_review"; nextNodeId: string }  // waiting for user to close settings
   | { phase: "closing" }
   | { phase: "done" };
 
@@ -144,10 +145,14 @@ function buildInitialMessages(
 export function useAssessmentFlow() {
   const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
+  const [isSettingsOpen, setIsSettingsOpen] = useAtom(isSettingsOpenAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
+
+  // Collected profile data during the profile phase of assessment
+  const pendingProfileRef = useRef<{ firstName?: string; lastName?: string; birthday?: string; gender?: string }>({});
 
   const SESSION_KEY = `assessment_state_${authUser?.uid || "guest"}`;
 
@@ -176,9 +181,9 @@ export function useAssessmentFlow() {
         if (parsed.flowState) return parsed.flowState;
       }
     } catch {}
-    return hasCv
-      ? { phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false }
-      : { phase: "cv_request" };
+    // Always start with CV request — profile fields (name/birthday/gender)
+    // are now collected in the assessment chat, not onboarding.
+    return { phase: "cv_request" };
   });
 
   // Wrap setters to also persist to sessionStorage
@@ -220,16 +225,38 @@ export function useAssessmentFlow() {
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
 
-  // Skip path: route into the 4 background questions (bg1_history)
+  // When settings closes while in settings_review phase, advance to the next assessment node
+  const prevSettingsOpen = useRef(false);
+  useEffect(() => {
+    const wasOpen = prevSettingsOpen.current;
+    prevSettingsOpen.current = isSettingsOpen;
+    if (wasOpen && !isSettingsOpen && flowState.phase === "settings_review") {
+      const { nextNodeId } = flowState;
+      // Show a transition message then start the assessment
+      const ctx: AssessmentContext = { profile: { firstName }, answers, hasCv };
+      const nextNode = getNode(nextNodeId);
+      if (nextNode) {
+        addMessage({
+          id: `post-settings-${Date.now()}`,
+          role: "assistant",
+          content: getNodeMessage(nextNode, ctx),
+        });
+        setFlowState({ phase: "question", nodeId: nextNodeId, awaitingFollowUp: false });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSettingsOpen]);
+
+  // Skip path: go to profile collection (name/birthday/gender) without CV
   const skipCv = useCallback(() => {
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: false };
-    const bgNode = getNode("bg1_history")!;
+    const nameNode = getNode("onb_name_full")!;
     addMessage({
-      id: `bg1-${Date.now()}`,
+      id: `onb-name-${Date.now()}`,
       role: "assistant",
-      content: getNodeMessage(bgNode, ctx),
+      content: getNodeMessage(nameNode, ctx),
     });
-    setFlowState({ phase: "question", nodeId: "bg1_history", awaitingFollowUp: false });
+    setFlowState({ phase: "question", nodeId: "onb_name_full", awaitingFollowUp: false });
   }, [firstName]);
 
   // Upload path: user attaches PDF/image during CV request
@@ -294,13 +321,15 @@ export function useAssessmentFlow() {
             content: CV_CONTEXT_MESSAGE(summary),
           });
         }
+        // After CV upload, confirm the name we got from the CV
         const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
+        const confirmNode = getNode("onb_confirm_name")!;
         addMessage({
-          id: `first-q-${Date.now()}`,
+          id: `onb-confirm-${Date.now()}`,
           role: "assistant",
-          content: getNodeMessage(QUESTION_NODES.find((n) => n.id === "q1_energy")!, ctx),
+          content: getNodeMessage(confirmNode, ctx),
         });
-        setFlowState({ phase: "question", nodeId: "q1_energy", awaitingFollowUp: false });
+        setFlowState({ phase: "question", nodeId: "onb_confirm_name", awaitingFollowUp: false });
       } catch (e) {
         console.warn("CV upload failed:", e);
         // On failure, fall through to background questions so the assessment continues
@@ -324,6 +353,11 @@ export function useAssessmentFlow() {
 
       if (flowState.phase === "cv_request" || flowState.phase === "opening") {
         skipCv();
+        return;
+      }
+
+      if (flowState.phase === "settings_review") {
+        // User typed while settings modal is open — ignore
         return;
       }
 
@@ -362,6 +396,75 @@ export function useAssessmentFlow() {
         } catch {
           setIsReflecting(false);
         }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // ── Profile collection phase (onb_* nodes) ───────────────────────────────
+      if (nodeId.startsWith("onb_")) {
+        if (nodeId === "onb_confirm_name" || nodeId === "onb_name_full") {
+          const parts = answerForLogic.trim().split(/\s+/);
+          pendingProfileRef.current.firstName = parts[0] || answerForLogic.trim();
+          pendingProfileRef.current.lastName = parts.slice(1).join(" ") || "";
+        } else if (nodeId === "onb_birthday") {
+          pendingProfileRef.current.birthday = answerForLogic.trim();
+        } else if (nodeId === "onb_gender") {
+          pendingProfileRef.current.gender = answerForLogic;
+          // Save collected profile data to Firestore
+          if (authUser?.uid) {
+            const { firstName: fn, lastName: ln, birthday, gender } = pendingProfileRef.current;
+            const resolvedFirst = fn || firstName;
+            try {
+              await saveUserProfile(authUser.uid, {
+                firstName: resolvedFirst,
+                lastName: ln || "",
+                birthday: birthday || "",
+                sex: gender || "",
+              } as any);
+              setAuthUser({
+                ...authUser,
+                profile: {
+                  ...(authUser.profile as any),
+                  firstName: resolvedFirst,
+                  lastName: ln || "",
+                  birthday: birthday || "",
+                  sex: gender || "",
+                },
+              });
+            } catch (e) {
+              console.warn("Failed to save profile:", e);
+            }
+          }
+          addMessage({
+            id: `settings-prompt-${Date.now()}`,
+            role: "assistant",
+            content: "Your profile is set up. Take a moment to review your settings — when you close, we'll begin.",
+          });
+          setIsSettingsOpen(true);
+          const nextNodeId = hasCv ? "q1_energy" : "bg1_history";
+          setFlowState({ phase: "settings_review", nextNodeId });
+          return;
+        }
+
+        // Advance to the next profile node
+        const nextId = typeof currentNode.next === "function"
+          ? currentNode.next(answerForLogic, { profile: { firstName: pendingProfileRef.current.firstName || firstName }, answers, hasCv })
+          : currentNode.next;
+
+        const nextNode = getNode(nextId);
+        if (nextNode) {
+          const profileCtx: AssessmentContext = {
+            profile: { firstName: pendingProfileRef.current.firstName || firstName },
+            answers,
+            hasCv,
+          };
+          addMessage({
+            id: `onb-${nextId}-${Date.now()}`,
+            role: "assistant",
+            content: getNodeMessage(nextNode, profileCtx),
+          });
+          setFlowState({ phase: "question", nodeId: nextId, awaitingFollowUp: false });
+        }
+        return;
       }
       // ─────────────────────────────────────────────────────────────────────────
 
@@ -406,7 +509,7 @@ export function useAssessmentFlow() {
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }
     },
-    [flowState, answers, firstName, hasCv, authUser, skipCv]
+    [flowState, answers, firstName, hasCv, authUser, setAuthUser, skipCv]
   );
 
   async function advanceToNode(

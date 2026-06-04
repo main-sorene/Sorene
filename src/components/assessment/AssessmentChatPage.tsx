@@ -218,6 +218,18 @@ export function AssessmentChatPage() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
+      {/* "Conversation saved" note — sits just above the phase bar */}
+      {showPhaseLabel && (
+        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-0">
+          <div className="max-w-2xl mx-auto">
+            <span className="flex items-center gap-1 text-[11px] text-[#9B9B9B]">
+              <CheckCircle2 size={11} className="shrink-0" />
+              Your conversation is saved automatically
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Phase indicator */}
       {showPhaseLabel && (
         <PhaseIndicator signal={currentSignal} progressPercent={progressPercent} />
@@ -357,18 +369,14 @@ export function AssessmentChatPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-3 px-0.5">
-            <span className="flex items-center gap-1 text-[11px] text-[#9B9B9B]">
-              <CheckCircle2 size={11} className="shrink-0" />
-              Progress saved automatically
-            </span>
+          <p className="text-center text-xs text-[#62646A] mt-3">
             <a
               href="/responsible"
-              className="text-xs text-[#9B9B9B] underline underline-offset-2 hover:text-[#101010] transition-colors"
+              className="underline underline-offset-2 hover:text-[#101010] transition-colors"
             >
-              Sorene can make mistakes.
+              Sorene can make mistakes. Consider checking important information.
             </a>
-          </div>
+          </p>
         </div>
       </div>
     </div>

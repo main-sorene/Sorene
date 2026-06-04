@@ -257,8 +257,6 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
-
         {/* Hero — newest chat-generated card takes top slot when present */}
         <section>
           {heroRecipe && (
@@ -450,6 +448,8 @@ export const DirectionSection = () => {
 
         {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
 
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+
         <section className="space-y-3">
           <MarketIntelligenceCard />
           <ProblemToSolveCard />
@@ -472,7 +472,6 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         <section>
           {legacyHeroRecipe && (
             <DirectionCard
@@ -598,6 +597,8 @@ export const DirectionSection = () => {
           </section>
         )}
 
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+
         <section className="space-y-3">
           <MarketIntelligenceCard />
           <ProblemToSolveCard />
@@ -658,8 +659,7 @@ export const DirectionSection = () => {
   const gridRecipeCards = visibleRecipeCards.filter((rd) => rd.id !== promotedHeroRecipeId && rd.id !== ideationHeroRecipe?.id);
 
   return (
-    <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
-      <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+    <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24">
       {/* Hero Section */}
       <section>
         {ideationHeroRecipe && (
@@ -779,6 +779,8 @@ export const DirectionSection = () => {
           ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
         ]} onShow={showCard} />
       </section>
+
+      <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
       <section className="space-y-3">
         <MarketIntelligenceCard />

@@ -22,28 +22,36 @@ async function run(dryRun: boolean) {
     const uid = userDoc.id;
     const email = data.email || data.profile?.email || "";
 
-    // Only target users who have direction cards (auto-generated) but no R&C data stored
     const hasDirectionCards = Array.isArray(data.directionCards) && data.directionCards.length > 0;
-    const hasRC = data.resourcesConstraints &&
-      Object.values(data.resourcesConstraints as Record<string, string>).some((v) => String(v ?? "").trim() !== "");
 
     if (!hasDirectionCards) {
       results.push({ uid, email, status: "skipped — no direction cards" });
       continue;
     }
-    if (hasRC) {
-      results.push({ uid, email, status: "skipped — has R&C data, cards are valid" });
+
+    // Clear if: no R&C data (cards generated before R&C gate) OR cards look dummy/truncated
+    const hasRC = data.resourcesConstraints &&
+      Object.values(data.resourcesConstraints as Record<string, string>).some((v) => String(v ?? "").trim() !== "");
+    const firstCard = data.directionCards?.[0];
+    const isDummy = firstCard && (
+      firstCard.title === "The Scalable Specialist" ||
+      !firstCard.ikigai_filters ||
+      !firstCard.path_label
+    );
+
+    if (hasRC && !isDummy) {
+      results.push({ uid, email, status: "skipped — cards look valid" });
       continue;
     }
 
-    // Has cards but no R&C — clear the stale cards
+    const reason = !hasRC ? "no R&C data" : "dummy/truncated cards";
     if (!dryRun) {
       await db.collection("users").doc(uid).update({
         directionCards: FieldValue.delete(),
         directionText: FieldValue.delete(),
       });
     }
-    results.push({ uid, email, status: dryRun ? "would clear (dry run)" : "✓ cleared direction cards" });
+    results.push({ uid, email, status: dryRun ? `would clear (dry run — ${reason})` : `✓ cleared (${reason})` });
   }
 
   const cleared = results.filter((r) => r.status.startsWith("✓")).length;

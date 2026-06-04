@@ -24,6 +24,7 @@ export function useDirectionResult() {
   const [directionCards, setDirectionCards] = useState<DirectionCardData[]>([]);
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
   const [needsRC, setNeedsRC] = useState(false);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["direction-profile", user?.uid],
@@ -152,6 +153,65 @@ export function useDirectionResult() {
     generate();
   }, [profile, hasStreamed, user]);
 
+  const generateMore = async () => {
+    if (!profile || isGeneratingMore) return;
+    const nextIndex = directionCards.length; // 0-based: 0=Safe,1=Aligned,2=Stretch
+    if (nextIndex >= 3) return;
+
+    const primaryModel = profile.directionEligibility?.model as StructuralModel | undefined;
+    if (!primaryModel) return;
+
+    const allAlts = profile.directionAlternatives || [];
+    const altModels = allAlts
+      .filter((a) => a.model !== primaryModel)
+      .slice(0, 2)
+      .map((a) => ({ model: a.model as StructuralModel, compatibility: a.compatibility, isPrimary: false }));
+    const primaryAlt = allAlts.find((a) => a.model === primaryModel);
+    const models = [
+      { model: primaryModel, compatibility: primaryAlt?.compatibility ?? 100, isPrimary: true },
+      ...altModels,
+    ];
+
+    if (nextIndex >= models.length) return;
+
+    const resources = (() => {
+      try {
+        const stored = localStorage.getItem("resourcesConstraints");
+        return stored ? JSON.parse(stored) : undefined;
+      } catch { return undefined; }
+    })();
+
+    setIsGeneratingMore(true);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          models,
+          cardIndex: nextIndex,
+          scores: profile.dnaScores,
+          firstName: profile.firstName || "there",
+          rawAnswers: profile.assessmentAnswers,
+          cvSummary: profile.cvSummary,
+          dnaNarrative: profile.dna_narrative,
+          resources,
+        }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const newCard = data.cards?.[0];
+      if (newCard) {
+        setDirectionCards((prev) => {
+          const updated = [...prev, newCard];
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setIsGeneratingMore(false);
+    }
+  };
+
   async function fetchLegacyAlternativeSummaries(
     alts: DirectionAlternative[],
     profileSnapshot: NonNullable<typeof profile>,
@@ -192,6 +252,11 @@ export function useDirectionResult() {
     .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
+  // Total available models (primary + up to 2 alts)
+  const allAlts = profile?.directionAlternatives || [];
+  const totalModels = Math.min(3, 1 + allAlts.filter((a) => a.model !== eligibleModel).slice(0, 2).length);
+  const canGenerateMore = !!primaryCard && directionCards.length < totalModels;
+
   return {
     // Structured cards (new path)
     primaryCard,
@@ -205,5 +270,8 @@ export function useDirectionResult() {
     bestCompatibility: alternatives.find((a) => a.model === eligibleModel)?.compatibility ?? 100,
     otherDirections,
     needsRC,
+    generateMore,
+    isGeneratingMore,
+    canGenerateMore,
   };
 }

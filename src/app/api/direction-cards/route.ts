@@ -227,29 +227,38 @@ export async function POST(req: NextRequest) {
       return Response.json({ cards: [] });
     }
 
-    // Generate each card in parallel — cuts total time to ~1 card's worth
-    const results = await Promise.allSettled(
-      models.map((model, i) => {
-        const prompt = buildPrompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, i);
-        return client.messages.create({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 1500,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: prompt }],
-        }).then((msg) => {
-          const block = msg.content[0];
-          const raw = block?.type === "text" ? block.text.trim() : "";
-          const jsonMatch = raw.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) return null;
-          const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
-          return Array.isArray(parsed.cards) ? parsed.cards[0] ?? null : null;
-        });
-      })
-    );
+    // cardIndex controls which path label (0=Safe, 1=Aligned, 2=Stretch)
+    const generateCard = (model: typeof models[0], index: number) => {
+      const prompt = buildPrompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, index);
+      return client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: prompt }],
+      }).then((msg) => {
+        const block = msg.content[0];
+        const raw = block?.type === "text" ? block.text.trim() : "";
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return null;
+        const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
+        return Array.isArray(parsed.cards) ? parsed.cards[0] ?? null : null;
+      });
+    };
 
-    const cards = results
-      .map((r) => (r.status === "fulfilled" ? r.value : null))
-      .filter((c): c is DirectionCardData => c !== null);
+    // cardIndex in body allows generating a specific alt card (1 or 2) on demand
+    const cardIndex = (body as any).cardIndex as number | undefined;
+    let cards: DirectionCardData[];
+
+    if (cardIndex !== undefined) {
+      // Generate a single specific card (for "Generate More" flow)
+      const model = models[cardIndex] ?? models[0];
+      const card = await generateCard(model, cardIndex).catch(() => null);
+      cards = card ? [card] : [];
+    } else {
+      // Default: generate only the primary card (index 0)
+      const card = await generateCard(models[0], 0).catch(() => null);
+      cards = card ? [card] : [];
+    }
 
     return Response.json({ cards });
   } catch (err) {

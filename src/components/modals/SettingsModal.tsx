@@ -69,21 +69,36 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
   });
 }
 
-// Birthday stored as MM/DD/YYYY in Firestore; <input type="date"> needs YYYY-MM-DD
+// Birthday may be stored as DD/MM/YYYY (assessment), MM/DD/YYYY (old), or YYYY-MM-DD (ISO).
+// <input type="date"> needs YYYY-MM-DD. We store as YYYY-MM-DD on save.
 function birthdayToInputValue(birthday: string): string {
   if (!birthday) return "";
-  // Already ISO format
+  // Already ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return birthday;
-  // MM/DD/YYYY format from onboarding
-  const [m, d, y] = birthday.split("/");
-  return y && m && d ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : "";
+  const parts = birthday.split("/");
+  if (parts.length !== 3) return "";
+  const [a, b, y] = parts;
+  if (!y || y.length !== 4) return "";
+  const ai = parseInt(a, 10);
+  const bi = parseInt(b, 10);
+  // If first segment > 12 it must be the day (DD/MM/YYYY — assessment format)
+  // If second segment > 12 it must be the day (MM/DD/YYYY — legacy format)
+  // If both ≤ 12, assume DD/MM/YYYY since that's what the assessment collects
+  if (ai > 12) {
+    // DD/MM/YYYY
+    return `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
+  }
+  if (bi > 12) {
+    // MM/DD/YYYY
+    return `${y}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+  }
+  // Ambiguous — default to DD/MM/YYYY (assessment stores this)
+  return `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
 }
 
 function inputValueToBirthday(value: string): string {
-  // Store as MM/DD/YYYY for consistency with onboarding
-  if (!value) return "";
-  const [y, m, d] = value.split("-");
-  return y && m && d ? `${m}/${d}/${y}` : "";
+  // Store as ISO YYYY-MM-DD to avoid format ambiguity
+  return value || "";
 }
 
 function generateOrgId(uid: string): string {

@@ -1178,7 +1178,7 @@ export function DirectionCard({
                 <p className="text-[11px] text-[#9A9A9A] font-medium">{cardData.oneliner}</p>
               </div>
             )}
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">{description}</p>
+            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-2">{description}</p>
             <div className="mt-auto flex items-center justify-between gap-2">
               {/* Left: Hide + constraint badge (no label text — space is tight in grid) */}
               <div className="flex items-center gap-2">

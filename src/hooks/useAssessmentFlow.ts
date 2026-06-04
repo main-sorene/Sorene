@@ -597,16 +597,20 @@ export function useAssessmentFlow() {
       try {
         const eligibility = computeDirection(currentAnswers);
         if (authUser?.uid) {
-          // Generate AI narrative in parallel with saving
-          const narrativeResult = await authFetch("/api/dna-narrative", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              answers: currentAnswers,
-              cvSummary: (authUser?.profile as any)?.cvSummary,
-            }),
-          }).then((r) => r.json()).catch(() => ({ narrative: {} }));
-          await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
+          // Wrap backend save so a network/Firestore failure never blocks the button
+          try {
+            const narrativeResult = await authFetch("/api/dna-narrative", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                answers: currentAnswers,
+                cvSummary: (authUser?.profile as any)?.cvSummary,
+              }),
+            }).then((r) => r.json()).catch(() => ({ narrative: {} }));
+            await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
+          } catch {
+            // Save failed — user can still proceed to DNA; data already in sessionStorage
+          }
           // Generate polished background summary for users who answered bg questions (no CV)
           if (!hasCv) {
             authFetch("/api/bg-summary", {
@@ -624,18 +628,15 @@ export function useAssessmentFlow() {
             }).catch(() => {});
           }
         }
-        // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
-        // this component and the user would never see the summary or nav buttons.
-        // The atom flips when the user clicks a nav button (see AssessmentChatPage).
-        // setFlowState writes to sessionStorage (via persist) before calling React setter,
-        // so the SESSION_KEY guard in AppLayout/chat/page is always set before any
-        // dnaAssessmentComplete Firestore listener can fire.
-        setFlowState({ phase: "done" });
       } finally {
         setIsSaving(false);
       }
-      // Update atom AFTER isSaving=false so Settings modal sees correct data but the
-      // "Explore My DNA" button is already visible when this fires.
+      // Always show the button regardless of save outcome.
+      // setFlowState writes to sessionStorage (via persist) before calling React setter,
+      // so the SESSION_KEY guard in AppLayout/chat/page blocks any auto-flip of
+      // isAssessmentCompleteAtom until the user explicitly clicks "Explore My DNA".
+      setFlowState({ phase: "done" });
+      // Update atom after button is visible so Settings modal has correct data.
       if (authUser?.uid) {
         setAuthUser({
           ...authUser,

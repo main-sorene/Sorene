@@ -35,7 +35,7 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       icon: "/figmaAssets/dna.svg",
       hero_statement: narrative?.core_dna_label || scores.motivation_driver.slice(0, 80),
       description: narrative?.your_core || scores.strengths_summary || "Your unique strengths and energy patterns shape how you work best.",
-      summary: narrative?.core_dna_label ? `${narrative.core_dna_label} — ${narrative.your_core?.split(". ")[0] || ""}` : scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
+      summary: narrative?.your_core ? narrative.your_core.split(". ").slice(0, 2).join(". ").replace(/\.?$/, ".") : scores.success_feeling?.slice(0, 120) || "Your personal definition of success guides your direction.",
       key_signals: [
         { label: "Primary Motivation", value: primaryMotivation, explanation: scores.motivation_driver },
         { label: "Structure Preference", value: structureLabel, explanation: "How you prefer to organize your work environment." },

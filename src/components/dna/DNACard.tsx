@@ -88,7 +88,7 @@ export function DNACard({
         !isExpanded &&
           variant === "standard" &&
           (isLarge ? "min-h-[242px]" : "min-h-[242px]"),
-        !isExpanded && variant === "hero" && isLarge && "min-h-[242px]",
+        !isExpanded && variant === "hero" && isLarge && "min-h-[280px]",
       )}
       style={gradientStyle}
       onClick={!isExpanded ? handleToggle : undefined}
@@ -194,8 +194,16 @@ export function DNACard({
               </div>
             </div>
 
-            <div className="p-8 pb-10 relative z-20">
-              <p className="text-white text-label-medium leading-relaxed max-w-[85%]">
+            <div className="p-8 pb-10 relative z-20 flex flex-col gap-2">
+              {heroStatement && (
+                <p
+                  className="text-white font-medium leading-snug tracking-tight"
+                  style={{ fontSize: "22px" }}
+                >
+                  {heroStatement}
+                </p>
+              )}
+              <p className="text-white text-label-medium leading-relaxed max-w-[85%] opacity-80">
                 {description}
               </p>
             </div>

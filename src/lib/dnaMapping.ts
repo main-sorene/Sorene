@@ -47,7 +47,9 @@ export function mapProfileToDNA(profile: ProfileData): DNACoreItem[] {
     description: core
       ? `${capitalize(core.primary_motivation || "")}-driven, ${(core.structure_preference || "").toLowerCase().replace(/_/g, " ")}-structured, and ${(core.collaboration_mode || "").toLowerCase().replace(/_/g, " ")} by nature — you bring ${(core.execution_bias || "focused execution").toLowerCase().replace(/_/g, " ")} to everything you build.`
       : `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with guided structure and collaborative collaboration.`,
-    summary: `As ${identity?.archetype?.[0] || "a professional"}, you combine a ${core?.primary_motivation || "value"}-led approach with a preference for ${core?.structure_preference || "balanced"} environments and ${(core?.collaboration_mode || "dynamic").replace("_", " ")} settings to ensure meaningful outcomes.`,
+    summary: core
+      ? `${capitalize(core.primary_motivation || "")}-driven, ${(core.structure_preference || "").toLowerCase().replace(/_/g, " ")}-structured, and ${(core.collaboration_mode || "").toLowerCase().replace(/_/g, " ")} by nature — you bring ${(core.execution_bias || "focused execution").toLowerCase().replace(/_/g, " ")} to everything you build.`
+      : `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with guided structure and collaborative collaboration.`,
     key_signals: [
       {
         label: "Primary Motivation",

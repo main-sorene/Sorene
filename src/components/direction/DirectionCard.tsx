@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "../ui/separator";
 import type { DirectionCardData } from "@/lib/directionTypes";
@@ -111,6 +112,11 @@ export function DirectionCard({
   isLoadingSection3 = false,
   isLoadingSection4 = false,
 }: DirectionCardProps) {
+  const router = useRouter();
+  const goValidate = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    router.push("/execution-hub");
+  };
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<string[]>(
     recommendedFirstStep.steps.filter((s) => s.completed).map((s) => s.id),
@@ -579,12 +585,10 @@ export function DirectionCard({
               {!isExpanded && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                   className="flex items-center gap-2">
-                  {onChoose && (
-                    <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
-                      Choose this Direction
-                    </button>
-                  )}
+                  <button onClick={goValidate}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                    Start Validate
+                  </button>
                   <button onClick={(e) => handleToggle(e)}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
                     {actionText}<ArrowRight size={16} />
@@ -851,6 +855,14 @@ export function DirectionCard({
                     </AnimatePresence>
                   </div>
 
+                  {/* Start Validation CTA */}
+                  <div className="p-4">
+                    <button onClick={goValidate}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                      Start Validation
+                    </button>
+                  </div>
+
                 </div>
               ) : (
                 legacyContent
@@ -1051,6 +1063,12 @@ export function DirectionCard({
           </div>
         )}
       </motion.section>
+
+      {/* Start Validation CTA */}
+      <button onClick={goValidate}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+        Start Validation
+      </button>
     </div>
   ) : legacyContent);
 
@@ -1072,7 +1090,7 @@ export function DirectionCard({
           )}
         </AnimatePresence>
         <div className="flex justify-between items-start">
-          <h3 className={cn("font-medium leading-snug tracking-tight line-clamp-2", isExpanded ? "text-heading-xsmall text-white max-w-[80%]" : "text-body-large-medium text-[#151515] pr-6 mb-4")}>
+          <h3 className={cn("font-medium leading-snug tracking-tight", isExpanded ? "text-heading-xsmall text-white max-w-[80%]" : "text-body-large-medium text-[#151515] pr-6 mb-4")}>
             {title}
           </h3>
           {score && (
@@ -1124,14 +1142,12 @@ export function DirectionCard({
                   </div>
                 )}
               </div>
-              {/* Right: Choose this Direction + See Detail */}
+              {/* Right: Start Validate + See Detail */}
               <div className="flex items-center gap-2">
-                {onChoose && (
-                  <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
-                    Choose this Direction
-                  </button>
-                )}
+                <button onClick={goValidate}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                  Start Validate
+                </button>
                 <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
                   {actionText}<ArrowRight size={16} />

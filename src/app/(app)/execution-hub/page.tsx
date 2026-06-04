@@ -17,11 +17,14 @@ import {
   MessageCircle,
   BarChart3,
   Lock,
+  PenSquare,
+  Loader2,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, activeConversationIdAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
 
 // ─────────────────────────────────────────────
 // Idea Validator

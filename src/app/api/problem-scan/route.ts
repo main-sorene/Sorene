@@ -18,7 +18,7 @@ Your job:
    - DNA match: 1-5
    - Qualify if total >= 14
 3. For each qualifying signal, generate a concrete business idea aligned to the user's background.
-4. Return the top 5 ranked opportunities as JSON.
+4. Return the top 5 ranked opportunities.
 
 Output ONLY valid JSON after your searches. No markdown, no prose, no code fences.
 
@@ -87,17 +87,20 @@ export async function POST(req: NextRequest) {
     const { firstName, dnaScores, rawAnswers, cvSummary } = body;
     const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary);
 
-    // web_search is a server-side tool — Anthropic executes searches automatically.
-    // We run a multi-turn loop: after each response, if stop_reason is "end_turn",
-    // the model has finished. If it's "tool_use" with web_search blocks, those were
-    // already executed server-side; we just continue the conversation.
+    const webSearchTool: Anthropic.Messages.WebSearchTool20250305 = {
+      name: "web_search",
+      type: "web_search_20250305",
+    };
+
+    // web_search is server-side: Anthropic executes searches within a single call.
+    // We only need to loop for pause_turn (long-running continuation).
     const messages: Anthropic.MessageParam[] = [
       { role: "user", content: userMessage },
     ];
 
     let finalText = "";
     let iterations = 0;
-    const MAX_ITERATIONS = 8;
+    const MAX_ITERATIONS = 6;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
@@ -106,16 +109,11 @@ export async function POST(req: NextRequest) {
         model: "claude-sonnet-4-6",
         max_tokens: 8096,
         system: SYSTEM_PROMPT,
-        tools: [
-          {
-            name: "web_search",
-            type: "web_search_20250305",
-          } as unknown as Anthropic.Tool,
-        ],
+        tools: [webSearchTool],
         messages,
       });
 
-      // Capture any text blocks
+      // Capture the last text block (will be the JSON output)
       for (const block of response.content) {
         if (block.type === "text") {
           finalText = block.text;
@@ -124,15 +122,15 @@ export async function POST(req: NextRequest) {
 
       if (response.stop_reason === "end_turn") break;
 
-      // For tool_use stop: web_search results are already embedded in response.content
-      // as server_tool_use blocks. Continue the conversation by appending the assistant
-      // turn — no need to send fake tool_results back.
-      if (response.stop_reason === "tool_use") {
+      // pause_turn: Anthropic paused a long-running turn.
+      // Re-send as-is to let the model continue.
+      if (response.stop_reason === "pause_turn") {
         messages.push({ role: "assistant", content: response.content });
-        // Continue — next call will have access to search results in context
+        messages.push({ role: "user", content: [{ type: "text", text: "Continue." }] });
         continue;
       }
 
+      // Any other stop reason (max_tokens, tool_use for non-server tools) — stop.
       break;
     }
 
@@ -142,9 +140,10 @@ export async function POST(req: NextRequest) {
 
     const jsonStart = finalText.indexOf("{");
     const jsonEnd = finalText.lastIndexOf("}");
-    const raw = jsonStart !== -1 && jsonEnd > jsonStart
-      ? finalText.slice(jsonStart, jsonEnd + 1)
-      : finalText.trim();
+    const raw =
+      jsonStart !== -1 && jsonEnd > jsonStart
+        ? finalText.slice(jsonStart, jsonEnd + 1)
+        : finalText.trim();
 
     let report: ProblemScanReport;
     try {

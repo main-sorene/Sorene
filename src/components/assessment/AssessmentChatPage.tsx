@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { ArrowUp, Loader2, Mic, Plus, Copy, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/store/atoms";
 
 function SoreneMessage({ content }: { content: string }) {
   const lines = content.split("\n");
@@ -94,6 +97,8 @@ export function AssessmentChatPage() {
     isDone, isCvRequest, currentChoices, canonicalChoices,
   } = useAssessmentFlow();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const user = useAtomValue(userAtom);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -122,6 +127,8 @@ export function AssessmentChatPage() {
 
   const handleExploreDna = () => {
     completeAssessment();
+    // Invalidate cached profile so direction cards are fetched fresh after assessment saves
+    queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
     router.push("/dna");
   };
 

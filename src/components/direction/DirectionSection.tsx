@@ -2,16 +2,19 @@
 
 import { DirectionCard } from "./DirectionCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import {
   ideationAtom,
   IdeationIdea,
   IdeationData,
   recipeDirectionsAtom,
+  userAtom,
 } from "@/store/atoms";
 import { useState } from "react";
 import { cn } from "@/lib/utils"
 import { ResourcesConstraintsForm } from "./ResourcesConstraintsForm";
+import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 const DEFAULT_IDEATION_DATA: IdeationData = {
   user_id: "dummy",
   status: "completed",
@@ -124,9 +127,12 @@ export const DirectionSection = () => {
     model,
     bestCompatibility,
     otherDirections,
+    eligibility,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
+  const user = useAtomValue(userAtom);
+  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => {
     try {
@@ -166,6 +172,29 @@ export const DirectionSection = () => {
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-gray-500">Sorene is building your direction...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Assessment complete but no cards yet — prompt refresh
+  const hasNoDirections = !primaryCard && !directionText && recipeDirections.length === 0;
+  if (!isDirectionLoading && hasNoDirections && eligibility?.eligible) {
+    return (
+      <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+          <p className="text-[15px] text-[#151515] font-medium">Your assessment is complete!</p>
+          <p className="text-sm text-[#9CA3AF]">Your direction cards are ready. Refresh to see them.</p>
+          <button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
+              window.location.reload();
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-[#2a2a2a] transition-colors"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
         </div>
       </div>
     );

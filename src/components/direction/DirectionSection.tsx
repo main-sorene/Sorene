@@ -156,10 +156,12 @@ export const DirectionSection = () => {
   const rcForm = useAtomValue(resourcesConstraintsAtom);
   const hasRCData = Object.values(rcForm).some((v) => v.trim() !== "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [heroRecipeId, setHeroRecipeId] = useState<string | null>(null);
 
-  // Auto-expand a newly added recipe card and clear the signal
+  // Promote a newly added recipe card to hero and auto-expand it
   useEffect(() => {
     if (newRecipeCardId) {
+      setHeroRecipeId(newRecipeCardId);
       setExpandedId(newRecipeCardId);
       setNewRecipeCardId(null);
     }
@@ -277,11 +279,15 @@ export const DirectionSection = () => {
     const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title));
     const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
 
-    // Promote first visible alt or recipe to hero if primary is hidden
-    const promotedAlt = primaryHidden && visibleAltCards.length > 0 ? visibleAltCards[0] : null;
-    const promotedRecipe = primaryHidden && !promotedAlt && visibleRecipes.length > 0 ? visibleRecipes[0] : null;
+    // If a recipe card was just generated from the chat bar, show it as the hero
+    const heroRecipe = heroRecipeId ? visibleRecipes.find((rd) => rd.id === heroRecipeId) ?? null : null;
+
+    // Promote first visible alt or recipe to hero if primary is hidden (and no heroRecipe)
+    const promotedAlt = !heroRecipe && primaryHidden && visibleAltCards.length > 0 ? visibleAltCards[0] : null;
+    const promotedRecipe = !heroRecipe && primaryHidden && !promotedAlt && visibleRecipes.length > 0 ? visibleRecipes[0] : null;
     const gridAltCards = visibleAltCards.filter((c) => c.title !== promotedAlt?.title);
-    const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id);
+    // heroRecipe goes in hero slot — exclude from grid; also exclude promoted recipe
+    const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id && rd.id !== heroRecipe?.id);
 
     const allHidden = [
       ...(primaryHidden ? [{ id: heroPrimaryId, title: primaryCard.title }] : []),
@@ -295,8 +301,30 @@ export const DirectionSection = () => {
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
-        {/* Hero — primary structured card (or promoted replacement) */}
+        {/* Hero — newest chat-generated card takes top slot when present */}
         <section>
+          {heroRecipe && (
+            <DirectionCard
+              variant="hero"
+              title={heroRecipe.title}
+              description={heroRecipe.description}
+              actionText="View detail"
+              score={String(heroRecipe.score)}
+              whyFitsYou={heroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+              keyRisks={heroRecipe.keyRisks}
+              isExpanded={expandedId === heroRecipe.id}
+              onToggle={() => setExpandedId(expandedId === heroRecipe.id ? null : heroRecipe.id)}
+              onHide={() => { hideCard(heroRecipe.id); setHeroRecipeId(null); }}
+              cardData={heroRecipe.cardData}
+              onLoadDetail={heroRecipe.cardData ? () => loadRecipeDetail(heroRecipe.id) : undefined}
+              onLoadSection3={heroRecipe.cardData ? () => loadRecipeSection3(heroRecipe.id) : undefined}
+              onLoadSection4={heroRecipe.cardData ? () => loadRecipeSection4(heroRecipe.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === heroRecipe.id}
+              isLoadingSection3={loadingRecipeSection3For === heroRecipe.id}
+              isLoadingSection4={loadingRecipeSection4For === heroRecipe.id}
+              rawContent={heroRecipe.rawContent}
+            />
+          )}
           {!primaryHidden && (
             <DirectionCard
               variant="hero"
@@ -472,16 +500,39 @@ export const DirectionSection = () => {
     const heroHidden = hiddenIds.includes("__hero__");
     const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));
     const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+    const legacyHeroRecipe = heroRecipeId ? visibleRecipes.find((rd) => rd.id === heroRecipeId) ?? null : null;
     // Pick the first visible card to promote when hero is hidden (native alts first, then recipes)
-    const promotedAltModel: string | null = heroHidden && visibleAlts.length > 0 ? visibleAlts[0].model : null;
-    const promotedRecipeId: string | null = heroHidden && !promotedAltModel && visibleRecipes.length > 0 ? visibleRecipes[0].id : null;
+    const promotedAltModel: string | null = !legacyHeroRecipe && heroHidden && visibleAlts.length > 0 ? visibleAlts[0].model : null;
+    const promotedRecipeId: string | null = !legacyHeroRecipe && heroHidden && !promotedAltModel && visibleRecipes.length > 0 ? visibleRecipes[0].id : null;
     const gridAlts = visibleAlts.filter((a) => a.model !== promotedAltModel);
-    const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipeId);
+    const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipeId && rd.id !== legacyHeroRecipe?.id);
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         <section>
+          {legacyHeroRecipe && (
+            <DirectionCard
+              variant="hero"
+              title={legacyHeroRecipe.title}
+              description={legacyHeroRecipe.description}
+              actionText="View detail"
+              score={String(legacyHeroRecipe.score)}
+              whyFitsYou={legacyHeroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+              keyRisks={legacyHeroRecipe.keyRisks}
+              isExpanded={expandedId === legacyHeroRecipe.id}
+              onToggle={() => setExpandedId(expandedId === legacyHeroRecipe.id ? null : legacyHeroRecipe.id)}
+              onHide={() => { hideCard(legacyHeroRecipe.id); setHeroRecipeId(null); }}
+              cardData={legacyHeroRecipe.cardData}
+              onLoadDetail={legacyHeroRecipe.cardData ? () => loadRecipeDetail(legacyHeroRecipe.id) : undefined}
+              onLoadSection3={legacyHeroRecipe.cardData ? () => loadRecipeSection3(legacyHeroRecipe.id) : undefined}
+              onLoadSection4={legacyHeroRecipe.cardData ? () => loadRecipeSection4(legacyHeroRecipe.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === legacyHeroRecipe.id}
+              isLoadingSection3={loadingRecipeSection3For === legacyHeroRecipe.id}
+              isLoadingSection4={loadingRecipeSection4For === legacyHeroRecipe.id}
+              rawContent={legacyHeroRecipe.rawContent}
+            />
+          )}
           {!heroHidden && (
             <DirectionCard
               variant="hero"
@@ -631,17 +682,40 @@ export const DirectionSection = () => {
   const heroIsHidden = bestPickIdea ? hiddenIds.includes(bestPickIdea.name) : false;
   const visibleOtherIdeas = otherIdeas.filter((i) => !hiddenIds.includes(i.name));
   const visibleRecipeCards = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
-  const promotedHeroIdeaName: string | null = heroIsHidden && visibleOtherIdeas.length > 0 ? visibleOtherIdeas[0].name : null;
-  const promotedHeroRecipeId: string | null = heroIsHidden && !promotedHeroIdeaName && visibleRecipeCards.length > 0 ? visibleRecipeCards[0].id : null;
+  const ideationHeroRecipe = heroRecipeId ? visibleRecipeCards.find((rd) => rd.id === heroRecipeId) ?? null : null;
+  const promotedHeroIdeaName: string | null = !ideationHeroRecipe && heroIsHidden && visibleOtherIdeas.length > 0 ? visibleOtherIdeas[0].name : null;
+  const promotedHeroRecipeId: string | null = !ideationHeroRecipe && heroIsHidden && !promotedHeroIdeaName && visibleRecipeCards.length > 0 ? visibleRecipeCards[0].id : null;
   const displayedHero = heroIsHidden ? (visibleOtherIdeas[0] ?? null) : (bestPickIdea ?? null);
   const gridIdeas = visibleOtherIdeas.filter((i) => i.name !== promotedHeroIdeaName);
-  const gridRecipeCards = visibleRecipeCards.filter((rd) => rd.id !== promotedHeroRecipeId);
+  const gridRecipeCards = visibleRecipeCards.filter((rd) => rd.id !== promotedHeroRecipeId && rd.id !== ideationHeroRecipe?.id);
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
       <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
       {/* Hero Section */}
       <section>
+        {ideationHeroRecipe && (
+          <DirectionCard
+            variant="hero"
+            title={ideationHeroRecipe.title}
+            description={ideationHeroRecipe.description}
+            actionText="View detail"
+            score={String(ideationHeroRecipe.score)}
+            whyFitsYou={ideationHeroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+            keyRisks={ideationHeroRecipe.keyRisks}
+            isExpanded={expandedId === ideationHeroRecipe.id}
+            onToggle={() => setExpandedId(expandedId === ideationHeroRecipe.id ? null : ideationHeroRecipe.id)}
+            onHide={() => { hideCard(ideationHeroRecipe.id); setHeroRecipeId(null); }}
+            cardData={ideationHeroRecipe.cardData}
+            onLoadDetail={ideationHeroRecipe.cardData ? () => loadRecipeDetail(ideationHeroRecipe.id) : undefined}
+            onLoadSection3={ideationHeroRecipe.cardData ? () => loadRecipeSection3(ideationHeroRecipe.id) : undefined}
+            onLoadSection4={ideationHeroRecipe.cardData ? () => loadRecipeSection4(ideationHeroRecipe.id) : undefined}
+            isLoadingDetail={loadingRecipeDetailFor === ideationHeroRecipe.id}
+            isLoadingSection3={loadingRecipeSection3For === ideationHeroRecipe.id}
+            isLoadingSection4={loadingRecipeSection4For === ideationHeroRecipe.id}
+            rawContent={ideationHeroRecipe.rawContent}
+          />
+        )}
         {displayedHero && (
           <DirectionCard
             variant="hero"

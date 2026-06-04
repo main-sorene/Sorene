@@ -64,6 +64,11 @@ function ConversationItem({ conv }: { conv: Conversation }) {
       setActiveId(null);
       router.push("/chat");
     }
+    // Local-only conversations (e.g. direction chat) don't exist on the backend
+    if (conv.isCreatedOnBackend === false) {
+      try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
+      return;
+    }
     try {
       await deleteHistoryMutation.mutateAsync(conv.id);
     } catch (error) {

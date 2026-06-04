@@ -72,7 +72,7 @@ function parseDirectionCard(text: string): RecipeDirection | null {
   const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
   if (!titleMatch) return null;
 
-  const title = titleMatch[1].trim();
+  const title = titleMatch[1].trim().replace(/^["'"']+|["'"']+$/g, "").trim();
 
   // Description: text between title line and first section header
   const afterTitle = text.slice(text.indexOf(titleMatch[0]) + titleMatch[0].length).trim();
@@ -93,6 +93,7 @@ function parseDirectionCard(text: string): RecipeDirection | null {
     whyFitsYou: parseList(whySection?.[1]),
     keyRisks: parseList(risksSection?.[1]),
     firstStep: (stepSection?.[1] ?? "").trim(),
+    score: 85,
   };
 }
 

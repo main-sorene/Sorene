@@ -133,6 +133,7 @@ export interface RecipeDirection {
   whyFitsYou: string[];
   keyRisks: string[];
   firstStep: string;
+  score: number;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

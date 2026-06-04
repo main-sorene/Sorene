@@ -150,16 +150,23 @@ export const DirectionSection = () => {
                 />
               ))}
               {recipeDirections.map((rd) => (
-                <DirectionCard
+                <div
                   key={rd.id}
-                  variant="standard"
-                  title={rd.title}
-                  description={rd.description}
-                  whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
-                  keyRisks={rd.keyRisks}
-                  recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
-                  actionText="View detail"
-                />
+                  className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 sm:col-span-2" : "col-span-1")}
+                >
+                  <DirectionCard
+                    variant="standard"
+                    title={rd.title}
+                    description={rd.description}
+                    score={String(rd.score)}
+                    whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                    keyRisks={rd.keyRisks}
+                    recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
+                    actionText="View detail"
+                    isExpanded={expandedId === rd.id}
+                    onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -249,15 +256,21 @@ export const DirectionSection = () => {
               </div>
             ))}
           {recipeDirections.map((rd) => (
-            <div key={rd.id} className="col-span-1">
+            <div
+              key={rd.id}
+              className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 md:col-span-2" : "col-span-1")}
+            >
               <DirectionCard
                 variant="standard"
                 title={rd.title}
                 description={rd.description}
+                score={String(rd.score)}
                 whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
                 keyRisks={rd.keyRisks}
                 recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
                 actionText="View detail"
+                isExpanded={expandedId === rd.id}
+                onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
               />
             </div>
           ))}

@@ -2,6 +2,74 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 
+const FULL_CARD_FORMAT = `
+**Direction: [specific business name, max 10 words]**
+[One-line description: what it does, who it serves. Max 20 words.]
+
+[3–5 sentence description: specific complaint solved, why now (name the industry shift), who first customers are.]
+
+**Why it fits you**
+- [grounded in their exact credential, tool, or asset]
+- [grounded in their assessment data or stated situation]
+- [grounded in their constraints and ambitions]
+
+**Key Risks**
+- [specific risk 1]
+- [specific risk 2]
+
+**Why Now**
+[What changed in the last 12–18 months — name the specific tool launch, platform event, or market shift that makes this viable today.]
+
+**Positioning**
+It is like [bloated incumbent] but only does [the one thing the complainant actually needs].
+
+**Unfair Advantage**
+[Why this user specifically — cite their exact credential, tool, or network. Never write "your experience" or "your background".]
+
+**Five Filters**
+- Alignment: [0–100] — [1-sentence rationale referencing their specific data]
+- Skills Match: [0–100] — [1-sentence rationale referencing their specific tool or credential]
+- Lifestyle Fit: [0–100] — [1-sentence rationale referencing their hours, travel, family constraints]
+- Financial Viability: [0–100] — [1-sentence rationale with rough math against their income floor]
+- Market Potential: [0–100] — [1-sentence rationale naming a specific demand signal]
+
+**Composite Score**
+[average of five scores, integer only]
+
+**High-Risk Flags**
+- [List any filter scored below 60 with specific reason. If none, write "None"]
+
+**Metrics**
+- Startup Cost: [USD range]
+- Time to First Revenue: [X–Y weeks]
+- Hours per Week (1-client scale): [number]
+
+**Constraint Check**
+[Pass / Warn / Fail] — [reason referencing their specific constraints]
+
+**First 10 Customers**
+[1 sentence, specific, location-aware — name the type of company or person and where to find them]
+
+**Competition**
+Layer 1 — Current workaround: [exact description of what buyers do today instead]
+Layer 2 — Bloated incumbent: [Name] — [why it fails for this specific segment]
+Layer 3 — Simple competitors: [names, or "None identified"]
+
+**Economic Urgency**
+[What the buyer's current workaround costs per month — this is the price anchor]
+
+**Ocean**
+[Blue / Purple / Red] — [competition density and why]
+
+**Trend Connection**
+[Which industry shift this connects to and how]
+
+**Complaint Source**
+[Which validated complaint this is rooted in]
+
+**Window Risk**
+[What closes this window and when]`;
+
 const RECIPE_PROMPTS: Record<string, string> = {
   "check-my-idea": `You are helping the user stress-test a specific business or project idea they have in mind.
 
@@ -13,20 +81,8 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card:
-
-**Direction: [name of their idea, sharpened]**
-[2-3 sentences on the idea's core potential and why it could work]
-
-**Why it fits you**
-- [grounded in what they shared about themselves]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest, specific risks for this idea]
-
-**Your first step**
-[One small, concrete action to validate the idea this week]
+Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card using EXACTLY this format:
+${FULL_CARD_FORMAT}
 
 Start now with turn 1.`,
 
@@ -40,40 +96,15 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
-
-**Direction: [specific direction]**
-[2-3 sentences on why it fits]
-
-**Why it fits you**
-- [grounded in their words]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest risks]
-
-**Your first step**
-[One small, reversible action]
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card using EXACTLY this format:
+${FULL_CARD_FORMAT}
 
 Start now with turn 1.`,
 
   "generate-from-constraints": `You are Sorene, a direction generator. The user has shared their resources and constraints. Generate exactly ONE Direction Card immediately — no preamble, no questions, no explanation.
 
-Output ONLY this format:
-
-**Direction: [specific, concrete direction name]**
-[2-3 sentences on the core opportunity and why it works given their situation]
-
-**Why it fits you**
-- [grounded in their specific resources or assets]
-- [grounded in their time and capital constraints]
-- [grounded in their preferences and ambitions]
-
-**Key risks**
-- [1-2 honest, specific risks given their stated constraints]
-
-**Your first step**
-[One small, concrete, reversible action they can take this week, matching their available hours and capital]`,
+Use EXACTLY this format:
+${FULL_CARD_FORMAT}`,
 
   "generate-new-direction": `You are helping the user discover new directions beyond what they already have.
 
@@ -85,20 +116,8 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card:
-
-**Direction: [specific direction]**
-[2-3 sentences on why it fits]
-
-**Why it fits you**
-- [grounded in their words]
-- [grounded in their words]
-
-**Key risks**
-- [1-2 honest risks]
-
-**Your first step**
-[One small, reversible action]
+Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card using EXACTLY this format:
+${FULL_CARD_FORMAT}
 
 Start now with turn 1.`,
 };

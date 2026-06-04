@@ -619,6 +619,15 @@ export function useAssessmentFlow() {
             }),
           }).then((r) => r.json()).catch(() => ({ narrative: {} }));
           await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
+          // Update atom so Settings modal can show professional background answers immediately
+          setAuthUser({
+            ...authUser,
+            profile: {
+              ...(authUser.profile as any),
+              assessmentAnswers: currentAnswers,
+              dnaAssessmentComplete: true,
+            },
+          });
         }
         // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
         // this component and the user would never see the summary or nav buttons.

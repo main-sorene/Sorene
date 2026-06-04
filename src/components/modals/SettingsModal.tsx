@@ -30,10 +30,11 @@ import {
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
-import { signOut, deleteUser } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
+import { authFetch } from "@/lib/authFetch";
 
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
@@ -341,21 +342,20 @@ export function SettingsModal() {
     setIsDeleting(true);
     const uid = authUser?.uid;
     try {
+      // Delete server-side data (Firestore profile + messaging + Firebase Auth)
+      await authFetch("/api/account/delete", { method: "POST" });
       if (uid) {
-        await deleteUserProfile(uid);
+        await deleteUserProfile(uid).catch(() => {});
       }
-      // Delete the Firebase Auth user so there's no stale session on redirect
-      if (auth?.currentUser) {
-        await deleteUser(auth.currentUser).catch(() => signOut(auth!));
-      } else if (auth) {
-        await signOut(auth);
-      }
+      // Sign out client-side (auth user already deleted server-side)
+      if (auth) await signOut(auth).catch(() => {});
       setUser(null);
       setConversations([]);
       setIsAssessmentComplete(false);
-      // Clear all local storage data for this user
+      // Clear ALL local storage data
       try {
-        Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+        sessionStorage.clear();
+        ["hiddenDirectionIds", "recipeDirections", "resourcesConstraints", "sorene_cookie_consent"].forEach(k => localStorage.removeItem(k));
         Object.keys(localStorage).filter(k =>
           k.startsWith("assessment_conv_") ||
           k.startsWith("convos_") ||
@@ -365,22 +365,6 @@ export function SettingsModal() {
       } catch {}
       setShowDeleteConfirm(false);
       setIsOpen(false);
-      // Clear all local data for this user
-      try {
-        const keysToRemove = Object.keys(localStorage).filter(k =>
-          k.startsWith("assessment_conv_") ||
-          k.startsWith("convos_") ||
-          k.startsWith("dna_chat_") ||
-          k.startsWith("direction_chat_") ||
-          k === "resourcesConstraints" ||
-          k === "recipeDirections" ||
-          k === "hiddenDirectionIds"
-        );
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-        Object.keys(sessionStorage)
-          .filter(k => k.startsWith("assessment_state_"))
-          .forEach(k => sessionStorage.removeItem(k));
-      } catch {}
       window.location.href = "/";
     } catch {
       toast({ description: "Failed to delete account.", variant: "destructive" });

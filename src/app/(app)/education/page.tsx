@@ -1,56 +1,103 @@
 "use client";
 
 import { Play } from "lucide-react";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/store/atoms";
+import { motion } from "framer-motion";
 
 const videos = [
   {
+    id: 1,
     title: "Master the tactical and psychological leap from employee to founder.",
-    description: "Coming soon",
   },
   {
+    id: 2,
     title: "How to validate the right way",
-    description: "Coming soon",
   },
   {
+    id: 3,
     title: "How to create social posts & messages",
-    description: "Coming soon",
   },
   {
+    id: 4,
     title: "How to talk to your customers",
-    description: "Coming soon",
   },
 ];
 
-function VideoPlaceholder({ title, description }: { title: string; description: string }) {
+function VideoCard({ title }: { title: string }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="w-full aspect-video bg-[#F7F7F7] rounded-2xl flex items-center justify-center border border-[#E8E8E8]">
-        <div className="w-12 h-12 rounded-full bg-[#ECEDEE] flex items-center justify-center">
-          <Play size={20} className="text-[#62646A] ml-0.5" />
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-3xl overflow-hidden border border-[#ECEDEE] flex flex-col"
+    >
+      {/* Thumbnail placeholder */}
+      <div className="w-full aspect-video bg-[#F7F7F7] flex items-center justify-center relative">
+        <div className="w-12 h-12 rounded-full bg-white/80 border border-[#ECEDEE] flex items-center justify-center shadow-sm">
+          <Play size={18} className="text-[#151515] ml-0.5" fill="#151515" />
+        </div>
+        <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-medium">
+          Coming soon
         </div>
       </div>
-      <div>
-        <p className="text-[14px] font-medium text-[#151515] leading-5">{title}</p>
-        <p className="text-[12px] text-[#9A9A9A] mt-0.5">{description}</p>
+
+      {/* Card body */}
+      <div className="px-5 py-4">
+        <p className="text-[14px] font-semibold text-[#151515] leading-[1.45]">
+          {title}
+        </p>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 export default function Page() {
-  return (
-    <div className="flex flex-col flex-1 px-6 py-8 max-w-3xl mx-auto w-full">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-[#151515]">Education</h1>
-        <p className="text-sm text-[#62646A] mt-1 leading-6">
-          Learn the skills and mindset to make your entrepreneurial leap.
-        </p>
-      </div>
+  const authUser = useAtomValue(userAtom);
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {videos.map((video) => (
-          <VideoPlaceholder key={video.title} title={video.title} description={video.description} />
-        ))}
+  const avatarUrl =
+    authUser?.profile?.photoUrl ||
+    authUser?.photoURL ||
+    `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`;
+
+  const displayName = authUser?.profile
+    ? `${authUser.profile.firstName} ${authUser.profile.lastName}`
+    : authUser?.displayName || "User";
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#F9FAFB] overflow-y-auto no-scrollbar">
+      <div className="max-w-6xl mx-auto w-full p-3 lg:py-6 lg:px-3 pb-24">
+        {/* Header row */}
+        <div className="flex items-start justify-between mb-6 px-1">
+          <div>
+            <h1 className="text-[22px] font-semibold text-[#151515] leading-snug">
+              Education
+            </h1>
+            <p className="text-sm text-[#62646A] mt-1 leading-relaxed">
+              Learn the skills and mindset to make your entrepreneurial leap.
+            </p>
+          </div>
+
+          {/* Profile picture */}
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className="w-10 h-10 rounded-full shrink-0 bg-purple-100 border border-[#ECEDEE] ml-4 mt-0.5"
+          />
+        </div>
+
+        {/* Video grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {videos.map((video, i) => (
+            <motion.div
+              key={video.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07 }}
+            >
+              <VideoCard title={video.title} />
+            </motion.div>
+          ))}
+        </div>
       </div>
     </div>
   );

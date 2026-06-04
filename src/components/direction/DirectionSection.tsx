@@ -176,13 +176,6 @@ export const DirectionSection = () => {
     });
   };
 
-  const heroBadges = [
-    {
-      label: "Earn From Your Expertise",
-      icon: <img src="/figmaAssets/wrench.svg" alt="" />,
-    },
-  ];
-
   // R&C gate — show prominently before anything else
   if (needsRC) {
     return (
@@ -289,7 +282,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={primaryCard.title}
               description={primaryCard.description}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(primaryCard.compatibility)}
               cardData={primaryCard}
@@ -301,7 +294,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={promotedAlt.title}
               description={promotedAlt.description}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(promotedAlt.compatibility)}
               cardData={promotedAlt}
@@ -313,7 +306,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={promotedRecipe.title}
               description={promotedRecipe.description}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(promotedRecipe.score)}
               whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
@@ -348,7 +341,7 @@ export const DirectionSection = () => {
                   variant="hero"
                   title={expandedAlt.title}
                   description={expandedAlt.description}
-                  badges={heroBadges}
+    
                   score={String(expandedAlt.compatibility)}
                   actionText="View detail"
                   cardData={expandedAlt}
@@ -363,7 +356,7 @@ export const DirectionSection = () => {
                   variant="hero"
                   title={expandedRecipe.title}
                   description={expandedRecipe.description}
-                  badges={heroBadges}
+    
                   score={String(expandedRecipe.score)}
                   actionText="View detail"
                   whyFitsYou={expandedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
@@ -439,7 +432,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={model || "Your Direction"}
               description={directionText}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(bestCompatibility ?? 100)}
               onHide={() => hideCard("__hero__")}
@@ -450,7 +443,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={a.model}
               description={a.summary || ""}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(a.compatibility)}
               onHide={() => hideCard(a.model)}
@@ -461,7 +454,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={rd.title}
               description={rd.description}
-              badges={heroBadges}
+
               actionText="View detail"
               score={String(rd.score)}
               whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -83,6 +83,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards } = useDirectionResult();
   const { data: dnaData } = useDnaData();
   const resourcesConstraints = useAtomValue(resourcesConstraintsAtom);
@@ -191,7 +192,8 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
           return updated;
         });
-        displayReply = `Your new direction card **"${parsed.title}"** has been added to the left panel. Click "View detail" to explore it.`;
+        setNewRecipeCardId(parsed.id);
+        displayReply = `Your new direction card **"${parsed.title}"** has been added and is now open on the left. Are you happy with this direction, or would you like to brainstorm further or adjust anything?`;
       }
 
       const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: displayReply };

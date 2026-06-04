@@ -25,6 +25,8 @@ export type DnaScores = {
   time_availability?: string;
   readiness_label?: string;
   strength_patterns?: string[];
+  liked_last_work?: "yes" | "no" | "mixed" | "unclear";
+  negative_work_types?: string;
 };
 
 export type StructuralModel =
@@ -177,6 +179,16 @@ function computeScores(answers: RawAnswers): DnaScores {
   if (constraint_score >= 9) rawStrengths.push("High commitment");
   const strength_patterns = [...new Set(rawStrengths)].slice(0, 5);
 
+  const q1b_followup = answers["q1b_quit_reason_followup"] || "";
+  const liked_last_work: "yes" | "no" | "mixed" | "unclear" =
+    q1b_followup.toLowerCase().includes("enjoyed the work itself") ? "yes" :
+    q1b_followup.toLowerCase().includes("didn't enjoy the actual work") ? "no" :
+    q1b_followup.toLowerCase().includes("mixed") ? "mixed" :
+    q1b_followup.length > 0 ? "mixed" : "unclear";
+  const negative_work_types = (liked_last_work === "no" || liked_last_work === "mixed")
+    ? q1b.slice(0, 300)
+    : "";
+
   return {
     risk_score,
     uncertainty_score,
@@ -200,6 +212,8 @@ function computeScores(answers: RawAnswers): DnaScores {
     readiness_label,
     strength_patterns,
     quit_reason,
+    liked_last_work,
+    negative_work_types,
   };
 }
 

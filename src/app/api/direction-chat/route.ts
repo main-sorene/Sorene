@@ -26,18 +26,18 @@ It is like [bloated incumbent] but only does [the one thing the complainant actu
 **Unfair Advantage**
 [Why this user specifically — cite their exact credential, tool, or network. Never write "your experience" or "your background".]
 
-**Five Filters**
-- Alignment: [0–100] — [1-sentence rationale referencing their specific data]
-- Skills Match: [0–100] — [1-sentence rationale referencing their specific tool or credential]
-- Lifestyle Fit: [0–100] — [1-sentence rationale referencing their hours, travel, family constraints]
-- Financial Viability: [0–100] — [1-sentence rationale with rough math against their income floor]
-- Market Potential: [0–100] — [1-sentence rationale naming a specific demand signal]
+**Ikigai Match**
+- What You Love: [0–100] — [1 sentence: does this energise them? reference their energy source and what drains them]
+- What You're Good At: [0–100] — [1 sentence: which existing skills/tools transfer directly? name them]
+- What The World Needs: [0–100] — [1 sentence: name the specific complaint or demand signal]
+- What You Can Be Paid For: [0–100] — [1 sentence: rough math against their income floor and runway]
+- Lifestyle Fit: [0–100] — [1 sentence: hours, travel, family, growth ambition match]
 
 **Composite Score**
 [average of five scores, integer only]
 
 **High-Risk Flags**
-- [List any filter scored below 60 with specific reason. If none, write "None"]
+- [List any Ikigai circle or Lifestyle Fit scored below 60 with specific reason. If none, write "None"]
 
 **Metrics**
 - Startup Cost: [USD range]
@@ -84,6 +84,9 @@ No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No ex
 Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card using EXACTLY this format:
 ${FULL_CARD_FORMAT}
 
+NEGATIVE FILTER: If at any point the user mentions they didn't enjoy certain types of work, do NOT suggest pivots that lead them back to that work type.
+SKILLS LEVERAGE: When evaluating their idea, explicitly assess how much of their existing expertise transfers — this is a key factor in viability.
+
 Start now with turn 1.`,
 
   "brainstorm-new-idea": `You are helping the user brainstorm business or project ideas.
@@ -98,6 +101,10 @@ No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No ex
 
 Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card using EXACTLY this format:
 ${FULL_CARD_FORMAT}
+
+NEGATIVE FILTER: If the user mentions they disliked certain work types, filter those out of suggestions.
+SKILLS LEVERAGE: Among the 5 questions, naturally ask what they've done before and what felt most natural — this helps ground the brainstorm in their real strengths.
+IKIGAI: Ensure the final direction card sits at the intersection of what they love, what they're good at, what the world needs, and what they can be paid for.
 
 Start now with turn 1.`,
 
@@ -118,6 +125,10 @@ No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No ex
 
 Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card using EXACTLY this format:
 ${FULL_CARD_FORMAT}
+
+NEGATIVE FILTER: Avoid directions that repeat work types they've said they dislike.
+SKILLS LEVERAGE: Among the 5 questions, ask about their strongest existing skills and past work to find transferable expertise.
+IKIGAI: Ensure the final direction card addresses all four Ikigai circles.
 
 Start now with turn 1.`,
 };
@@ -266,8 +277,14 @@ Filter 4 — Financial Viability: Can it hit minimum income floor before runway 
 Filter 5 — Market Potential: Is there evidence of demand? Is the market growing? Name specific signals.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MODE A — GENERATE 3 DIRECTIONS
+MODE A — GENERATE 3 DIRECTIONS (IKIGAI FRAMEWORK)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IKIGAI RULE: Every direction must sit at the intersection of: What They Love + What They're Good At + What The World Needs + What They Can Be Paid For. A direction strong in 2-3 circles but weak in one is NOT a valid direction.
+
+SKILLS LEVERAGE PRIORITY: Always start from existing expertise. A direction that converts their current skills into a new delivery vehicle is worth 10× more than one requiring new skills — it compresses time-to-start dramatically.
+
+NEGATIVE FILTER: Before suggesting any direction, check: does it require performing work types listed in negative_work_types? If yes, reject it. If the user has both negative work types AND strong skills in that area, suggest a direction where they MANAGE or TEACH that work type rather than performing it directly.
+
 Step 0: Name 3 significant industry shifts happening right now relevant to this user's background.
 Step 1: Identify validated market pain (real complaints, economic urgency, distribution path).
 Step 2: Map user's specific advantage to each complaint.
@@ -279,7 +296,13 @@ For each of Path A / Path B / Path C provide:
 4. Why now (specific tool launch, platform shift, market event in last 12–18 months)
 5. Simple-version positioning: "It is like [bloated incumbent] but only does [one thing complainant needs]."
 6. User's unfair advantage (cite exact credential or tool from their profile — never write "your experience")
-7. Five Filter scores (each with 1-sentence rationale referencing their specific data)
+7. Five Ikigai Filter scores (each with 1-sentence rationale referencing their exact data):
+   - What You Love (energy + passion alignment)
+   - What You're Good At (skills/expertise leverage — how much transfers directly?)
+   - What The World Needs (market demand + complaint validation)
+   - What You Can Be Paid For (financial viability — math against income floor and runway)
+   - Lifestyle Fit (hours, location, travel, family, growth ambition)
+   Composite score = arithmetic mean of all five, minus 3 for each Ikigai circle below 60
 8. Composite score + any HIGH-RISK flags
 9. Startup cost / Time to first revenue / Hours/week at 1-client scale
 10. First 10 customers (specific, location-aware)

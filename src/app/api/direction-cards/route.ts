@@ -10,9 +10,17 @@ const SYSTEM_PROMPT = `You are Sorene's direction engine. You output structured 
 
 Every field must be grounded in the user's actual DNA data and answers. Do not invent credentials, industries, or circumstances not evidenced in the data.
 
+IKIGAI FRAMEWORK: Every direction must sit at the intersection of all four circles:
+1. What You Love — energizes them, aligns with their passion and work style
+2. What You're Good At — leverages skills, expertise, and experience they already have (prioritise fast-start paths using existing assets)
+3. What The World Needs — validated market demand, real complaint sources
+4. What You Can Be Paid For — financially viable within their runway and income floor
+
 CRITICAL: "title" must be a specific business name — not a category. Wrong: "Operational Consultant". Right: "Systems Audit Service for Solo Coaches".
 
-NEGATIVE FILTER (non-negotiable): Any card whose model would reproduce the conditions described in "what drains them" or "why they left" must structurally avoid those conditions — not merely omit mentioning them.`;
+NEGATIVE FILTER (non-negotiable): If the user did NOT enjoy their last type of work (liked_last_work = "no" or "mixed"), any direction that requires them to primarily perform that same category of work MUST be rejected — not softened, not reframed. Structurally avoid work types listed in negative_work_types. If no valid direction exists without that work type, flag it explicitly and pivot toward an adjacent skill application.
+
+SKILLS LEVERAGE RULE: Always prioritise directions that convert existing expertise into a new vehicle, reducing time-to-start. A direction that requires learning an entirely new field from scratch is only valid if the user has high constraint_score and runway.`;
 
 function buildPrompt(
   models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
@@ -54,6 +62,9 @@ USER DNA:
 - Income timeline: ${rawAnswers["q5_finance"] || "unknown"}
 - Work mode: ${rawAnswers["q8_workmode"] || "unknown"}
 - Readiness state: ${rawAnswers["q11_readiness"] || "unknown"}
+- Liked their last type of work: ${(scores as any).liked_last_work || "not captured"}
+- Work types to avoid (negative filter): ${(scores as any).negative_work_types || "none specified"}
+- What pushed them out: ${scores.quit_reason || "not provided"}
 
 ${bgBlock ? `BACKGROUND:\n${bgBlock}\n` : ""}
 MODELS TO GENERATE:
@@ -70,9 +81,13 @@ For EACH model, produce a DirectionCardData object with ALL of these fields:
 - why_now: string — what changed in the last 12–18 months that makes this viable today? Name the specific tool launch, platform change, or market event
 - simple_positioning: string — "It is like [bloated incumbent] but only does [the one thing the complainant actually needs]"
 - unfair_advantage: string — why ${firstName} specifically; reference their exact credential or demonstrated skill
-- four_filters: object with these five keys, each { score: 0-100, reason: "1 sentence" }:
-    alignment, skills_match, lifestyle_fit, financial_viability, market_potential
-- composite_score: number — arithmetic average of the five filter scores, rounded to nearest integer
+- ikigai_filters: object with these five keys, each { score: 0-100, reason: "1 sentence grounded in their exact data" }:
+    what_you_love: Does this direction energise them? Does it match their energy source and avoid their energy drains? Reference their q1_energy answer.
+    what_you_are_good_at: Can they do this with skills/expertise they already have? How much of their existing toolkit transfers directly? Reference specific tools or credentials.
+    what_world_needs: Is there validated market demand? Is there a real complaint this solves? Name a specific signal.
+    what_you_can_be_paid_for: Can this generate meaningful income within their runway? Show rough math against their income floor.
+    lifestyle_fit: Does the model match their hours, location, travel, family constraints, and growth ambition?
+- composite_score: number — Ikigai intersection score. Formula: arithmetic mean of all five scores, then subtract 3 points for every Ikigai circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) that scores below 60. A direction must be strong across ALL four Ikigai circles to score high. Round to nearest integer.
 - high_risk_flags: string[] — one entry per filter scored below 60, format: "FilterName (score): specific reason"
 - startup_cost_usd: string — e.g. "$0–$500"
 - time_to_first_revenue_weeks: string — factoring in time constraints from DNA, e.g. "6–10 weeks"

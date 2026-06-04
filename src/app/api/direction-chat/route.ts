@@ -96,10 +96,9 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, do NOT output the card yet. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
+Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, do NOT output a card. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
 
-On the NEXT turn — whether the user adds more detail or simply asks you to generate — output a Direction Card using EXACTLY this format (fold in any new details they gave), then end with one short sentence asking if they'd like to adjust anything:
-${FULL_CARD_FORMAT}
+NEVER output a direction card yourself — the card is generated automatically when the user clicks Generate. If the user adds more detail after the marker, acknowledge it in one sentence and emit [[READY_TO_GENERATE]] again.
 
 NEGATIVE FILTER: If at any point the user mentions they didn't enjoy certain types of work, do NOT suggest pivots that lead them back to that work type.
 SKILLS LEVERAGE: When evaluating their idea, explicitly assess how much of their existing expertise transfers — this is a key factor in viability.
@@ -119,10 +118,9 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No bullet lists. No extra text.
 
-Ask exactly 5 questions across turns 2–6, skipping any whose answer you already know from the profile. After the last question is answered, do NOT output the card yet. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
+Ask exactly 5 questions across turns 2–6, skipping any whose answer you already know from the profile. After the last question is answered, do NOT output a card. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
 
-On the NEXT turn — whether the user adds more detail or simply asks you to generate — output a Direction Card using EXACTLY this format (fold in any new details they gave), then end with one short sentence asking if they'd like to adjust anything:
-${FULL_CARD_FORMAT}
+NEVER output a direction card yourself — the card is generated automatically when the user clicks Generate. If the user adds more detail after the marker, acknowledge it in one sentence and emit [[READY_TO_GENERATE]] again.
 
 NEGATIVE FILTER: Filter out directions that repeat work types they disliked.
 SKILLS LEVERAGE: Ground the final direction in their existing expertise — not a new field from scratch.

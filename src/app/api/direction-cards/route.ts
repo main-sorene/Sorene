@@ -93,12 +93,17 @@ function buildUserContext(
     travelTolerance?: string; otherNotes?: string;
   },
   cardIndex = 0,
+  concept?: string,
 ): string {
   const or = (v: unknown, fallback = "Not provided") =>
     v && String(v).trim() ? String(v) : fallback;
 
   const nar = dnaNarrative ?? {};
   const res = resources ?? {};
+
+  const conceptBlock = concept?.trim()
+    ? `━━━ THE IDEA THE USER WANTS (anchor every field to THIS) ━━━\n${concept.trim()}\n\nBuild the card around this specific idea. Do not invent a different direction.\n\n`
+    : "";
 
   const bgBlock = cvSummary?.trim()
     ? `CV/portfolio summary:\n${cvSummary.trim()}`
@@ -114,7 +119,7 @@ function buildUserContext(
   const m = models[0];
   const modelLine = `${pathLabel}: ${m.model} (compatibility: ${m.compatibility}%)${m.isPrimary ? " ← PRIMARY DNA FIT" : ""}`;
 
-  return `━━━ DNA PROFILE ━━━
+  return `${conceptBlock}━━━ DNA PROFILE ━━━
 Name: ${firstName}
 Core Pattern: ${or(nar["core_dna_label"] ?? scores.strength_patterns?.join(", "))}
 Value Signature: ${or(nar["your_core"] ?? scores.strengths_summary)}
@@ -175,8 +180,9 @@ function buildPhase1Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
   const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
 
   return `Generate 1 direction card summary for ${firstName}.
@@ -211,8 +217,9 @@ function buildPhase2Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform fit analysis for this direction for ${firstName}.
 
@@ -243,8 +250,9 @@ function buildPhase3Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform market reality analysis for this direction for ${firstName}.
 
@@ -279,8 +287,9 @@ function buildPhase4Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform operations analysis for this direction for ${firstName}.
 
@@ -309,8 +318,9 @@ function buildFullPrompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
   const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
 
   return `Generate 1 direction card for ${firstName}.
@@ -384,11 +394,20 @@ export async function POST(req: NextRequest) {
       cardIndex?: number;
       phase?: 1 | 2 | 3 | 4;
       phase1Card?: Partial<DirectionCardData>;
+      concept?: string;
     };
 
-    const { models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources } = body;
+    const { scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, concept } = body;
 
-    if (!models || models.length === 0) {
+    // When generating from a brainstormed idea (concept), models may be empty —
+    // fall back to a neutral entry so the staged flow still works.
+    const models = body.models && body.models.length > 0
+      ? body.models
+      : concept?.trim()
+        ? [{ model: "Skill-Leveraged Service" as StructuralModel, compatibility: 85, isPrimary: true }]
+        : [];
+
+    if (models.length === 0) {
       return Response.json({ cards: [] });
     }
 
@@ -404,7 +423,7 @@ export async function POST(req: NextRequest) {
 
     if (phase === 1) {
       // Phase 1: fast summary using Haiku
-      const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
         max_tokens: 1024,
@@ -424,7 +443,7 @@ export async function POST(req: NextRequest) {
     if (phase === 2) {
       // Phase 2: deep analysis using Sonnet (or Haiku for alt cards)
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase2Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase2Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const selectedModel = isAltCard ? fastModel : deepModel;
       const msg = await client.messages.create({
         model: selectedModel,
@@ -441,7 +460,7 @@ export async function POST(req: NextRequest) {
     if (phase === 3) {
       // Phase 3: market reality using Haiku
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
         max_tokens: 1000,
@@ -457,7 +476,7 @@ export async function POST(req: NextRequest) {
     if (phase === 4) {
       // Phase 4: operations using Haiku
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase4Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase4Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
         max_tokens: 600,

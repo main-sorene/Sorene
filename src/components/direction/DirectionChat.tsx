@@ -88,7 +88,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
-  const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards } = useDirectionResult();
+  const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards, generateRecipeCard, generatingRecipe } = useDirectionResult();
   const { data: dnaData } = useDnaData();
   const resourcesConstraints = useAtomValue(resourcesConstraintsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
@@ -230,6 +230,29 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     await sendMessage(text);
   };
 
+  // Generate the structured, staged direction card from the brainstormed idea.
+  const handleGenerateRecipe = async () => {
+    if (generatingRecipe || isProcessing) return;
+    setShowGenerate(false);
+    setIsProcessing(true);
+    const concept = messages
+      .map((m) => `${m.role === "user" ? "User" : "Sorene"}: ${m.content}`)
+      .join("\n");
+    try {
+      const recipe = await generateRecipeCard(concept);
+      const text = recipe
+        ? `Your new direction card **"${recipe.title}"** has been added and is now open on the left — open it to load the detail, market reality, and operations sections. Want to adjust anything?`
+        : "Sorry, I couldn't generate that direction. Please try again.";
+      if (recipe) setNewRecipeCardId(recipe.id);
+      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: text };
+      const withAi = [...messages, aiMsg];
+      setMessages(withAi);
+      persistToSidebar(withAi);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
@@ -299,7 +322,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
               {showGenerate && !isProcessing && (
                 <div className="flex justify-start">
                   <button
-                    onClick={() => sendMessage("Generate my direction")}
+                    onClick={handleGenerateRecipe}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-colors"
                   >
                     <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5" alt="" />

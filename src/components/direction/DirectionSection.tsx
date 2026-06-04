@@ -141,6 +141,12 @@ export const DirectionSection = () => {
     loadingDetailFor,
     loadingSection3For,
     loadingSection4For,
+    loadRecipeDetail,
+    loadRecipeSection3,
+    loadRecipeSection4,
+    loadingRecipeDetailFor,
+    loadingRecipeSection3For,
+    loadingRecipeSection4For,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -338,6 +344,13 @@ export const DirectionSection = () => {
               isExpanded={expandedId === promotedRecipe.id}
               onToggle={() => setExpandedId(expandedId === promotedRecipe.id ? null : promotedRecipe.id)}
               onHide={() => hideCard(promotedRecipe.id)}
+              cardData={promotedRecipe.cardData}
+              onLoadDetail={promotedRecipe.cardData ? () => loadRecipeDetail(promotedRecipe.id) : undefined}
+              onLoadSection3={promotedRecipe.cardData ? () => loadRecipeSection3(promotedRecipe.id) : undefined}
+              onLoadSection4={promotedRecipe.cardData ? () => loadRecipeSection4(promotedRecipe.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === promotedRecipe.id}
+              isLoadingSection3={loadingRecipeSection3For === promotedRecipe.id}
+              isLoadingSection4={loadingRecipeSection4For === promotedRecipe.id}
               rawContent={promotedRecipe.rawContent}
             />
           )}
@@ -433,7 +446,14 @@ export const DirectionSection = () => {
                       isExpanded={false}
                       onToggle={() => setExpandedId(rd.id)}
                       onHide={() => hideCard(rd.id)}
-                      rawContent={rd.rawContent}
+                      cardData={rd.cardData}
+              onLoadDetail={rd.cardData ? () => loadRecipeDetail(rd.id) : undefined}
+              onLoadSection3={rd.cardData ? () => loadRecipeSection3(rd.id) : undefined}
+              onLoadSection4={rd.cardData ? () => loadRecipeSection4(rd.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === rd.id}
+              isLoadingSection3={loadingRecipeSection3For === rd.id}
+              isLoadingSection4={loadingRecipeSection4For === rd.id}
+              rawContent={rd.rawContent}
                     />
                   ))}
                 </div>
@@ -498,6 +518,13 @@ export const DirectionSection = () => {
               isExpanded={expandedId === rd.id}
               onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
               onHide={() => hideCard(rd.id)}
+              cardData={rd.cardData}
+              onLoadDetail={rd.cardData ? () => loadRecipeDetail(rd.id) : undefined}
+              onLoadSection3={rd.cardData ? () => loadRecipeSection3(rd.id) : undefined}
+              onLoadSection4={rd.cardData ? () => loadRecipeSection4(rd.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === rd.id}
+              isLoadingSection3={loadingRecipeSection3For === rd.id}
+              isLoadingSection4={loadingRecipeSection4For === rd.id}
               rawContent={rd.rawContent}
             />
           ); })()}
@@ -537,6 +564,13 @@ export const DirectionSection = () => {
                     isExpanded={expandedId === rd.id}
                     onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                     onHide={() => hideCard(rd.id)}
+              cardData={rd.cardData}
+              onLoadDetail={rd.cardData ? () => loadRecipeDetail(rd.id) : undefined}
+              onLoadSection3={rd.cardData ? () => loadRecipeSection3(rd.id) : undefined}
+              onLoadSection4={rd.cardData ? () => loadRecipeSection4(rd.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === rd.id}
+              isLoadingSection3={loadingRecipeSection3For === rd.id}
+              isLoadingSection4={loadingRecipeSection4For === rd.id}
               rawContent={rd.rawContent}
                   />
                 </div>
@@ -629,6 +663,13 @@ export const DirectionSection = () => {
             isExpanded={expandedId === rd.id}
             onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
             onHide={() => hideCard(rd.id)}
+              cardData={rd.cardData}
+              onLoadDetail={rd.cardData ? () => loadRecipeDetail(rd.id) : undefined}
+              onLoadSection3={rd.cardData ? () => loadRecipeSection3(rd.id) : undefined}
+              onLoadSection4={rd.cardData ? () => loadRecipeSection4(rd.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === rd.id}
+              isLoadingSection3={loadingRecipeSection3For === rd.id}
+              isLoadingSection4={loadingRecipeSection4For === rd.id}
               rawContent={rd.rawContent}
           />
         ); })()}
@@ -678,6 +719,13 @@ export const DirectionSection = () => {
                 isExpanded={expandedId === rd.id}
                 onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                 onHide={() => hideCard(rd.id)}
+              cardData={rd.cardData}
+              onLoadDetail={rd.cardData ? () => loadRecipeDetail(rd.id) : undefined}
+              onLoadSection3={rd.cardData ? () => loadRecipeSection3(rd.id) : undefined}
+              onLoadSection4={rd.cardData ? () => loadRecipeSection4(rd.id) : undefined}
+              isLoadingDetail={loadingRecipeDetailFor === rd.id}
+              isLoadingSection3={loadingRecipeSection3For === rd.id}
+              isLoadingSection4={loadingRecipeSection4For === rd.id}
               rawContent={rd.rawContent}
               />
             </div>

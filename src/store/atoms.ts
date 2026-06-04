@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import { UserProfile } from "@/lib/firestore";
+import type { DirectionCardData } from "@/lib/directionTypes";
 
 export interface AuthUser {
   uid: string;
@@ -135,6 +136,11 @@ export interface RecipeDirection {
   firstStep: string;
   score: number;
   rawContent?: string;
+  // Structured staged-flow card (new path). When present, the card renders with
+  // the same template + lazy-loaded sections as the main direction cards.
+  cardData?: DirectionCardData;
+  // The brainstormed idea + transcript used to seed the staged phases.
+  concept?: string;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

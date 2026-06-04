@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, recipeDirectionsAtom, type RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +29,14 @@ export function useDirectionResult() {
   const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
   const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
   const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
+
+  // Recipe (brainstorm/check-my-idea) cards — shared via jotai so DirectionChat
+  // and DirectionSection see the same list and lazy-load the same staged data.
+  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const [generatingRecipe, setGeneratingRecipe] = useState(false);
+  const [loadingRecipeDetailFor, setLoadingRecipeDetailFor] = useState<string | null>(null);
+  const [loadingRecipeSection3For, setLoadingRecipeSection3For] = useState<string | null>(null);
+  const [loadingRecipeSection4For, setLoadingRecipeSection4For] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["direction-profile", user?.uid],
@@ -210,6 +218,120 @@ export function useDirectionResult() {
       resources,
     };
   };
+
+  // Like buildBasePayload but does not require directionEligibility — recipe
+  // ideas are anchored by the concept, so a model is optional (the API falls
+  // back to a neutral one when none is provided).
+  const buildRecipeBasePayload = () => {
+    if (!profile) return null;
+    const base = buildBasePayload();
+    if (base) return base;
+    const resources = (() => {
+      try {
+        const stored = localStorage.getItem("resourcesConstraints");
+        return stored ? JSON.parse(stored) : undefined;
+      } catch { return undefined; }
+    })();
+    return {
+      models: [] as { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+      scores: profile.dnaScores,
+      firstName: profile.firstName || "there",
+      rawAnswers: profile.assessmentAnswers,
+      cvSummary: profile.cvSummary,
+      dnaNarrative: profile.dna_narrative,
+      resources,
+    };
+  };
+
+  const persistRecipes = (updater: (prev: RecipeDirection[]) => RecipeDirection[]) => {
+    setRecipeDirections((prev) => {
+      const updated = updater(prev);
+      try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  // Generate the fast phase-1 shell for a brainstormed idea (concept), then add
+  // it to the shared recipe list so it renders with the staged template.
+  const generateRecipeCard = async (concept: string): Promise<RecipeDirection | null> => {
+    if (generatingRecipe) return null;
+    const base = buildRecipeBasePayload();
+    if (!base) return null;
+    setGeneratingRecipe(true);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...base, cardIndex: 0, phase: 1, concept }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const card = data.cards?.[0];
+      if (!card) return null;
+      const recipe: RecipeDirection = {
+        id: `recipe-${Date.now()}`,
+        title: card.title,
+        description: card.description,
+        whyFitsYou: card.why_fits_you ?? [],
+        keyRisks: card.key_risks ?? [],
+        firstStep: "",
+        score: card.compatibility ?? 85,
+        cardData: card,
+        concept,
+      };
+      persistRecipes((prev) => [...prev, recipe]);
+      return recipe;
+    } catch (err) {
+      console.error("[generateRecipeCard] failed:", err);
+      return null;
+    } finally {
+      setGeneratingRecipe(false);
+    }
+  };
+
+  // Lazy-load a staged phase (2/3/4) for a recipe card, anchored to its concept.
+  const loadRecipePhase = async (
+    id: string,
+    phase: 2 | 3 | 4,
+    setLoading: (v: string | null) => void,
+    alreadyLoaded: (c: DirectionCardData) => boolean,
+  ) => {
+    setRecipeDirections((prevList) => {
+      const recipe = prevList.find((r) => r.id === id);
+      if (!recipe?.cardData || alreadyLoaded(recipe.cardData)) return prevList;
+      const base = buildRecipeBasePayload();
+      if (!base) return prevList;
+
+      setLoading(id);
+      (async () => {
+        try {
+          const res = await authFetch("/api/direction-cards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...base, cardIndex: 0, phase, phase1Card: recipe.cardData, concept: recipe.concept }),
+          });
+          if (!res.ok) return;
+          const data = (await res.json()) as { cards?: DirectionCardData[] };
+          const fields = data.cards?.[0];
+          if (fields) {
+            persistRecipes((prev) => prev.map((r) =>
+              r.id === id && r.cardData ? { ...r, cardData: { ...r.cardData, ...fields } } : r
+            ));
+          }
+        } finally {
+          setLoading(null);
+        }
+      })();
+      return prevList;
+    });
+  };
+
+  const loadRecipeDetail = (id: string) =>
+    loadRecipePhase(id, 2, setLoadingRecipeDetailFor, (c) => !!c.ikigai_filters);
+  const loadRecipeSection3 = (id: string) =>
+    loadRecipePhase(id, 3, setLoadingRecipeSection3For, (c) => !!c.ocean_classification || !!c.trend_connection);
+  const loadRecipeSection4 = (id: string) =>
+    loadRecipePhase(id, 4, setLoadingRecipeSection4For, (c) => !!c.startup_cost_usd);
 
   const generateMore = async () => {
     if (isGeneratingMore) return;
@@ -445,5 +567,14 @@ export function useDirectionResult() {
     loadingDetailFor,
     loadingSection3For,
     loadingSection4For,
+    // Recipe staged-card flow
+    generateRecipeCard,
+    generatingRecipe,
+    loadRecipeDetail,
+    loadRecipeSection3,
+    loadRecipeSection4,
+    loadingRecipeDetailFor,
+    loadingRecipeSection3For,
+    loadingRecipeSection4For,
   };
 }

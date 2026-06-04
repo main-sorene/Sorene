@@ -60,6 +60,15 @@ export function useDirectionResult() {
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
     if (!profile.directionEligibility.eligible) return;
 
+    // Don't auto-generate until user has filled in Resources & Constraints.
+    // This ensures the first direction is grounded in their real-life constraints.
+    try {
+      const stored = localStorage.getItem("resourcesConstraints");
+      const rc = stored ? JSON.parse(stored) : {};
+      const hasAnyRC = Object.values(rc).some((v) => String(v ?? "").trim() !== "");
+      if (!hasAnyRC) return; // wait for R&C form to be filled
+    } catch {}
+
     const generate = async () => {
       setIsStreaming(true);
       setHasStreamed(true);

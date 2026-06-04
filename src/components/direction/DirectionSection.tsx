@@ -8,6 +8,7 @@ import {
   IdeationIdea,
   IdeationData,
   recipeDirectionsAtom,
+  resourcesConstraintsAtom,
   userAtom,
 } from "@/store/atoms";
 import { useState } from "react";
@@ -133,6 +134,8 @@ export const DirectionSection = () => {
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
   const user = useAtomValue(userAtom);
   const queryClient = useQueryClient();
+  const rcForm = useAtomValue(resourcesConstraintsAtom);
+  const hasRCData = Object.values(rcForm).some((v) => v.trim() !== "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => {
     try {
@@ -177,14 +180,34 @@ export const DirectionSection = () => {
     );
   }
 
-  // Assessment complete but no cards yet — prompt refresh
+  // Assessment complete but no directions yet
   const hasNoDirections = !primaryCard && !directionText && recipeDirections.length === 0;
   if (!isDirectionLoading && hasNoDirections && eligibility?.eligible) {
+    // No R&C filled yet — show form prominently as the primary action
+    if (!hasRCData) {
+      return (
+        <div className="p-3 lg:py-6 lg:px-3 pb-24">
+          <div className="max-w-lg mx-auto space-y-6 pt-8">
+            <div className="text-center space-y-2">
+              <p className="text-[18px] font-medium text-[#151515] tracking-tight">
+                You're ready for your first direction
+              </p>
+              <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
+                Tell Sorene about your resources and constraints — what you have and what limits you — so it can suggest a direction that fits your real life.
+              </p>
+            </div>
+            <ResourcesConstraintsForm />
+          </div>
+        </div>
+      );
+    }
+
+    // R&C filled but cards not loaded yet — show refresh option
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4 text-center max-w-sm">
-          <p className="text-[15px] text-[#151515] font-medium">Your assessment is complete!</p>
-          <p className="text-sm text-[#9CA3AF]">Your direction cards are ready. Refresh to see them.</p>
+          <p className="text-[15px] text-[#151515] font-medium">Your direction is being prepared</p>
+          <p className="text-sm text-[#9CA3AF]">This usually takes a moment. Refresh if nothing appears.</p>
           <button
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });

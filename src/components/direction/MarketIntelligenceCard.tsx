@@ -198,7 +198,7 @@ export function MarketIntelligenceCard() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
             {topOpportunity && <TopOpportunityTeaser opportunity={topOpportunity} />}
             <div className="flex items-center justify-between gap-3">
-              <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
+              <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
                 <RefreshCw size={12} /> Regenerate
               </button>
               <button onClick={() => setIsExpanded(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#4338ca] text-white text-[13px] font-medium hover:bg-[#3730a3] transition-all shadow-sm shrink-0">
@@ -239,7 +239,7 @@ export function MarketIntelligenceCard() {
                     Generated {new Date(report.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </p>
                 )}
-                <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
+                <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
                   <RefreshCw size={12} /> Regenerate
                 </button>
               </div>

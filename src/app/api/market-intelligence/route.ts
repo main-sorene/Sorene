@@ -7,7 +7,7 @@ export const maxDuration = 120;
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are Sorene's Market Intelligence Engine. Your job is to research live market trends and surface personalised signals and business opportunities for a specific user.
+const SYSTEM_PROMPT_LIVE = `You are Sorene's Market Intelligence Engine. Your job is to research live market trends and surface personalised signals and business opportunities for a specific user.
 
 Your job:
 1. Use the web_search tool to scan for current market trends, industry shifts, emerging tools, and demand signals relevant to the user's domain and skills. Search across news, Reddit, LinkedIn, Product Hunt, and industry publications.
@@ -15,7 +15,31 @@ Your job:
 
 Output ONLY valid JSON after searching. No markdown, no prose, no code fences.
 
-SCHEMA:
+${SCHEMA_BLOCK()}
+
+RULES:
+- Base signals on actual search results — cite real trends you found
+- Personalise EVERYTHING to the specific user's DNA scores, skills, and background
+- dna_fit_score: skill match (25%) + capital fit (20%) + lifestyle fit (20%) + values alignment (20%) + market timing (15%)
+- Be specific: name actual industries, real roles, concrete first steps
+- No hype words: no "game-changing", "revolutionary", "disruptive potential"
+- Output ONLY the JSON object after searching. Nothing else.`;
+
+const SYSTEM_PROMPT_FALLBACK = `You are Sorene's Market Intelligence Engine. Your job is to analyse a user's professional DNA and surface personalised market signals and business opportunities.
+
+You must output ONLY valid JSON — no markdown, no prose, no code fences. The JSON must exactly match the schema below.
+
+${SCHEMA_BLOCK()}
+
+IMPORTANT RULES:
+- Personalise EVERYTHING to the specific user's DNA scores, skills, background, and constraints
+- The dna_fit_score must reflect real alignment: skill match (25%), capital fit (20%), lifestyle fit (20%), values alignment (20%), market timing (15%)
+- Be specific: name actual industries, real roles, concrete first steps
+- Avoid hype words: no "game-changing", "revolutionary", "disruptive potential"
+- Output ONLY the JSON object. Nothing else.`;
+
+function SCHEMA_BLOCK() {
+  return `SCHEMA:
 {
   "rising_signals": [/* exactly 3 */],
   "falling_signals": [/* exactly 3 */],
@@ -55,27 +79,25 @@ Each horizon signal:
   "title": string,
   "description": string,
   "horizon": string
+}`;
 }
-
-RULES:
-- Base signals on actual search results — cite real trends you found
-- Personalise EVERYTHING to the specific user's DNA scores, skills, and background
-- dna_fit_score: skill match (25%) + capital fit (20%) + lifestyle fit (20%) + values alignment (20%) + market timing (15%)
-- Be specific: name actual industries, real roles, concrete first steps
-- No hype words: no "game-changing", "revolutionary", "disruptive potential"
-- Output ONLY the JSON object after searching. Nothing else.`;
 
 function buildUserMessage(
   firstName: string,
   dnaScores: Record<string, unknown>,
   rawAnswers: Record<string, string>,
   cvSummary?: string,
+  withSearch = true,
 ): string {
   const cvBlock = cvSummary?.trim() ? `\n\nCV / Portfolio Summary:\n${cvSummary.trim()}` : "";
   const answersBlock = Object.entries(rawAnswers)
     .filter(([, v]) => v?.trim())
     .map(([k, v]) => `- ${k}: ${v}`)
     .join("\n");
+
+  const task = withSearch
+    ? "Search for live market trends and signals relevant to this person's domain and skills. Then generate a personalised Market Intelligence Report. Output only the JSON."
+    : "Generate a personalised Market Intelligence Report for this specific user. Return only the JSON.";
 
   return `User: ${firstName}
 
@@ -85,7 +107,70 @@ ${JSON.stringify(dnaScores, null, 2)}
 Assessment Answers:
 ${answersBlock || "(none provided)"}${cvBlock}
 
-Search for live market trends and signals relevant to this person's domain and skills. Then generate a personalised Market Intelligence Report. Output only the JSON.`;
+${task}`;
+}
+
+async function generateWithSearch(userMessage: string): Promise<string> {
+  const webSearchTool: Anthropic.Messages.WebSearchTool20250305 = {
+    name: "web_search",
+    type: "web_search_20250305",
+  };
+
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
+  let finalText = "";
+  let iterations = 0;
+
+  while (iterations < 6) {
+    iterations++;
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8096,
+      system: SYSTEM_PROMPT_LIVE,
+      tools: [webSearchTool],
+      messages,
+    });
+
+    for (const block of response.content) {
+      if (block.type === "text") finalText = block.text;
+    }
+
+    if (response.stop_reason === "end_turn") break;
+
+    if (response.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: response.content });
+      messages.push({ role: "user", content: [{ type: "text", text: "Continue." }] });
+      continue;
+    }
+
+    break;
+  }
+
+  return finalText;
+}
+
+async function generateFallback(userMessage: string): Promise<string> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system: SYSTEM_PROMPT_FALLBACK,
+    messages: [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: "{" },
+    ],
+  });
+  const text = message.content[0].type === "text" ? message.content[0].text : "";
+  return "{" + text;
+}
+
+function parseReport(text: string): MIEReport {
+  const jsonStart = text.indexOf("{");
+  const jsonEnd = text.lastIndexOf("}");
+  const raw =
+    jsonStart !== -1 && jsonEnd > jsonStart
+      ? text.slice(jsonStart, jsonEnd + 1)
+      : text.trim();
+  const parsed = JSON.parse(raw);
+  return { ...parsed, generated_at: new Date().toISOString() };
 }
 
 export async function POST(req: NextRequest) {
@@ -103,67 +188,22 @@ export async function POST(req: NextRequest) {
     };
 
     const { firstName, dnaScores, rawAnswers, cvSummary } = body;
-    const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary);
 
-    const webSearchTool: Anthropic.Messages.WebSearchTool20250305 = {
-      name: "web_search",
-      type: "web_search_20250305",
-    };
+    let report: MIEReport | null = null;
 
-    const messages: Anthropic.MessageParam[] = [
-      { role: "user", content: userMessage },
-    ];
-
-    let finalText = "";
-    let iterations = 0;
-    const MAX_ITERATIONS = 6;
-
-    while (iterations < MAX_ITERATIONS) {
-      iterations++;
-
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8096,
-        system: SYSTEM_PROMPT,
-        tools: [webSearchTool],
-        messages,
-      });
-
-      for (const block of response.content) {
-        if (block.type === "text") {
-          finalText = block.text;
-        }
-      }
-
-      if (response.stop_reason === "end_turn") break;
-
-      if (response.stop_reason === "pause_turn") {
-        messages.push({ role: "assistant", content: response.content });
-        messages.push({ role: "user", content: [{ type: "text", text: "Continue." }] });
-        continue;
-      }
-
-      break;
-    }
-
-    if (!finalText) {
-      return new Response(JSON.stringify({ error: "No response generated" }), { status: 500 });
-    }
-
-    const jsonStart = finalText.indexOf("{");
-    const jsonEnd = finalText.lastIndexOf("}");
-    const raw =
-      jsonStart !== -1 && jsonEnd > jsonStart
-        ? finalText.slice(jsonStart, jsonEnd + 1)
-        : finalText.trim();
-
-    let report: MIEReport;
+    // Try live web search first; fall back to training-data generation on any error
     try {
-      const parsed = JSON.parse(raw);
-      report = { ...parsed, generated_at: new Date().toISOString() };
-    } catch {
-      console.error("MIE JSON parse error. Raw:", raw.slice(0, 500));
-      return new Response(JSON.stringify({ error: "Failed to parse report" }), { status: 500 });
+      const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary, true);
+      const text = await generateWithSearch(userMessage);
+      if (text) report = parseReport(text);
+    } catch (searchErr) {
+      console.warn("MIE web search failed, falling back to training data:", searchErr);
+    }
+
+    if (!report) {
+      const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary, false);
+      const text = await generateFallback(userMessage);
+      report = parseReport(text);
     }
 
     return new Response(JSON.stringify({ report }), {

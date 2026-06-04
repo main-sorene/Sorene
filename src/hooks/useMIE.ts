@@ -76,9 +76,11 @@ export function useMIE() {
     }
   }, [user?.uid]);
 
-  // Allow any user who has completed DNA assessment OR has dna scores
+  // Allow any user who has completed DNA assessment OR has dna scores.
+  // If we already have a cached report (status=complete), allow regenerate even
+  // while profile query is still loading — we'll send whatever profile data we have.
   const hasProfile = !!(profile?.dnaAssessmentComplete || profile?.dnaScores);
-  const canGenerate = !!user?.uid && hasProfile && status !== "loading";
+  const canGenerate = !!user?.uid && (hasProfile || status === "complete") && status !== "loading";
   const lastRun = report?.generated_at ?? null;
 
   const generate = useCallback(async () => {

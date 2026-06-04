@@ -10,17 +10,17 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const SYSTEM_PROMPT = `You are Sorene's Problem Scan Engine. You autonomously research real pain signals from online communities and match them to business opportunities aligned with the user's professional DNA.
 
 Your job:
-1. Use the web_search tool to scan Reddit, Quora, Twitter/X, Facebook Groups, Product Hunt, App Store reviews, and LLM communities for real complaints, frustrations, and unmet needs relevant to the user's domain and skills.
-2. Extract pain signals and score each one:
-   - Pain intensity: 1-5 (how severe is the suffering)
-   - Frequency: 1-5 (how often it appears)
-   - Market gap: 1-5 (no good existing solution)
-   - DNA match: 1-5 (how well this person can solve it)
-   - Qualify if total ≥ 14
+1. Use the web_search tool to scan Reddit, Quora, Twitter/X, Product Hunt, and App Store reviews for real complaints, frustrations, and unmet needs relevant to the user's domain and skills.
+2. After searching, extract the top pain signals and score each:
+   - Pain intensity: 1-5
+   - Frequency: 1-5
+   - Market gap: 1-5
+   - DNA match: 1-5
+   - Qualify if total >= 14
 3. For each qualifying signal, generate a concrete business idea aligned to the user's background.
-4. Return the top 5 ranked opportunities.
+4. Return the top 5 ranked opportunities as JSON.
 
-After searching, output ONLY valid JSON — no markdown, no prose, no code fences.
+Output ONLY valid JSON after your searches. No markdown, no prose, no code fences.
 
 SCHEMA:
 {
@@ -43,10 +43,9 @@ Each opportunity:
 }
 
 RULES:
-- Base everything on actual search results — cite real platforms and community types
-- Personalise why_fits_you to this specific user's skills, archetype, and DNA scores
-- Be concrete: name specific communities, pain points, and first steps
-- No hype words. Output ONLY the JSON object.`;
+- Base evidence on actual search results
+- Personalise why_fits_you to this specific user's DNA scores and background
+- Output ONLY the JSON object after searching. Nothing else.`;
 
 function buildUserMessage(
   firstName: string,
@@ -68,7 +67,7 @@ ${JSON.stringify(dnaScores, null, 2)}
 Assessment Answers:
 ${answersBlock || "(none provided)"}${cvBlock}
 
-Search for real pain signals online that this person is uniquely positioned to solve, then generate a ranked list of the top 5 business opportunities. Use web_search to scan multiple channels. Return only the JSON.`;
+Search for real pain signals online that this person is uniquely positioned to solve. Use web_search to scan Reddit, Quora, X, and Product Hunt. Then output the top 5 business opportunities as JSON only.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -88,14 +87,17 @@ export async function POST(req: NextRequest) {
     const { firstName, dnaScores, rawAnswers, cvSummary } = body;
     const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary);
 
-    // Agentic loop with web_search tool
+    // web_search is a server-side tool — Anthropic executes searches automatically.
+    // We run a multi-turn loop: after each response, if stop_reason is "end_turn",
+    // the model has finished. If it's "tool_use" with web_search blocks, those were
+    // already executed server-side; we just continue the conversation.
     const messages: Anthropic.MessageParam[] = [
       { role: "user", content: userMessage },
     ];
 
     let finalText = "";
     let iterations = 0;
-    const MAX_ITERATIONS = 10;
+    const MAX_ITERATIONS = 8;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
@@ -107,43 +109,37 @@ export async function POST(req: NextRequest) {
         tools: [
           {
             name: "web_search",
-            type: "web_search_20250305" as never,
-          },
+            type: "web_search_20250305",
+          } as unknown as Anthropic.Tool,
         ],
         messages,
       });
 
-      // Collect any text content
+      // Capture any text blocks
       for (const block of response.content) {
         if (block.type === "text") {
           finalText = block.text;
         }
       }
 
-      // If end_turn or no tool use, we're done
       if (response.stop_reason === "end_turn") break;
 
-      // Handle tool_use blocks
-      const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
-      if (toolUseBlocks.length === 0) break;
+      // For tool_use stop: web_search results are already embedded in response.content
+      // as server_tool_use blocks. Continue the conversation by appending the assistant
+      // turn — no need to send fake tool_results back.
+      if (response.stop_reason === "tool_use") {
+        messages.push({ role: "assistant", content: response.content });
+        // Continue — next call will have access to search results in context
+        continue;
+      }
 
-      // Add assistant message
-      messages.push({ role: "assistant", content: response.content });
-
-      // Add tool results (web_search results are provided by Anthropic natively)
-      const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((block) => {
-        if (block.type !== "tool_use") throw new Error("unexpected");
-        return {
-          type: "tool_result" as const,
-          tool_use_id: block.id,
-          content: "Search completed.",
-        };
-      });
-
-      messages.push({ role: "user", content: toolResults });
+      break;
     }
 
-    // Parse JSON from final text
+    if (!finalText) {
+      return new Response(JSON.stringify({ error: "No response generated" }), { status: 500 });
+    }
+
     const jsonStart = finalText.indexOf("{");
     const jsonEnd = finalText.lastIndexOf("}");
     const raw = jsonStart !== -1 && jsonEnd > jsonStart
@@ -164,6 +160,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Problem scan API error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 }

@@ -152,7 +152,11 @@ export function useAssessmentFlow() {
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
 
   // Collected profile data during the profile phase of assessment
-  const pendingProfileRef = useRef<{ firstName?: string; lastName?: string; birthday?: string; gender?: string }>({});
+  // Pre-seeded with existing profile values so CV-path confirmation can fall back to them
+  const pendingProfileRef = useRef<{ firstName?: string; lastName?: string; birthday?: string; gender?: string }>({
+    firstName,
+    lastName: (authUser?.profile as any)?.lastName || "",
+  });
 
   const SESSION_KEY = `assessment_state_${authUser?.uid || "guest"}`;
 
@@ -286,9 +290,13 @@ export function useAssessmentFlow() {
         });
 
         let summary = "";
+        let cvFirstName = firstName;
+        let cvLastName = (authUser?.profile as any)?.lastName || "";
         if (res.ok) {
           const data = await res.json();
           summary = (data?.summary || "").trim();
+          if (data?.firstName) cvFirstName = data.firstName;
+          if (data?.lastName !== undefined) cvLastName = data.lastName;
         }
 
         const cvDataPayload = {
@@ -298,10 +306,12 @@ export function useAssessmentFlow() {
           text_length: file.size,
         };
 
-        // Persist to Firestore and local atom
+        // Persist CV data + extracted name to Firestore and local atom
         await saveUserProfile(authUser.uid, {
           cvData: cvDataPayload,
           ...(summary ? { cvSummary: summary } : {}),
+          ...(cvFirstName ? { firstName: cvFirstName } : {}),
+          lastName: cvLastName,
         } as any);
 
         setAuthUser({
@@ -310,8 +320,14 @@ export function useAssessmentFlow() {
             ...(authUser.profile as any),
             cvData: cvDataPayload,
             ...(summary ? { cvSummary: summary } : {}),
+            ...(cvFirstName ? { firstName: cvFirstName } : {}),
+            lastName: cvLastName,
           },
         });
+
+        // Pre-seed pendingProfileRef with CV-extracted names
+        pendingProfileRef.current.firstName = cvFirstName;
+        pendingProfileRef.current.lastName = cvLastName;
 
         // Show CV context (if we got a summary) + first energy question
         if (summary) {
@@ -321,8 +337,8 @@ export function useAssessmentFlow() {
             content: CV_CONTEXT_MESSAGE(summary),
           });
         }
-        // After CV upload, confirm the name we got from the CV
-        const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
+        // After CV upload, confirm the full name we got from the CV
+        const ctx: AssessmentContext = { profile: { firstName: cvFirstName, lastName: cvLastName }, answers: {}, hasCv: true };
         const confirmNode = getNode("onb_confirm_name")!;
         addMessage({
           id: `onb-confirm-${Date.now()}`,
@@ -402,9 +418,17 @@ export function useAssessmentFlow() {
       // ── Profile collection phase (onb_* nodes) ───────────────────────────────
       if (nodeId.startsWith("onb_")) {
         if (nodeId === "onb_confirm_name" || nodeId === "onb_name_full") {
-          const parts = answerForLogic.trim().split(/\s+/);
-          pendingProfileRef.current.firstName = parts[0] || answerForLogic.trim();
-          pendingProfileRef.current.lastName = parts.slice(1).join(" ") || "";
+          // For onb_confirm_name: if user says "yes"/"correct"/"right"/etc., keep existing profile name
+          const isAffirmative = /^\s*(yes|yeah|yep|yup|correct|right|that'?s? (right|correct|me)|ok|okay|sure|✓|👍)\s*$/i.test(answerForLogic.trim());
+          if (nodeId === "onb_confirm_name" && isAffirmative) {
+            // Keep firstName/lastName already on the profile — don't overwrite
+            pendingProfileRef.current.firstName = pendingProfileRef.current.firstName || firstName;
+            pendingProfileRef.current.lastName = pendingProfileRef.current.lastName ?? (authUser?.profile?.lastName || "");
+          } else {
+            const parts = answerForLogic.trim().split(/\s+/);
+            pendingProfileRef.current.firstName = parts[0] || answerForLogic.trim();
+            pendingProfileRef.current.lastName = parts.slice(1).join(" ") || "";
+          }
         } else if (nodeId === "onb_birthday") {
           pendingProfileRef.current.birthday = answerForLogic.trim();
         } else if (nodeId === "onb_gender") {
@@ -446,14 +470,16 @@ export function useAssessmentFlow() {
         }
 
         // Advance to the next profile node
+        const pendingFirst = pendingProfileRef.current.firstName || firstName;
+        const pendingLast = pendingProfileRef.current.lastName ?? "";
         const nextId = typeof currentNode.next === "function"
-          ? currentNode.next(answerForLogic, { profile: { firstName: pendingProfileRef.current.firstName || firstName }, answers, hasCv })
+          ? currentNode.next(answerForLogic, { profile: { firstName: pendingFirst, lastName: pendingLast }, answers, hasCv })
           : currentNode.next;
 
         const nextNode = getNode(nextId);
         if (nextNode) {
           const profileCtx: AssessmentContext = {
-            profile: { firstName: pendingProfileRef.current.firstName || firstName },
+            profile: { firstName: pendingFirst, lastName: pendingLast },
             answers,
             hasCv,
           };

@@ -1,6 +1,6 @@
 "use client";
 export type AssessmentContext = {
-  profile: { firstName: string; cvFileName?: string | null };
+  profile: { firstName: string; lastName?: string; cvFileName?: string | null };
   answers: Record<string, string>;
   hasCv: boolean;
 };
@@ -34,11 +34,13 @@ export type QuestionNode = {
 // not to assessment scoring answers.
 export const PROFILE_NODES: QuestionNode[] = [
   {
-    // Shown when user uploaded a CV — confirm the name we extracted
+    // Shown when user uploaded a CV — confirm the full name we extracted
     id: "onb_confirm_name",
     signal: "Profile Setup",
-    soreneMessage: (ctx) =>
-      `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${ctx.profile.firstName}**. Is that the name you go by?`,
+    soreneMessage: (ctx) => {
+      const fullName = [ctx.profile.firstName, ctx.profile.lastName].filter(Boolean).join(" ");
+      return `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${fullName}**. Is that correct? If not, just type your full name.`;
+    },
     inputType: "freetext",
     next: "onb_birthday",
   },

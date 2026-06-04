@@ -10,7 +10,17 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PROMPT = `You're Sorene, a personalized entrepreneurship coach.
 
-The attached file is the user's CV, portfolio, or resume. Write a narrative summary of what you see in their background — in second person, as if speaking warmly and directly to them ("I can see you've...", "You moved from...").
+The attached file is the user's CV, portfolio, or resume.
+
+First, extract the person's full name from the CV. Then write a narrative summary of their background.
+
+Output in this exact format (no other text before or after):
+FIRST_NAME: <first name only>
+LAST_NAME: <last name(s) only, or empty if not found>
+SUMMARY:
+<narrative summary here>
+
+For the summary: write in second person, speaking warmly and directly ("I can see you've...", "You moved from...").
 
 Focus on:
 - Concrete years and domains of experience (use real numbers)
@@ -23,10 +33,7 @@ Style rules:
 - Specific, not generic — name fields, sectors, years, transitions
 - Warm and observational, like a coach noticing patterns
 - Never use the words "candidate" or "applicant"
-- No bullet points, no headings
-- Don't introduce yourself or restate the prompt — just output the summary directly
-
-Output only the summary text, nothing else.`;
+- No bullet points, no headings in the summary`;
 
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
@@ -81,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 600,
+      max_tokens: 700,
       messages: [
         {
           role: "user",
@@ -91,9 +98,18 @@ export async function POST(req: NextRequest) {
     });
 
     const block = message.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
+    const raw = block && block.type === "text" ? block.text.trim() : "";
 
-    return Response.json({ summary: text });
+    // Parse structured output
+    const firstNameMatch = raw.match(/^FIRST_NAME:\s*(.+)$/m);
+    const lastNameMatch = raw.match(/^LAST_NAME:\s*(.*)$/m);
+    const summaryMatch = raw.match(/^SUMMARY:\s*\n([\s\S]+)$/m);
+
+    const extractedFirstName = firstNameMatch?.[1]?.trim() || "";
+    const extractedLastName = lastNameMatch?.[1]?.trim() || "";
+    const summary = summaryMatch?.[1]?.trim() || raw;
+
+    return Response.json({ summary, firstName: extractedFirstName, lastName: extractedLastName });
   } catch (error) {
     console.error("[cv-summary] error:", error);
     return Response.json(

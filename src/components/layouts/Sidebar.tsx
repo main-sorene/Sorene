@@ -243,6 +243,22 @@ export function Sidebar({
     refetchConvo();
   }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // When assessment completes, force-reload from localStorage so the
+  // assessment conversation appears in the sidebar immediately.
+  useEffect(() => {
+    if (!isAssessmentComplete || !authUser?.uid) return;
+    const local = loadLocalConversations(authUser.uid);
+    if (local.length > 0) {
+      setConversations((prev) => {
+        const merged = [...prev];
+        local.forEach((lc) => {
+          if (!merged.find((m) => m.id === lc.id)) merged.push(lc);
+        });
+        return sortConvos(merged);
+      });
+    }
+  }, [isAssessmentComplete, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Persist conversations to localStorage whenever they change
   useEffect(() => {
     if (!convoStorageKey || conversations.length === 0) return;

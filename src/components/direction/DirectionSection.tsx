@@ -1,6 +1,7 @@
 "use client";
 
 import { DirectionCard } from "./DirectionCard";
+import { MarketIntelligenceCard } from "./MarketIntelligenceCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
 import { useAtom } from "jotai";
 import {
@@ -150,6 +151,13 @@ export const DirectionSection = () => {
             </div>
           </section>
         )}
+
+        <section className="space-y-3">
+          <h3 className="text-sm font-medium text-[#62646A] px-1">
+            Market Intelligence
+          </h3>
+          <MarketIntelligenceCard />
+        </section>
       </div>
     );
   }
@@ -235,6 +243,14 @@ export const DirectionSection = () => {
               </div>
             ))}
         </div>
+      </section>
+
+      {/* Market Intelligence Section */}
+      <section>
+        <h2 className="text-sm font-medium text-[#62646A] mb-4 px-2">
+          Market Intelligence
+        </h2>
+        <MarketIntelligenceCard />
       </section>
     </div>
   );

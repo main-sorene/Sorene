@@ -190,7 +190,6 @@ function computeScores(answers: RawAnswers): DnaScores {
     success_feeling,
     energy_source,
     energy_drains,
-<<<<<<< HEAD
     primary_motivation,
     collaboration_mode,
     structure_preference,
@@ -200,9 +199,7 @@ function computeScores(answers: RawAnswers): DnaScores {
     time_availability,
     readiness_label,
     strength_patterns,
-=======
     quit_reason,
->>>>>>> 1dcba53 (Add quit-reason question and negative filter to direction engine)
   };
 }
 

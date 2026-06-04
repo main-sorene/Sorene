@@ -130,6 +130,54 @@ function ConversationItem({ conv }: { conv: Conversation }) {
   );
 }
 
+function sortConvos(list: Conversation[]): Conversation[] {
+  return [...list].sort((a, b) => {
+    const timeA = new Date(a.updatedAt).getTime();
+    const timeB = new Date(b.updatedAt).getTime();
+    if (timeA !== timeB) return timeB - timeA;
+    return (b.id || "").localeCompare(a.id || "");
+  });
+}
+
+// Gather every locally-stored conversation for a user, independent of the
+// backend history API (which may be unavailable). Sources:
+//  - convos_<uid>            : the full persisted snapshot
+//  - dna_chat_<uid>_*        : local-only DNA chats
+//  - direction_chat_<uid>_*  : local-only direction chats
+//  - assessment_conv_<uid>   : the assessment conversation
+function loadLocalConversations(uid: string): Conversation[] {
+  const out: Conversation[] = [];
+  const seen = new Set<string>();
+  const push = (c: Conversation | null | undefined) => {
+    if (!c?.id || seen.has(c.id)) return;
+    seen.add(c.id);
+    out.push({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt) });
+  };
+
+  try {
+    const stored = localStorage.getItem(`convos_${uid}`);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Conversation[];
+      if (Array.isArray(parsed)) parsed.forEach(push);
+    }
+  } catch {}
+
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(`dna_chat_${uid}_`) || k.startsWith(`direction_chat_${uid}_`))
+      .forEach((k) => {
+        try { push(JSON.parse(localStorage.getItem(k)!)); } catch {}
+      });
+  } catch {}
+
+  try {
+    const stored = localStorage.getItem(`assessment_conv_${uid}`);
+    if (stored) push(JSON.parse(stored));
+  } catch {}
+
+  return sortConvos(out);
+}
+
 interface SidebarProps {
   mobile?: boolean;
   collapsed?: boolean;
@@ -163,27 +211,24 @@ export function Sidebar({
 
   const convoStorageKey = authUser?.uid ? `convos_${authUser.uid}` : null;
 
-  // Restore conversations from localStorage on login
+  // Restore conversations from localStorage on login — independent of the
+  // backend history API, so chats survive refresh/login even when it's down.
   useEffect(() => {
     if (!authUser?.uid) {
       setConversations([]);
       // Clear any leftover storage (logout case handled by uid change)
       return;
     }
-    const key = `convos_${authUser.uid}`;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Conversation[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setConversations(parsed.map((c) => ({
-            ...c,
-            createdAt: new Date(c.createdAt),
-            updatedAt: new Date(c.updatedAt),
-          })));
-        }
-      }
-    } catch {}
+    const local = loadLocalConversations(authUser.uid);
+    if (local.length > 0) {
+      setConversations((prev) => {
+        const merged = [...prev];
+        local.forEach((lc) => {
+          if (!merged.find((m) => m.id === lc.id)) merged.push(lc);
+        });
+        return sortConvos(merged);
+      });
+    }
     refetchConvo();
   }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 

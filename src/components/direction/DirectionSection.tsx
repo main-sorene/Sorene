@@ -604,7 +604,6 @@ export const DirectionSection = () => {
           <DirectionCard
             variant="hero"
             {...mapIdeaToCardProps(displayedHero)}
-            badges={heroBadges}
             actionText="View detail"
             onHide={() => hideCard(displayedHero.name)}
           />
@@ -614,7 +613,6 @@ export const DirectionSection = () => {
             variant="hero"
             title={rd.title}
             description={rd.description}
-            badges={heroBadges}
             actionText="View detail"
             score={String(rd.score)}
             whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}

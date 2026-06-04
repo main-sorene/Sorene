@@ -171,7 +171,7 @@ export const QUESTION_NODES: QuestionNode[] = [
       condition: (answer) =>
         answer.includes("All the time") || answer.includes("Pretty often"),
       message:
-        "So this was a real thread — not just a one-off. Did it consistently energize you, or did it start to feel like extra work on top of your real job?",
+        "So this was a real pattern, not just a one-off. When it happened, did it feel exciting and natural — or more like extra effort you had to push through?",
       inputType: "freetext",
     },
   },

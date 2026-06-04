@@ -387,6 +387,35 @@ export function useAssessmentFlow() {
     questionSignal: string,
     userAnswer: string,
   ) {
+    // ── Dynamic background phase ──────────────────────────────────────────────
+    // When we're entering or continuing the bg* phase, ask Claude whether
+    // the next static question is still needed or if info was already given.
+    if (nextId.startsWith("bg")) {
+      setIsReflecting(true);
+      try {
+        const res = await authFetch("/api/bg-next-question", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers: currentAnswers, preferredLanguage }),
+        });
+        const data = await res.json() as { done: boolean; question: string | null; nodeId: string | null };
+        setIsReflecting(false);
+        if (data.done) {
+          // All background covered — jump straight to working-style questions
+          return advanceToNode("q1_energy", currentAnswers, ctx, questionSignal, userAnswer);
+        }
+        if (data.question && data.nodeId) {
+          addMessage({ id: `bg-dyn-${Date.now()}`, role: "assistant", content: data.question });
+          setFlowState({ phase: "question", nodeId: data.nodeId, awaitingFollowUp: false });
+          return;
+        }
+        // Fallback: proceed with static node if API returned nothing useful
+      } catch {
+        setIsReflecting(false);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (nextId === "closing") {
       setIsReflecting(true);
       // Fetch reflection for final answer + closing summary in parallel

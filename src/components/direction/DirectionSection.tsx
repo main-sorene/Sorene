@@ -266,7 +266,7 @@ export const DirectionSection = () => {
       ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
     ];
 
-    const hasOtherDirections = visibleAltCards.length > 0 || visibleRecipes.length > 0 || !!promotedAlt || !!promotedRecipe;
+    const hasOtherDirections = gridAltCards.length > 0 || gridRecipes.length > 0;
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
@@ -319,12 +319,12 @@ export const DirectionSection = () => {
         {/* Other directions — alt structured + recipe cards */}
         {hasOtherDirections && (() => {
           // If any "other" card is expanded, pull it to full-width hero position
-          const expandedAlt = visibleAltCards.find((c) => expandedId === c.title);
-          const expandedRecipe = visibleRecipes.find((rd) => expandedId === rd.id);
-          const expandedItem = expandedAlt || expandedRecipe;
+          const expandedAlt = gridAltCards.find((c) => expandedId === c.title);
+          const expandedRecipe = gridRecipes.find((rd) => expandedId === rd.id);
 
-          const gridOnlyAltCards = visibleAltCards.filter((c) => expandedId !== c.title);
-          const gridOnlyRecipes = visibleRecipes.filter((rd) => expandedId !== rd.id);
+          // Exclude cards already in hero position (promoted or expanded)
+          const gridOnlyAltCards = gridAltCards.filter((c) => expandedId !== c.title);
+          const gridOnlyRecipes = gridRecipes.filter((rd) => expandedId !== rd.id);
           const hasGrid = gridOnlyAltCards.length > 0 || gridOnlyRecipes.length > 0;
 
           return (

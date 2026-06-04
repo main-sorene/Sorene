@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -296,7 +296,7 @@ function DirectSyncContent() {
     name: string;
     platform: "telegram" | "whatsapp";
     description: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
   }> = [
     {
       name: "WhatsApp",
@@ -520,11 +520,11 @@ interface FolderDef {
   id: string;
   gradient: string;
   iconSrc?: string;
-  iconNode?: React.ReactNode;
+  iconNode?: ReactNode;
   title: string;
   tagline: string;
   description: string;
-  content: React.ReactNode;
+  content: ReactNode;
   strengthTags?: string[];
 }
 

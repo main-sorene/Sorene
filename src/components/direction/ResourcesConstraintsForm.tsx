@@ -63,7 +63,7 @@ export function ResourcesConstraintsForm() {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
-  const { primaryCard } = useDirectionResult();
+  const { primaryCard, generateMore, isGeneratingMore, canGenerateMore } = useDirectionResult();
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -298,15 +298,27 @@ export function ResourcesConstraintsForm() {
                 </p>
               </div>
             </div>
-            <div className="mt-auto flex items-center justify-between">
+            <div className="mt-auto flex items-center justify-between gap-3">
               {hasAnyData ? (
                 <span className="text-[12px] text-white/60">{filledCount} field{filledCount !== 1 ? "s" : ""} saved</span>
               ) : (
                 <span className="text-[12px] text-white/50">Not filled in yet</span>
               )}
-              <div className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">
-                {hasNoDirections && !hasAnyData ? "Get started" : "Fill in"}
-                <ChevronDown size={14} />
+              <div className="flex items-center gap-2">
+                {canGenerateMore && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); generateMore(); }}
+                    disabled={isGeneratingMore}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {isGeneratingMore && <Loader2 size={12} className="animate-spin" />}
+                    {isGeneratingMore ? "Generating…" : "Generate More Direction"}
+                  </button>
+                )}
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">
+                  {hasNoDirections && !hasAnyData ? "Get started" : "Edit"}
+                  <ChevronDown size={14} />
+                </div>
               </div>
             </div>
           </motion.div>

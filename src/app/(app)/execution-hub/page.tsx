@@ -17,7 +17,6 @@ import {
   MessageCircle,
   BarChart3,
   Lock,
-  PenSquare,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -659,13 +658,14 @@ export default function Page() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleNewChat}
+          <a
+            href="https://discord.gg/2YtvCm2SWp"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-body-small-medium hover:bg-[#2a2a2a] transition-colors"
           >
-            <PenSquare size={14} />
-            New Chat
-          </button>
+            Product Feedback
+          </a>
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="w-9 h-9 rounded-full overflow-hidden hover:ring-2 ring-black/10 transition-all shrink-0"

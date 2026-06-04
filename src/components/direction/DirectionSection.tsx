@@ -2,6 +2,7 @@
 
 import { DirectionCard } from "./DirectionCard";
 import { MarketIntelligenceCard } from "./MarketIntelligenceCard";
+import { ProblemToSolveCard } from "./ProblemToSolveCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
 import { useAtom, useAtomValue } from "jotai";
 import {
@@ -202,6 +203,7 @@ export const DirectionSection = () => {
         <div className="flex flex-col gap-4">
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
           <MarketIntelligenceCard />
+          <ProblemToSolveCard />
         </div>
       </div>
     </div>
@@ -449,8 +451,8 @@ export const DirectionSection = () => {
         {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
 
         <section className="space-y-3">
-          
           <MarketIntelligenceCard />
+          <ProblemToSolveCard />
         </section>
       </div>
     );
@@ -597,8 +599,8 @@ export const DirectionSection = () => {
         )}
 
         <section className="space-y-3">
-          
           <MarketIntelligenceCard />
+          <ProblemToSolveCard />
         </section>
       </div>
     );
@@ -779,8 +781,8 @@ export const DirectionSection = () => {
       </section>
 
       <section className="space-y-3">
-        
         <MarketIntelligenceCard />
+        <ProblemToSolveCard />
       </section>
     </div>
   );

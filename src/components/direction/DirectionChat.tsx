@@ -83,7 +83,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     const conv: Conversation = {
       id: convId, title: firstUser.slice(0, 50) + (firstUser.length > 50 ? "..." : ""),
       messages: sidebarMessages, createdAt: new Date(), updatedAt: new Date(),
-      model: "sorene-1", segment: "direction", isCreatedOnBackend: false,
+      model: "sorene-1", segment: "ideation", isCreatedOnBackend: false,
     };
     setConversations((prev) => {
       const idx = prev.findIndex((c) => c.id === convId);

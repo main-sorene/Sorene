@@ -71,8 +71,43 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       description: narrative?.what_drives_you || scores.motivation_driver,
       summary: truncateSummary(narrative?.what_drives_you || scores.success_feeling || scores.motivation_driver || ""),
       key_signals: [
-        { label: "Primary Drive", value: riskLabel === "High" ? "Ambition" : riskLabel === "Medium" ? "Growth" : "Mastery", explanation: "Inferred from your risk and energy patterns." },
-        { label: "Centrality", value: scores.motivation_driver.includes("core focus") ? "Center" : scores.motivation_driver.includes("important component") ? "Key part" : "Supporting", explanation: "Where this work would sit in your life." },
+        {
+          label: "Primary Drive",
+          value: narrative?.primary_motivation_label || (riskLabel === "High" ? "Ambition" : riskLabel === "Medium" ? "Growth" : "Mastery"),
+          explanation: riskLabel === "High"
+            ? "You're wired to move — staying still feels like falling behind."
+            : riskLabel === "Medium"
+            ? "You want to grow without gambling everything — progress with intention."
+            : "You care about doing it right more than doing it fast.",
+        },
+        {
+          label: "Centrality",
+          value: scores.motivation_driver.includes("core focus") ? "Central to your life" : scores.motivation_driver.includes("important component") ? "Key part of your life" : "One element of your life",
+          explanation: scores.motivation_driver.includes("core focus")
+            ? "This isn't a side project — you want it to be the main thing."
+            : scores.motivation_driver.includes("important component")
+            ? "Important, but not the only thing — you're building a bigger picture."
+            : "This fits into a fuller life rather than defining it.",
+        },
+        {
+          label: "Success Feels Like",
+          value: scores.success_feeling ? truncateSummary(scores.success_feeling, 60) : "—",
+          explanation: "Your own words for what winning actually looks like.",
+        },
+        {
+          label: "Non-Negotiable",
+          value: scores.non_negotiable ? truncateSummary(scores.non_negotiable, 60) : "—",
+          explanation: "The trade-off you named as the hardest to live with.",
+        },
+        {
+          label: "Readiness",
+          value: readinessLabel,
+          explanation: readinessLabel === "Ready"
+            ? "You're not waiting for a sign — you're looking for the right direction to commit to."
+            : readinessLabel === "Deciding"
+            ? "You're moving from clarity to commitment — the pieces are coming together."
+            : "You're still figuring out what you want — and that's a real and valid place to be.",
+        },
       ],
       strength_patterns: narrative?.what_drives_you_strengths
         ? narrative.what_drives_you_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)

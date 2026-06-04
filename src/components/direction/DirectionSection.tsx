@@ -103,15 +103,14 @@ function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
   return (
     <div className="mt-4 pt-4 border-t border-[#ECEDEE]">
       <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {hidden.map((card) => (
           <button
             key={card.id}
             onClick={() => onShow(card.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#62646A] hover:bg-[#F1F3F5] transition-all"
+            className="px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#62646A] hover:bg-[#F1F3F5] transition-all text-left truncate"
           >
             {card.title}
-            <span className="text-[#9CA3AF]">· Show</span>
           </button>
         ))}
       </div>

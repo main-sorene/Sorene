@@ -76,18 +76,6 @@ export function useMIE() {
     }
   }, [user?.uid]);
 
-  // Auto-generate MIE on first visit when profile is ready and no cached report
-  useEffect(() => {
-    if (!user?.uid || !profile || status !== "idle" || report) return;
-    const hasP = !!(profile.dnaAssessmentComplete || profile.dnaScores);
-    if (!hasP) return;
-    const cached = loadFromCache(user.uid);
-    if (cached) return; // already loaded above
-    generate();
-  // generate is stable (useCallback), profile/status/report are reactive
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, profile, status, report]);
-
   // Allow any user who has completed DNA assessment OR has dna scores.
   // If we already have a cached report (status=complete), allow regenerate even
   // while profile query is still loading — we'll send whatever profile data we have.

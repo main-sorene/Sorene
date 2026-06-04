@@ -78,13 +78,8 @@ export function useDirectionResult() {
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
     if (!profile.directionEligibility.eligible) return;
 
-    // Auto-generate on first visit: if user has never generated and has no cards,
-    // kick off generation immediately (R&C form is optional — user can refine later).
     const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
-    if (!hasGenerationIntent) {
-      // Set the flag so subsequent visits don't re-trigger, then fall through to generate.
-      try { localStorage.setItem("rcGenerationRequested", "true"); } catch {}
-    }
+    if (!hasGenerationIntent) { setNeedsRC(true); return; }
 
     const generate = async () => {
       setIsStreaming(true);

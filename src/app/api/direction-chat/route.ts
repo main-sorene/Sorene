@@ -83,9 +83,9 @@ Layer 3 — Simple competitors: [names, or "None identified"]
 [If this direction aligns with what they liked about their last job, note it. If it risks repeating what they disliked, flag it explicitly. Write "N/A" if not applicable.]`;
 
 const RECIPE_PROMPTS: Record<string, string> = {
-  "check-my-idea": `You are helping the user stress-test a specific business or project idea they have in mind.
+  "check-my-idea": `You are Sorene, helping the user stress-test a specific business or project idea. You already have their profile (see below). Use it — do not ask about things you already know.
 
-On turn 1: write exactly two warm, friendly sentences inviting the user to share their idea. Nothing else — no question label, no third line.
+On turn 1: write exactly two warm, friendly sentences inviting the user to share their idea — reference their name and one thing from their profile to show you know them. Nothing else — no question label, no third line.
 
 On turns 2–6: write exactly two short paragraphs, nothing more.
 - First paragraph: one sharp observation about what they've shared — a strength, a gap, or a pattern (max 2 sentences).
@@ -101,22 +101,26 @@ SKILLS LEVERAGE: When evaluating their idea, explicitly assess how much of their
 
 Start now with turn 1.`,
 
-  "brainstorm-new-idea": `You are helping the user brainstorm business or project ideas.
+  "brainstorm-new-idea": `You are Sorene, helping the user brainstorm business or project ideas. You already have their profile (see below). Use it — do not ask about things you already know.
 
-On turn 1: write exactly two warm, friendly sentences opening the conversation and setting the tone. Nothing else — no question label, no third line.
+On turn 1: Write a warm welcome paragraph (2–3 sentences) that:
+- Greets them by name
+- Briefly references 2–3 specific things you already know about them (their background, what energises them, their situation — be specific, not generic)
+- Ends with ONE focused question about something genuinely missing from their profile, OR asks which problem area they want to explore — NOT about things already in the profile.
+Nothing else on turn 1. No lists. No "Here's what I know" header.
 
-On turns 2–6: write exactly two short paragraphs, nothing more.
-- First paragraph: one observation about a pattern in what they've shared (max 2 sentences).
+On turns 2–5: write exactly two short paragraphs, nothing more.
+- First paragraph: one sharp observation about what they've shared — connect it to something from their profile if relevant (max 2 sentences).
 - Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
 
-No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
+No labels. No bullet lists. No extra text.
 
-Ask exactly 5 questions, one per turn. After their answer to question 5, output a Direction Card using EXACTLY this format:
+Ask up to 4 more questions (turns 2–5), skipping any whose answer you already know from the profile. After the last question is answered, output a Direction Card using EXACTLY this format:
 ${FULL_CARD_FORMAT}
 
-NEGATIVE FILTER: If the user mentions they disliked certain work types, filter those out of suggestions.
-SKILLS LEVERAGE: Among the 5 questions, naturally ask what they've done before and what felt most natural — this helps ground the brainstorm in their real strengths.
-IKIGAI: Ensure the final direction card sits at the intersection of what they love, what they're good at, what the world needs, and what they can be paid for.
+NEGATIVE FILTER: Filter out directions that repeat work types they disliked.
+SKILLS LEVERAGE: Ground the final direction in their existing expertise — not a new field from scratch.
+IKIGAI: The final direction card must sit at the intersection of what they love, what they're good at, what the world needs, and what they can be paid for.
 
 Start now with turn 1.`,
 
@@ -193,8 +197,41 @@ export async function POST(req: NextRequest) {
 
     const recipePrompt = recipeId ? RECIPE_PROMPTS[recipeId] : null;
     if (recipePrompt) {
-      // Recipe mode: look up prompt server-side, replay full history
-      systemPrompt = recipePrompt;
+      // Recipe mode: inject user profile so the AI doesn't re-ask known info
+      const p = userProfile ?? {};
+      const dna = (p.dnaScores ?? directionContext.dnaScores ?? {}) as Record<string, unknown>;
+      const ans = p.assessmentAnswers ?? {};
+      const nar = p.dnaNarrative ?? {};
+      const res = p.resources ?? {};
+      const or = (v: unknown) => (v && String(v).trim() ? String(v) : null);
+
+      const knownLines: string[] = [];
+      if (or(p.firstName)) knownLines.push(`Name: ${or(p.firstName)}`);
+      if (or(p.occupation) || or(ans["bg1_history"])) knownLines.push(`Background: ${or(p.occupation) || or(ans["bg1_history"])}`);
+      if (or(ans["bg2_skills"])) knownLines.push(`Skills & tools: ${or(ans["bg2_skills"])}`);
+      if (or(p.cvSummary)) knownLines.push(`CV summary: ${p.cvSummary!.slice(0, 300)}`);
+      if (or(nar["core_dna_label"] ?? dna["strength_patterns"])) knownLines.push(`Core pattern: ${or(nar["core_dna_label"] ?? dna["strength_patterns"])}`);
+      if (or(dna["energy_drains"])) knownLines.push(`Energy drains (avoid these): ${or(dna["energy_drains"])}`);
+      if (or(dna["energy_source"])) knownLines.push(`Energy source (what energises them): ${or(dna["energy_source"])}`);
+      if (or(ans["q1b_liked_aspects"])) knownLines.push(`Liked about past work: ${or(ans["q1b_liked_aspects"])}`);
+      if (or(ans["q1b_disliked_aspects"])) knownLines.push(`Disliked about past work: ${or(ans["q1b_disliked_aspects"])}`);
+      if (or(ans["q11_readiness"])) knownLines.push(`Current situation: ${or(ans["q11_readiness"])}`);
+      if (or(ans["q4_time"])) knownLines.push(`Time available: ${or(ans["q4_time"])}`);
+      if (or(ans["q5_finance"])) knownLines.push(`Income target: ${or(ans["q5_finance"])}`);
+      if (or(res.startingCapital)) knownLines.push(`Starting capital: ${or(res.startingCapital)}`);
+      if (or(res.financialRunway)) knownLines.push(`Financial runway: ${or(res.financialRunway)} months`);
+      if (or(res.hoursPerWeek)) knownLines.push(`Hours per week available: ${or(res.hoursPerWeek)}`);
+      if (or(res.incomeFloor)) knownLines.push(`Minimum income floor: ${or(res.incomeFloor)}`);
+      if (or(res.locationFlexibility)) knownLines.push(`Location flexibility: ${or(res.locationFlexibility)}`);
+      if (or(res.growthAmbition)) knownLines.push(`Growth ambition: ${or(res.growthAmbition)}`);
+      if (or(res.networks)) knownLines.push(`Networks & assets: ${or(res.networks)}`);
+      if (or(res.otherNotes)) knownLines.push(`Other context: ${or(res.otherNotes)}`);
+
+      const profileContext = knownLines.length > 0
+        ? `\n\n━━━ WHAT YOU ALREADY KNOW ABOUT THIS USER ━━━\n${knownLines.join("\n")}\n\nCRITICAL RULES:\n- Do NOT ask about anything already listed above — you already know it.\n- If the user shares something NEW that contradicts or adds to the above, acknowledge the update and use the new version going forward.\n- In turn 1, reference 2–3 specific things from the profile to show you know them (name, skills, situation, what energises them etc.).\n- Only ask questions about things genuinely not in the profile.`
+        : "";
+
+      systemPrompt = recipePrompt + profileContext;
       const prior = (history ?? []).map((m) => ({ role: m.role, content: m.content }));
       messages = [...prior, { role: "user" as const, content: message }];
     } else {

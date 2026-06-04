@@ -126,10 +126,11 @@ export function AssessmentChatPage() {
   };
 
   const handleExploreDna = () => {
-    completeAssessment();
-    // Invalidate cached profile so direction cards are fetched fresh after assessment saves
+    // Navigate first — completeAssessment flips isAssessmentCompleteAtom which
+    // immediately re-renders this page to HomePage, causing a flash before /dna loads.
     queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
     router.push("/dna");
+    completeAssessment();
   };
 
   // When done, textarea is disabled but input area stays visible for the DNA button

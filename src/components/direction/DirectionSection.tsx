@@ -16,7 +16,6 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils"
 import { ResourcesConstraintsForm } from "./ResourcesConstraintsForm";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
 const DEFAULT_IDEATION_DATA: IdeationData = {
   user_id: "dummy",
   status: "completed",
@@ -235,22 +234,20 @@ export const DirectionSection = () => {
       );
     }
 
-    // R&C filled but cards not loaded yet — show refresh option
+    // R&C filled but no card generated yet — show the form so the user can
+    // trigger generation via the Generate Direction button.
     return (
-      <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-4 text-center max-w-sm">
-          <p className="text-[15px] text-[#151515] font-medium">Your direction is being prepared</p>
-          <p className="text-sm text-[#9CA3AF]">This usually takes a moment. Refresh if nothing appears.</p>
-          <button
-            onClick={() => {
-              queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
-              window.location.reload();
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-[#2a2a2a] transition-colors"
-          >
-            <RefreshCw size={14} />
-            Refresh
-          </button>
+      <div className="p-3 lg:py-6 lg:px-3 pb-24">
+        <div className="max-w-5xl mx-auto space-y-4 pt-6">
+          <div className="space-y-1">
+            <p className="text-[18px] font-medium text-[#151515] tracking-tight">
+              You're ready for your first direction
+            </p>
+            <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
+              Review your resources and constraints, then generate a direction that fits your real life.
+            </p>
+          </div>
+          <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         </div>
       </div>
     );

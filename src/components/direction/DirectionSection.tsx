@@ -171,8 +171,11 @@ export const DirectionSection = () => {
   if (directionText) {
     const heroHidden = hiddenIds.includes("__hero__");
     const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
     const promotedAlt = heroHidden ? visibleAlts[0] ?? null : null;
+    const promotedRecipe = heroHidden && !promotedAlt ? visibleRecipes[0] ?? null : null;
     const gridAlts = visibleAlts.filter((a) => a !== promotedAlt);
+    const gridRecipes = visibleRecipes.filter((rd) => rd !== promotedRecipe);
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
@@ -199,6 +202,22 @@ export const DirectionSection = () => {
               onHide={() => hideCard(promotedAlt.model)}
             />
           )}
+          {promotedRecipe && (
+            <DirectionCard
+              variant="hero"
+              title={promotedRecipe.title}
+              description={promotedRecipe.description}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(promotedRecipe.score)}
+              whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+              keyRisks={promotedRecipe.keyRisks}
+              recommendedFirstStep={promotedRecipe.firstStep ? { progress: 0, steps: [{ id: "1", label: promotedRecipe.firstStep, completed: false }] } : undefined}
+              isExpanded={expandedId === promotedRecipe.id}
+              onToggle={() => setExpandedId(expandedId === promotedRecipe.id ? null : promotedRecipe.id)}
+              onHide={() => hideCard(promotedRecipe.id)}
+            />
+          )}
         </section>
 
         {(otherDirections.length > 0 || recipeDirections.length > 0 || heroHidden) && (
@@ -218,7 +237,7 @@ export const DirectionSection = () => {
                   onHide={() => hideCard(alt.model)}
                 />
               ))}
-              {recipeDirections.filter((rd) => !hiddenIds.includes(rd.id)).map((rd) => (
+              {gridRecipes.map((rd) => (
                 <div
                   key={rd.id}
                   className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 sm:col-span-2" : "col-span-1")}
@@ -290,13 +309,15 @@ export const DirectionSection = () => {
     setExpandedId(expandedId === name ? null : name);
   };
 
-  // Determine the displayed hero: original best pick if not hidden, else promote first visible other
+  // Determine the displayed hero: original best pick if not hidden, else promote first visible other idea, then first visible recipe
   const heroIsHidden = bestPickIdea ? hiddenIds.includes(bestPickIdea.name) : false;
   const visibleOtherIdeas = otherIdeas.filter((i) => !hiddenIds.includes(i.name));
+  const visibleRecipeCards = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
   const promotedHero = heroIsHidden ? visibleOtherIdeas[0] ?? null : null;
+  const promotedHeroRecipe = heroIsHidden && !promotedHero ? visibleRecipeCards[0] ?? null : null;
   const displayedHero = heroIsHidden ? promotedHero : bestPickIdea ?? null;
-  // Ideas shown in the grid (exclude the promoted hero)
   const gridIdeas = visibleOtherIdeas.filter((i) => i !== promotedHero);
+  const gridRecipeCards = visibleRecipeCards.filter((rd) => rd !== promotedHeroRecipe);
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
@@ -309,6 +330,22 @@ export const DirectionSection = () => {
             badges={heroBadges}
             actionText="View detail"
             onHide={() => hideCard(displayedHero.name)}
+          />
+        )}
+        {promotedHeroRecipe && (
+          <DirectionCard
+            variant="hero"
+            title={promotedHeroRecipe.title}
+            description={promotedHeroRecipe.description}
+            badges={heroBadges}
+            actionText="View detail"
+            score={String(promotedHeroRecipe.score)}
+            whyFitsYou={promotedHeroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+            keyRisks={promotedHeroRecipe.keyRisks}
+            recommendedFirstStep={promotedHeroRecipe.firstStep ? { progress: 0, steps: [{ id: "1", label: promotedHeroRecipe.firstStep, completed: false }] } : undefined}
+            isExpanded={expandedId === promotedHeroRecipe.id}
+            onToggle={() => setExpandedId(expandedId === promotedHeroRecipe.id ? null : promotedHeroRecipe.id)}
+            onHide={() => hideCard(promotedHeroRecipe.id)}
           />
         )}
       </section>
@@ -340,7 +377,7 @@ export const DirectionSection = () => {
                 />
               </div>
             ))}
-          {recipeDirections.filter((rd) => !hiddenIds.includes(rd.id)).map((rd) => (
+          {gridRecipeCards.map((rd) => (
             <div
               key={rd.id}
               className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 md:col-span-2" : "col-span-1")}

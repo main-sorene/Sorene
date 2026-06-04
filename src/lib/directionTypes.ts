@@ -51,4 +51,9 @@ export type DirectionCardData = {
   trend_connection: string;
   complaint_source: string;
   window_risk: string;
+  path_label?: "Safe" | "Aligned" | "Stretch";
+  market_signal_confidence?: "Complaint-validated" | "Inferred" | "Insufficient signal";
+  distribution_path?: string;
+  industry_shift?: string;
+  liked_work_check?: string | null;
 };

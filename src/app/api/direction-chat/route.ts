@@ -34,7 +34,7 @@ It is like [bloated incumbent] but only does [the one thing the complainant actu
 - Lifestyle Fit: [0–100] — [1 sentence: hours, travel, family, growth ambition match]
 
 **Composite Score**
-[average of five scores, integer only]
+[arithmetic mean of all five scores, then subtract 3 points for every Ikigai circle (What You Love, What You're Good At, What The World Needs, What You Can Be Paid For) scored below 60]
 
 **High-Risk Flags**
 - [List any Ikigai circle or Lifestyle Fit scored below 60 with specific reason. If none, write "None"]
@@ -68,7 +68,19 @@ Layer 3 — Simple competitors: [names, or "None identified"]
 [Which validated complaint this is rooted in]
 
 **Window Risk**
-[What closes this window and when]`;
+[What closes this window and when]
+
+**Path**
+[Safe / Aligned / Stretch] — [1 sentence: why this path label applies]
+
+**Market Signal Confidence**
+[Complaint-validated / Inferred / Insufficient signal] — [1 sentence explanation]
+
+**Distribution Path**
+[Specific community, subreddit, Facebook group, event, or association where first 100 customers can be found without a $50K ad budget]
+
+**Work Fit Check**
+[If this direction aligns with what they liked about their last job, note it. If it risks repeating what they disliked, flag it explicitly. Write "N/A" if not applicable.]`;
 
 const RECIPE_PROMPTS: Record<string, string> = {
   "check-my-idea": `You are helping the user stress-test a specific business or project idea they have in mind.
@@ -315,8 +327,11 @@ MODE B — EVALUATE USER'S IDEA
 Section 1 — Idea Clarity Check: Extract who they serve + what outcome. If unclear, ask ONE question. If clear, restate as "You want to [X] for [audience]." and confirm.
 Section 2 — Five Filters Scorecard (score + 1-sentence rationale per filter, referencing their DNA/tools/constraints/assessment). Cross-check against what they liked and disliked about their last job, and their Energy Leak.
 Section 3 — Market Signal Check: validated problem sources, economic urgency of current workaround, confidence level.
-Section 4 — Verdict: ≥70 + no HIGH-RISK → "Worth testing." | 50–69 or 1 flag → "Potential but [issue]. Fix: [concrete action]." | <50 or 2+ flags → "Significant obstacles. Stronger alternative: [specific alternative from their DNA]."
-Section 5 — Refinement Suggestions (1–3, must reference exact constraints/tools/assessment — no generic advice).
+Section 4 — Verdict:
+- Composite ≥70 and no HIGH-RISK flags → "This idea is worth testing. Move to Idea Validator."
+- Composite 50–69 or 1 HIGH-RISK flag → "This idea has potential but [specific issue]. Here's how to address it: [1 concrete fix referencing their exact tools/constraints]."
+- Composite <50 or 2+ HIGH-RISK flags → "This idea faces significant obstacles given your current profile. Here's a stronger alternative that fits you better: [1 specific alternative drawn from their DNA + assessment data]."
+Section 5 — Refinement Suggestions (always include): 1–3 specific refinements to improve filter scores. Each MUST reference the user's exact constraints, tools, assessment context, or DNA. Weak: "Validate with customers." Strong: "Narrow your target to HR managers at Series A startups — your Salesforce certification and ex-colleague network gives you a warm entry that most competitors don't have."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 UNIVERSAL RULES

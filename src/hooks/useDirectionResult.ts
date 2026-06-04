@@ -112,6 +112,13 @@ export function useDirectionResult() {
           ...altModels,
         ];
 
+        const resources = (() => {
+          try {
+            const stored = localStorage.getItem("resourcesConstraints");
+            return stored ? JSON.parse(stored) : undefined;
+          } catch { return undefined; }
+        })();
+
         const res = await authFetch("/api/direction-cards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -121,6 +128,8 @@ export function useDirectionResult() {
             firstName,
             rawAnswers: profile.assessmentAnswers,
             cvSummary: profile.cvSummary,
+            dnaNarrative: profile.dna_narrative,
+            resources,
           }),
         });
 

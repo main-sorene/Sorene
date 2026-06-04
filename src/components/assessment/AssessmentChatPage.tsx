@@ -202,14 +202,14 @@ export function AssessmentChatPage() {
   };
 
   const handleExploreDna = () => {
-    // Mark animation as seen so DNA page doesn't replay the 3-second reveal
-    sessionStorage.setItem("dna-revealed", "1");
     // Pre-populate the DNA query cache with in-memory profile data so the page
     // loads instantly without a Firestore round-trip.
     if (user?.uid && user.profile) {
       queryClient.setQueryData(["dna", user.uid], { ...user.profile, externalProfile: null });
     }
     completeAssessment(); // saves history to sidebar + flips isAssessmentCompleteAtom + removes session key
+    // Do NOT set dna-revealed here — let DNAPage play the "Building your DNA" reveal
+    // animation as the emotional payoff for completing the assessment.
     router.push("/dna");
   };
 

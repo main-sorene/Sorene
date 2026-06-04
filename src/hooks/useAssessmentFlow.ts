@@ -16,7 +16,7 @@ import {
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isAssessmentCompleteAtom, isSettingsOpenAtom, conversationsAtom, type Conversation } from "@/store/atoms";
+import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
@@ -31,7 +31,7 @@ type FlowState =
   | { phase: "opening" }
   | { phase: "question"; nodeId: string; awaitingFollowUp: false }
   | { phase: "question"; nodeId: string; awaitingFollowUp: true; followUpType: "condition" | "always" }
-  | { phase: "settings_review"; nextNodeId: string }  // waiting for user to close settings
+
   | { phase: "closing" }
   | { phase: "done" };
 
@@ -146,7 +146,6 @@ function buildInitialMessages(
 export function useAssessmentFlow() {
   const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
-  const [isSettingsOpen, setIsSettingsOpen] = useAtom(isSettingsOpenAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
@@ -229,28 +228,6 @@ export function useAssessmentFlow() {
 
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
-
-  // When settings closes while in settings_review phase, advance to the next assessment node
-  const prevSettingsOpen = useRef(false);
-  useEffect(() => {
-    const wasOpen = prevSettingsOpen.current;
-    prevSettingsOpen.current = isSettingsOpen;
-    if (wasOpen && !isSettingsOpen && flowState.phase === "settings_review") {
-      const { nextNodeId } = flowState;
-      // Show a transition message then start the assessment
-      const ctx: AssessmentContext = { profile: { firstName }, answers, hasCv };
-      const nextNode = getNode(nextNodeId);
-      if (nextNode) {
-        addMessage({
-          id: `post-settings-${Date.now()}`,
-          role: "assistant",
-          content: getNodeMessage(nextNode, ctx),
-        });
-        setFlowState({ phase: "question", nodeId: nextNodeId, awaitingFollowUp: false });
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSettingsOpen]);
 
   // Skip path: go to profile collection (name/birthday/gender) without CV
   const skipCv = useCallback(() => {
@@ -373,10 +350,7 @@ export function useAssessmentFlow() {
         return;
       }
 
-      if (flowState.phase === "settings_review") {
-        // User typed while settings modal is open — ignore
-        return;
-      }
+
 
       const answerForLogic = canonicalAnswer ?? text;
 
@@ -459,14 +433,20 @@ export function useAssessmentFlow() {
               console.warn("Failed to save profile:", e);
             }
           }
-          addMessage({
-            id: `settings-prompt-${Date.now()}`,
-            role: "assistant",
-            content: "Your profile is set up. Take a moment to review your settings — when you close, we'll begin.",
-          });
-          setIsSettingsOpen(true);
+          // Advance directly to the next assessment node — no Settings popup interruption
           const nextNodeId = hasCv ? "q1_energy" : "bg1_history";
-          setFlowState({ phase: "settings_review", nextNodeId });
+          const pendingFirstAdv = pendingProfileRef.current.firstName || firstName;
+          const pendingLastAdv = pendingProfileRef.current.lastName ?? "";
+          const ctxAdv: AssessmentContext = { profile: { firstName: pendingFirstAdv, lastName: pendingLastAdv }, answers, hasCv };
+          const nextNodeAdv = getNode(nextNodeId);
+          if (nextNodeAdv) {
+            addMessage({
+              id: `q-${nextNodeId}-${Date.now()}`,
+              role: "assistant",
+              content: getNodeMessage(nextNodeAdv, ctxAdv),
+            });
+            setFlowState({ phase: "question", nodeId: nextNodeId, awaitingFollowUp: false });
+          }
           return;
         }
 

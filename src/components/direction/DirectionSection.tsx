@@ -202,25 +202,79 @@ export const DirectionSection = () => {
 
   // ── New structured cards path ─────────────────────────────────────────────
   if (primaryCard) {
+    const heroPrimaryId = `__primary__`;
+    const primaryHidden = hiddenIds.includes(heroPrimaryId);
+    const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+
+    // Promote first visible alt or recipe to hero if primary is hidden
+    const promotedAlt = primaryHidden && visibleAltCards.length > 0 ? visibleAltCards[0] : null;
+    const promotedRecipe = primaryHidden && !promotedAlt && visibleRecipes.length > 0 ? visibleRecipes[0] : null;
+    const gridAltCards = visibleAltCards.filter((c) => c.title !== promotedAlt?.title);
+    const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id);
+
+    const allHidden = [
+      ...(primaryHidden ? [{ id: heroPrimaryId, title: primaryCard.title }] : []),
+      ...altCards.filter((c) => hiddenIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title })),
+      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
+    ];
+
+    const hasOtherDirections = visibleAltCards.length > 0 || visibleRecipes.length > 0 || !!promotedAlt || !!promotedRecipe;
+
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm />
+
+        {/* Hero — primary structured card (or promoted replacement) */}
         <section>
-          <DirectionCard
-            variant="hero"
-            title={primaryCard.title}
-            description={primaryCard.description}
-            badges={heroBadges}
-            actionText="View detail"
-            score={String(primaryCard.compatibility)}
-            cardData={primaryCard}
-          />
+          {!primaryHidden && (
+            <DirectionCard
+              variant="hero"
+              title={primaryCard.title}
+              description={primaryCard.description}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(primaryCard.compatibility)}
+              cardData={primaryCard}
+              onHide={() => hideCard(heroPrimaryId)}
+            />
+          )}
+          {promotedAlt && (
+            <DirectionCard
+              variant="hero"
+              title={promotedAlt.title}
+              description={promotedAlt.description}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(promotedAlt.compatibility)}
+              cardData={promotedAlt}
+              onHide={() => hideCard(promotedAlt.title)}
+            />
+          )}
+          {promotedRecipe && (
+            <DirectionCard
+              variant="hero"
+              title={promotedRecipe.title}
+              description={promotedRecipe.description}
+              badges={heroBadges}
+              actionText="View detail"
+              score={String(promotedRecipe.score)}
+              whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+              keyRisks={promotedRecipe.keyRisks}
+              isExpanded={expandedId === promotedRecipe.id}
+              onToggle={() => setExpandedId(expandedId === promotedRecipe.id ? null : promotedRecipe.id)}
+              onHide={() => hideCard(promotedRecipe.id)}
+              rawContent={promotedRecipe.rawContent}
+            />
+          )}
         </section>
-        {altCards.length > 0 && (
+
+        {/* Other directions — alt structured + recipe cards */}
+        {hasOtherDirections && (
           <section className="space-y-3">
             <h3 className="text-sm font-medium text-[#62646A] px-1">Other possible directions</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {altCards.map((card) => (
+              {gridAltCards.map((card) => (
                 <DirectionCard
                   key={card.title}
                   variant="standard"
@@ -229,11 +283,30 @@ export const DirectionSection = () => {
                   score={String(card.compatibility)}
                   actionText="View detail"
                   cardData={card}
+                  onHide={() => hideCard(card.title)}
+                />
+              ))}
+              {gridRecipes.map((rd) => (
+                <DirectionCard
+                  key={rd.id}
+                  variant="standard"
+                  title={rd.title}
+                  description={rd.description}
+                  score={String(rd.score)}
+                  actionText="View detail"
+                  whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                  keyRisks={rd.keyRisks}
+                  isExpanded={expandedId === rd.id}
+                  onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
+                  onHide={() => hideCard(rd.id)}
+                  rawContent={rd.rawContent}
                 />
               ))}
             </div>
           </section>
         )}
+
+        {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
       </div>
     );
   }

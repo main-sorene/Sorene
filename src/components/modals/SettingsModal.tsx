@@ -234,6 +234,16 @@ export function SettingsModal() {
       setUser(null);
       setConversations([]);
       setIsAssessmentComplete(false);
+      // Clear all local storage data for this user
+      try {
+        Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+        Object.keys(localStorage).filter(k =>
+          k.startsWith("assessment_conv_") ||
+          k.startsWith("convos_") ||
+          k.startsWith("dna_chat_") ||
+          k.startsWith("direction_chat_")
+        ).forEach(k => localStorage.removeItem(k));
+      } catch {}
       setShowDeleteConfirm(false);
       setIsOpen(false);
       // Use window.location for a full page reload to avoid AuthPersistence race conditions

@@ -45,6 +45,8 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 8. strength_patterns_labels — Exactly 4-5 distinct strength labels, comma-separated, each 2-5 words. These should read like beautiful, ownable strengths — specific to what this person actually said. Examples: "Systems Thinking", "Creative Depth", "Empathic Leadership", "Strategic Patience", "Execution Under Pressure". No raw quotes from the user. No generic words like "hardworking" or "motivated". Each label should feel like something this specific person would be proud to own.
 
+9. what_drives_you_strengths — Exactly 3-4 motivation-related strength labels, comma-separated, each 2-5 words. These should reflect what specifically drives this person — their values, longing, or purpose signal. Examples: "Values-Led Ambition", "Meaning Over Metrics", "Sustainable Impact Drive", "Autonomy & Craft". No raw quotes. Beautiful and ownable.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -88,11 +90,15 @@ TITLE: primary_motivation_label
 ---SECTION---
 TITLE: strength_patterns_labels
 
-[4-5 labels, comma-separated]`;
+[4-5 labels, comma-separated]
+---SECTION---
+TITLE: what_drives_you_strengths
+
+[3-4 labels, comma-separated]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2200,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -101,7 +107,7 @@ TITLE: strength_patterns_labels
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

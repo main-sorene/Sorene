@@ -123,10 +123,10 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
               <div className="flex items-center justify-between gap-4 mb-4">
                 <button
                   onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
-                  className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors text-[13px] font-medium"
+                  className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium"
                 >
-                  <ChevronLeft size={16} />
-                  Back
+                  <ChevronLeft size={20} />
+                  Back to summary
                 </button>
                 {saved && (
                   <span className="text-[12px] text-white/70">Direction card added ↓</span>

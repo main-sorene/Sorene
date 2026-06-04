@@ -13,16 +13,20 @@ const BG_SIGNALS = [
   { key: "bg5_turning", label: "career arc — roles and industries that shaped them and how they got here" },
 ];
 
-const SYSTEM_PROMPT = `You are Sorene, conducting a professional background intake. Your job is to figure out what we still need to know, then generate a natural, conversational question to gather it — or decide we already have enough and move on.
+const SYSTEM_PROMPT = `You are Sorene, conducting a professional background intake. Your job is to briefly acknowledge what the user just said, then ask the next question to fill in what's still missing — or decide we already have enough.
 
-Voice: direct, warm, specific. No corporate language. No flattery. No transitions like "Great!" or "Thanks for sharing that."
+Voice: direct, warm, specific. No corporate language. No hollow praise like "Great!" or "Thanks for sharing that." Reference something specific from their answer if you acknowledge it.
+
+Output format (two parts, separated by exactly "---"):
+1. One sentence reflection on their last answer — something specific you noticed or that's worth naming. Do NOT start with "I" or compliment words.
+2. The next question (if still needed), or DONE if all background is covered.
 
 Rules:
-- If the user has already answered the next signal in a prior answer, skip it silently — ask the next uncovered one instead, or declare done.
-- Never ask for information already given. Reference what they said to make the next question feel earned.
-- If all 5 signals are adequately covered across the collected answers, output DONE.
+- If the user has already answered the next signal in a prior answer, skip it — ask the next uncovered one instead, or output DONE.
+- Never ask for information already given.
 - Keep questions short. One question at a time.
-- Match the depth of their answers. If they're terse, don't push for an essay.`;
+- Match the depth of their answers.
+- If all 5 signals are adequately covered, output: [one reflection sentence]---DONE`;
 
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
@@ -43,21 +47,27 @@ export async function POST(req: NextRequest) {
     // Find the first uncollected signal
     const firstMissing = BG_SIGNALS.find((s) => !answers[s.key]);
 
-    const userPrompt = `What we need to know about their professional background:
+    // Find the most recent user answer for the reflection
+    const lastAnswerKey = BG_SIGNALS.slice().reverse().find((s) => answers[s.key])?.key;
+    const lastAnswer = lastAnswerKey ? answers[lastAnswerKey] : "";
+
+    const userPrompt = `Their most recent answer: "${lastAnswer}"
+
+What we know about their professional background so far:
 ${collectedLines}
 
 ${firstMissing ? `The next signal to collect is: "${firstMissing.label}"` : "All signals appear collected."}
 
-Review all collected answers carefully. Some signals may already be covered by answers to other questions (e.g., they mentioned their career arc while describing their role).
+Review all collected answers. Some signals may already be covered by earlier answers.
 
 Task:
-1. Determine which signal is ACTUALLY still missing or unclear (not just formally unanswered).
-2. If something is genuinely still missing, write a single question to get it — make it feel natural and specific, not generic.
-3. If all background is adequately covered across the answers, output exactly: DONE
+1. Write one brief reflection sentence on their most recent answer — specific, not generic.
+2. Determine which signal is ACTUALLY still missing. If something is genuinely missing, write a single question to get it.
+3. If all background is adequately covered, the question part should be DONE.
 
-${preferredLanguage && preferredLanguage !== "english" ? `IMPORTANT: Write your question in ${preferredLanguage}.` : ""}
+${preferredLanguage && preferredLanguage !== "english" ? `IMPORTANT: Write everything in ${preferredLanguage}.` : ""}
 
-Output ONLY the question text, or DONE. No preamble.`;
+Output format: [reflection sentence]---[question or DONE]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -68,15 +78,20 @@ Output ONLY the question text, or DONE. No preamble.`;
 
     const raw = (message.content[0]?.type === "text" ? message.content[0].text : "").trim();
 
-    if (raw === "DONE" || raw.startsWith("DONE")) {
-      return Response.json({ done: true });
+    const [reflectionPart, questionPart] = raw.split("---").map((s) => s.trim());
+    const reflection = reflectionPart || "";
+    const questionOrDone = questionPart || raw;
+
+    if (!questionPart || questionOrDone === "DONE" || questionOrDone.startsWith("DONE")) {
+      return Response.json({ done: true, reflection });
     }
 
     // Find which signal this question covers (to know what nodeId to advance to)
     const nextMissing = BG_SIGNALS.find((s) => !answers[s.key]);
     return Response.json({
       done: false,
-      question: raw,
+      reflection,
+      question: questionOrDone,
       nodeId: nextMissing?.key ?? "bg5_turning",
     });
   } catch (err) {

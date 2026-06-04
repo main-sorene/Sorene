@@ -398,14 +398,21 @@ export function useAssessmentFlow() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ answers: currentAnswers, preferredLanguage }),
         });
-        const data = await res.json() as { done: boolean; question: string | null; nodeId: string | null };
+        const data = await res.json() as { done: boolean; reflection?: string; question: string | null; nodeId: string | null };
         setIsReflecting(false);
         if (data.done) {
           // All background covered — jump straight to working-style questions
+          // Show reflection first if present, then transition
+          if (data.reflection) {
+            addMessage({ id: `bg-reflect-${Date.now()}`, role: "assistant", content: data.reflection });
+          }
           return advanceToNode("q1_energy", currentAnswers, ctx, questionSignal, userAnswer);
         }
         if (data.question && data.nodeId) {
-          addMessage({ id: `bg-dyn-${Date.now()}`, role: "assistant", content: data.question });
+          const content = data.reflection
+            ? `${data.reflection}\n\n${data.question}`
+            : data.question;
+          addMessage({ id: `bg-dyn-${Date.now()}`, role: "assistant", content });
           setFlowState({ phase: "question", nodeId: data.nodeId, awaitingFollowUp: false });
           return;
         }

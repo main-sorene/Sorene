@@ -11,6 +11,19 @@ import { useDnaData } from "@/hooks/useDnaData";
 
 const DIRECTION_SUGGESTIONS = ["Why does this fit me?", "How do I start?"];
 
+const DIRECTION_RECIPES = [
+  {
+    label: "Brainstorm more ideas",
+    prompt:
+      "I want to brainstorm more ideas. Please ask me 5 to 10 questions — one at a time — to help uncover daily problems I want to solve, interests I'm excited about, or opportunities I haven't explored yet. Start with your first question now.",
+  },
+  {
+    label: "Generate more direction",
+    prompt:
+      "I want to explore new directions. Please ask me 5 to 10 questions — one at a time — about what feels missing or limiting in my current directions, what outcomes I'm really after, and what kind of work energises me. Start with your first question now.",
+  },
+];
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -81,9 +94,11 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     try { localStorage.setItem(`direction_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
   };
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || isProcessing) return;
-    const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: text };
+  // displayText is what appears in the chat bubble; prompt is what's sent to the API.
+  const sendMessage = async (displayText: string, prompt?: string) => {
+    const apiPrompt = prompt ?? displayText;
+    if (!displayText.trim() || isProcessing) return;
+    const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: displayText };
     const next = [...messages, userMsg];
     setMessages(next);
     persistToSidebar(next);
@@ -94,7 +109,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text,
+          message: apiPrompt,
           directionContext: {
             recommendedModel: model,
             compatibility: bestCompatibility,
@@ -203,6 +218,16 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
           {!hasMessages && (
             <div className="flex flex-wrap gap-2">
+              {DIRECTION_RECIPES.map((recipe) => (
+                <button
+                  key={recipe.label}
+                  onClick={() => sendMessage(recipe.label, recipe.prompt)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
+                >
+                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+                  {recipe.label}
+                </button>
+              ))}
               {DIRECTION_SUGGESTIONS.map((label) => (
                 <button
                   key={label}

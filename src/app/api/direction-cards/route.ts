@@ -6,6 +6,9 @@ import { verifyAuth } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Allow up to 60s — model calls can exceed the default 10s serverless limit
+export const maxDuration = 60;
+
 const SYSTEM_PROMPT_TEXT = `You are Sorene's Direction Engine. Your job is to generate business directions for a specific user — combining who they are (DNA), what they have (Resources + Constraints), and what the market needs (Market Intelligence).
 
 You are NOT a generic advisor. Every output must be specific to this exact user. If any output could apply to a different user with a similar background, rewrite it until it cannot.
@@ -404,14 +407,18 @@ export async function POST(req: NextRequest) {
       const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
       const msg = await client.messages.create({
         model: fastModel,
-        max_tokens: 700,
+        max_tokens: 1024,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
-      return Response.json({ cards: card ? [card] : [] });
+      if (!card) {
+        console.error("[direction-cards] phase 1 parse failed. Raw:", raw.slice(0, 500));
+        return Response.json({ cards: [], error: "Could not parse model output" }, { status: 502 });
+      }
+      return Response.json({ cards: [card] });
     }
 
     if (phase === 2) {

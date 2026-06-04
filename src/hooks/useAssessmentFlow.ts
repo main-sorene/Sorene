@@ -336,6 +336,35 @@ export function useAssessmentFlow() {
         followUpType?: string;
       };
       const currentNode = getNode(nodeId)!;
+
+      // ── Clarification detection (free-text only, not choice buttons) ─────────
+      // If the user seems to be asking what the question means rather than answering,
+      // respond to their confusion and stay on the same question.
+      if (!canonicalAnswer && currentNode.inputType === "freetext") {
+        setIsReflecting(true);
+        try {
+          const clarifyRes = await authFetch("/api/clarify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              currentQuestion: getNodeMessage(currentNode, { profile: { firstName }, answers, hasCv }),
+              userMessage: text,
+              preferredLanguage,
+            }),
+          });
+          const clarifyData = await clarifyRes.json() as { isAnswer: boolean; clarification?: string };
+          setIsReflecting(false);
+          if (!clarifyData.isAnswer && clarifyData.clarification) {
+            addMessage({ id: `clarify-${Date.now()}`, role: "assistant", content: clarifyData.clarification });
+            // Stay on the same node — don't advance
+            return;
+          }
+        } catch {
+          setIsReflecting(false);
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       let newAnswers = { ...answers };
 
       if (awaitingFollowUp) {

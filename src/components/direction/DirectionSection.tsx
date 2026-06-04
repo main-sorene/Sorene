@@ -129,6 +129,7 @@ export const DirectionSection = () => {
     bestCompatibility,
     otherDirections,
     eligibility,
+    needsRC,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -167,6 +168,25 @@ export const DirectionSection = () => {
       icon: <img src="/figmaAssets/wrench.svg" alt="" />,
     },
   ];
+
+  // R&C gate — show prominently before anything else
+  if (needsRC) {
+    return (
+      <div className="p-3 lg:py-6 lg:px-3 pb-24">
+        <div className="max-w-lg mx-auto space-y-6 pt-8">
+          <div className="text-center space-y-2">
+            <p className="text-[18px] font-medium text-[#151515] tracking-tight">
+              You're ready for your first direction
+            </p>
+            <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
+              Tell Sorene about your resources and constraints — what you have and what limits you — so it can suggest a direction that fits your real life.
+            </p>
+          </div>
+          <ResourcesConstraintsForm />
+        </div>
+      </div>
+    );
+  }
 
   // If we have a streamed direction from our internal API, show it in the hero card
   if (isDirectionLoading && !directionText && !primaryCard) {

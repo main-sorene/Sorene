@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
+import { DNAReveal } from "@/components/dna/DNAReveal";
 
 function renderInline(text: string) {
   return text.split(/\*\*(.*?)\*\*/g).map((part, j) =>
@@ -201,12 +202,17 @@ export function AssessmentChatPage() {
     setIsSending(false);
   };
 
+  const [revealingDna, setRevealingDna] = useState(false);
+
   const handleExploreDna = () => {
-    // Navigate first — completeAssessment flips isAssessmentCompleteAtom which
-    // immediately re-renders this page to HomePage, causing a flash before /dna loads.
+    sessionStorage.setItem("dna-revealed", "1"); // prevent double reveal on DNA page
+    setRevealingDna(true);
+  };
+
+  const handleRevealComplete = () => {
     queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
-    router.push("/dna");
     completeAssessment();
+    router.push("/dna");
   };
 
   // When done, textarea is disabled but input area stays visible for the DNA button
@@ -217,7 +223,8 @@ export function AssessmentChatPage() {
   const showPhaseLabel = !!currentSignal && !isCvRequest && !isDone;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-white">
+    <div className="flex flex-col flex-1 min-h-0 bg-white relative">
+      {revealingDna && <DNAReveal onComplete={handleRevealComplete} />}
       {/* "Conversation saved" note — sits just above the phase bar */}
       {showPhaseLabel && (
         <div className="shrink-0 px-4 sm:px-6 pt-3 pb-0">
@@ -275,7 +282,7 @@ export function AssessmentChatPage() {
                 className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium active:scale-95"
               >
                 <Sparkles size={14} />
-                Explore the DNA Page
+                Explore My DNA
               </button>
             </div>
           ) : currentChoices && currentChoices.length > 0 && !isWaiting ? (

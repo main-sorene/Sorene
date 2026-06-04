@@ -155,8 +155,8 @@ export function useDirectionResult() {
 
   const generateMore = async () => {
     if (!profile || isGeneratingMore) return;
-    const nextIndex = directionCards.length; // 0-based: 0=Safe,1=Aligned,2=Stretch
-    if (nextIndex >= 3) return;
+    // Cap at 2 (Stretch) for path label, but allow unlimited cards
+    const nextIndex = Math.min(directionCards.length, 2);
 
     const primaryModel = profile.directionEligibility?.model as StructuralModel | undefined;
     if (!primaryModel) return;
@@ -171,8 +171,6 @@ export function useDirectionResult() {
       { model: primaryModel, compatibility: primaryAlt?.compatibility ?? 100, isPrimary: true },
       ...altModels,
     ];
-
-    if (nextIndex >= models.length) return;
 
     const resources = (() => {
       try {
@@ -252,7 +250,7 @@ export function useDirectionResult() {
     .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
-  // Show button when R&C is filled and fewer than 3 structured cards generated
+  // Show button whenever R&C is filled (no hard cap — user can always generate more)
   const hasRCFilled = (() => {
     try {
       const stored = localStorage.getItem("resourcesConstraints");
@@ -261,7 +259,7 @@ export function useDirectionResult() {
       return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
     } catch { return false; }
   })();
-  const canGenerateMore = hasRCFilled && directionCards.length < 3;
+  const canGenerateMore = hasRCFilled;
 
   return {
     // Structured cards (new path)

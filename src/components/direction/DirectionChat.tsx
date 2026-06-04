@@ -84,11 +84,11 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
-  const { model, bestCompatibility, directionText, otherDirections } = useDirectionResult();
+  const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards } = useDirectionResult();
   const { data: dnaData } = useDnaData();
   const resourcesConstraints = useAtomValue(resourcesConstraintsAtom);
-  const hasRCData = Object.values(resourcesConstraints).some((v) => v.trim() !== "") ||
-    (() => { try { const s = localStorage.getItem("resourcesConstraints"); if (!s) return false; return Object.values(JSON.parse(s) as Record<string, string>).some((v) => String(v ?? "").trim() !== ""); } catch { return false; } })();
+  const recipeDirections = useAtomValue(recipeDirectionsAtom);
+  const hasDirections = !!primaryCard || altCards.length > 0 || !!directionText || recipeDirections.length > 0;
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -292,7 +292,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       {/* Input Section */}
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {hasRCData && (
+          {hasDirections && (
             <div className="flex flex-wrap gap-2">
               {DIRECTION_RECIPES.map((recipe) => (
                 <button

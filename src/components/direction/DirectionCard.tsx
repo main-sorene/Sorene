@@ -221,8 +221,8 @@ export function DirectionCard({
             <p className="text-[13px] text-[#151515] leading-relaxed">{bodyText(sec.body)}</p>
           </div>
         );
-      } else if (h.includes("filter")) {
-        const filterLines = sec.body.filter(l => /^[-*]\s*(Alignment|Skills|Lifestyle|Financial|Market)/i.test(l.trim()));
+      } else if (h.includes("filter") || h.includes("ikigai")) {
+        const filterLines = sec.body.filter(l => /^[-*]\s*(Alignment|Skills|Lifestyle|Financial|Market|What You|Ikigai)/i.test(l.trim()));
         nodes.push(
           <div key={i}>
             <h4 className="text-base font-medium text-[#151515] mb-4">Fit Filters</h4>
@@ -440,7 +440,7 @@ export function DirectionCard({
       {/* Fit Filters */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-base font-medium text-[#151515]">Fit Filters</h4>
+          <h4 className="text-base font-medium text-[#151515]">Ikigai Match</h4>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-[#9A9A9A]">Composite</span>
             <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
@@ -450,15 +450,23 @@ export function DirectionCard({
         </div>
         <Separator className="bg-[#ECEDEE] mb-4" />
         <div className="space-y-3">
-          {(
-            [
-              ["Alignment", cardData.four_filters.alignment],
-              ["Skills Match", cardData.four_filters.skills_match],
-              ["Lifestyle Fit", cardData.four_filters.lifestyle_fit],
-              ["Financial Viability", cardData.four_filters.financial_viability],
-              ["Market Potential", cardData.four_filters.market_potential],
-            ] as [string, { score: number; reason: string }][]
-          ).map(([label, item], idx) => (
+          {(cardData.ikigai_filters
+            ? [
+                ["What You Love", cardData.ikigai_filters.what_you_love],
+                ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+              ]
+            : [
+                ["What You Love", cardData.four_filters?.alignment],
+                ["What You're Good At", cardData.four_filters?.skills_match],
+                ["What The World Needs", cardData.four_filters?.market_potential],
+                ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+              ]
+          ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+          .map(([label, item], idx) => (
             <motion.div key={label} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 + idx * 0.04 }} className="flex items-start gap-3">
               <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold", filterScoreClass(item.score))}>{item.score}</span>
               <div className="flex-1">

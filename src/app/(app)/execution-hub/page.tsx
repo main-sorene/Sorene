@@ -15,7 +15,11 @@ import {
   BarChart3,
   ArrowRight,
   Lock,
+  PenSquare,
 } from "lucide-react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, activeConversationIdAtom, isSettingsOpenAtom } from "@/store/atoms";
+import { useRouter } from "next/navigation";
 
 // ─────────────────────────────────────────────
 // Idea Validator content
@@ -471,6 +475,16 @@ function FolderCard({ folder }: { folder: Folder }) {
 // ─────────────────────────────────────────────
 
 export default function Page() {
+  const authUser = useAtomValue(userAtom);
+  const setActiveId = useSetAtom(activeConversationIdAtom);
+  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const router = useRouter();
+
+  const handleNewChat = () => {
+    setActiveId(null);
+    router.push("/chat");
+  };
+
   const folders: Folder[] = [
     {
       id: "idea-validator",
@@ -503,18 +517,48 @@ export default function Page() {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-4 py-8 pb-24 space-y-3">
-        <div className="mb-6 space-y-1">
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-2 shrink-0">
+        <div>
           <h1 className="text-[22px] font-semibold text-[#151515]">Execution Hub</h1>
-          <p className="text-[14px] text-[#62646A]">
+          <p className="text-[13px] text-[#62646A] mt-0.5">
             Turn your Direction into momentum. Open a section to get started.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-colors"
+          >
+            <PenSquare size={14} />
+            New Chat
+          </button>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-9 h-9 rounded-full overflow-hidden hover:ring-2 ring-black/10 transition-all shrink-0"
+          >
+            <img
+              src={
+                authUser?.profile?.photoUrl ||
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
+              }
+              alt={authUser?.displayName || "User"}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        </div>
+      </div>
 
-        {folders.map((folder) => (
-          <FolderCard key={folder.id} folder={folder} />
-        ))}
+      {/* Grid */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-4 py-6 pb-24">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {folders.map((folder) => (
+              <FolderCard key={folder.id} folder={folder} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

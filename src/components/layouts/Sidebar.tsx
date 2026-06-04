@@ -653,7 +653,7 @@ export function Sidebar({
                       : authUser?.displayName || "User"}
                   </p>
                   <p className="text-body-xsmall text-[#62646A] truncate">
-                    {authUser?.profile?.email || "No email"}
+                    {authUser?.profile?.email || authUser?.email || "No email"}
                   </p>
                 </div>
                 <ChevronDown

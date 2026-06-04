@@ -42,7 +42,7 @@ export function useDirectionResult() {
     // New path: structured direction cards
     // Skip if cards are old format (missing why_fits_you = pre-v2 cards) — fall through to regenerate
     const cachedCards = profile.directionCards;
-    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you;
+    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters);
     if (cardsAreUpToDate) {
       setDirectionCards(cachedCards);
       setHasStreamed(true);

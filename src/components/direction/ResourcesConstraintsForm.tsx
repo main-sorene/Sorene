@@ -114,6 +114,7 @@ export function ResourcesConstraintsForm() {
   const handleGenerate = async () => {
     const msg = buildMessage(form);
     if (!msg.trim()) return;
+    try { localStorage.setItem("rcGenerationRequested", "true"); } catch {}
     setIsGenerating(true);
     try {
       const res = await authFetch("/api/direction-chat", {

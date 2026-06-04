@@ -1195,11 +1195,17 @@ export function DirectionCard({
                   </div>
                 )}
               </div>
-              {/* Right: View detail only — Start Validation lives in expanded view */}
-              <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                {actionText}<ArrowRight size={14} />
-              </button>
+              {/* Right: Start Validate + View detail */}
+              <div className="flex items-center gap-2">
+                <button onClick={(e) => { e.stopPropagation(); goValidate(e); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                  Start Validate
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
+                  {actionText}<ArrowRight size={14} />
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

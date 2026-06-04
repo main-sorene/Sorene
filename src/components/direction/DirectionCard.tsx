@@ -1188,7 +1188,7 @@ export function DirectionCard({
             )}
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">{description}</p>
             <div className="mt-auto flex items-center justify-between gap-2">
-              {/* Left: Hide + constraint badge */}
+              {/* Left: Hide + constraint badge (no label text — space is tight in grid) */}
               <div className="flex items-center gap-2">
                 {onHide && (
                   <button onClick={(e) => { e.stopPropagation(); onHide(); }}
@@ -1197,26 +1197,17 @@ export function DirectionCard({
                   </button>
                 )}
                 {cardData && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#9A9A9A] font-medium">Constraint Check</span>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
-                      style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                      {cardData.constraint_check.status}
-                    </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                    style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                    {cardData.constraint_check.status}
                   </div>
                 )}
               </div>
-              {/* Right: Start Validate + See Detail */}
-              <div className="flex items-center gap-2">
-                <button onClick={goValidate}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
-                  Start Validate
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                  {actionText}<ArrowRight size={16} />
-                </button>
-              </div>
+              {/* Right: View detail only — Start Validation lives in expanded view */}
+              <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
+                {actionText}<ArrowRight size={14} />
+              </button>
             </div>
           </motion.div>
         )}

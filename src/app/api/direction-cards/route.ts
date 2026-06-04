@@ -185,6 +185,7 @@ Produce exactly 1 DirectionCardData object with ALL of these fields:
 - first_10_customers: string — 1 sentence, specific channel and location-aware (use their city if provided)
 - distribution_path: string — specific community, subreddit, Facebook group, event, or association where the first 100 customers can be reached without a $50K ad budget
 - competition: { layer1_workaround: string, layer2_incumbent: string, layer3_simple_competitors: string }
+- key_competitors: array of exactly 3 objects { name: string, what_they_do: string } — real named competitors or substitute tools that serve the same need; each what_they_do is 1 sentence max
 - economic_urgency: string — what does the buyer's current workaround cost per month? This is the price anchor — quantify it
 - ocean_classification: { type: "Blue" | "Purple" | "Red", density: string }
 - trend_connection: string — which macro industry shift does this connect to

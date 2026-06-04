@@ -43,6 +43,7 @@ export type DirectionCardData = {
     layer2_incumbent: string;
     layer3_simple_competitors: string;
   };
+  key_competitors?: { name: string; what_they_do: string }[];
   economic_urgency: string;
   ocean_classification: {
     type: "Blue" | "Purple" | "Red";

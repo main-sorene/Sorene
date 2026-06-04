@@ -176,10 +176,55 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
       description: narrative?.risk_and_change || `Your relationship with risk leans ${riskLabel.toLowerCase()}, and you handle ambiguity at a ${uncertaintyLabel.toLowerCase()} threshold. ${uncertaintyLabel === "Low" ? "You move forward best when signals are clear." : uncertaintyLabel === "High" ? "You can act before signals fully resolve." : "You hold a middle ground — you need some clarity, but don't need certainty."}`,
       summary: truncateSummary(narrative?.risk_and_change || `${riskLabel} risk · ${uncertaintyLabel} uncertainty`),
       key_signals: [
-        { label: "Risk Profile", value: riskLabel, explanation: `Risk score: ${scores.risk_score}/10.` },
-        { label: "Uncertainty Tolerance", value: uncertaintyLabel, explanation: `Uncertainty score: ${scores.uncertainty_score}/10.` },
+        {
+          label: "Risk Profile",
+          value: riskLabel,
+          explanation: riskLabel === "High"
+            ? "You're willing to bet on yourself — uncertainty doesn't stop you, it activates you."
+            : riskLabel === "Medium"
+            ? "You take considered risks — you'll move when the signal is strong enough."
+            : "You prefer calculated moves — you build confidence before you commit.",
+        },
+        {
+          label: "Uncertainty Tolerance",
+          value: uncertaintyLabel,
+          explanation: uncertaintyLabel === "High"
+            ? "You can act before all the answers are in — ambiguity is fuel, not friction."
+            : uncertaintyLabel === "Medium"
+            ? "You need some clarity to move, but you don't need certainty — a direction is enough."
+            : "You move best when the path is clear — fog drains you and slows your decisions.",
+        },
+        {
+          label: "Emotional Risk",
+          value: emotionalRisk,
+          explanation: emotionalRisk === "High"
+            ? "You're willing to risk being wrong, being judged, or being vulnerable in public."
+            : emotionalRisk === "Medium"
+            ? "You'll put yourself out there when the stakes feel worth it."
+            : "You protect your inner world carefully — you need psychological safety to take risks.",
+        },
+        {
+          label: "Financial Risk",
+          value: financialRisk,
+          explanation: financialRisk === "High"
+            ? "You can stomach real financial uncertainty — you'd rather swing than play it safe."
+            : financialRisk === "Medium"
+            ? "You'll invest when the logic holds — but you need income in sight."
+            : "You need financial ground under your feet before you move — income is not optional.",
+        },
+        {
+          label: "Change Response",
+          value: uncertaintyLabel === "High" ? "Lean In" : uncertaintyLabel === "Medium" ? "Pause & Pivot" : "Seek Clarity First",
+          explanation: uncertaintyLabel === "High"
+            ? "When things shift, you move with them — you update fast and iterate."
+            : uncertaintyLabel === "Medium"
+            ? "You step back, reassess, then re-commit — thoughtful rather than reactive."
+            : "You want to understand before you act — change feels better with a plan.",
+        },
       ],
-      strength_patterns: [`${riskLabel} risk`, `${uncertaintyLabel} ambiguity tolerance`],
+      strength_patterns: narrative?.risk_and_change_strengths
+        ? narrative.risk_and_change_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [`${riskLabel} risk appetite`, `${uncertaintyLabel} ambiguity tolerance`],
     },
     {
       core_id: "your_energy",
@@ -428,7 +473,7 @@ export const DNASection = () => {
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths) || !answers || !authUser?.uid) return;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

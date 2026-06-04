@@ -729,10 +729,20 @@ export function useAssessmentFlow() {
     // Persist to localStorage so it survives page refreshes
     try {
       localStorage.setItem(`assessment_conv_${uid}`, JSON.stringify(assessmentConv));
+      // Also write to convos_ immediately so Sidebar has it on next load
+      // without needing to wait for the persist effect to fire.
+      const convosKey = `convos_${uid}`;
+      try {
+        const existing = JSON.parse(localStorage.getItem(convosKey) || "[]") as Conversation[];
+        const filtered = existing.filter((c: Conversation) => (c as any).segment !== "assessment");
+        localStorage.setItem(convosKey, JSON.stringify([assessmentConv, ...filtered]));
+      } catch {}
     } catch {}
     setConversations((prev) => {
-      if (prev.some((c) => c.segment === "assessment")) return prev;
-      return [assessmentConv, ...prev];
+      // Always replace — ensures fresh messages are reflected even if assessment
+      // conv was already in the atom (e.g. from a previous loadLocalConversations call).
+      const without = prev.filter((c) => (c as any).segment !== "assessment");
+      return [assessmentConv, ...without];
     });
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
     setIsAssessmentComplete(true);

@@ -190,31 +190,27 @@ export const DirectionSection = () => {
     });
   };
 
-  // R&C gate — show prominently before anything else
-  if (needsRC) {
-    return (
-      <div className="p-3 lg:py-6 lg:px-3 pb-24">
-        <div className="max-w-5xl mx-auto space-y-4 pt-6">
-          <div className="space-y-1">
-            <p className="text-[18px] font-medium text-[#151515] tracking-tight">
-              You're ready for your first direction
-            </p>
-            <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
-              Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
-            </p>
+  // Shared initial-state layout: R&C + Market Intelligence side by side
+  const initialStateScreen = (
+    <div className="p-3 lg:py-6 lg:px-3 pb-24">
+      <div className="max-w-5xl mx-auto space-y-4 pt-6">
+        {generateError && (
+          <div className="rounded-xl border border-[#F3C0B8] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#B42318]">
+            {generateError}
           </div>
-          {generateError && (
-            <div className="rounded-xl border border-[#F3C0B8] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#B42318]">
-              {generateError}
-            </div>
-          )}
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+          <MarketIntelligenceCard />
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // If we have a streamed direction from our internal API, show it in the hero card
+  // R&C gate — show both cards before any directions exist
+  if (needsRC) return initialStateScreen;
+
+  // Generating spinner
   if ((isDirectionLoading || isGeneratingMore) && !directionText && !primaryCard) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
@@ -226,50 +222,10 @@ export const DirectionSection = () => {
     );
   }
 
-  // Assessment complete but no directions yet
+  // Assessment complete but no directions yet — show both cards
   const hasNoDirections = !primaryCard && !directionText && recipeDirections.length === 0;
   if (!isDirectionLoading && hasNoDirections && eligibility?.eligible) {
-    // No R&C filled yet — show form prominently as the primary action
-    if (!hasRCData) {
-      return (
-        <div className="p-3 lg:py-6 lg:px-3 pb-24">
-          <div className="max-w-5xl mx-auto space-y-4 pt-6">
-            <div className="space-y-1">
-              <p className="text-[18px] font-medium text-[#151515] tracking-tight">
-                You're ready for your first direction
-              </p>
-              <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
-                Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
-              </p>
-            </div>
-            <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
-          </div>
-        </div>
-      );
-    }
-
-    // R&C filled but no card generated yet — show the form so the user can
-    // trigger generation via the Generate Direction button.
-    return (
-      <div className="p-3 lg:py-6 lg:px-3 pb-24">
-        <div className="max-w-5xl mx-auto space-y-4 pt-6">
-          <div className="space-y-1">
-            <p className="text-[18px] font-medium text-[#151515] tracking-tight">
-              You're ready for your first direction
-            </p>
-            <p className="text-[14px] text-[#9CA3AF] leading-relaxed">
-              Review your resources and constraints, then generate a direction that fits your real life.
-            </p>
-          </div>
-          {generateError && (
-            <div className="rounded-xl border border-[#F3C0B8] bg-[#FDECEA] px-4 py-3 text-[13px] text-[#B42318]">
-              {generateError}
-            </div>
-          )}
-          <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
-        </div>
-      </div>
-    );
+    return initialStateScreen;
   }
 
   // ── New structured cards path ─────────────────────────────────────────────

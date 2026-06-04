@@ -628,6 +628,22 @@ export function useAssessmentFlow() {
               dnaAssessmentComplete: true,
             },
           });
+          // Generate polished background summary for users who answered bg questions (no CV)
+          if (!hasCv) {
+            authFetch("/api/bg-summary", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ answers: currentAnswers }),
+            }).then((r) => r.json()).then(async (data) => {
+              const summary = (data?.summary || "").trim();
+              if (!summary || !authUser.uid) return;
+              await saveUserProfile(authUser.uid, { cvSummary: summary } as any);
+              setAuthUser((prev) => prev ? {
+                ...prev,
+                profile: { ...(prev.profile as any), cvSummary: summary },
+              } : prev);
+            }).catch(() => {});
+          }
         }
         // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
         // this component and the user would never see the summary or nav buttons.

@@ -16,6 +16,7 @@ import {
   Settings,
   Wrench,
   Bell,
+  Loader2,
   Plug,
   CreditCard,
   Database,
@@ -114,18 +115,53 @@ const BG_QUESTION_LABELS: Record<string, string> = {
   bg5_turning: "Career path",
 };
 
+function renderSummaryText(text: string) {
+  return text.split(/\n\n+/).map((para, pi) => (
+    <p key={pi} className="text-sm text-[#151515] leading-relaxed mb-3 last:mb-0">
+      {para.split(/\*\*(.*?)\*\*/g).map((part, j) =>
+        j % 2 === 1 ? <strong key={j} className="font-semibold">{part}</strong> : part
+      )}
+    </p>
+  ));
+}
+
 function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
   const setUser = useSetAtom(userAtom);
   const { toast } = useToast();
   const [isUploadingCv, setIsUploadingCv] = React.useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = React.useState(false);
+  const hasTriedGenRef = React.useRef(false);
   const cvInputRef = React.useRef<HTMLInputElement>(null);
 
   const assessmentAnswers = (authUser?.profile as any)?.assessmentAnswers as Record<string, string> | undefined;
-  const bgAnswers = assessmentAnswers
-    ? Object.entries(BG_QUESTION_LABELS)
-        .map(([key, label]) => ({ key, label, answer: assessmentAnswers[key] }))
-        .filter((e) => e.answer)
-    : [];
+  const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
+  const hasBgAnswers = assessmentAnswers
+    ? Object.keys(BG_QUESTION_LABELS).some((k) => assessmentAnswers[k])
+    : false;
+
+  // Auto-generate polished summary for existing users who have bg answers but no summary yet
+  React.useEffect(() => {
+    if (cvSummary || !hasBgAnswers || !authUser?.uid || hasTriedGenRef.current) return;
+    hasTriedGenRef.current = true;
+    setIsGeneratingSummary(true);
+    import("@/lib/authFetch").then(({ authFetch: af }) =>
+      af("/api/bg-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: assessmentAnswers }),
+      })
+        .then((r) => r.json())
+        .then(async (data) => {
+          const summary = (data?.summary || "").trim();
+          if (!summary) return;
+          const { saveUserProfile: svp } = await import("@/lib/firestore");
+          await svp(authUser!.uid, { cvSummary: summary } as any);
+          setUser({ ...authUser!, profile: { ...(authUser!.profile as any), cvSummary: summary } });
+        })
+        .catch(() => {})
+        .finally(() => setIsGeneratingSummary(false))
+    );
+  }, [authUser?.uid, hasBgAnswers, cvSummary]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -168,8 +204,8 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
     <div>
       <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3 block">Professional Experience</label>
 
-      {/* CV */}
-      <div className="mb-3">
+      {/* CV upload row */}
+      <div className="mb-4">
         {authUser?.profile?.cvData?.file_name ? (
           <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
             <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
@@ -198,21 +234,19 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
         <input ref={cvInputRef} type="file" accept=".pdf,application/pdf" onChange={handleCvUpload} className="hidden" />
       </div>
 
-      {/* Background Q&A summary */}
-      {bgAnswers.length > 0 && (
-        <div className="rounded-xl border border-[#ECEDEE] divide-y divide-[#F5F5F5] overflow-hidden">
-          {bgAnswers.map(({ key, label, answer }) => (
-            <div key={key} className="px-4 py-3">
-              <p className="text-xs font-medium text-[#9B9B9B] mb-1">{label}</p>
-              <p className="text-sm text-[#151515] leading-relaxed">{answer}</p>
-            </div>
-          ))}
+      {/* Polished narrative summary */}
+      {cvSummary ? (
+        <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-5 py-4">
+          {renderSummaryText(cvSummary)}
         </div>
-      )}
-
-      {bgAnswers.length === 0 && !authUser?.profile?.cvData?.file_name && (
-        <p className="text-xs text-[#BCBCBC] mt-2">Your experience summary from the assessment will appear here.</p>
-      )}
+      ) : isGeneratingSummary ? (
+        <div className="flex items-center gap-2 text-xs text-[#9B9B9B] py-2">
+          <Loader2 size={13} className="animate-spin" />
+          Summarising your background…
+        </div>
+      ) : !hasBgAnswers && !authUser?.profile?.cvData?.file_name ? (
+        <p className="text-xs text-[#BCBCBC] mt-1">Your experience summary from the assessment will appear here.</p>
+      ) : null}
     </div>
   );
 }

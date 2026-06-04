@@ -41,6 +41,7 @@ export interface UserProfile {
     success_feeling: string;
     energy_source: string;
     energy_drains: string;
+    quit_reason: string;
     // Derived text labels (added in later engine versions)
     primary_motivation?: string;
     collaboration_mode?: string;

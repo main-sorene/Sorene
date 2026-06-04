@@ -31,11 +31,18 @@ export function UpgradePage() {
   const { data: subscription } = useSubscriptionStatus();
 
   const currentPlanId = subscription?.plan || "free";
+  const highlightedPlan = searchParams.get("plan");
 
   useEffect(() => {
     if (searchParams.get("checkout_success") !== "true") return;
     refetchSubscriptionStatus();
   }, []);
+
+  useEffect(() => {
+    if (!highlightedPlan) return;
+    const el = document.getElementById(`plan-card-${highlightedPlan}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedPlan]);
 
   async function handleUpgrade(plan: Plan, isCurrent: boolean) {
     if (isCurrent || loadingPlan) return;
@@ -161,8 +168,12 @@ export function UpgradePage() {
           return (
             <div
               key={plan.name}
+              id={`plan-card-${plan.id}`}
               className={cn(
-                "relative bg-white border rounded-[24px] p-5 flex flex-col transition-all border-[#ECEDEE]",
+                "relative bg-white border rounded-[24px] p-5 flex flex-col transition-all",
+                highlightedPlan === plan.id
+                  ? "border-[#FDC24C] ring-2 ring-[#FDC24C]"
+                  : "border-[#ECEDEE]",
               )}
             >
               {plan.isPopular && (

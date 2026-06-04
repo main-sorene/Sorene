@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -67,6 +67,34 @@ Start now with turn 1.`,
   },
 ];
 
+function parseDirectionCard(text: string): RecipeDirection | null {
+  const titleMatch = text.match(/\*\*Direction:\s*([^\n*]+)\*\*/i);
+  if (!titleMatch) return null;
+
+  const title = titleMatch[1].trim();
+
+  // Description: text between title line and first bold section
+  const afterTitle = text.slice(text.indexOf(titleMatch[0]) + titleMatch[0].length).trim();
+  const descEnd = afterTitle.search(/\*\*Why it fits you\*\*/i);
+  const description = (descEnd > 0 ? afterTitle.slice(0, descEnd) : afterTitle.slice(0, 300)).trim();
+
+  const whySection = afterTitle.match(/\*\*Why it fits you\*\*\n([\s\S]*?)(?=\*\*Key risks\*\*|\*\*Your first step\*\*|$)/i);
+  const risksSection = afterTitle.match(/\*\*Key risks\*\*\n([\s\S]*?)(?=\*\*Your first step\*\*|$)/i);
+  const stepSection = afterTitle.match(/\*\*Your first step\*\*\n([\s\S]*?)$/i);
+
+  const parseList = (s: string | undefined) =>
+    (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+
+  return {
+    id: `recipe-${Date.now()}`,
+    title,
+    description,
+    whyFitsYou: parseList(whySection?.[1]),
+    keyRisks: parseList(risksSection?.[1]),
+    firstStep: (stepSection?.[1] ?? "").trim(),
+  };
+}
+
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -99,6 +127,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const { model, bestCompatibility, directionText, otherDirections } = useDirectionResult();
   const { data: dnaData } = useDnaData();
 
@@ -174,7 +203,17 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         }),
       });
       const data = (await res.json()) as { reply: string };
-      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: data.reply || "Sorry, I couldn't respond. Try again." };
+      const reply = data.reply || "Sorry, I couldn't respond. Try again.";
+
+      // If AI returned a Direction Card, extract it and show it in the left column
+      const parsed = activeRecipePrompt ? parseDirectionCard(reply) : null;
+      let displayReply = reply;
+      if (parsed) {
+        setRecipeDirections((prev) => [...prev, parsed]);
+        displayReply = `Your new direction card **"${parsed.title}"** has been added to the left panel. Click "View detail" to explore it.`;
+      }
+
+      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: displayReply };
       const withAi = [...next, aiMsg];
       setMessages(withAi);
       persistToSidebar(withAi);

@@ -125,3 +125,14 @@ export interface SubscriptionStatus {
 }
 
 export const subscriptionStatusAtom = atom<SubscriptionStatus | null>(null);
+
+export interface RecipeDirection {
+  id: string;
+  title: string;
+  description: string;
+  whyFitsYou: string[];
+  keyRisks: string[];
+  firstStep: string;
+}
+
+export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

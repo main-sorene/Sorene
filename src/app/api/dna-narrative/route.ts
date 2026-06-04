@@ -49,6 +49,8 @@ Generate EXACTLY 7 sections, each separated by "---SECTION---". Each section has
 
 10. how_you_work_strengths — Exactly 3-4 work-style strength labels, comma-separated, each 2-5 words. Reflect how this person actually operates — their collaboration style, pace, creative approach, or working environment. Examples: "Deep Focus Builder", "Intentional Collaborator", "Creative Problem Solver", "Trusted Circle Operator", "Pace-Aware Creator". No raw quotes. Specific and ownable.
 
+11. risk_and_change_strengths — Exactly 3-4 risk-related strength labels, comma-separated, each 2-5 words. Reflect their specific relationship with risk, uncertainty, and change — not generic. Examples: "Calculated Risk Taker", "Grounded Under Pressure", "Clarity-Seeking Strategist", "Emotionally Honest Mover", "Deliberate Change Maker". No raw quotes. Ownable and honest.
+
 Rules:
 - Write in second person ("You", "Your")
 - Be specific — name what they said, echo their language, name contradictions if you see them
@@ -100,11 +102,15 @@ TITLE: what_drives_you_strengths
 ---SECTION---
 TITLE: how_you_work_strengths
 
+[3-4 labels, comma-separated]
+---SECTION---
+TITLE: risk_and_change_strengths
+
 [3-4 labels, comma-separated]`;
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2800,
+      max_tokens: 3200,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -113,7 +119,7 @@ TITLE: how_you_work_strengths
 
     const sections = raw.split(/---SECTION---|---section---/).map((s) => s.trim()).filter(Boolean);
 
-    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths"]);
+    const KNOWN_KEYS = new Set(["core_dna_label","your_core","what_drives_you","how_you_work","risk_and_change","your_energy","strengths_and_edges","primary_motivation_label","strength_patterns_labels","what_drives_you_strengths","how_you_work_strengths","risk_and_change_strengths"]);
     const narrative: Record<string, string> = {};
     for (let si = 0; si < sections.length; si++) {
       const lines = sections[si].split("\n").filter(l => l.trim() !== "");

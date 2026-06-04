@@ -434,12 +434,14 @@ export function DirectionCard({
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-5">
         <div className="flex items-center justify-between">
           <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[#9A9A9A]">Composite</span>
-            <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-              {cardData.composite_score}
-            </span>
-          </div>
+          {cardData.composite_score != null && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-[#9A9A9A]">Composite</span>
+              <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
+                {cardData.composite_score}
+              </span>
+            </div>
+          )}
         </div>
         <Separator className="bg-[#ECEDEE]" />
         <div className="space-y-3">
@@ -479,88 +481,104 @@ export function DirectionCard({
             ))}
           </div>
         )}
-        <div>
-          <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-          <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-        </div>
-      </motion.section>
-
-      {/* ── Section 2: Positioning ── */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
-        <Separator className="bg-[#ECEDEE] mb-4" />
-        <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
-          {cardData.simple_positioning}
-        </p>
-      </motion.section>
-
-      {/* ── Section 3: Market Reality ── */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-5">
-        <h4 className="text-base font-medium text-[#151515]">Market Reality</h4>
-        <Separator className="bg-[#ECEDEE]" />
-
-        {/* Trend */}
-        <div>
-          <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
-          <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
-        </div>
-
-        {/* Ocean */}
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
-            style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
-            <span className="text-[11px] font-semibold uppercase tracking-wide"
-              style={{ color: oceanColor(cardData.ocean_classification.type) }}>
-              {cardData.ocean_classification.type} Ocean
-            </span>
-          </div>
-          <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
-        </div>
-
-        {/* Key Competitors */}
-        <div>
-          <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
-          <div className="mt-2 space-y-2">
-            {(cardData.key_competitors && cardData.key_competitors.length > 0
-              ? cardData.key_competitors
-              : [
-                  { name: "Current workaround", what_they_do: cardData.competition.layer1_workaround },
-                  { name: "Main incumbent", what_they_do: cardData.competition.layer2_incumbent },
-                  { name: "Simple alternatives", what_they_do: cardData.competition.layer3_simple_competitors },
-                ]
-            ).map((c, i) => (
-              <div key={i} className="flex gap-2 items-start">
-                <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Economic Urgency */}
-        <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
-          <div className="flex items-center gap-1.5">
-            <DollarSign size={13} className="text-[#151515]" />
-            <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
-          </div>
-          <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
-        </div>
-
-        {/* Key Risks */}
-        {(cardData.key_risks?.length ?? 0) > 0 && (
+        {cardData.unfair_advantage && (
           <div>
-            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
-            <div className="mt-2 space-y-2">
-              {cardData.key_risks.map((risk, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
-                  <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
-                  <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
-                </motion.div>
-              ))}
-            </div>
+            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+            <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
           </div>
         )}
       </motion.section>
+
+      {/* ── Section 2: Positioning ── */}
+      {cardData.simple_positioning && (
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
+          <Separator className="bg-[#ECEDEE] mb-4" />
+          <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
+            {cardData.simple_positioning}
+          </p>
+        </motion.section>
+      )}
+
+      {/* ── Section 3: Market Reality ── */}
+      {(cardData.trend_connection || cardData.ocean_classification || cardData.key_competitors || cardData.competition || cardData.economic_urgency) && (
+        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-5">
+          <h4 className="text-base font-medium text-[#151515]">Market Reality</h4>
+          <Separator className="bg-[#ECEDEE]" />
+
+          {/* Trend */}
+          {cardData.trend_connection && (
+            <div>
+              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
+              <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
+            </div>
+          )}
+
+          {/* Ocean */}
+          {cardData.ocean_classification && (
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
+                style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
+                <span className="text-[11px] font-semibold uppercase tracking-wide"
+                  style={{ color: oceanColor(cardData.ocean_classification.type) }}>
+                  {cardData.ocean_classification.type} Ocean
+                </span>
+              </div>
+              <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
+            </div>
+          )}
+
+          {/* Key Competitors */}
+          {(cardData.key_competitors || cardData.competition) && (
+            <div>
+              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
+              <div className="mt-2 space-y-2">
+                {(cardData.key_competitors && cardData.key_competitors.length > 0
+                  ? cardData.key_competitors
+                  : cardData.competition
+                    ? [
+                        { name: "Current workaround", what_they_do: cardData.competition.layer1_workaround },
+                        { name: "Main incumbent", what_they_do: cardData.competition.layer2_incumbent },
+                        { name: "Simple alternatives", what_they_do: cardData.competition.layer3_simple_competitors },
+                      ]
+                    : []
+                ).map((c, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
+                    <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Economic Urgency */}
+          {cardData.economic_urgency && (
+            <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+              <div className="flex items-center gap-1.5">
+                <DollarSign size={13} className="text-[#151515]" />
+                <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
+              </div>
+              <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
+            </div>
+          )}
+
+          {/* Key Risks */}
+          {(cardData.key_risks?.length ?? 0) > 0 && (
+            <div>
+              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
+              <div className="mt-2 space-y-2">
+                {cardData.key_risks!.map((risk, idx) => (
+                  <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
+                    <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
+                    <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.section>
+      )}
 
       {/* ── Section 4: Operations ── */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">

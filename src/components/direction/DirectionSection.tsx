@@ -133,6 +133,7 @@ export const DirectionSection = () => {
     needsRC,
     generateMore,
     isGeneratingMore,
+    isLoadingDetails,
     canGenerateMore,
     directionCardsCount,
   } = useDirectionResult();
@@ -274,6 +275,14 @@ export const DirectionSection = () => {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+
+        {/* Deep analysis loading indicator */}
+        {isLoadingDetails && (
+          <div className="flex items-center gap-2 px-1 text-[13px] text-[#9CA3AF]">
+            <div className="w-3 h-3 border border-[#9CA3AF] border-t-transparent rounded-full animate-spin" />
+            Loading deep analysis…
+          </div>
+        )}
 
         {/* Hero — primary structured card (or promoted replacement) */}
         <section>

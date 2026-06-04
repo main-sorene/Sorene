@@ -12,7 +12,7 @@ import { useDnaData } from "@/hooks/useDnaData";
 
 const DIRECTION_RECIPES = [
   {
-    label: "Brainstorm more ideas",
+    label: "Brainstorm new idea",
     prompt: `You are helping the user brainstorm business or project ideas.
 
 Every single turn: write exactly two short paragraphs, nothing more.
@@ -39,7 +39,7 @@ Ask exactly 5 questions, one per turn. After their answer to question 5, output 
 Start now with turn 1.`,
   },
   {
-    label: "Generate more direction",
+    label: "Generate new direction",
     prompt: `You are helping the user discover new directions beyond what they already have.
 
 Every single turn: write exactly two short paragraphs, nothing more.

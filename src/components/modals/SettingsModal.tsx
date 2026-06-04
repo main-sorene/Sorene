@@ -30,7 +30,7 @@ import {
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
-import { signOut } from "firebase/auth";
+import { signOut, deleteUser } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
@@ -230,7 +230,12 @@ export function SettingsModal() {
       if (uid) {
         await deleteUserProfile(uid);
       }
-      if (auth) await signOut(auth);
+      // Delete the Firebase Auth user so there's no stale session on redirect
+      if (auth?.currentUser) {
+        await deleteUser(auth.currentUser).catch(() => signOut(auth!));
+      } else if (auth) {
+        await signOut(auth);
+      }
       setUser(null);
       setConversations([]);
       setIsAssessmentComplete(false);

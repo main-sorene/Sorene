@@ -449,7 +449,7 @@ export const DirectionSection = () => {
         {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
 
         <section className="space-y-3">
-          <h3 className="text-sm font-medium text-[#62646A] px-1">Market Intelligence</h3>
+          
           <MarketIntelligenceCard />
         </section>
       </div>
@@ -597,7 +597,7 @@ export const DirectionSection = () => {
         )}
 
         <section className="space-y-3">
-          <h3 className="text-sm font-medium text-[#62646A] px-1">Market Intelligence</h3>
+          
           <MarketIntelligenceCard />
         </section>
       </div>
@@ -779,7 +779,7 @@ export const DirectionSection = () => {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-[#62646A] px-2">Market Intelligence</h2>
+        
         <MarketIntelligenceCard />
       </section>
     </div>

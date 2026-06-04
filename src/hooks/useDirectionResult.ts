@@ -252,8 +252,16 @@ export function useDirectionResult() {
     .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
-  // Show "Generate More" when 1 or 2 structured cards exist (not yet at max 3)
-  const canGenerateMore = directionCards.length >= 1 && directionCards.length < 3;
+  // Show button when R&C is filled and fewer than 3 structured cards generated
+  const hasRCFilled = (() => {
+    try {
+      const stored = localStorage.getItem("resourcesConstraints");
+      if (!stored) return false;
+      const rc = JSON.parse(stored);
+      return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
+    } catch { return false; }
+  })();
+  const canGenerateMore = hasRCFilled && directionCards.length < 3;
 
   return {
     // Structured cards (new path)
@@ -271,5 +279,6 @@ export function useDirectionResult() {
     generateMore,
     isGeneratingMore,
     canGenerateMore,
+    directionCardsCount: directionCards.length,
   };
 }

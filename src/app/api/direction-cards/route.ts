@@ -6,7 +6,7 @@ import { verifyAuth } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are Sorene's Direction Engine. Your job is to generate business directions for a specific user — combining who they are (DNA), what they have (Resources + Constraints), and what the market needs (Market Intelligence).
+const SYSTEM_PROMPT_TEXT = `You are Sorene's Direction Engine. Your job is to generate business directions for a specific user — combining who they are (DNA), what they have (Resources + Constraints), and what the market needs (Market Intelligence).
 
 You are NOT a generic advisor. Every output must be specific to this exact user. If any output could apply to a different user with a similar background, rewrite it until it cannot.
 
@@ -54,10 +54,6 @@ Label the 3 cards in order:
 - Path B (Aligned) — highest DNA/Ikigai fit, sustainable long-term
 - Path C (Stretch) — highest upside, requires more time or capital
 
-━━━ COMPOSITE SCORE FORMULA ━━━
-
-Arithmetic mean of all five Ikigai filter scores, then subtract 3 points for every Ikigai circle (What You Love, What You're Good At, What The World Needs, What You Can Be Paid For) that scores below 60. Lifestyle Fit does not trigger the penalty. Round to nearest integer.
-
 ━━━ UNIVERSAL RULES ━━━
 
 - Every direction must cite a specific market signal or complaint source
@@ -71,7 +67,16 @@ Arithmetic mean of all five Ikigai filter scores, then subtract 3 points for eve
 - If a profile field is missing, note the gap inline where it affects scoring: e.g. "What You Can Be Paid For capped at 60: income floor not provided"
 - NEVER produce generic output. If the output could apply to 10 different users, rewrite it.`;
 
-function buildPrompt(
+// System prompt with prompt caching
+const SYSTEM_PROMPT_CACHED = [
+  {
+    type: "text" as const,
+    text: SYSTEM_PROMPT_TEXT,
+    cache_control: { type: "ephemeral" as const },
+  },
+];
+
+function buildUserContext(
   models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
   scores: DnaScores,
   firstName: string,
@@ -106,9 +111,7 @@ function buildPrompt(
   const m = models[0];
   const modelLine = `${pathLabel}: ${m.model} (compatibility: ${m.compatibility}%)${m.isPrimary ? " ← PRIMARY DNA FIT" : ""}`;
 
-  return `Generate 1 direction card for ${firstName}.
-
-━━━ DNA PROFILE ━━━
+  return `━━━ DNA PROFILE ━━━
 Name: ${firstName}
 Core Pattern: ${or(nar["core_dna_label"] ?? scores.strength_patterns?.join(", "))}
 Value Signature: ${or(nar["your_core"] ?? scores.strengths_summary)}
@@ -157,7 +160,102 @@ Travel tolerance: ${or(res.travelTolerance)}
 Target income: ${or(rawAnswers["q5_finance"])}
 
 ${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}━━━ MODEL ━━━
-${modelLine}
+${modelLine}`;
+}
+
+function buildPhase1Prompt(
+  models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+  cardIndex = 0,
+): string {
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
+
+  return `Generate 1 direction card summary for ${firstName}.
+
+${context}
+
+Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markdown):
+{"cards": [{
+  "title": "<specific business name, max 10 words, NOT a category>",
+  "compatibility": <exact compatibility score from MODEL line>,
+  "oneliner": "<what it does and who it serves, max 20 words>",
+  "description": "<3–5 sentences: specific complaint solved, why now, first customers>",
+  "why_fits_you": ["<bullet 1 — reference their exact credential/tool>", "<bullet 2>", "<bullet 3>"],
+  "key_risks": ["<risk 1 — specific>", "<risk 2 — specific>"],
+  "startup_cost_usd": "<e.g. $0–$500>",
+  "time_to_first_revenue_weeks": "<e.g. 6–10 weeks>",
+  "hours_per_week": "<at 1-client scale, e.g. 8–12 hrs/week>",
+  "constraint_check": {"status": "Pass"|"Warn"|"Fail", "reason": "<required if Warn or Fail>"},
+  "first_10_customers": "<1 sentence, specific channel and city if provided>",
+  "unfair_advantage": "<why ${firstName} specifically — reference exact credential or tool, NEVER 'your experience'>",
+  "path_label": "${pathLabel}"
+}]}`;
+}
+
+function buildPhase2Prompt(
+  phase1Card: Partial<DirectionCardData>,
+  models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+  cardIndex = 0,
+): string {
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+
+  return `Perform deep market analysis for this direction for ${firstName}.
+
+Direction: "${phase1Card.title}"
+Summary: ${phase1Card.oneliner}
+${phase1Card.description}
+
+${context}
+
+Return the analysis as JSON {"cards": [{ "title": "${phase1Card.title}", ...analysis fields }]} with ONLY these fields (no other fields):
+- ikigai_filters: object with five keys (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for, lifestyle_fit), each { score: 0-100, reason: "1 sentence grounded in their exact data" }
+- composite_score: arithmetic mean of all five ikigai scores, subtract 3 for each circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) below 60. Round to nearest integer.
+- high_risk_flags: string[] — one entry per filter scored below 60, format "FilterName (score): specific reason"
+- simple_positioning: "It is like [bloated incumbent] but only does [the one thing the complainant actually needs]"
+- why_now: what changed in the last 12-18 months that makes this viable today?
+- competition: { layer1_workaround: string, layer2_incumbent: string, layer3_simple_competitors: string }
+- key_competitors: array of exactly 3 objects { name: string, what_they_do: string }
+- economic_urgency: what does the buyer's current workaround cost per month?
+- ocean_classification: { type: "Blue"|"Purple"|"Red", density: string }
+- trend_connection: which macro industry shift does this connect to
+- industry_shift: which specific tool/platform/event this direction rides
+- complaint_source: which specific validated complaint this is rooted in
+- window_risk: what closes this window and roughly when
+- market_signal_confidence: "Complaint-validated"|"Inferred"|"Insufficient signal"
+- distribution_path: specific community/subreddit/Facebook group/event/association for first 100 customers
+- liked_work_check: null or brief note on alignment/conflict with what they liked/disliked about last job
+
+Return JSON only, no markdown fences.`;
+}
+
+function buildFullPrompt(
+  models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+  cardIndex = 0,
+): string {
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
+
+  return `Generate 1 direction card for ${firstName}.
+
+${context}
 
 Produce exactly 1 DirectionCardData object with ALL of these fields:
 
@@ -171,33 +269,41 @@ Produce exactly 1 DirectionCardData object with ALL of these fields:
 - simple_positioning: string — "It is like [bloated incumbent] but only does [the one thing the complainant actually needs]"
 - unfair_advantage: string — why ${firstName} specifically; reference their exact credential or demonstrated skill — NEVER "your experience" or "your background"
 - ikigai_filters: object with these five keys, each { score: 0-100, reason: "1 sentence grounded in their exact data" }:
-    what_you_love: Does this energise them? Does it match their energy source and avoid their energy drains? Reference their exact q1_energy answer.
-    what_you_are_good_at: Can they do this with skills/expertise they already have? How much of their existing toolkit transfers directly? Reference specific tools or credentials.
-    what_world_needs: Is there validated market demand? Is there a real complaint this solves? Name a specific signal or community where this pain is discussed.
-    what_you_can_be_paid_for: Can this generate meaningful income within their runway? Show rough math against their income floor. If income floor not provided, note it.
-    lifestyle_fit: Does the model match their hours, location, family constraints, travel tolerance, growth ambition, and client interaction preference?
-- composite_score: number — formula: arithmetic mean of all five scores, subtract 3 for every Ikigai circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) below 60. Round to nearest integer.
+    what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for, lifestyle_fit
+- composite_score: number — arithmetic mean of all five scores, subtract 3 for every Ikigai circle (what_you_love, what_you_are_good_at, what_world_needs, what_you_can_be_paid_for) below 60. Round to nearest integer.
 - high_risk_flags: string[] — one entry per filter scored below 60, format: "FilterName (score): specific reason"
 - startup_cost_usd: string — e.g. "$0–$500"
-- time_to_first_revenue_weeks: string — factoring in time constraints, e.g. "6–10 weeks"
+- time_to_first_revenue_weeks: string — e.g. "6–10 weeks"
 - hours_per_week: string — at 1-client scale, e.g. "8–12 hrs/week"
 - constraint_check: { status: "Pass" | "Warn" | "Fail", reason?: string (required if Warn or Fail) } — do NOT generate a card with Fail status
-- first_10_customers: string — 1 sentence, specific channel and location-aware (use their city if provided)
-- distribution_path: string — specific community, subreddit, Facebook group, event, or association where the first 100 customers can be reached without a $50K ad budget
+- first_10_customers: string — 1 sentence, specific channel and location-aware
+- distribution_path: string — specific community, subreddit, Facebook group, event, or association
 - competition: { layer1_workaround: string, layer2_incumbent: string, layer3_simple_competitors: string }
-- key_competitors: array of exactly 3 objects { name: string, what_they_do: string } — real named competitors or substitute tools that serve the same need; each what_they_do is 1 sentence max
-- economic_urgency: string — what does the buyer's current workaround cost per month? This is the price anchor — quantify it
+- key_competitors: array of exactly 3 objects { name: string, what_they_do: string }
+- economic_urgency: string — what does the buyer's current workaround cost per month?
 - ocean_classification: { type: "Blue" | "Purple" | "Red", density: string }
 - trend_connection: string — which macro industry shift does this connect to
-- industry_shift: string — which of the Step 0 shifts this direction specifically rides (name the tool, platform, or event)
+- industry_shift: string — which of the Step 0 shifts this direction specifically rides
 - complaint_source: string — which specific validated complaint this is rooted in
 - window_risk: string — what closes this window and roughly when
-- path_label: "${cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch"}" — use exactly this value
-- market_signal_confidence: "Complaint-validated" | "Inferred" | "Insufficient signal" — how well-validated the market demand is
-- liked_work_check: string | null — if the direction aligns with what they liked about their last job, note it briefly; if it risks repeating what they disliked, flag it explicitly; null if no relevant overlap
+- path_label: "${pathLabel}" — use exactly this value
+- market_signal_confidence: "Complaint-validated" | "Inferred" | "Insufficient signal"
+- liked_work_check: string | null
 
 Return JSON only, exactly this shape (no markdown fences):
 {"cards": [/* the single card object */]}`;
+}
+
+function parseCard(text: string): DirectionCardData | null {
+  const raw = text.trim();
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
+    return Array.isArray(parsed.cards) ? parsed.cards[0] ?? null : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -214,12 +320,10 @@ export async function POST(req: NextRequest) {
       rawAnswers: Record<string, string>;
       cvSummary?: string;
       dnaNarrative?: Record<string, string>;
-      resources?: {
-        networks?: string; startingCapital?: string; financialRunway?: string; hoursPerWeek?: string;
-        locationFlexibility?: string; familyCommitments?: string; incomeFloor?: string;
-        onlineVsOffline?: string; growthAmbition?: string; clientInteraction?: string;
-        travelTolerance?: string; otherNotes?: string;
-      };
+      resources?: Record<string, string>;
+      cardIndex?: number;
+      phase?: 1 | 2;
+      phase1Card?: Partial<DirectionCardData>;
     };
 
     const { models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources } = body;
@@ -228,40 +332,61 @@ export async function POST(req: NextRequest) {
       return Response.json({ cards: [] });
     }
 
-    // cardIndex controls which path label (0=Safe, 1=Aligned, 2=Stretch)
-    const generateCard = (model: typeof models[0], index: number) => {
-      const prompt = buildPrompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, index);
-      return client.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
-        system: SYSTEM_PROMPT,
+    const cardIndex = body.cardIndex ?? 0;
+    const phase = body.phase;
+
+    // Alt cards (index 1 and 2) use Haiku — faster and cheaper
+    const isAltCard = cardIndex > 0;
+    const fastModel = "claude-haiku-4-5-20251001";
+    const deepModel = "claude-sonnet-4-6";
+
+    const model = body.models[cardIndex] ?? body.models[0];
+
+    if (phase === 1) {
+      // Phase 1: fast summary using Haiku
+      const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const msg = await client.messages.create({
+        model: fastModel,
+        max_tokens: 700,
+        system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
-      }).then((msg) => {
-        const block = msg.content[0];
-        const raw = block?.type === "text" ? block.text.trim() : "";
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) return null;
-        const parsed = JSON.parse(jsonMatch[0]) as { cards?: DirectionCardData[] };
-        return Array.isArray(parsed.cards) ? parsed.cards[0] ?? null : null;
       });
-    };
-
-    // cardIndex in body allows generating a specific alt card (1 or 2) on demand
-    const cardIndex = (body as any).cardIndex as number | undefined;
-    let cards: DirectionCardData[];
-
-    if (cardIndex !== undefined) {
-      // Generate a single specific card (for "Generate More" flow)
-      const model = models[cardIndex] ?? models[0];
-      const card = await generateCard(model, cardIndex).catch(() => null);
-      cards = card ? [card] : [];
-    } else {
-      // Default: generate only the primary card (index 0)
-      const card = await generateCard(models[0], 0).catch(() => null);
-      cards = card ? [card] : [];
+      const block = msg.content[0];
+      const raw = block?.type === "text" ? block.text : "";
+      const card = parseCard(raw);
+      return Response.json({ cards: card ? [card] : [] });
     }
 
-    return Response.json({ cards });
+    if (phase === 2) {
+      // Phase 2: deep analysis using Sonnet (or Haiku for alt cards)
+      const phase1Card = body.phase1Card ?? {};
+      const prompt = buildPhase2Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const selectedModel = isAltCard ? fastModel : deepModel;
+      const msg = await client.messages.create({
+        model: selectedModel,
+        max_tokens: 1500,
+        system: SYSTEM_PROMPT_CACHED,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const block = msg.content[0];
+      const raw = block?.type === "text" ? block.text : "";
+      const card = parseCard(raw);
+      return Response.json({ cards: card ? [card] : [] });
+    }
+
+    // Legacy single-phase path (used for generate-more without two-phase)
+    const selectedModel = isAltCard ? fastModel : deepModel;
+    const prompt = buildFullPrompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+    const msg = await client.messages.create({
+      model: selectedModel,
+      max_tokens: 2000,
+      system: SYSTEM_PROMPT_CACHED,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const block = msg.content[0];
+    const raw = block?.type === "text" ? block.text : "";
+    const card = parseCard(raw);
+    return Response.json({ cards: card ? [card] : [] });
   } catch (err) {
     console.error("[direction-cards] error:", err);
     return Response.json({ cards: [] }, { status: 500 });

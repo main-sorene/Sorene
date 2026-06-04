@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
 import {
   QUESTION_NODES,
+  MAIN_QUESTION_IDS,
   OPENING_MESSAGE,
   CV_REQUEST_MESSAGE,
   CV_CONTEXT_MESSAGE,
@@ -661,6 +662,11 @@ export function useAssessmentFlow() {
   const currentNode = flowState.phase === "question" ? getNode(flowState.nodeId) : null;
   const isWaiting = isReflecting || isSaving || isProcessingCv;
 
+  // Progress: count answered main question IDs
+  const answeredMainCount = MAIN_QUESTION_IDS.filter((id) => answers[id] !== undefined).length;
+  const progressPercent = Math.min(100, Math.round((answeredMainCount / MAIN_QUESTION_IDS.length) * 100));
+  const currentSignal = currentNode?.signal || "";
+
   // Canonical (English) choices for the current node — used for scoring/branching
   const canonicalChoices: string[] | undefined =
     flowState.phase === "question" && !flowState.awaitingFollowUp
@@ -720,6 +726,8 @@ export function useAssessmentFlow() {
     isDone: flowState.phase === "done",
     currentChoices: displayChoices,
     canonicalChoices,
+    currentSignal,
+    progressPercent,
     inputType:
       flowState.phase === "question" && !flowState.awaitingFollowUp
         ? currentNode?.inputType ?? "freetext"

@@ -3,31 +3,50 @@
 import { useRef, useEffect, useState } from "react";
 import { useAssessmentFlow } from "@/hooks/useAssessmentFlow";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Mic, Plus, Copy, Sparkles } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Plus, Copy, Sparkles, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 
+function renderInline(text: string) {
+  return text.split(/\*\*(.*?)\*\*/g).map((part, j) =>
+    j % 2 === 1 ? <strong key={j} className="font-semibold text-[#151515]">{part}</strong> : part
+  );
+}
+
 function SoreneMessage({ content }: { content: string }) {
-  const lines = content.split("\n");
+  // Split into paragraphs; if the last paragraph ends with '?' treat it as the question
+  const paragraphs = content.split(/\n\n+/);
+  const lastPara = paragraphs[paragraphs.length - 1].trimEnd();
+  const hasQuestion = lastPara.endsWith("?") && paragraphs.length > 1;
+
+  const reflectionParas = hasQuestion ? paragraphs.slice(0, -1) : paragraphs;
+  const questionPara = hasQuestion ? lastPara : null;
+
   return (
-    <div className="space-y-2">
-      {lines.map((line, i) => {
-        if (line === "") return <div key={i} className="h-1" />;
-        const parts = line.split(/\*\*(.*?)\*\*/g);
-        const rendered = parts.map((part, j) =>
-          j % 2 === 1 ? (
-            <strong key={j} className="font-semibold text-[#151515]">{part}</strong>
-          ) : part
-        );
-        return (
-          <p key={i} className={cn("text-[15px] leading-7 text-[#111111]", line.startsWith("•") && "pl-1")}>
-            {rendered}
-          </p>
-        );
-      })}
+    <div className="space-y-3">
+      {/* Reflection / context lines */}
+      {reflectionParas.map((para, pi) => (
+        <div key={pi} className="space-y-1.5">
+          {para.split("\n").map((line, li) => {
+            if (line === "") return <div key={li} className="h-0.5" />;
+            return (
+              <p key={li} className={cn("text-[15px] leading-7 text-[#4B5563]", line.startsWith("•") && "pl-1")}>
+                {renderInline(line)}
+              </p>
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Question — visually prominent */}
+      {questionPara && (
+        <p className="text-[16px] leading-7 font-medium text-[#111111] pt-1">
+          {renderInline(questionPara)}
+        </p>
+      )}
     </div>
   );
 }
@@ -94,7 +113,7 @@ function UserMessage({ content }: { content: string }) {
 export function AssessmentChatPage() {
   const {
     messages, sendMessage, skipCv, uploadCv, completeAssessment, isSaving, isWaiting, isProcessingCv,
-    isDone, isCvRequest, currentChoices, canonicalChoices,
+    isDone, isCvRequest, currentChoices, canonicalChoices, currentSignal, progressPercent,
   } = useAssessmentFlow();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -137,10 +156,36 @@ export function AssessmentChatPage() {
   const isDisabled = isSending || isWaiting || isDone;
   const canSend = inputValue.trim().length > 0 && !isDisabled;
 
+  // Phase label shown once we're in the main question flow
+  const showPhaseLabel = currentSignal && !isCvRequest && !isDone;
+  const isNearEnd = progressPercent >= 70;
+
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
+      {/* Phase indicator bar */}
+      {showPhaseLabel && (
+        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-0">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <span className="text-xs text-[#9B9B9B] tracking-wide">
+              {isNearEnd ? "Almost there" : currentSignal}
+            </span>
+            {progressPercent > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-1 rounded-full bg-[#F0F0F0] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#151515] transition-all duration-700"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <span className="text-[11px] text-[#BCBCBC]">{progressPercent}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-8 pb-4">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-4">
         <div className="max-w-2xl mx-auto space-y-6">
           {messages.map((msg) => {
             if (msg.type === "cv_request") return null;
@@ -273,14 +318,18 @@ export function AssessmentChatPage() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-[#62646A] mt-3">
+          <div className="flex items-center justify-between mt-3 px-0.5">
+            <span className="flex items-center gap-1 text-[11px] text-[#9B9B9B]">
+              <CheckCircle2 size={11} className="shrink-0" />
+              Progress saved automatically
+            </span>
             <a
               href="/responsible"
-              className="underline underline-offset-2 hover:text-[#101010] transition-colors"
+              className="text-xs text-[#9B9B9B] underline underline-offset-2 hover:text-[#101010] transition-colors"
             >
-              Sorene can make mistakes. Consider checking important information.
+              Sorene can make mistakes.
             </a>
-          </p>
+          </div>
         </div>
       </div>
     </div>

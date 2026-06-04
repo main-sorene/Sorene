@@ -101,6 +101,17 @@ export const QUESTION_NODES: QuestionNode[] = [
       "Now think about your most recent role — or the situation you're moving away from. What specifically pushed you out, or is pushing you out now? Not 'I needed a change' — but what was the thing you knew you couldn't keep doing?",
     inputType: "freetext",
     next: "q2_pattern",
+    alwaysFollowUp: {
+      message:
+        "And did you actually enjoy the type of work itself — the tasks, the craft, the content of the role — or was it mainly the environment, management, or conditions that made you want to leave?",
+      inputType: "choice" as const,
+      choices: [
+        "I enjoyed the work itself — the problem was the environment or conditions",
+        "I didn't enjoy the actual work either — it wasn't the right fit for me",
+        "Mixed — some of what I did I loved, other parts I didn't",
+        "Hard to separate — everything felt connected",
+      ],
+    },
   },
   {
     id: "q2_pattern",

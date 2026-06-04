@@ -1,4 +1,4 @@
-export type FourFilterItem = {
+export type IkigaiFilterItem = {
   score: number; // 0–100
   reason: string; // 1 sentence
 };
@@ -13,12 +13,20 @@ export type DirectionCardData = {
   why_now: string;
   simple_positioning: string;
   unfair_advantage: string;
-  four_filters: {
-    alignment: FourFilterItem;
-    skills_match: FourFilterItem;
-    lifestyle_fit: FourFilterItem;
-    financial_viability: FourFilterItem;
-    market_potential: FourFilterItem;
+  ikigai_filters: {
+    what_you_love: IkigaiFilterItem;
+    what_you_are_good_at: IkigaiFilterItem;
+    what_world_needs: IkigaiFilterItem;
+    what_you_can_be_paid_for: IkigaiFilterItem;
+    lifestyle_fit: IkigaiFilterItem;
+  };
+  // backward compat for old cards
+  four_filters?: {
+    alignment?: { score: number; reason: string };
+    skills_match?: { score: number; reason: string };
+    lifestyle_fit?: { score: number; reason: string };
+    financial_viability?: { score: number; reason: string };
+    market_potential?: { score: number; reason: string };
   };
   composite_score: number;
   high_risk_flags: string[];

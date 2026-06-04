@@ -571,12 +571,9 @@ export function DirectionCard({
                 </button>
               )}
               {cardData && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-[#9A9A9A] font-medium">Constraint Check</span>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
-                    style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                    {cardData.constraint_check.status}
-                  </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                  style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                  {cardData.constraint_check.status}
                 </div>
               )}
             </div>
@@ -1179,11 +1176,6 @@ export function DirectionCard({
             {cardData && (
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-[11px] text-[#9A9A9A] font-medium">{cardData.oneliner}</p>
-                {cardData.path_label && (
-                  <span className="ml-auto shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F5F5F7] text-[#62646A]">
-                    {cardData.path_label}
-                  </span>
-                )}
               </div>
             )}
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">{description}</p>

@@ -82,14 +82,10 @@ export function useDirectionResult() {
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
     if (!profile.directionEligibility.eligible) return;
 
-    // Don't auto-generate until user has filled in Resources & Constraints.
-    // This ensures the first direction is grounded in their real-life constraints.
-    try {
-      const stored = localStorage.getItem("resourcesConstraints");
-      const rc = stored ? JSON.parse(stored) : {};
-      const hasAnyRC = Object.values(rc).some((v) => String(v ?? "").trim() !== "");
-      if (!hasAnyRC) { setNeedsRC(true); return; } // wait for R&C form to be filled
-    } catch {}
+    // Don't auto-generate until user explicitly clicks "Generate Direction".
+    // R&C data being present is not enough — we require the explicit intent flag.
+    const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
+    if (!hasGenerationIntent) { setNeedsRC(true); return; }
 
     const generate = async () => {
       setIsStreaming(true);

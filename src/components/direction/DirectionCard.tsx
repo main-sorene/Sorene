@@ -428,7 +428,7 @@ export function DirectionCard({
 
   // ── Structured expanded content (new path) ──────────────────────────────────
   const structuredContent = cardData ? (
-    <div className="p-3 md:p-4 space-y-10">
+    <div className="p-3 md:p-4 space-y-8">
       {/* ── Section 1: Why This Fits You ── */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-5">
         <div className="flex items-center justify-between">
@@ -484,8 +484,6 @@ export function DirectionCard({
         </div>
       </motion.section>
 
-      <Separator className="bg-[#ECEDEE]" />
-
       {/* ── Section 2: Positioning ── */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
@@ -494,8 +492,6 @@ export function DirectionCard({
           {cardData.simple_positioning}
         </p>
       </motion.section>
-
-      <Separator className="bg-[#ECEDEE]" />
 
       {/* ── Section 3: Market Reality ── */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-5">
@@ -565,8 +561,6 @@ export function DirectionCard({
         )}
       </motion.section>
 
-      <Separator className="bg-[#ECEDEE]" />
-
       {/* ── Section 4: Operations ── */}
       <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
         <h4 className="text-base font-medium text-[#151515]">Operations</h4>
@@ -616,39 +610,37 @@ export function DirectionCard({
   // ── Legacy expanded content ─────────────────────────────────────────────────
   const legacyContent = (
     <div className="p-3 md:p-4 space-y-8">
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <h4 className="text-base font-medium text-[#151515] mb-4">Why This Fits You</h4>
-            <Separator className="bg-[#ECEDEE] mb-5" />
-            <div className="space-y-4">
-              {whyFitsYou.map((item, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + idx * 0.05 }} className="flex gap-4 items-center">
-                  <CircleCheck size={20} className="text-[#32C382] shrink-0" />
-                  <div>
-                    <h5 className="text-[14px] font-medium text-[#151515] mb-0.5">{item.title}</h5>
-                    <p className="text-[13px] text-[#62646A] leading-relaxed">{item.description}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-          <div className="flex-1">
-            <h4 className="text-base font-medium text-[#151515] mb-4">Key Risks</h4>
-            <Separator className="bg-[#ECEDEE] mb-5" />
-            <div className="space-y-2">
-              {keyRisks.map((risk, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + idx * 0.05 }} className="flex gap-4 items-center">
-                  <CircleX size={20} className="text-[#DF2E16] shrink-0" />
-                  <p className="text-sm font-medium leading-relaxed">{risk}</p>
-                </motion.div>
-              ))}
-            </div>
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-6">
+        <div>
+          <h4 className="text-base font-medium text-[#151515] mb-3">Why This Fits You</h4>
+          <Separator className="bg-[#ECEDEE] mb-4" />
+          <div className="space-y-4">
+            {whyFitsYou.map((item, idx) => (
+              <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + idx * 0.05 }} className="flex gap-4 items-center">
+                <CircleCheck size={20} className="text-[#32C382] shrink-0" />
+                <div>
+                  <h5 className="text-[14px] font-medium text-[#151515] mb-0.5">{item.title}</h5>
+                  <p className="text-[13px] text-[#62646A] leading-relaxed">{item.description}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
-        <div className="mt-8">
+        <div>
+          <h4 className="text-base font-medium text-[#151515] mb-3">Key Risks</h4>
+          <Separator className="bg-[#ECEDEE] mb-4" />
+          <div className="space-y-2">
+            {keyRisks.map((risk, idx) => (
+              <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + idx * 0.05 }} className="flex gap-3 items-start">
+                <CircleX size={18} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+        <div>
           <h4 className="text-base font-medium text-[#151515] mb-3">Why Now Works</h4>
-          <Separator className="bg-[#ECEDEE] mb-5" />
+          <Separator className="bg-[#ECEDEE] mb-4" />
           <p className="text-[13px] text-[#62646A] leading-relaxed">{whyNowWorks}</p>
         </div>
       </motion.section>

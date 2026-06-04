@@ -110,6 +110,63 @@ function UserMessage({ content }: { content: string }) {
   );
 }
 
+// Maps internal signal names → warm, human-readable phase labels
+const PHASE_LABELS: Record<string, string> = {
+  "Profile Setup": "Setting up your profile",
+  "Professional Profile": "Exploring your background",
+  "Energy Pattern": "Exploring your work energy",
+  "Negative Filter": "Understanding what to leave behind",
+  "Values + Motivation": "Understanding what drives you",
+  "Constraints": "Mapping your constraints",
+  "Constraints + Risk Comfort": "Mapping your constraints",
+  "Non-Negotiables": "Finding your non-negotiables",
+  "Decision-Making Style + Risk Comfort": "Understanding your risk comfort",
+  "Work Structure Preference": "How you like to work",
+  "Definition of Success": "Defining your success",
+  "Risk Tolerance + Decision-Making Style": "Calibrating your risk tolerance",
+  "Readiness Mode": "Almost there — last question",
+};
+
+function PhaseIndicator({ signal, progressPercent }: { signal: string; progressPercent: number }) {
+  const label = PHASE_LABELS[signal] || signal;
+  const isNearEnd = progressPercent >= 50;
+  const displayLabel = isNearEnd && signal !== "Readiness Mode" && signal !== "Profile Setup"
+    ? "Almost there — keep going"
+    : label;
+
+  return (
+    <div className="shrink-0 px-4 sm:px-6 pt-4 pb-0">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-2">
+          <span className={cn(
+            "text-[13px] font-medium tracking-wide transition-colors duration-500",
+            isNearEnd ? "text-[#111111]" : "text-[#6B7280]"
+          )}>
+            {displayLabel}
+          </span>
+          {isNearEnd && (
+            <span className="text-[11px] font-semibold text-[#111111] bg-[#F5F5F5] px-2 py-0.5 rounded-full">
+              ✦ Almost there
+            </span>
+          )}
+        </div>
+        {/* Progress bar — thicker, gradient fill */}
+        <div className="w-full h-[3px] rounded-full bg-[#EBEBEB] overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${Math.max(4, progressPercent)}%`,
+              background: isNearEnd
+                ? "linear-gradient(90deg, #6366F1 0%, #8B5CF6 100%)"
+                : "linear-gradient(90deg, #9CA3AF 0%, #6B7280 100%)",
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AssessmentChatPage() {
   const {
     messages, sendMessage, skipCv, uploadCv, completeAssessment, isSaving, isWaiting, isProcessingCv,
@@ -156,32 +213,14 @@ export function AssessmentChatPage() {
   const isDisabled = isSending || isWaiting || isDone;
   const canSend = inputValue.trim().length > 0 && !isDisabled;
 
-  // Phase label shown once we're in the main question flow
-  const showPhaseLabel = currentSignal && !isCvRequest && !isDone;
-  const isNearEnd = progressPercent >= 70;
+  // Phase indicator: show during active question phases only
+  const showPhaseLabel = !!currentSignal && !isCvRequest && !isDone;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
-      {/* Phase indicator bar */}
+      {/* Phase indicator */}
       {showPhaseLabel && (
-        <div className="shrink-0 px-4 sm:px-6 pt-3 pb-0">
-          <div className="max-w-2xl mx-auto flex items-center justify-between">
-            <span className="text-xs text-[#9B9B9B] tracking-wide">
-              {isNearEnd ? "Almost there" : currentSignal}
-            </span>
-            {progressPercent > 0 && (
-              <div className="flex items-center gap-2">
-                <div className="w-24 h-1 rounded-full bg-[#F0F0F0] overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-[#151515] transition-all duration-700"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <span className="text-[11px] text-[#BCBCBC]">{progressPercent}%</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <PhaseIndicator signal={currentSignal} progressPercent={progressPercent} />
       )}
 
       {/* Messages */}

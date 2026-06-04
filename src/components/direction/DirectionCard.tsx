@@ -2,7 +2,6 @@
 
 import {
   ArrowRight,
-  Check,
   ChevronLeft,
   CircleCheck,
   CircleX,
@@ -57,6 +56,7 @@ interface DirectionCardProps {
   isExpanded?: boolean;
   onToggle?: () => void;
   onHide?: () => void;
+  onChoose?: () => void;
   rawContent?: string;
 }
 
@@ -94,6 +94,7 @@ export function DirectionCard({
   isExpanded: isExpandedProp,
   onToggle,
   onHide,
+  onChoose,
   rawContent,
 }: DirectionCardProps) {
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
@@ -697,13 +698,14 @@ export function DirectionCard({
             {description}
           </motion.p>
           <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-wrap gap-2">
-              {badges?.map((badge, idx) => (
-                <motion.div key={idx} layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] text-[#151515] text-[13px] font-medium">
-                  {badge.icon || <Check size={14} />}{badge.label}
-                </motion.div>
-              ))}
+            {/* Left: Hide + constraint badge */}
+            <div className="flex items-center gap-2">
+              {onHide && (
+                <button onClick={(e) => { e.stopPropagation(); onHide(); }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                  Hide
+                </button>
+              )}
               {cardData ? (
                 <motion.div layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
@@ -717,13 +719,14 @@ export function DirectionCard({
                 </motion.div>
               )}
             </div>
+            {/* Right: Choose this Direction + See Detail */}
             <AnimatePresence mode="wait">
               {!isExpanded && (
                 <div className="flex items-center gap-2">
-                  {onHide && (
-                    <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                      className="flex items-center justify-center w-9 h-9 rounded-xl border border-[#ECEDEE] text-[#9A9A9A] hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
-                      <CircleX size={16} />
+                  {onChoose && (
+                    <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                      Choose this Direction
                     </button>
                   )}
                   <motion.button layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
@@ -807,17 +810,35 @@ export function DirectionCard({
               </div>
             )}
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">{description}</p>
-            <div className="mt-auto flex items-center justify-end gap-2">
-              {onHide && (
-                <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                  className="flex items-center justify-center w-9 h-9 rounded-xl border border-[#ECEDEE] text-[#9A9A9A] hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
-                  <CircleX size={16} />
+            <div className="mt-auto flex items-center justify-between gap-2">
+              {/* Left: Hide + constraint badge */}
+              <div className="flex items-center gap-2">
+                {onHide && (
+                  <button onClick={(e) => { e.stopPropagation(); onHide(); }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                    Hide
+                  </button>
+                )}
+                {cardData && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                    style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                    {cardData.constraint_check.status}
+                  </div>
+                )}
+              </div>
+              {/* Right: Choose this Direction + See Detail */}
+              <div className="flex items-center gap-2">
+                {onChoose && (
+                  <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                    Choose this Direction
+                  </button>
+                )}
+                <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
+                  {actionText}<ArrowRight size={16} />
                 </button>
-              )}
-              <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                {actionText}<ArrowRight size={16} />
-              </button>
+              </div>
             </div>
           </motion.div>
         )}

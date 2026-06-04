@@ -96,6 +96,7 @@ export function useDirectionResult() {
     const generate = async () => {
       setIsStreaming(true);
       setHasStreamed(true);
+      setGenerateError(null);
 
       try {
         const firstName = profile.firstName || "there";
@@ -138,7 +139,14 @@ export function useDirectionResult() {
           body: JSON.stringify({ ...basePayload, phase: 1 }),
         });
 
-        if (!res1.ok) return;
+        if (!res1.ok) {
+          const detail = await res1.text().catch(() => "");
+          setGenerateError(`Generation failed (${res1.status}). ${detail || "Please try again."}`);
+          // Clear the intent so the user lands back on the form, not a dead spinner
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+          setNeedsRC(true);
+          return;
+        }
 
         const data1 = (await res1.json()) as { cards?: DirectionCardData[] };
         const phase1Card = data1.cards?.[0];
@@ -149,7 +157,18 @@ export function useDirectionResult() {
           if (user?.uid) {
             await saveUserProfile(user.uid, { directionCards: [phase1Card], directionText: "" });
           }
+        } else {
+          setGenerateError("The engine returned no direction. Please try again.");
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+          setNeedsRC(true);
         }
+      } catch (err) {
+        console.error("[generate] failed:", err);
+        setGenerateError(
+          err instanceof Error ? err.message : "Something went wrong while generating. Please try again."
+        );
+        try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+        setNeedsRC(true);
       } finally {
         setIsStreaming(false);
       }

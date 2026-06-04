@@ -39,11 +39,30 @@ export function useDirectionResult() {
       setAlternatives(profile.directionAlternatives);
     }
 
+    // Check whether user has filled in R&C (localStorage)
+    const hasRCData = (() => {
+      try {
+        const stored = localStorage.getItem("resourcesConstraints");
+        if (!stored) return false;
+        const rc = JSON.parse(stored);
+        return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
+      } catch { return false; }
+    })();
+
     // New path: structured direction cards
     // Skip if cards are old format (missing why_fits_you = pre-v2 cards) — fall through to regenerate
+    // Also skip if user hasn't filled R&C yet — clear stale cards and show R&C form
     const cachedCards = profile.directionCards;
     const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters);
     if (cardsAreUpToDate) {
+      if (!hasRCData) {
+        // Cards exist but no R&C — clear them from Firestore and show R&C form
+        if (user?.uid) {
+          saveUserProfile(user.uid, { directionCards: [] as any, directionText: "" });
+        }
+        setHasStreamed(true);
+        return;
+      }
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;

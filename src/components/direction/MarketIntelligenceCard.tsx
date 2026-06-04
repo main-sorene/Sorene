@@ -52,9 +52,9 @@ export function MarketIntelligenceCard() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               onClick={() => setIsExpanded(false)}
-              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm font-medium mb-8 w-fit"
+              className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium mb-8 w-fit"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={20} />
               Back to summary
             </motion.button>
           )}

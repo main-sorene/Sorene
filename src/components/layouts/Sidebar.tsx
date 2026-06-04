@@ -647,7 +647,7 @@ export function Sidebar({
                 />
               ) : (
                 <span className="text-white font-semibold text-sm">
-                  {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+                  {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || authUser?.uid || "U").charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
@@ -668,7 +668,7 @@ export function Sidebar({
                     <>
                       <p className="text-label-medium text-orange-500 truncate">Update your name →</p>
                       <p className="text-body-xsmall text-[#62646A] truncate">
-                        {authUser?.profile?.email || authUser?.email || ""}
+                        {authUser?.profile?.email || authUser?.email || authUser?.uid || ""}
                       </p>
                     </>
                   ) : (
@@ -679,7 +679,7 @@ export function Sidebar({
                           : authUser?.displayName || "User"}
                       </p>
                       <p className="text-body-xsmall text-[#62646A] truncate">
-                        {authUser?.profile?.email || authUser?.email || "No email"}
+                        {authUser?.profile?.email || authUser?.email || authUser?.uid || ""}
                       </p>
                     </>
                   )}

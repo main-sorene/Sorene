@@ -408,9 +408,10 @@ export function SettingsModal() {
     return true;
   });
 
-  const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || authUser?.email?.split("@")[0] || "User";
+  const emailForDisplay = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
+  const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || emailForDisplay.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
-  const email = authUser?.email || "";
+  const email = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
   const avatarUrl = authUser?.profile?.photoUrl;
   const orgId = authUser?.profile?.orgId || (authUser?.uid ? generateOrgId(authUser.uid) : "—");
 

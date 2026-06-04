@@ -60,31 +60,17 @@ Be direct, warm, and specific to their actual data. Use short paragraphs. Bold k
       messages = [{ role: "user" as const, content: message }];
     }
 
-    const jsonInstruction = '\n\nRespond ONLY with valid JSON — no markdown code fences, nothing outside the JSON: {"reply": "<your response>"}';
-
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
-      system: systemPrompt + jsonInstruction,
+      system: systemPrompt,
       messages,
     });
 
     const block = msg.content[0];
-    let raw = block && block.type === "text" ? block.text.trim() : "{}";
-    // Strip markdown code fences if present
-    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-    // Extract JSON object if there's surrounding text
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) raw = jsonMatch[0];
+    const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
 
-    let parsed: { reply: string };
-    try {
-      parsed = JSON.parse(raw) as { reply: string };
-    } catch {
-      parsed = { reply: raw };
-    }
-
-    return NextResponse.json(parsed);
+    return NextResponse.json({ reply });
   } catch (error) {
     console.error("[direction-chat] error:", error);
     return NextResponse.json({ reply: "Sorry, I had trouble with that. Please try again." }, { status: 500 });

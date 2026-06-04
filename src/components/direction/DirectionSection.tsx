@@ -316,41 +316,92 @@ export const DirectionSection = () => {
         </section>
 
         {/* Other directions — alt structured + recipe cards */}
-        {hasOtherDirections && (
-          <section className="space-y-3">
-            <h3 className="text-sm font-medium text-[#62646A] px-1">Other possible directions</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {gridAltCards.map((card) => (
+        {hasOtherDirections && (() => {
+          // If any "other" card is expanded, pull it to full-width hero position
+          const expandedAlt = visibleAltCards.find((c) => expandedId === c.title);
+          const expandedRecipe = visibleRecipes.find((rd) => expandedId === rd.id);
+          const expandedItem = expandedAlt || expandedRecipe;
+
+          const gridOnlyAltCards = visibleAltCards.filter((c) => expandedId !== c.title);
+          const gridOnlyRecipes = visibleRecipes.filter((rd) => expandedId !== rd.id);
+          const hasGrid = gridOnlyAltCards.length > 0 || gridOnlyRecipes.length > 0;
+
+          return (
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-[#62646A] px-1">Other possible directions</h3>
+
+              {/* Expanded card pulled to full width */}
+              {expandedAlt && (
                 <DirectionCard
-                  key={card.title}
-                  variant="standard"
-                  title={card.title}
-                  description={card.description}
-                  score={String(card.compatibility)}
+                  key={expandedAlt.title + "-expanded"}
+                  variant="hero"
+                  title={expandedAlt.title}
+                  description={expandedAlt.description}
+                  badges={heroBadges}
+                  score={String(expandedAlt.compatibility)}
                   actionText="View detail"
-                  cardData={card}
-                  onHide={() => hideCard(card.title)}
+                  cardData={expandedAlt}
+                  isExpanded={true}
+                  onToggle={() => setExpandedId(null)}
+                  onHide={() => hideCard(expandedAlt.title)}
                 />
-              ))}
-              {gridRecipes.map((rd) => (
+              )}
+              {expandedRecipe && (
                 <DirectionCard
-                  key={rd.id}
-                  variant="standard"
-                  title={rd.title}
-                  description={rd.description}
-                  score={String(rd.score)}
+                  key={expandedRecipe.id + "-expanded"}
+                  variant="hero"
+                  title={expandedRecipe.title}
+                  description={expandedRecipe.description}
+                  badges={heroBadges}
+                  score={String(expandedRecipe.score)}
                   actionText="View detail"
-                  whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
-                  keyRisks={rd.keyRisks}
-                  isExpanded={expandedId === rd.id}
-                  onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
-                  onHide={() => hideCard(rd.id)}
-                  rawContent={rd.rawContent}
+                  whyFitsYou={expandedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                  keyRisks={expandedRecipe.keyRisks}
+                  isExpanded={true}
+                  onToggle={() => setExpandedId(null)}
+                  onHide={() => hideCard(expandedRecipe.id)}
+                  rawContent={expandedRecipe.rawContent}
                 />
-              ))}
-            </div>
-          </section>
-        )}
+              )}
+
+              {/* Remaining cards in grid */}
+              {hasGrid && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {gridOnlyAltCards.map((card) => (
+                    <DirectionCard
+                      key={card.title}
+                      variant="standard"
+                      title={card.title}
+                      description={card.description}
+                      score={String(card.compatibility)}
+                      actionText="View detail"
+                      cardData={card}
+                      isExpanded={false}
+                      onToggle={() => setExpandedId(card.title)}
+                      onHide={() => hideCard(card.title)}
+                    />
+                  ))}
+                  {gridOnlyRecipes.map((rd) => (
+                    <DirectionCard
+                      key={rd.id}
+                      variant="standard"
+                      title={rd.title}
+                      description={rd.description}
+                      score={String(rd.score)}
+                      actionText="View detail"
+                      whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                      keyRisks={rd.keyRisks}
+                      isExpanded={false}
+                      onToggle={() => setExpandedId(rd.id)}
+                      onHide={() => hideCard(rd.id)}
+                      rawContent={rd.rawContent}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
       </div>

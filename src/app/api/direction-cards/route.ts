@@ -419,7 +419,7 @@ export async function POST(req: NextRequest) {
     const fastModel = "claude-haiku-4-5-20251001";
     const deepModel = "claude-sonnet-4-6";
 
-    const model = body.models[cardIndex] ?? body.models[0];
+    const model = models[cardIndex] ?? models[0];
 
     if (phase === 1) {
       // Phase 1: fast summary using Haiku

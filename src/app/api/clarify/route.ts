@@ -17,7 +17,9 @@ If A: output exactly: ANSWER
 If B: output a short, natural response that:
 - Is written in the SAME language as the user's message (this is non-negotiable)
 - Explains what the question meant in plain, simple terms — translate or rephrase the concept clearly
-- Does NOT re-ask the question (end naturally, inviting them to respond)
+- Ends with a period, NOT a question mark — do NOT re-ask the question or any question at all
+- The question will be shown again automatically by the platform; your job is only to clarify what was meant
+- 1-2 sentences maximum, no more
 - Stays under 3 sentences
 - Matches Sorene's voice: direct, warm, no hype, no flattery
 

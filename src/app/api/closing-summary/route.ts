@@ -33,7 +33,8 @@ Paragraph 1 — A warm, specific intro (2-3 sentences). Acknowledge that they've
 Paragraph 2 — A concise, honest summary of who they are (3-4 sentences). Cover: what energises them, how they operate, and what they need from a business. Be specific. No hype, no platitudes. Write as if you've genuinely been listening.
 
 Rules:
-- No bullet points, no headers, no markdown
+- No bullet points, no headers
+- Use **bold** (markdown) to highlight 4–6 key phrases across the two paragraphs — the words that define who they are: the energy source, the operating style, the core need, the constraint. Bold the concept, not filler words.
 - No phrases like "I can see", "It's clear", "You've got this", "Let's dive in"
 - Speak directly to ${firstName}
 - Under 150 words total for the two paragraphs

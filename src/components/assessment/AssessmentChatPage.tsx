@@ -211,7 +211,10 @@ export function AssessmentChatPage() {
 
   const handleRevealComplete = () => {
     queryClient.invalidateQueries({ queryKey: ["direction-profile", user?.uid] });
-    completeAssessment();
+    // Navigate first — completeAssessment() flips isAssessmentCompleteAtom which would
+    // re-render this page to <HomePage> before navigation, causing a visible flash.
+    // dnaAssessmentComplete is already persisted in Firestore at this point, so
+    // AppLayout's useEffect will sync the atom once the DNA page mounts.
     router.push("/dna");
   };
 

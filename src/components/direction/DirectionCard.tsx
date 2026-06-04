@@ -671,25 +671,6 @@ export function DirectionCard({
                     ) : null}
                   </div>
 
-                  {/* Section 2: Positioning */}
-                  {(cardData.ikigai_filters || cardData.four_filters || isLoadingDetail) && (
-                    <div className="p-4 pb-6">
-                      {isLoadingDetail && !cardData.simple_positioning ? (
-                        <div className="flex items-center gap-2 py-4 justify-center">
-                          <Spinner />
-                        </div>
-                      ) : cardData.simple_positioning ? (
-                        <>
-                          <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
-                          <Separator className="bg-[#ECEDEE] mb-4" />
-                          <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
-                            {cardData.simple_positioning}
-                          </p>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
-
                   {/* Section 3: Market Reality accordion */}
                   <div>
                     <button
@@ -949,17 +930,6 @@ export function DirectionCard({
           </div>
         )}
       </motion.section>
-
-      {/* Section 2: Positioning */}
-      {cardData.simple_positioning && (
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
-          <Separator className="bg-[#ECEDEE] mb-4" />
-          <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
-            {cardData.simple_positioning}
-          </p>
-        </motion.section>
-      )}
 
       {/* Section 3: Market Reality */}
       {(cardData.trend_connection || cardData.ocean_classification || cardData.key_competitors || cardData.competition || cardData.economic_urgency) && (

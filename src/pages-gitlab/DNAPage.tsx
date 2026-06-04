@@ -1,16 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle } from "lucide-react";
 import { DNAChat } from "@/components/dna/DNAChat";
+import { DNAReveal } from "@/components/dna/DNAReveal";
 
 export function DNAPage({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
+  const [revealing, setRevealing] = useState(false);
+
+  useEffect(() => {
+    const seen = sessionStorage.getItem("dna-revealed");
+    if (!seen) setRevealing(true);
+  }, []);
+
+  const handleRevealComplete = () => {
+    setRevealing(false);
+    sessionStorage.setItem("dna-revealed", "1");
+  };
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[#F9FAFB] relative">
+      {/* Reveal overlay — shown once per session */}
+      <AnimatePresence>
+        {revealing && <DNAReveal onComplete={handleRevealComplete} />}
+      </AnimatePresence>
+
       {/* Left Column: DNA Grid — hidden on mobile when chat is open */}
       <div
         className={`flex-1 flex flex-col h-full overflow-hidden ${

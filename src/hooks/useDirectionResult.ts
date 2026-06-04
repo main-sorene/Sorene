@@ -252,10 +252,8 @@ export function useDirectionResult() {
     .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
-  // Total available models (primary + up to 2 alts)
-  const allAlts = profile?.directionAlternatives || [];
-  const totalModels = Math.min(3, 1 + allAlts.filter((a) => a.model !== eligibleModel).slice(0, 2).length);
-  const canGenerateMore = !!primaryCard && directionCards.length < totalModels;
+  // Show "Generate More" when 1 or 2 structured cards exist (not yet at max 3)
+  const canGenerateMore = directionCards.length >= 1 && directionCards.length < 3;
 
   return {
     // Structured cards (new path)

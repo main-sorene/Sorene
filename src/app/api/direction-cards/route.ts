@@ -65,6 +65,8 @@ For EACH model, produce a DirectionCardData object with ALL of these fields:
 - compatibility: number — use the provided compatibility score exactly
 - oneliner: string — what it does and who it serves, max 20 words
 - description: string — 3-5 sentences covering: the specific complaint it solves, why now (name the industry shift), who the first customers are
+- why_fits_you: string[] — 3-4 bullets grounded in their exact credentials, tools, assessment answers, and constraints
+- key_risks: string[] — 2 honest, specific risks for this direction
 - why_now: string — what changed in the last 12–18 months that makes this viable today? Name the specific tool launch, platform change, or market event
 - simple_positioning: string — "It is like [bloated incumbent] but only does [the one thing the complainant actually needs]"
 - unfair_advantage: string — why ${firstName} specifically; reference their exact credential or demonstrated skill

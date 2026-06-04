@@ -8,6 +8,8 @@ export type DirectionCardData = {
   compatibility: number;
   oneliner: string;
   description: string;
+  why_fits_you: string[];
+  key_risks: string[];
   why_now: string;
   simple_positioning: string;
   unfair_advantage: string;

@@ -278,7 +278,7 @@ export function ResourcesConstraintsForm() {
                 className="w-full flex items-center justify-center gap-2 py-3 bg-[#151515] text-white text-[13px] font-semibold rounded-xl hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating && <Loader2 size={14} className="animate-spin" />}
-                {isGenerating ? "Generating direction…" : "Generate Direction from My Constraints"}
+                {isGenerating ? "Generating direction…" : "Generate Direction"}
               </button>
             </div>
           </motion.div>

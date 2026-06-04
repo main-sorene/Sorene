@@ -17,7 +17,9 @@ const DIRECTION_RECIPES = [
 
 // Emitted by the recipe prompts once enough info is gathered; signals the UI to
 // show a "Generate" button instead of producing the card automatically.
-const READY_MARKER = "[[READY_TO_GENERATE]]";
+// Matched loosely (case/spacing/formatting tolerant) so a stray variant from the
+// model still triggers the button instead of leaking into the chat bubble.
+const READY_MARKER_RE = /\[\[\s*READY[_\s]*TO[_\s]*GENERATE\s*\]\]/i;
 
 function parseDirectionCard(text: string): RecipeDirection | null {
   // Match "Direction:" with or without bold markers
@@ -189,10 +191,14 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       const data = (await res.json()) as { reply: string };
       const reply = data.reply || "Sorry, I couldn't respond. Try again.";
 
-      // If the AI signalled it's ready, strip the marker and show a Generate button
+      // If the AI signalled it's ready, strip the marker and show a Generate button.
+      // Tolerate spacing/case/formatting variants (e.g. **[[ READY_TO_GENERATE ]]**).
       let displayReply = reply;
-      if (reply.includes(READY_MARKER)) {
-        displayReply = reply.split(READY_MARKER).join("").trim();
+      if (READY_MARKER_RE.test(reply)) {
+        displayReply = reply
+          .replace(new RegExp(READY_MARKER_RE.source, "gi"), "")
+          .replace(/\*\*\s*\*\*/g, "")
+          .trim();
         setShowGenerate(true);
       }
 

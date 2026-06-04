@@ -25,7 +25,9 @@ export function useDirectionResult() {
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
   const [needsRC, setNeedsRC] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
+  const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
+  const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["direction-profile", user?.uid],
@@ -53,10 +55,11 @@ export function useDirectionResult() {
     })();
 
     // New path: structured direction cards
-    // Skip if cards are old format (missing why_fits_you = pre-v2 cards) — fall through to regenerate
-    // Also skip if user hasn't filled R&C yet — clear stale cards and show R&C form
+    // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
     const cachedCards = profile.directionCards;
-    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters);
+    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 &&
+      ((cachedCards[0].title && cachedCards[0].constraint_check) ||
+       (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
     if (cardsAreUpToDate) {
       if (!hasRCData) {
         // Cards exist but no R&C — clear them and prompt R&C form
@@ -127,7 +130,7 @@ export function useDirectionResult() {
           resources,
         };
 
-        // Phase 1: fast card shell (Haiku, ~8s)
+        // Phase 1 only: fast card shell (Haiku, ~8s)
         const res1 = await authFetch("/api/direction-cards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -141,30 +144,9 @@ export function useDirectionResult() {
 
         if (phase1Card) {
           setDirectionCards([phase1Card]);
-          setIsStreaming(false);
-          setIsLoadingDetails(true);
-
-          // Phase 2: deep analysis in background (Sonnet, ~15-20s)
-          try {
-            const res2 = await authFetch("/api/direction-cards", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...basePayload, phase: 2, phase1Card }),
-            });
-
-            if (res2.ok) {
-              const data2 = (await res2.json()) as { cards?: DirectionCardData[] };
-              const phase2Fields = data2.cards?.[0];
-              if (phase2Fields) {
-                const fullCard = { ...phase1Card, ...phase2Fields };
-                setDirectionCards([fullCard]);
-                if (user?.uid) {
-                  await saveUserProfile(user.uid, { directionCards: [fullCard], directionText: "" });
-                }
-              }
-            }
-          } finally {
-            setIsLoadingDetails(false);
+          // Save to Firestore immediately so refresh doesn't re-generate
+          if (user?.uid) {
+            await saveUserProfile(user.uid, { directionCards: [phase1Card], directionText: "" });
           }
         }
       } finally {
@@ -175,13 +157,10 @@ export function useDirectionResult() {
     generate();
   }, [profile, hasStreamed, user]);
 
-  const generateMore = async () => {
-    if (!profile || isGeneratingMore) return;
-    // Cap at 2 (Stretch) for path label, but allow unlimited cards
-    const nextIndex = Math.min(directionCards.length, 2);
-
+  const buildBasePayload = () => {
+    if (!profile) return null;
     const primaryModel = profile.directionEligibility?.model as StructuralModel | undefined;
-    if (!primaryModel) return;
+    if (!primaryModel) return null;
 
     const allAlts = profile.directionAlternatives || [];
     const altModels = allAlts
@@ -201,71 +180,149 @@ export function useDirectionResult() {
       } catch { return undefined; }
     })();
 
+    return {
+      models,
+      scores: profile.dnaScores,
+      firstName: profile.firstName || "there",
+      rawAnswers: profile.assessmentAnswers,
+      cvSummary: profile.cvSummary,
+      dnaNarrative: profile.dna_narrative,
+      resources,
+    };
+  };
+
+  const generateMore = async () => {
+    if (!profile || isGeneratingMore) return;
+    // Cap at 2 (Stretch) for path label, but allow unlimited cards
+    const nextIndex = Math.min(directionCards.length, 2);
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const basePayload = { ...basePayloadBase, cardIndex: nextIndex };
+
     setIsGeneratingMore(true);
     try {
-      const basePayload = {
-        models,
-        cardIndex: nextIndex,
-        scores: profile.dnaScores,
-        firstName: profile.firstName || "there",
-        rawAnswers: profile.assessmentAnswers,
-        cvSummary: profile.cvSummary,
-        dnaNarrative: profile.dna_narrative,
-        resources,
-      };
-
-      // Alt cards (index > 0) use single-phase Haiku for speed
-      if (nextIndex > 0) {
-        const res = await authFetch("/api/direction-cards", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(basePayload),
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { cards?: DirectionCardData[] };
-        const newCard = data.cards?.[0];
-        if (newCard) {
-          setDirectionCards((prev) => {
-            const updated = [...prev, newCard];
-            if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
-            return updated;
-          });
-        }
-        return;
-      }
-
-      // Primary card (index 0): two-phase
-      const res1 = await authFetch("/api/direction-cards", {
+      // All cards use phase 1 only (single-phase Haiku for speed)
+      const res = await authFetch("/api/direction-cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...basePayload, phase: 1 }),
       });
-      if (!res1.ok) return;
-      const data1 = (await res1.json()) as { cards?: DirectionCardData[] };
-      const phase1Card = data1.cards?.[0];
-      if (!phase1Card) return;
-
-      setDirectionCards((prev) => [...prev, phase1Card]);
-
-      const res2 = await authFetch("/api/direction-cards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...basePayload, phase: 2, phase1Card }),
-      });
-      if (res2.ok) {
-        const data2 = (await res2.json()) as { cards?: DirectionCardData[] };
-        const phase2Fields = data2.cards?.[0];
-        if (phase2Fields) {
-          const fullCard = { ...phase1Card, ...phase2Fields };
-          setDirectionCards((prev) => {
-            const updated = [...prev.slice(0, -1), fullCard];
-            if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
-            return updated;
-          });
-        }
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const newCard = data.cards?.[0];
+      if (newCard) {
+        setDirectionCards((prev) => {
+          const updated = [...prev, newCard];
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
       }
     } finally {
       setIsGeneratingMore(false);
+    }
+  };
+
+  const loadCardDetail = async (cardTitle: string) => {
+    if (loadingDetailFor !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.ikigai_filters) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingDetailFor(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 2, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase2Fields = data.cards?.[0];
+      if (phase2Fields) {
+        const mergedCard = { ...card, ...phase2Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingDetailFor(null);
+    }
+  };
+
+  const loadCardSection3 = async (cardTitle: string) => {
+    if (loadingSection3For !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.ocean_classification) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingSection3For(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 3, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase3Fields = data.cards?.[0];
+      if (phase3Fields) {
+        const mergedCard = { ...card, ...phase3Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingSection3For(null);
+    }
+  };
+
+  const loadCardSection4 = async (cardTitle: string) => {
+    if (loadingSection4For !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.startup_cost_usd) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingSection4For(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 4, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase4Fields = data.cards?.[0];
+      if (phase4Fields) {
+        const mergedCard = { ...card, ...phase4Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingSection4For(null);
     }
   };
 
@@ -335,8 +392,13 @@ export function useDirectionResult() {
     needsRC,
     generateMore,
     isGeneratingMore,
-    isLoadingDetails,
     canGenerateMore,
     directionCardsCount: directionCards.length,
+    loadCardDetail,
+    loadCardSection3,
+    loadCardSection4,
+    loadingDetailFor,
+    loadingSection3For,
+    loadingSection4For,
   };
 }

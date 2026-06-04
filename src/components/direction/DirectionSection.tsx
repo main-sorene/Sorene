@@ -133,9 +133,14 @@ export const DirectionSection = () => {
     needsRC,
     generateMore,
     isGeneratingMore,
-    isLoadingDetails,
     canGenerateMore,
     directionCardsCount,
+    loadCardDetail,
+    loadCardSection3,
+    loadCardSection4,
+    loadingDetailFor,
+    loadingSection3For,
+    loadingSection4For,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -276,14 +281,6 @@ export const DirectionSection = () => {
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
-        {/* Deep analysis loading indicator */}
-        {isLoadingDetails && (
-          <div className="flex items-center gap-2 px-1 text-[13px] text-[#9CA3AF]">
-            <div className="w-3 h-3 border border-[#9CA3AF] border-t-transparent rounded-full animate-spin" />
-            Loading deep analysis…
-          </div>
-        )}
-
         {/* Hero — primary structured card (or promoted replacement) */}
         <section>
           {!primaryHidden && (
@@ -291,11 +288,16 @@ export const DirectionSection = () => {
               variant="hero"
               title={primaryCard.title}
               description={primaryCard.description}
-
               actionText="View detail"
               score={String(primaryCard.compatibility)}
               cardData={primaryCard}
               onHide={() => hideCard(heroPrimaryId)}
+              onLoadDetail={() => loadCardDetail(primaryCard.title)}
+              onLoadSection3={() => loadCardSection3(primaryCard.title)}
+              onLoadSection4={() => loadCardSection4(primaryCard.title)}
+              isLoadingDetail={loadingDetailFor === primaryCard.title}
+              isLoadingSection3={loadingSection3For === primaryCard.title}
+              isLoadingSection4={loadingSection4For === primaryCard.title}
             />
           )}
           {promotedAlt && (
@@ -303,11 +305,16 @@ export const DirectionSection = () => {
               variant="hero"
               title={promotedAlt.title}
               description={promotedAlt.description}
-
               actionText="View detail"
               score={String(promotedAlt.compatibility)}
               cardData={promotedAlt}
               onHide={() => hideCard(promotedAlt.title)}
+              onLoadDetail={() => loadCardDetail(promotedAlt.title)}
+              onLoadSection3={() => loadCardSection3(promotedAlt.title)}
+              onLoadSection4={() => loadCardSection4(promotedAlt.title)}
+              isLoadingDetail={loadingDetailFor === promotedAlt.title}
+              isLoadingSection3={loadingSection3For === promotedAlt.title}
+              isLoadingSection4={loadingSection4For === promotedAlt.title}
             />
           )}
           {promotedRecipe && (
@@ -350,13 +357,18 @@ export const DirectionSection = () => {
                   variant="hero"
                   title={expandedAlt.title}
                   description={expandedAlt.description}
-    
                   score={String(expandedAlt.compatibility)}
                   actionText="View detail"
                   cardData={expandedAlt}
                   isExpanded={true}
                   onToggle={() => setExpandedId(null)}
                   onHide={() => hideCard(expandedAlt.title)}
+                  onLoadDetail={() => loadCardDetail(expandedAlt.title)}
+                  onLoadSection3={() => loadCardSection3(expandedAlt.title)}
+                  onLoadSection4={() => loadCardSection4(expandedAlt.title)}
+                  isLoadingDetail={loadingDetailFor === expandedAlt.title}
+                  isLoadingSection3={loadingSection3For === expandedAlt.title}
+                  isLoadingSection4={loadingSection4For === expandedAlt.title}
                 />
               )}
               {expandedRecipe && (
@@ -392,6 +404,12 @@ export const DirectionSection = () => {
                       isExpanded={false}
                       onToggle={() => setExpandedId(card.title)}
                       onHide={() => hideCard(card.title)}
+                      onLoadDetail={() => loadCardDetail(card.title)}
+                      onLoadSection3={() => loadCardSection3(card.title)}
+                      onLoadSection4={() => loadCardSection4(card.title)}
+                      isLoadingDetail={loadingDetailFor === card.title}
+                      isLoadingSection3={loadingSection3For === card.title}
+                      isLoadingSection4={loadingSection4For === card.title}
                     />
                   ))}
                   {gridOnlyRecipes.map((rd) => (

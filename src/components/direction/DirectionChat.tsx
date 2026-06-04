@@ -201,22 +201,30 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const sendMessage = async (displayText: string, recipePrompt?: string) => {
     if (!displayText.trim() || isProcessing) return;
 
-    // If a recipe is starting, store its prompt for all subsequent turns
+    // If a new recipe is starting, reset the conversation and assign a new ID
+    const isNewRecipe = !!recipePrompt;
     const systemOverride = recipePrompt ?? activeRecipePromptRef.current ?? undefined;
     if (recipePrompt) {
       setActiveRecipePrompt(recipePrompt);
       activeRecipePromptRef.current = recipePrompt;
     }
 
+    // New recipe = fresh conversation; ongoing recipe = keep prior history
+    const priorMessages = isNewRecipe ? [] : messages;
+    if (isNewRecipe) {
+      setMessages([]);
+      convIdRef.current = `direction-chat-${Date.now()}`;
+    }
+
     const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: displayText };
-    const next = [...messages, userMsg];
+    const next = [...priorMessages, userMsg];
     setMessages(next);
     persistToSidebar(next);
     setIsProcessing(true);
 
     // Build history for recipe mode (exclude the current user message, it's sent as `message`)
     const history = systemOverride
-      ? messages.map((m) => ({ role: m.role, content: m.content }))
+      ? priorMessages.map((m) => ({ role: m.role, content: m.content }))
       : undefined;
 
     try {

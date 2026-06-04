@@ -332,7 +332,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-colors"
                   >
                     <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5" alt="" />
-                    Generate
+                    Generate Direction
                   </button>
                 </div>
               )}

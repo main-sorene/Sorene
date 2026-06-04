@@ -130,6 +130,9 @@ export const DirectionSection = () => {
     otherDirections,
     eligibility,
     needsRC,
+    generateMore,
+    isGeneratingMore,
+    canGenerateMore,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -182,7 +185,7 @@ export const DirectionSection = () => {
               Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
             </p>
           </div>
-          <ResourcesConstraintsForm />
+          <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
         </div>
       </div>
     );
@@ -216,7 +219,7 @@ export const DirectionSection = () => {
                 Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
               </p>
             </div>
-            <ResourcesConstraintsForm />
+            <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
           </div>
         </div>
       );
@@ -266,7 +269,7 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm />
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
 
         {/* Hero — primary structured card (or promoted replacement) */}
         <section>
@@ -367,7 +370,7 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm />
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
         <section>
           {!heroHidden && (
             <DirectionCard
@@ -512,7 +515,7 @@ export const DirectionSection = () => {
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
-      <ResourcesConstraintsForm />
+      <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
       {/* Hero Section */}
       <section>
         {displayedHero && (

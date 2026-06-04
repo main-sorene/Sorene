@@ -111,6 +111,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeRecipePrompt, setActiveRecipePrompt] = useState<string | null>(null);
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasMessages = messages.length > 0;
@@ -139,22 +140,31 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     try { localStorage.setItem(`direction_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
   };
 
-  // displayText is what appears in the chat bubble; prompt is what's sent to the API.
-  const sendMessage = async (displayText: string, prompt?: string) => {
-    const apiPrompt = prompt ?? displayText;
+  // displayText is what appears in the chat bubble; recipePrompt activates recipe mode.
+  const sendMessage = async (displayText: string, recipePrompt?: string) => {
     if (!displayText.trim() || isProcessing) return;
+
+    // If a recipe is starting, store its prompt for all subsequent turns
+    const systemOverride = recipePrompt ?? activeRecipePrompt ?? undefined;
+    if (recipePrompt) setActiveRecipePrompt(recipePrompt);
+
     const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: "user", content: displayText };
     const next = [...messages, userMsg];
     setMessages(next);
     persistToSidebar(next);
     setIsProcessing(true);
 
+    // Build history for recipe mode (exclude the current user message, it's sent as `message`)
+    const history = systemOverride
+      ? messages.map((m) => ({ role: m.role, content: m.content }))
+      : undefined;
+
     try {
       const res = await authFetch("/api/direction-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: apiPrompt,
+          message: displayText,
           directionContext: {
             recommendedModel: model,
             compatibility: bestCompatibility,
@@ -162,6 +172,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             alternatives: otherDirections.map((a: { model: string; compatibility: number; summary?: string }) => ({ model: a.model, compatibility: a.compatibility, summary: a.summary })),
             dnaScores: dnaData?.dnaScores ?? {},
           },
+          ...(systemOverride ? { systemOverride, history } : {}),
         }),
       });
       const data = (await res.json()) as { reply: string };
@@ -202,7 +213,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         ) : <div />}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { setMessages([]); convIdRef.current = `direction-chat-${Date.now()}`; }}
+            onClick={() => { setMessages([]); setActiveRecipePrompt(null); convIdRef.current = `direction-chat-${Date.now()}`; }}
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all"
           >
             <Plus size={16} />

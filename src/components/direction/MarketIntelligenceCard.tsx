@@ -126,7 +126,7 @@ export function MarketIntelligenceCard() {
         <AnimatePresence>
           {isExpanded && (
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-white/70 text-[13px] leading-relaxed mt-4">
-              Continuously monitors global market signals across 8 data categories, identifies who is being disrupted and how, and surfaces personalised business opportunities matched to your DNA profile.
+              Scans rising &amp; falling trends across 10 market signal categories and surfaces the business opportunities opening up specifically for you.
             </motion.p>
           )}
         </AnimatePresence>
@@ -137,11 +137,11 @@ export function MarketIntelligenceCard() {
         {status === "idle" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
             <p className="text-[13px] text-[#62646A] leading-relaxed">
-              Continuously monitors global market signals across 8 data categories, identifies who is being disrupted and how, and surfaces personalised business opportunities matched to your DNA profile.
+              Scans rising &amp; falling trends across 10 market signal categories and surfaces the business opportunities opening up specifically for you.
             </p>
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
-                {[{ label: "8 Signal Categories", color: "#e0e7ff", text: "#4338ca" }, { label: "DNA-Matched", color: "#f0fdf4", text: "#166534" }, { label: "Real-Time", color: "#fdf4ff", text: "#7e22ce" }]
+                {[{ label: "8 Signal Categories", color: "#e0e7ff", text: "#4338ca" }, { label: "DNA-Matched", color: "#f0fdf4", text: "#166534" }, { label: "On Demand", color: "#fdf4ff", text: "#7e22ce" }]
                   .map(({ label, color, text }) => (
                     <span key={label} className="px-3 py-1 rounded-full text-[12px] font-medium" style={{ backgroundColor: color, color: text }}>{label}</span>
                   ))}

@@ -219,6 +219,7 @@ export const DirectionSection = () => {
               isExpanded={expandedId === rd.id}
               onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
               onHide={() => hideCard(rd.id)}
+              rawContent={rd.rawContent}
             />
           ); })()}
         </section>
@@ -257,6 +258,7 @@ export const DirectionSection = () => {
                     isExpanded={expandedId === rd.id}
                     onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                     onHide={() => hideCard(rd.id)}
+              rawContent={rd.rawContent}
                   />
                 </div>
               ))}
@@ -350,6 +352,7 @@ export const DirectionSection = () => {
             isExpanded={expandedId === rd.id}
             onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
             onHide={() => hideCard(rd.id)}
+              rawContent={rd.rawContent}
           />
         ); })()}
       </section>
@@ -398,6 +401,7 @@ export const DirectionSection = () => {
                 isExpanded={expandedId === rd.id}
                 onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                 onHide={() => hideCard(rd.id)}
+              rawContent={rd.rawContent}
               />
             </div>
           ))}

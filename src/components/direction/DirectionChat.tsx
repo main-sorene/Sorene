@@ -30,10 +30,14 @@ function parseDirectionCard(text: string): RecipeDirection | null {
 
   const whySection = afterTitle.match(/\*{0,2}Why it fits you\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Key risks\*{0,2}|\*{0,2}Your first step\*{0,2}|$)/i);
   const risksSection = afterTitle.match(/\*{0,2}Key risks\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}Your first step\*{0,2}|$)/i);
-  const stepSection = afterTitle.match(/\*{0,2}Your first step\*{0,2}[:\n]+([\s\S]*?)$/i);
+  const stepSection = afterTitle.match(/\*{0,2}Your first step\*{0,2}[:\n]+([\s\S]*?)(?=\*{0,2}|$)/i);
 
   const parseList = (s: string | undefined) =>
     (s ?? "").split("\n").map((l) => l.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+
+  // Extract composite score if present
+  const scoreMatch = text.match(/composite score[:\s]+(\d+)/i);
+  const score = scoreMatch ? Math.min(100, parseInt(scoreMatch[1])) : 85;
 
   return {
     id: `recipe-${Date.now()}`,
@@ -42,7 +46,8 @@ function parseDirectionCard(text: string): RecipeDirection | null {
     whyFitsYou: parseList(whySection?.[1]),
     keyRisks: parseList(risksSection?.[1]),
     firstStep: (stepSection?.[1] ?? "").trim(),
-    score: 85,
+    score,
+    rawContent: text,
   };
 }
 

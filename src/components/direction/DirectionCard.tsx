@@ -50,6 +50,7 @@ interface DirectionCardProps {
   isExpanded?: boolean;
   onToggle?: () => void;
   onHide?: () => void;
+  rawContent?: string;
 }
 
 export function DirectionCard({
@@ -118,6 +119,7 @@ export function DirectionCard({
   isExpanded: isExpandedProp,
   onToggle,
   onHide,
+  rawContent,
 }: DirectionCardProps) {
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<string[]>(
@@ -186,7 +188,66 @@ export function DirectionCard({
     );
   };
 
-  const expandedDetailContent = (
+  // Render raw markdown-like content (bold, headers, bullets) as readable HTML
+  const renderRaw = (text: string) => {
+    const lines = text.split("\n");
+    return (
+      <div className="space-y-1.5 text-sm text-[#374151] leading-relaxed">
+        {lines.map((line, i) => {
+          const trimmed = line.trim();
+          if (!trimmed) return <div key={i} className="h-2" />;
+          // Section headers (## or bold-only lines)
+          if (/^\*{2}[^*]+\*{2}$/.test(trimmed) || /^#{1,3}\s/.test(trimmed)) {
+            const label = trimmed.replace(/^\*{2}|\*{2}$|^#{1,3}\s/g, "").trim();
+            return <p key={i} className="font-semibold text-[#111111] mt-4 first:mt-0">{label}</p>;
+          }
+          // Bullet points
+          if (/^[-*•]\s/.test(trimmed)) {
+            const content = trimmed.replace(/^[-*•]\s/, "");
+            const parts = content.split(/(\*\*.*?\*\*)/g);
+            return (
+              <div key={i} className="flex gap-2">
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" />
+                <span>{parts.map((p, j) => p.startsWith("**") && p.endsWith("**")
+                  ? <strong key={j} className="text-[#111111]">{p.slice(2, -2)}</strong>
+                  : <span key={j}>{p}</span>
+                )}</span>
+              </div>
+            );
+          }
+          // Numbered list
+          if (/^\d+\.\s/.test(trimmed)) {
+            const [num, ...rest] = trimmed.split(/\.\s/);
+            const content = rest.join(". ");
+            const parts = content.split(/(\*\*.*?\*\*)/g);
+            return (
+              <div key={i} className="flex gap-2">
+                <span className="shrink-0 font-medium text-[#6B7280]">{num}.</span>
+                <span>{parts.map((p, j) => p.startsWith("**") && p.endsWith("**")
+                  ? <strong key={j} className="text-[#111111]">{p.slice(2, -2)}</strong>
+                  : <span key={j}>{p}</span>
+                )}</span>
+              </div>
+            );
+          }
+          // Normal line with inline bold
+          const parts = trimmed.split(/(\*\*.*?\*\*)/g);
+          return (
+            <p key={i}>{parts.map((p, j) => p.startsWith("**") && p.endsWith("**")
+              ? <strong key={j} className="text-[#111111]">{p.slice(2, -2)}</strong>
+              : <span key={j}>{p}</span>
+            )}</p>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const expandedDetailContent = rawContent ? (
+    <div className="p-4 md:p-6">
+      {renderRaw(rawContent)}
+    </div>
+  ) : (
     <div className="p-3 md:p-4 space-y-8">
       <motion.section
         initial={{ opacity: 0, y: 20 }}

@@ -134,6 +134,7 @@ export interface RecipeDirection {
   keyRisks: string[];
   firstStep: string;
   score: number;
+  rawContent?: string;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

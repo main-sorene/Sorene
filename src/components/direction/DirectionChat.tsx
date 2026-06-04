@@ -229,13 +229,14 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           </button>
         ) : <div />}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => { setMessages([]); setActiveRecipePrompt(null); activeRecipePromptRef.current = null; convIdRef.current = `direction-chat-${Date.now()}`; }}
+          <a
+            href="https://discord.gg/2YtvCm2SWp"
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all"
           >
-            <Plus size={16} />
-            New Chat
-          </button>
+            Product Feedback
+          </a>
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0"

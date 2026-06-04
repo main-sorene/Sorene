@@ -10,7 +10,8 @@ import {
   recipeDirectionsAtom,
 } from "@/store/atoms";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
+import { ResourcesConstraintsForm } from "./ResourcesConstraintsForm";
 const DEFAULT_IDEATION_DATA: IdeationData = {
   user_id: "dummy",
   status: "completed",
@@ -180,6 +181,7 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
+        <ResourcesConstraintsForm />
         <section>
           {!heroHidden && (
             <DirectionCard
@@ -322,6 +324,7 @@ export const DirectionSection = () => {
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
+      <ResourcesConstraintsForm />
       {/* Hero Section */}
       <section>
         {displayedHero && (

@@ -63,9 +63,10 @@ interface ResourcesConstraintsFormProps {
   generateMore?: () => void;
   isGeneratingMore?: boolean;
   canGenerateMore?: boolean;
+  directionCardsCount?: number;
 }
 
-export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = false, canGenerateMore = false }: ResourcesConstraintsFormProps) {
+export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = false, canGenerateMore = false, directionCardsCount = 0 }: ResourcesConstraintsFormProps) {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
@@ -318,7 +319,7 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {isGeneratingMore && <Loader2 size={12} className="animate-spin" />}
-                    {isGeneratingMore ? "Generating…" : "Generate More Direction"}
+                    {isGeneratingMore ? "Generating…" : directionCardsCount === 0 ? "Generate Direction" : "Generate More Direction"}
                   </button>
                 )}
                 <div className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">

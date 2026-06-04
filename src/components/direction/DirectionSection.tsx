@@ -133,6 +133,7 @@ export const DirectionSection = () => {
     generateMore,
     isGeneratingMore,
     canGenerateMore,
+    directionCardsCount,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -185,7 +186,7 @@ export const DirectionSection = () => {
               Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
             </p>
           </div>
-          <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
+          <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         </div>
       </div>
     );
@@ -219,7 +220,7 @@ export const DirectionSection = () => {
                 Tell Sorene about your resources and constraints so it can suggest a direction that fits your real life.
               </p>
             </div>
-            <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
+            <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
           </div>
         </div>
       );
@@ -269,7 +270,7 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
         {/* Hero — primary structured card (or promoted replacement) */}
         <section>
@@ -421,7 +422,7 @@ export const DirectionSection = () => {
 
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
-        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
+        <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
         <section>
           {!heroHidden && (
             <DirectionCard
@@ -566,7 +567,7 @@ export const DirectionSection = () => {
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
-      <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} />
+      <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
       {/* Hero Section */}
       <section>
         {displayedHero && (

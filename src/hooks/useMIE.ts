@@ -11,9 +11,10 @@ import type { MIEReport, MIEStatus } from "@/types/mie";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const LOADING_STEPS = [
-  "Scanning market signals across 8 categories…",
-  "Identifying industries under pressure…",
-  "Detecting emerging demand gaps…",
+  "Searching live market trends and industry news…",
+  "Scanning Reddit, Product Hunt, and LinkedIn…",
+  "Identifying rising and falling demand signals…",
+  "Detecting emerging gaps in your domain…",
   "Matching opportunities to your DNA profile…",
   "Scoring and ranking your top opportunities…",
 ];
@@ -93,7 +94,7 @@ export function useMIE() {
         clearInterval(stepInterval);
         return prev;
       });
-    }, 2800);
+    }, 8000);
 
     try {
       const res = await authFetch("/api/market-intelligence", {

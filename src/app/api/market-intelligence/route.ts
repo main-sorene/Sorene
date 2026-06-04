@@ -3,11 +3,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 import type { MIEReport } from "@/types/mie";
 
+export const maxDuration = 120;
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const systemPrompt = `You are Sorene's Market Intelligence Engine. Your job is to analyse a user's professional DNA and surface personalised market signals and business opportunities.
+const SYSTEM_PROMPT = `You are Sorene's Market Intelligence Engine. Your job is to research live market trends and surface personalised signals and business opportunities for a specific user.
 
-You must output ONLY valid JSON — no markdown, no prose, no code fences. The JSON must exactly match the schema below.
+Your job:
+1. Use the web_search tool to scan for current market trends, industry shifts, emerging tools, and demand signals relevant to the user's domain and skills. Search across news, Reddit, LinkedIn, Product Hunt, and industry publications.
+2. After searching, synthesise the live data into a structured report personalised to this user's DNA profile.
+
+Output ONLY valid JSON after searching. No markdown, no prose, no code fences.
 
 SCHEMA:
 {
@@ -51,12 +57,13 @@ Each horizon signal:
   "horizon": string
 }
 
-IMPORTANT RULES:
-- Personalise EVERYTHING to the specific user's DNA scores, skills, background, and constraints
-- The dna_fit_score must reflect real alignment: skill match (25%), capital fit (20%), lifestyle fit (20%), values alignment (20%), market timing (15%)
+RULES:
+- Base signals on actual search results — cite real trends you found
+- Personalise EVERYTHING to the specific user's DNA scores, skills, and background
+- dna_fit_score: skill match (25%) + capital fit (20%) + lifestyle fit (20%) + values alignment (20%) + market timing (15%)
 - Be specific: name actual industries, real roles, concrete first steps
-- Avoid hype words: no "game-changing", "revolutionary", "disruptive potential"
-- Output ONLY the JSON object. Nothing else.`;
+- No hype words: no "game-changing", "revolutionary", "disruptive potential"
+- Output ONLY the JSON object after searching. Nothing else.`;
 
 function buildUserMessage(
   firstName: string,
@@ -64,10 +71,7 @@ function buildUserMessage(
   rawAnswers: Record<string, string>,
   cvSummary?: string,
 ): string {
-  const cvBlock = cvSummary?.trim()
-    ? `\n\nCV / Portfolio Summary:\n${cvSummary.trim()}`
-    : "";
-
+  const cvBlock = cvSummary?.trim() ? `\n\nCV / Portfolio Summary:\n${cvSummary.trim()}` : "";
   const answersBlock = Object.entries(rawAnswers)
     .filter(([, v]) => v?.trim())
     .map(([k, v]) => `- ${k}: ${v}`)
@@ -81,7 +85,7 @@ ${JSON.stringify(dnaScores, null, 2)}
 Assessment Answers:
 ${answersBlock || "(none provided)"}${cvBlock}
 
-Generate a personalised Market Intelligence Report for this specific user. Return only the JSON.`;
+Search for live market trends and signals relevant to this person's domain and skills. Then generate a personalised Market Intelligence Report. Output only the JSON.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -101,24 +105,57 @@ export async function POST(req: NextRequest) {
     const { firstName, dnaScores, rawAnswers, cvSummary } = body;
     const userMessage = buildUserMessage(firstName, dnaScores, rawAnswers, cvSummary);
 
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      system: systemPrompt,
-      // Prefill forces the response to begin with "{" — guarantees pure JSON output
-      messages: [
-        { role: "user", content: userMessage },
-        { role: "assistant", content: "{" },
-      ],
-    });
+    const webSearchTool: Anthropic.Messages.WebSearchTool20250305 = {
+      name: "web_search",
+      type: "web_search_20250305",
+    };
 
-    // Prepend the "{" we used as prefill, then extract the outermost JSON object
-    const rawText = "{" + (message.content[0].type === "text" ? message.content[0].text : "");
-    const jsonStart = rawText.indexOf("{");
-    const jsonEnd = rawText.lastIndexOf("}");
-    const raw = jsonStart !== -1 && jsonEnd > jsonStart
-      ? rawText.slice(jsonStart, jsonEnd + 1)
-      : rawText.trim();
+    const messages: Anthropic.MessageParam[] = [
+      { role: "user", content: userMessage },
+    ];
+
+    let finalText = "";
+    let iterations = 0;
+    const MAX_ITERATIONS = 6;
+
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8096,
+        system: SYSTEM_PROMPT,
+        tools: [webSearchTool],
+        messages,
+      });
+
+      for (const block of response.content) {
+        if (block.type === "text") {
+          finalText = block.text;
+        }
+      }
+
+      if (response.stop_reason === "end_turn") break;
+
+      if (response.stop_reason === "pause_turn") {
+        messages.push({ role: "assistant", content: response.content });
+        messages.push({ role: "user", content: [{ type: "text", text: "Continue." }] });
+        continue;
+      }
+
+      break;
+    }
+
+    if (!finalText) {
+      return new Response(JSON.stringify({ error: "No response generated" }), { status: 500 });
+    }
+
+    const jsonStart = finalText.indexOf("{");
+    const jsonEnd = finalText.lastIndexOf("}");
+    const raw =
+      jsonStart !== -1 && jsonEnd > jsonStart
+        ? finalText.slice(jsonStart, jsonEnd + 1)
+        : finalText.trim();
 
     let report: MIEReport;
     try {
@@ -134,6 +171,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Market Intelligence API error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    const message = err instanceof Error ? err.message : "Internal server error";
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 }

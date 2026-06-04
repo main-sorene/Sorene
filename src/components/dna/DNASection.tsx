@@ -74,7 +74,9 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
         { label: "Primary Drive", value: riskLabel === "High" ? "Ambition" : riskLabel === "Medium" ? "Growth" : "Mastery", explanation: "Inferred from your risk and energy patterns." },
         { label: "Centrality", value: scores.motivation_driver.includes("core focus") ? "Center" : scores.motivation_driver.includes("important component") ? "Key part" : "Supporting", explanation: "Where this work would sit in your life." },
       ],
-      strength_patterns: scores.success_feeling ? [scores.success_feeling.slice(0, 60)] : [],
+      strength_patterns: narrative?.what_drives_you_strengths
+        ? narrative.what_drives_you_strengths.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [],
     },
     {
       core_id: "how_you_work",
@@ -355,7 +357,7 @@ export const DNASection = () => {
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels) || !answers || !authUser?.uid) return;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

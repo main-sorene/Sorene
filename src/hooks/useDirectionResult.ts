@@ -23,6 +23,7 @@ export function useDirectionResult() {
   const [hasStreamed, setHasStreamed] = useState(false);
   const [directionCards, setDirectionCards] = useState<DirectionCardData[]>([]);
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
+  const [needsRC, setNeedsRC] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["direction-profile", user?.uid],
@@ -56,7 +57,9 @@ export function useDirectionResult() {
     const cardsAreUpToDate = cachedCards && cachedCards.length > 0 && cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters);
     if (cardsAreUpToDate) {
       if (!hasRCData) {
-        // Cards exist but no R&C — clear them from Firestore and show R&C form
+        // Cards exist but no R&C — clear them and prompt R&C form
+        setDirectionCards([]);
+        setNeedsRC(true);
         if (user?.uid) {
           saveUserProfile(user.uid, { directionCards: [] as any, directionText: "" });
         }
@@ -85,7 +88,7 @@ export function useDirectionResult() {
       const stored = localStorage.getItem("resourcesConstraints");
       const rc = stored ? JSON.parse(stored) : {};
       const hasAnyRC = Object.values(rc).some((v) => String(v ?? "").trim() !== "");
-      if (!hasAnyRC) return; // wait for R&C form to be filled
+      if (!hasAnyRC) { setNeedsRC(true); return; } // wait for R&C form to be filled
     } catch {}
 
     const generate = async () => {
@@ -196,5 +199,6 @@ export function useDirectionResult() {
     model: eligibleModel,
     bestCompatibility: alternatives.find((a) => a.model === eligibleModel)?.compatibility ?? 100,
     otherDirections,
+    needsRC,
   };
 }

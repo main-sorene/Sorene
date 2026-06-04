@@ -36,7 +36,8 @@ async function run(dryRun: boolean) {
     const isDummy = firstCard && (
       firstCard.title === "The Scalable Specialist" ||
       !firstCard.ikigai_filters ||
-      !firstCard.path_label
+      !firstCard.path_label ||
+      !firstCard.key_competitors
     );
 
     if (hasRC && !isDummy) {

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { resourcesConstraintsAtom, EMPTY_RESOURCES, ResourcesConstraints, recipeDirectionsAtom, RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { Loader2, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useDirectionResult } from "@/hooks/useDirectionResult";
 
 function parseDirectionCard(text: string): RecipeDirection | null {
   const titleMatch = text.match(/\*{0,2}Direction:\s*([^\n*]+?)\*{0,2}\n/i);
@@ -61,9 +62,13 @@ const GRADIENT = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba
 export function ResourcesConstraintsForm() {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const recipeDirections = useAtomValue(recipeDirectionsAtom);
+  const { primaryCard } = useDirectionResult();
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const hasNoDirections = !primaryCard && recipeDirections.length === 0;
 
   useEffect(() => {
     try {
@@ -131,6 +136,8 @@ export function ResourcesConstraintsForm() {
         });
         setSaved(true);
         setIsOpen(false);
+        // Scroll down so the new card is visible
+        setTimeout(() => window.scrollBy({ top: 300, behavior: "smooth" }), 150);
       }
     } catch {}
     finally { setIsGenerating(false); }
@@ -281,8 +288,10 @@ export function ResourcesConstraintsForm() {
                 <h3 className="text-[18px] font-medium text-white leading-snug tracking-tight">
                   Resources &amp; Constraints
                 </h3>
-                <p className="text-[13px] text-white/70 mt-1 leading-relaxed">
-                  Tell Sorene what you have and what limits you — get directions that fit your real life.
+                <p className="text-[13px] text-white/70 mt-1.5 leading-relaxed">
+                  {hasNoDirections
+                    ? "No directions yet — fill in your resources and constraints and Sorene will generate your first personalised direction."
+                    : "Tell Sorene what you have and what limits you — get directions that fit your real life."}
                 </p>
               </div>
             </div>
@@ -293,7 +302,7 @@ export function ResourcesConstraintsForm() {
                 <span className="text-[12px] text-white/50">Not filled in yet</span>
               )}
               <div className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">
-                Fill in
+                {hasNoDirections && !hasAnyData ? "Get started" : "Fill in"}
                 <ChevronDown size={14} />
               </div>
             </div>

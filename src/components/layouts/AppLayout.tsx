@@ -41,10 +41,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [authLoading, authUser, router]);
 
-  // Sync assessment complete state from Firestore profile
+  // Sync assessment complete state from Firestore profile —
+  // but only when no active assessment session is live in sessionStorage,
+  // otherwise the assessment page gets replaced before the user can click the button.
   useEffect(() => {
     if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete) {
-      setIsAssessmentComplete(true);
+      const sessionKey = `assessment_state_${authUser.uid}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        setIsAssessmentComplete(true);
+      }
     }
   }, [authUser, isAssessmentComplete, setIsAssessmentComplete]);
 

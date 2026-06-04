@@ -48,12 +48,16 @@ export function ChatArea() {
 
   const queryClient = useQueryClient();
 
-  // If profile exists, mark assessment as complete to hide buttons and enable chat
+  // If profile exists, mark assessment as complete to hide buttons and enable chat —
+  // but guard against flipping mid-session so AssessmentChatPage stays visible.
   useEffect(() => {
     if (profileRes?.dnaAssessmentComplete && !isAssessmentComplete) {
-      setIsAssessmentComplete(true);
+      const sessionKey = `assessment_state_${authUser?.uid || "guest"}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        setIsAssessmentComplete(true);
+      }
     }
-  }, [profileRes, isAssessmentComplete, setIsAssessmentComplete]);
+  }, [profileRes, isAssessmentComplete, setIsAssessmentComplete, authUser?.uid]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async () => {

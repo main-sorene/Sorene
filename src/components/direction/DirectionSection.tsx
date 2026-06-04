@@ -201,7 +201,7 @@ export const DirectionSection = () => {
   }
 
   // If we have a streamed direction from our internal API, show it in the hero card
-  if (isDirectionLoading && !directionText && !primaryCard) {
+  if ((isDirectionLoading || isGeneratingMore) && !directionText && !primaryCard) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4 text-center">

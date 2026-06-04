@@ -201,6 +201,7 @@ export function useDirectionResult() {
 
     const basePayload = { ...basePayloadBase, cardIndex: nextIndex };
 
+    setNeedsRC(false);
     setIsGeneratingMore(true);
     try {
       // All cards use phase 1 only (single-phase Haiku for speed)

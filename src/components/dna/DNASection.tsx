@@ -22,10 +22,13 @@ function buildDnaItems(scores: NonNullable<ReturnType<typeof useDnaData>["data"]
   const emotionalRisk = scores.emotional_risk || riskLabel;
   const financialRisk = scores.financial_risk || riskLabel;
   const primaryMotivation = narrative?.primary_motivation_label || scores.primary_motivation || scores.energy_source?.split(/[.,!?]/)[0]?.trim().slice(0, 50) || "—";
+  const cleanedScoreStrengths = (scores.strength_patterns || []).filter(
+    (s) => s && !/[:\-]/.test(s) && s !== s.toLowerCase() && s.split(" ").length <= 4
+  );
   const strengthPatterns = narrative?.strength_patterns_labels
     ? narrative.strength_patterns_labels.split(",").map((s: string) => s.trim()).filter(Boolean).slice(0, 5)
-    : scores.strength_patterns?.length
-      ? scores.strength_patterns
+    : cleanedScoreStrengths.length
+      ? cleanedScoreStrengths
       : [energyStabilityLabel + " energy", structureLabel, collaborationLabel, uncertaintyLabel + " adaptability", readinessLabel].slice(0, 5);
 
   return [
@@ -347,7 +350,7 @@ export const DNASection = () => {
   useEffect(() => {
     const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.primary_motivation_label && narrative?.strength_patterns_labels) || !answers || !authUser?.uid) return;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

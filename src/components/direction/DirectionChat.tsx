@@ -13,7 +13,6 @@ import { useDnaData } from "@/hooks/useDnaData";
 const DIRECTION_RECIPES = [
   { label: "Brainstorm new idea", id: "brainstorm-new-idea" },
   { label: "Check my idea",       id: "check-my-idea" },
-  { label: "Generate new direction", id: "generate-new-direction" },
 ];
 
 function parseDirectionCard(text: string): RecipeDirection | null {

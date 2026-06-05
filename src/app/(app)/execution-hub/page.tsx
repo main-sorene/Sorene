@@ -512,7 +512,13 @@ Readiness score: ${pct}% (${checked}/${total} criteria met)
 Completed: ${checkedItems.length > 0 ? checkedItems.join(", ") : "none"}
 Not yet done: ${uncheckedItems.length > 0 ? uncheckedItems.join(", ") : "none"}
 
-Write 4-5 sentences: (1) overall verdict — ready, close, or not ready and why; (2) the single biggest strength from their journey; (3) the single most critical gap; (4) one specific action to take this week to move forward. Be direct. No fluff.`;
+Write exactly 4 short paragraphs (one sentence each), separated by a blank line:
+1. **Verdict:** overall verdict — ready, close, or not ready, and the single most important reason why.
+2. **Biggest strength:** the strongest signal from their journey so far.
+3. **Critical gap:** the single most important thing still missing.
+4. **This week:** one specific action to take this week.
+
+Use **bold** for the most important 2-4 words in each paragraph. Plain prose only — no lists, no headers, no JSON.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -654,7 +660,7 @@ Write 4-5 sentences: (1) overall verdict — ready, close, or not ready and why;
               </div>
             )}
             {analysisStage === "done" && analysis && (
-              <div className="text-[13px] text-[#151515] leading-relaxed">
+              <div className="text-[14px] text-[#151515] leading-[1.75] space-y-3 [&_strong]:font-semibold [&_strong]:text-[#151515]">
                 <MarkdownText text={analysis} />
               </div>
             )}

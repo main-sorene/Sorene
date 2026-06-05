@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Circle,
   ChevronLeft,
+  ChevronRight,
   ChevronDown,
   Users,
   Search,
@@ -627,30 +628,34 @@ function FolderCard({ folder }: { folder: FolderDef }) {
 
 type Tab = "validation" | "launchpad" | "agents" | "direct-sync";
 
-const TABS: { id: Tab; label: string; gradient: string; dotColor: string }[] = [
+const TABS: { id: Tab; label: string; sub: string; icon: React.ReactNode; gradient: string }[] = [
   {
     id: "validation",
     label: "Validation",
-    gradient: `linear-gradient(135deg, #16B364 0%, #A3E635 100%)`,
-    dotColor: "#16B364",
+    sub: "VIBE · Go/No-Go",
+    icon: <Search size={14} />,
+    gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #16B364 0%, #A3E635 100%)`,
   },
   {
     id: "launchpad",
     label: "Launchpad",
-    gradient: `linear-gradient(135deg, #EF6820 0%, #FAC515 100%)`,
-    dotColor: "#EF6820",
+    sub: "Pitch · Tools",
+    icon: <Rocket size={14} />,
+    gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #EF6820 0%, #FAC515 100%)`,
   },
   {
     id: "agents",
-    label: "Agents System",
-    gradient: `linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)`,
-    dotColor: "#8B5CF6",
+    label: "Agents",
+    sub: "AI · Automation",
+    icon: <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5 invert brightness-0" alt="" />,
+    gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)`,
   },
   {
     id: "direct-sync",
     label: "Direct Sync",
-    gradient: `linear-gradient(135deg, #0891B2 0%, #2DD4BF 100%)`,
-    dotColor: "#0891B2",
+    sub: "WhatsApp · Telegram",
+    icon: <MessageCircle size={14} />,
+    gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #0891B2 0%, #2DD4BF 100%)`,
   },
 ];
 
@@ -847,9 +852,9 @@ export default function Page() {
               />
             </div>
 
-            {/* Tabs */}
-            <div className="px-4 lg:px-6 pt-4 pb-3">
-              <div className="flex items-center gap-2 flex-wrap">
+            {/* Tabs — DNA/Direction card style mini tiles */}
+            <div className="px-4 lg:px-6 pt-4 pb-4">
+              <div className="flex items-stretch gap-3 flex-wrap">
                 {TABS.map((tab) => {
                   const isActive = activeTab === tab.id;
                   return (
@@ -857,18 +862,24 @@ export default function Page() {
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={cn(
-                        "relative flex items-center gap-2 px-4 py-2 rounded-2xl text-body-small-medium transition-all duration-200 whitespace-nowrap border",
+                        "relative flex flex-col justify-between rounded-[20px] overflow-hidden transition-all duration-200 text-left shrink-0",
+                        "w-[120px] h-[72px] p-3.5",
                         isActive
-                          ? "text-white border-transparent shadow-md"
-                          : "text-[#62646A] bg-white border-gray-100 hover:border-gray-200 hover:bg-[#F8F9FA] shadow-sm"
+                          ? "shadow-md scale-[1.02]"
+                          : "opacity-60 hover:opacity-90 hover:scale-[1.01] shadow-sm border border-gray-100"
                       )}
-                      style={isActive ? { background: tab.gradient } : undefined}
+                      style={{ background: tab.gradient }}
                     >
-                      <span
-                        className={cn("w-2 h-2 rounded-full shrink-0 transition-all", isActive ? "bg-white/70" : "")}
-                        style={!isActive ? { backgroundColor: tab.dotColor } : undefined}
-                      />
-                      {tab.label}
+                      {/* spotlight overlay — exact DNA card pattern */}
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.3)_0%,transparent_70%)] pointer-events-none" />
+                      <div className="relative z-10 flex items-center justify-between">
+                        <span className="text-white/80">{tab.icon}</span>
+                        {isActive && <ChevronRight size={12} className="text-white/60" />}
+                      </div>
+                      <div className="relative z-10">
+                        <p className="text-white text-[13px] font-semibold leading-tight tracking-tight">{tab.label}</p>
+                        <p className="text-white/50 text-[10px] font-medium leading-none mt-0.5 truncate">{tab.sub}</p>
+                      </div>
                     </button>
                   );
                 })}

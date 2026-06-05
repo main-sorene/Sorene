@@ -329,14 +329,16 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
 }
 
 function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue<typeof selectedExecutionProjectAtom>> }) {
+  const titleRef = useRef(project?.title ?? "");
+  titleRef.current = project?.title ?? "";
   const title = project?.title ?? "";
+
   const fields = [
     { key: "runway",         label: "Personal runway",          placeholder: "e.g. 6 months savings, $15k set aside…" },
     { key: "startup_cost",   label: "Startup cost estimate",    placeholder: "e.g. $500 for tools, $0 no-code MVP…" },
     { key: "revenue_target", label: "First revenue target",     placeholder: "e.g. $3k/month within 90 days…" },
     { key: "funding_path",   label: "Funding / bootstrap path", placeholder: "e.g. bootstrapping from savings, pre-selling…" },
   ];
-  const storageKey = (k: string) => `finance-${k}-${title}`;
   const [vals, setVals] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -344,22 +346,10 @@ function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue
   useEffect(() => {
     if (!title) return;
     const loaded: Record<string, string> = {};
-    fields.forEach((f) => { try { loaded[f.key] = localStorage.getItem(storageKey(f.key)) ?? ""; } catch { /* ignore */ } });
+    fields.forEach((f) => {
+      try { loaded[f.key] = localStorage.getItem(`finance-${f.key}-${title}`) ?? ""; } catch { /* ignore */ }
+    });
     setVals(loaded);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
-
-  // Also prefill from DNA/project if available
-  useEffect(() => {
-    if (!title) return;
-    try {
-      const dnaRaw = localStorage.getItem(`target-customers-${title}`);
-      if (!dnaRaw) return;
-      const dna = JSON.parse(dnaRaw);
-      if (dna.fundingPath && !localStorage.getItem(storageKey("funding_path"))) {
-        setVals((prev) => ({ ...prev, funding_path: dna.fundingPath }));
-      }
-    } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title]);
 
@@ -367,7 +357,9 @@ function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue
     setVals((prev) => ({ ...prev, [key]: val }));
     if (timers.current[key]) clearTimeout(timers.current[key]);
     timers.current[key] = setTimeout(() => {
-      try { localStorage.setItem(storageKey(key), val); } catch { /* ignore */ }
+      const t = titleRef.current;
+      if (!t) return;
+      try { localStorage.setItem(`finance-${key}-${t}`, val); } catch { /* ignore */ }
       setSaved((prev) => ({ ...prev, [key]: true }));
       setTimeout(() => setSaved((prev) => ({ ...prev, [key]: false })), 1500);
     }, 600);
@@ -397,6 +389,8 @@ function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue
 
 function GoNoGoContent() {
   const project = useAtomValue(selectedExecutionProjectAtom);
+  const projectTitleRef = useRef(project?.title ?? "");
+  projectTitleRef.current = project?.title ?? "";
   const auto = useGoNoGoAutoDetect(project);
   const storageKey = `go-nogo-manual-${project?.title ?? ""}`;
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -445,9 +439,9 @@ function GoNoGoContent() {
   }, [project?.title]);
 
   const generateAnalysis = async () => {
-    if (!project?.title) return;
+    const t = projectTitleRef.current || project?.title || "";
+    if (!t) return;
     setAnalysisStage("loading");
-    const t = project.title;
 
     // ── Stage 1: Validate ──
     let convSummary = "No conversations logged.";

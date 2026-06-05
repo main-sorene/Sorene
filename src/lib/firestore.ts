@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { db } from "./firebase";
 import type { DirectionCardData } from "./directionTypes";
 
 export interface UserProfile {
@@ -97,7 +97,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
     return null;
   } catch (error) {
-    await auth?.signOut();
+    // Do NOT sign the user out here — a transient/slow read would otherwise
+    // log them out and bounce them back to the landing page.
     console.error("[Firestore] Error fetching user profile:", error);
     return null;
   }

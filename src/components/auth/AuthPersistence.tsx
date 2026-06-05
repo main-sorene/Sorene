@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { onAuthStateChanged, getRedirectResult } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
@@ -16,8 +16,6 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
     const fallbackTimer = setTimeout(() => setLoading(false), 8000);
 
-    getRedirectResult(auth).catch(() => {});
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
@@ -28,24 +26,11 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
       const appUid = firebaseUser.email || firebaseUser.uid;
 
-      // Persist the email in the background — don't block the UI on it.
-      // (The OAuth callback already saved it; this is just a safety net.)
-      if (firebaseUser.email) {
-        saveUserProfile(appUid, { email: firebaseUser.email }).catch(() => {});
-      }
-
-      // Single awaited round-trip so we know onboardingComplete before rendering.
-      // Retry once on failure (mobile networks are flaky) before giving up.
-      let profile = null;
-      try {
-        profile = await getUserProfile(appUid);
-      } catch {
-        try {
-          profile = await getUserProfile(appUid);
-        } catch {
-          profile = null;
-        }
-      }
+      // The ONLY thing on the critical path is reading the profile so we know
+      // onboardingComplete before redirecting — a single round-trip. (Email is
+      // saved by the onboarding form for new users; returning users already
+      // have it, so no write is needed here.)
+      const profile = await getUserProfile(appUid);
 
       // Clear any Google-sourced photo URL that was previously auto-saved.
       // Only data URLs (uploaded by user) should remain. Background-only.

@@ -258,6 +258,144 @@ function GoNoGoContent() {
 }
 
 // ─────────────────────────────────────────────
+// Validation Progress Bar
+// ─────────────────────────────────────────────
+
+const VALIDATION_STAGES = [
+  { id: 1, label: "Validate", shortLabel: "V" },
+  { id: 2, label: "Interview", shortLabel: "I" },
+  { id: 3, label: "Build demo", shortLabel: "B" },
+  { id: 4, label: "Experiment", shortLabel: "E" },
+  { id: 5, label: "Launch Readiness", shortLabel: "LR" },
+];
+
+function ValidationProgress() {
+  const [activeStage, setActiveStage] = useState(1);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Progress Bar */}
+      <div className="relative">
+        {/* Connector line */}
+        <div className="absolute top-[18px] left-0 right-0 h-0.5 bg-gray-100 mx-8" />
+        <div className="flex justify-between relative z-10">
+          {VALIDATION_STAGES.map((stage) => {
+            const isActive = stage.id === activeStage;
+            const isCompleted = stage.id < activeStage;
+            return (
+              <button
+                key={stage.id}
+                onClick={() => setActiveStage(stage.id)}
+                className="flex flex-col items-center gap-2 group"
+              >
+                <div className={cn(
+                  "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-200 border-2",
+                  isActive
+                    ? "bg-[#151515] border-[#151515] text-white shadow-md scale-110"
+                    : isCompleted
+                    ? "bg-[#32C382] border-[#32C382] text-white"
+                    : "bg-white border-gray-200 text-[#9A9A9A] group-hover:border-[#151515] group-hover:text-[#151515]"
+                )}>
+                  {isCompleted ? <CheckCircle2 size={16} className="text-white" /> : stage.shortLabel}
+                </div>
+                <span className={cn(
+                  "text-[10px] font-semibold text-center leading-tight max-w-[60px] transition-colors",
+                  isActive ? "text-[#151515]" : isCompleted ? "text-[#32C382]" : "text-[#9A9A9A]"
+                )}>
+                  {stage.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator className="bg-gray-100" />
+
+      {/* Stage content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeStage}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeStage <= 4 ? (
+            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} />
+          ) : (
+            <GoNoGoContent />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between pt-2">
+        <button
+          onClick={() => setActiveStage((s) => Math.max(1, s - 1))}
+          disabled={activeStage === 1}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#62646A] hover:text-[#151515] hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft size={16} /> Previous
+        </button>
+        <span className="text-[11px] text-[#9A9A9A]">Stage {activeStage} of {VALIDATION_STAGES.length}</span>
+        <button
+          onClick={() => setActiveStage((s) => Math.min(5, s + 1))}
+          disabled={activeStage === 5}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[#62646A] hover:text-[#151515] hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          Next <ArrowRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VibeStageContent({ step }: { step: typeof VIBE_STEPS[number] }) {
+  const Icon = step.icon;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+          <Icon size={16} className="text-white" />
+        </div>
+        <div>
+          <p className="text-[11px] text-[#9A9A9A] uppercase tracking-wide">Step {step.id} · {step.vibe} · {step.duration}</p>
+          <h4 className="text-body-medium-medium text-[#151515]">{step.title}</h4>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene provides</p>
+          <ul className="space-y-2.5">
+            {step.soreneDoes.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-label-medium text-[#151515]">
+                <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">You must do</p>
+          <ul className="space-y-2.5">
+            {step.userDoes.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-label-medium text-[#62646A]">
+                <Circle size={13} className="text-gray-300 shrink-0 mt-0.5" />{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      {step.insight && (
+        <div className="rounded-2xl bg-[#F5FFD9] border border-[#32C382]/30 px-4 py-3">
+          <p className="text-label-medium text-[#151515] leading-relaxed">{step.insight}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Launchpad
 // ─────────────────────────────────────────────
 
@@ -886,13 +1024,12 @@ export default function Page() {
                     <div
                       key={`${selectedProject?.title ?? "all"}-${activeTab}`}
                       className={cn(
-                        "p-6",
-                        isDirectSync
-                          ? "grid grid-cols-1 md:grid-cols-2 gap-4"
-                          : "grid grid-cols-1 md:grid-cols-2 gap-4"
+                        activeTab === "validation" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
                       )}
                     >
-                      {isDirectSync
+                      {activeTab === "validation"
+                        ? <ValidationProgress />
+                        : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
                     </div>

@@ -761,7 +761,7 @@ function ProjectPicker({
 
 export default function Page() {
   const authUser = useAtomValue(userAtom);
-  const [activeTab, setActiveTab] = useState<Tab>("validation");
+  const [activeTab, setActiveTab] = useState<Tab | null>("validation");
   const [chatOpen, setChatOpen] = useState(false); // mobile only
   const [chatCollapsed, setChatCollapsed] = useState(false); // desktop
   const [projects, setProjects] = useState<DirectionCardData[]>([]);
@@ -831,6 +831,7 @@ export default function Page() {
 
   const currentFolders = activeTab === "validation" ? validationFolders : activeTab === "launchpad" ? launchpadFolders : agentsFolders;
   const isDirectSync = activeTab === "direct-sync";
+  const isActive = (id: Tab) => activeTab === id;
 
   return (
     <div className="flex h-full w-full overflow-hidden relative bg-[#F9FAFB]">
@@ -847,23 +848,22 @@ export default function Page() {
               />
             </div>
 
-            {/* Tabs — connected card strip */}
-            <div className="px-4 lg:px-6 pt-4 pb-4">
-              <div className="inline-flex rounded-[20px] overflow-hidden shadow-sm border border-gray-100">
+            {/* Tabs + inline accordion content */}
+            <div className="px-4 lg:px-6 pt-4 pb-24 space-y-3">
+              {/* Tab strip */}
+              <div className="inline-flex rounded-[22px] overflow-hidden shadow-sm border border-gray-100">
                 {TABS.map((tab, i) => {
-                  const isActive = activeTab === tab.id;
+                  const isActive = activeTab === tab.id as Tab | null;
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => setActiveTab(activeTab === tab.id ? null : tab.id)}
                       className={cn(
-                        "relative flex items-center gap-2 px-5 py-3 text-[13px] font-semibold transition-all duration-300",
+                        "relative flex items-center gap-2.5 px-[22px] py-[13px] text-[14px] font-semibold transition-all duration-300",
                         i > 0 && "border-l border-white/20",
                         isActive ? "text-white" : "text-[#9A9A9A] hover:text-[#62646A]"
                       )}
-                      style={isActive
-                        ? { background: tab.gradient }
-                        : { background: "#F3F4F6" }}
+                      style={isActive ? { background: tab.gradient } : { background: "#F3F4F6" }}
                     >
                       <span className={isActive ? "text-white" : "text-[#BCBCBC]"}>{tab.icon}</span>
                       {tab.label}
@@ -871,22 +871,34 @@ export default function Page() {
                   );
                 })}
               </div>
-            </div>
 
-            {/* Content */}
-            <div className="px-4 lg:px-6 pt-4 pb-24">
-              {isDirectSync ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)}
-                </div>
-              ) : (
-                <div
-                  key={`${selectedProject?.title ?? "all"}-${activeTab}`}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                  {currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
-                </div>
-              )}
+              {/* Accordion panel */}
+              <AnimatePresence initial={false}>
+                {activeTab && (
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                    className="rounded-[28px] bg-white shadow-sm border border-gray-100 overflow-hidden"
+                  >
+                    <div
+                      key={`${selectedProject?.title ?? "all"}-${activeTab}`}
+                      className={cn(
+                        "p-6",
+                        isDirectSync
+                          ? "grid grid-cols-1 md:grid-cols-2 gap-4"
+                          : "grid grid-cols-1 md:grid-cols-2 gap-4"
+                      )}
+                    >
+                      {isDirectSync
+                        ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
+                        : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>

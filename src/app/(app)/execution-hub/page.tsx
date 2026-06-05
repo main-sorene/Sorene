@@ -935,7 +935,7 @@ function ProjectPicker({
                     </div>
                     <div className="min-w-0">
                       <p className="text-body-small-medium text-[#151515]">Choose a Direction</p>
-                      <p className="text-[11px] text-[#9A9A9A]">Pick from AI-generated directions</p>
+                      <p className="text-[11px] text-[#9A9A9A]">Directions tailored to your DNA</p>
                     </div>
                   </a>
                   <button onClick={() => { onCreateProject(); setOpen(false); }}

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom } from "@/store/atoms";
+import { useRouter } from "next/navigation";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom, conversationsAtom, type Conversation, type Message } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,7 +18,23 @@ const SUGGESTIONS: { label: string; recipeId: string }[] = [
   { label: "Update business status", recipeId: "update_status" },
 ];
 
-interface ChatMsg { id: string; role: "user" | "assistant"; content: string }
+interface ChatMsg { id: string; role: "user" | "assistant"; content: string; isStatusButtons?: boolean; confirmTab?: string }
+
+const TAB_LABELS: Record<string, string> = {
+  validation: "Validation",
+  launchpad: "Launchpad",
+  growth: "Growth",
+};
+
+type OnboardStep = "idle" | "name" | "description" | "status" | "traction" | "done";
+interface OnboardData { name: string; description: string; status: string; traction: string }
+
+const STATUS_OPTIONS = [
+  { label: "Just an idea", value: "just_an_idea" },
+  { label: "Talking to customers / validating", value: "validating" },
+  { label: "Built something / ready to launch", value: "ready_to_launch" },
+  { label: "Already launched and growing", value: "launched_growing" },
+];
 
 // Shared across chat instances (desktop + mobile both mount) so an onboarding
 // trigger only fires once.
@@ -85,12 +102,26 @@ function FormattedMessage({ content }: { content: string }) {
 export function ExecutionHubChat({ project, onClose }: { project?: DirectionCardData | null; onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setNavigateTab = useSetAtom(executionNavigateTabAtom);
+  const setStartValidate = useSetAtom(executionStartValidateAtom);
+  const setConversations = useSetAtom(conversationsAtom);
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const awaitingStatusRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [onboardStep, setOnboardStepState] = useState<OnboardStep>("idle");
+  const onboardStepRef = useRef<OnboardStep>("idle");
+  const onboardLockRef = useRef(false);
+  const idRef = useRef(0);
+  const onboardDataRef = useRef<OnboardData>({ name: "", description: "", status: "", traction: "" });
+
+  // Keep a synchronous mirror of the step so rapid double-submits can't read a
+  // stale value and skip ahead a question.
+  const setOnboardStep = (s: OnboardStep) => { onboardStepRef.current = s; setOnboardStepState(s); };
+  const nextId = () => `${Date.now()}-${idRef.current++}`;
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
 
@@ -98,6 +129,157 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // Persist the Execution Hub conversation into the global sidebar (segment
+  // "execution") + localStorage, mirroring the proven DNA/Direction pattern.
+  // The id is deterministic per project so desktop + mobile mounts and refreshes
+  // all resolve to the same entry instead of creating duplicates.
+  const projectKey = (project?.title || "general").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const convId = `execution-${projectKey}`;
+  const persistToSidebar = (msgs: ChatMsg[]) => {
+    const uid = authUser?.uid || "local";
+    const realMessages = msgs.filter((m) => !m.isStatusButtons);
+    // Only persist once the user has actually said something.
+    if (!realMessages.some((m) => m.role === "user")) return;
+
+    const sidebarMessages: Message[] = realMessages.map((m) => ({
+      id: m.id, role: m.role, content: m.content, timestamp: new Date(), type: "chat" as const,
+    }));
+    const titleSrc = project?.title
+      ? `Execution: ${project.title}`
+      : realMessages.find((m) => m.role === "user")?.content || "Execution Hub";
+    const conv: Conversation = {
+      id: convId,
+      title: titleSrc.length > 50 ? `${titleSrc.slice(0, 50)}...` : titleSrc,
+      messages: sidebarMessages,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      model: "sorene-1",
+      segment: "execution",
+      isCreatedOnBackend: false,
+    };
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === convId);
+      if (idx === -1) return [conv, ...prev];
+      return prev.map((c) => (c.id === convId ? conv : c));
+    });
+    try { localStorage.setItem(`execution_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
+  };
+
+  const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
+    setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, ...extra }]);
+
+  const addUser = (content: string) =>
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content }]);
+
+  // Final evaluation — calls API with all collected onboarding data.
+  const evaluateOnboarding = async (data: OnboardData) => {
+    setLoading(true);
+    try {
+      const profile = authUser?.profile;
+      const res = await authFetch("/api/execution-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Project name: ${data.name}\nDescription: ${data.description}\nStatus they selected: ${data.status}\nTraction details: ${data.traction}`,
+          recipeId: "onboard_evaluate",
+          history: [],
+          userProfile: profile ? {
+            firstName: profile.firstName,
+            occupation: profile.occupation,
+            cvSummary: profile.cvSummary,
+            dnaScores: profile.dnaScores,
+            dnaNarrative: profile.dna_narrative,
+            assessmentAnswers: profile.assessmentAnswers,
+          } : undefined,
+          project: null,
+          projectStatus: null,
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const raw = d?.reply ?? "Thanks! Let's get started.";
+        const match = raw.match(/\[\[TAB:(validation|launchpad|growth)\]\]/i);
+        const tab = match ? match[1].toLowerCase() : "validation";
+        const clean = raw.replace(/\[\[TAB:[^\]]*\]\]/gi, "").trim();
+        addAssistant(clean, { confirmTab: tab });
+      } else {
+        addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
+      }
+    } catch {
+      addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
+    } finally {
+      setLoading(false);
+      setOnboardStep("done");
+    }
+  };
+
+  // Handle onboarding step transitions when the user submits text.
+  // Reads the synchronous step ref so a fast double-submit can't skip a step.
+  const handleOnboardInput = (text: string) => {
+    const d = onboardDataRef.current;
+    const step = onboardStepRef.current;
+    if (step === "name") {
+      d.name = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("description");
+      setTimeout(() => addAssistant("Love it — that's a great start.\n\nNow tell me a bit more: what does it actually do, and who is it for?"), 300);
+    } else if (step === "description") {
+      d.description = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("status");
+      setTimeout(() => addAssistant("Got it, thanks for sharing that.\n\nWhere are you at with it right now? Pick whichever fits best:", { isStatusButtons: true }), 300);
+    } else if (step === "traction") {
+      d.traction = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("done");
+      evaluateOnboarding({ ...d });
+    }
+  };
+
+  const handleConfirmTab = (tab: string) => {
+    addUser("Yes, let's go");
+    setNavigateTab(tab);
+    onClose?.();
+    setTimeout(() => addAssistant(`Opening the ${TAB_LABELS[tab] ?? tab} tab now — let's get to work.`), 200);
+  };
+
+  // New-idea path: check founder/market fit first → generate a Direction Card.
+  // Set a flag the Direction page reads on arrival to auto-generate a card.
+  const handleCheckFit = () => {
+    addUser("Check Founder & Market Fit");
+    try { sessionStorage.setItem("autoGenerateDirection", "1"); } catch { /* ignore */ }
+    setTimeout(() => addAssistant("Smart move — let's pressure-test the fit first. Taking you to the Direction generator to map your founder–market fit and surface the strongest angles."), 150);
+    onClose?.();
+    setTimeout(() => router.push("/direction"), 600);
+  };
+
+  // New-idea path: skip ahead and start validating this idea now.
+  const handleStartValidate = () => {
+    const d = onboardDataRef.current;
+    addUser("Start validating");
+    setStartValidate({ title: d.name || "My project", oneliner: d.description || "" });
+    onClose?.();
+    setTimeout(() => addAssistant(`Done — I've set up **${d.name || "your project"}** in your project bar and opened the Validation tab. Start with the Idea Validator to talk to real people before building.`), 200);
+  };
+
+  const handleStatusSelect = (option: { label: string; value: string }) => {
+    const d = onboardDataRef.current;
+    d.status = option.value;
+    addUser(option.label);
+    setOnboardStep("traction");
+    setTimeout(() => addAssistant(
+      "Perfect — that helps me place you accurately.\n\nOne last thing: any real traction yet — users, waitlist signups, paying customers or revenue? If it's none so far, just say 0."
+    ), 300);
+  };
+
+  // Read the committed value straight from the DOM (covers the last composed
+  // word the React state may not have caught yet), clear the box, then dispatch.
   const submitInput = () => {
     const text = (textareaRef.current?.value ?? input).trim();
     if (!text || loading) return;
@@ -108,8 +290,22 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
 
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
+
+    // Intercept onboarding steps. Use the synchronous step ref and a short lock
+    // so a rapid double-submit can't duplicate the answer or skip a question.
+    const step = onboardStepRef.current;
+    if (step === "name" || step === "description" || step === "traction") {
+      if (onboardLockRef.current) return;
+      onboardLockRef.current = true;
+      handleOnboardInput(text);
+      setTimeout(() => { onboardLockRef.current = false; }, 400);
+      return;
+    }
+
     const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    let afterUser: ChatMsg[] = [];
+    setMessages((prev) => { afterUser = [...prev, userMsg]; return afterUser; });
+    persistToSidebar(afterUser);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
@@ -154,53 +350,31 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
         }),
       });
       const id = (Date.now() + 1).toString();
-      if (res.ok) {
-        const data = await res.json();
-        setMessages((prev) => [...prev, { id, role: "assistant", content: data?.reply ?? "Sorry, I couldn't respond." }]);
-      } else {
-        setMessages((prev) => [...prev, { id, role: "assistant", content: "Sorry, I had trouble with that. Please try again." }]);
-      }
+      const reply = res.ok
+        ? ((await res.json())?.reply ?? "Sorry, I couldn't respond.")
+        : "Sorry, I had trouble with that. Please try again.";
+      let afterReply: ChatMsg[] = [];
+      setMessages((prev) => { afterReply = [...prev, { id, role: "assistant", content: reply }]; return afterReply; });
+      persistToSidebar(afterReply);
     } catch {
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, I had trouble reaching the coach. Please try again." }]);
+      let afterErr: ChatMsg[] = [];
+      setMessages((prev) => { afterErr = [...prev, { id: (Date.now() + 1).toString(), role: "assistant" as const, content: "Sorry, I had trouble reaching the coach. Please try again." }]; return afterErr; });
+      persistToSidebar(afterErr);
     } finally {
       setLoading(false);
     }
   };
 
-  // Onboarding kickoff — Sorene opens the conversation (no user bubble) to
-  // collect the project name + status and route the user to the right tab.
-  const kickoffOnboarding = async () => {
-    setMessages([]);
-    setLoading(true);
-    try {
-      const profile = authUser?.profile;
-      const res = await authFetch("/api/execution-coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "[start onboarding]",
-          recipeId: "onboard",
-          history: [],
-          userProfile: profile ? {
-            firstName: profile.firstName,
-            occupation: profile.occupation,
-            cvSummary: profile.cvSummary,
-            dnaScores: profile.dnaScores,
-            dnaNarrative: profile.dna_narrative,
-            assessmentAnswers: profile.assessmentAnswers,
-          } : undefined,
-          project: null,
-          projectStatus: null,
-        }),
-      });
-      const id = Date.now().toString();
-      if (res.ok) {
-        const data = await res.json();
-        setMessages([{ id, role: "assistant", content: data?.reply ?? "Let's set up your project. What are you working on?" }]);
-      }
-    } catch { /* silent */ } finally {
-      setLoading(false);
-    }
+  // Onboarding kickoff — client-driven, no API call needed for the first question.
+  const kickoffOnboarding = () => {
+    onboardDataRef.current = { name: "", description: "", status: "", traction: "" };
+    onboardLockRef.current = false;
+    setOnboardStep("name");
+    setMessages([{
+      id: nextId(),
+      role: "assistant",
+      content: `Hey${userName !== "there" ? ` ${userName}` : ""} — exciting to be setting up something new with you!\n\nLet's start simple: what's your project called?`,
+    }]);
   };
 
   const onboardTrigger = useAtomValue(executionOnboardTriggerAtom);
@@ -252,8 +426,45 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
                   <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                     <div className={m.role === "user"
                       ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
-                      : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
+                      : "max-w-[85%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
                       <FormattedMessage content={m.content} />
+                      {m.isStatusButtons && onboardStep === "status" && (
+                        <div className="flex flex-col gap-2 mt-3">
+                          {STATUS_OPTIONS.map((opt) => (
+                            <button key={opt.value} onClick={() => handleStatusSelect(opt)}
+                              className="text-left px-3 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#111111] font-medium hover:bg-[#F1F3F5] hover:border-[#D1D5DB] transition-all">
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {m.confirmTab && onboardStep === "done" && (
+                        m.confirmTab === "validation" ? (
+                          <div className="flex flex-col gap-2 mt-3">
+                            <button onClick={handleCheckFit}
+                              className="text-left px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] hover:border-[#D1D5DB] transition-all">
+                              Check Founder &amp; Market Fit
+                              <span className="block text-xs font-normal text-[#6B7280] mt-0.5">See if the idea fits you and the market before committing</span>
+                            </button>
+                            <button onClick={handleStartValidate}
+                              className="text-left px-4 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+                              Start Validate
+                              <span className="block text-xs font-normal text-white/70 mt-0.5">Set up the project and start talking to real users now</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button onClick={() => handleConfirmTab(m.confirmTab!)}
+                              className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+                              Yes, take me to {TAB_LABELS[m.confirmTab] ?? m.confirmTab}
+                            </button>
+                            <button onClick={() => addAssistant("No problem — ask me anything, or pick a different tab whenever you're ready.")}
+                              className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
+                              Not yet
+                            </button>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 ))}

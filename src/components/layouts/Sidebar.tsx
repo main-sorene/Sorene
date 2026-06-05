@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, MoreHorizontal, Trash2, Rocket, Layers } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Conversation,
   activeConversationIdAtom,
@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { deleteHistory, getChatUserId, getConvoHistory } from "@/lib/chatApi";
+import { getCloudConversations, saveCloudConversation, deleteCloudConversation } from "@/lib/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 function ConversationItem({ conv }: { conv: Conversation }) {
@@ -67,6 +68,10 @@ function ConversationItem({ conv }: { conv: Conversation }) {
     // Local-only conversations (e.g. direction chat) don't exist on the backend
     if (conv.isCreatedOnBackend === false) {
       try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
+      try { localStorage.removeItem(`dna_chat_${userId}_${conv.id}`); } catch {}
+      try { localStorage.removeItem(`execution_chat_${userId}_${conv.id}`); } catch {}
+      // Remove from cross-device cloud history too.
+      if (authUser?.uid) deleteCloudConversation(authUser.uid, conv.id).catch(() => {});
       return;
     }
     try {
@@ -154,25 +159,37 @@ function loadLocalConversations(uid: string): Conversation[] {
     out.push({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt) });
   };
 
-  try {
-    const stored = localStorage.getItem(`convos_${uid}`);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Conversation[];
-      if (Array.isArray(parsed)) parsed.forEach(push);
-    }
-  } catch {}
+  // Read for a given owner suffix. We read BOTH the real uid AND "local",
+  // because chat components fall back to a "local" key when the user atom
+  // isn't populated yet at save time (a race). Without this, those chats were
+  // written but never shown — the most common cause of "history disappeared".
+  const owners = [uid, "local"];
+
+  for (const owner of owners) {
+    try {
+      const stored = localStorage.getItem(`convos_${owner}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Conversation[];
+        if (Array.isArray(parsed)) parsed.forEach(push);
+      }
+    } catch {}
+
+    try {
+      const stored = localStorage.getItem(`assessment_conv_${owner}`);
+      if (stored) push(JSON.parse(stored));
+    } catch {}
+  }
 
   try {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith(`dna_chat_${uid}_`) || k.startsWith(`direction_chat_${uid}_`))
+      .filter((k) =>
+        k.startsWith(`dna_chat_${uid}_`) || k.startsWith(`dna_chat_local_`) ||
+        k.startsWith(`direction_chat_${uid}_`) || k.startsWith(`direction_chat_local_`) ||
+        k.startsWith(`execution_chat_${uid}_`) || k.startsWith(`execution_chat_local_`),
+      )
       .forEach((k) => {
         try { push(JSON.parse(localStorage.getItem(k)!)); } catch {}
       });
-  } catch {}
-
-  try {
-    const stored = localStorage.getItem(`assessment_conv_${uid}`);
-    if (stored) push(JSON.parse(stored));
   } catch {}
 
   return sortConvos(out);
@@ -241,6 +258,25 @@ export function Sidebar({
       });
     }
     refetchConvo();
+
+    // Pull cross-device history from the cloud and merge it in. This is what
+    // makes assessment/DNA/Direction chats follow the user to a new device.
+    const uid = authUser.uid;
+    getCloudConversations(uid)
+      .then((cloud) => {
+        if (cloud.length === 0) return;
+        setConversations((prev) => {
+          const merged = [...prev];
+          cloud.forEach((cc) => {
+            const idx = merged.findIndex((m) => m.id === cc.id);
+            if (idx === -1) merged.push(cc);
+            // Prefer the version with more messages (a fuller copy).
+            else if ((cc.messages?.length || 0) > (merged[idx].messages?.length || 0)) merged[idx] = cc;
+          });
+          return sortConvos(merged);
+        });
+      })
+      .catch(() => {});
   }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When assessment completes, force-reload from localStorage so the
@@ -259,6 +295,48 @@ export function Sidebar({
     }
   }, [isAssessmentComplete, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // GUARANTEE the assessment conversation is always shown for anyone who has
+  // completed it — independent of the backend history API (which never stores
+  // these local-only chats and may be empty/slow). This is the single source
+  // of truth for assessment history and must NOT be coupled to convoData; that
+  // coupling is what kept regressing whenever the chat query changed.
+  useEffect(() => {
+    if (!authUser?.uid) return;
+    const uid = authUser.uid;
+
+    let conv: Conversation | null = null;
+    try {
+      const stored = localStorage.getItem(`assessment_conv_${uid}`)
+        || localStorage.getItem(`assessment_conv_local`);
+      if (stored) conv = JSON.parse(stored);
+    } catch {}
+
+    // Existing users who finished the assessment before it was persisted
+    // locally (or on another device) still get a clickable history entry.
+    if (!conv && authUser.profile?.dnaAssessmentComplete) {
+      conv = {
+        id: `assessment-${uid}`,
+        title: "User Assessment Phase",
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        model: "sorene-1",
+        done: true,
+        segment: "assessment",
+        isCreatedOnBackend: false,
+      };
+    }
+
+    if (!conv) return;
+    const assessmentConv = conv;
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === assessmentConv.id || c.segment === "assessment")) {
+        return prev;
+      }
+      return sortConvos([...prev, assessmentConv]);
+    });
+  }, [authUser?.uid, authUser?.profile?.dnaAssessmentComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Persist conversations to localStorage whenever they change
   useEffect(() => {
     if (!convoStorageKey || conversations.length === 0) return;
@@ -266,6 +344,30 @@ export function Sidebar({
       localStorage.setItem(convoStorageKey, JSON.stringify(conversations));
     } catch {}
   }, [conversations, convoStorageKey]);
+
+  // Mirror local-only conversations (assessment/DNA/Direction) to Firestore so
+  // history follows the user across devices. Debounced, and we only write the
+  // ones whose content actually changed since the last sync to bound writes.
+  const cloudSyncedRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const uid = authUser?.uid;
+    if (!uid || conversations.length === 0) return;
+    const timer = setTimeout(() => {
+      for (const conv of conversations) {
+        // Backend chats already sync via the history API — only mirror local ones.
+        if (conv.isCreatedOnBackend !== false) continue;
+        let serialized = "";
+        try { serialized = JSON.stringify(conv); } catch { continue; }
+        if (cloudSyncedRef.current[conv.id] === serialized) continue;
+        cloudSyncedRef.current[conv.id] = serialized;
+        saveCloudConversation(uid, conv).catch(() => {
+          // Allow a retry on the next change if the write failed.
+          delete cloudSyncedRef.current[conv.id];
+        });
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [conversations, authUser?.uid]);
 
   useEffect(() => {
     if (!convoData?.chats) return;
@@ -321,7 +423,11 @@ export function Sidebar({
       try {
         const uidKey = authUser?.uid || "local";
         Object.keys(localStorage)
-          .filter((k) => k.startsWith(`dna_chat_${uidKey}_`) || k.startsWith(`direction_chat_${uidKey}_`))
+          .filter((k) =>
+            k.startsWith(`dna_chat_${uidKey}_`) ||
+            k.startsWith(`direction_chat_${uidKey}_`) ||
+            k.startsWith(`execution_chat_${uidKey}_`),
+          )
           .forEach((k) => {
             try {
               const c = JSON.parse(localStorage.getItem(k)!);
@@ -582,6 +688,22 @@ export function Sidebar({
               </div>
             )}
 
+            {/* Execution Section */}
+            {conversations.filter((c) => c.segment === "execution").length > 0 && (
+              <div className="mb-4">
+                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                  EXECUTION
+                </p>
+                <div className="space-y-0.5">
+                  {conversations
+                    .filter((c) => c.segment === "execution")
+                    .map((conv) => (
+                      <ConversationItem key={conv.id} conv={conv} />
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Education Section */}
             {conversations.filter((c) => c.segment === "education").length > 0 && (
               <div className="mb-4">
@@ -600,7 +722,7 @@ export function Sidebar({
 
             {/* Other Section */}
             {conversations.filter(
-              (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
+              (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
             ).length > 0 && (
               <div className="mb-4">
                 <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
@@ -609,13 +731,21 @@ export function Sidebar({
                 <div className="space-y-0.5">
                   {conversations
                     .filter(
-                      (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
+                      (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
                     )
                     .map((conv) => (
                       <ConversationItem key={conv.id} conv={conv} />
                     ))}
                 </div>
               </div>
+            )}
+
+            {/* Empty state — confirms the list is rendering, just has nothing yet */}
+            {conversations.length === 0 && (
+              <p className="px-3 mt-2 text-[12px] leading-5 text-[#9A9A9A]">
+                No conversations yet. Your assessment and chats in DNA,
+                Direction and Execution will appear here.
+              </p>
             )}
           </div>
         </ScrollArea>

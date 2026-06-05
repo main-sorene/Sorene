@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
-import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom } from "@/store/atoms";
+import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -4089,12 +4089,17 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
   const title = project?.title ?? "";
   const storageKey = `business-name-${title}`;
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
@@ -4340,12 +4345,17 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
   const storageKey = `brand-${type}-${title}`;
   const meta = BRAND_TEXT_META[type];
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string; available?: boolean | null }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
@@ -6597,6 +6607,15 @@ export default function Page() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const bumpOnboard = useSetAtom(executionOnboardTriggerAtom);
+  const [navigateTab, setNavigateTab] = useAtom(executionNavigateTabAtom);
+
+  // After onboarding evaluation, the chat sets a target tab; switch to it here.
+  useEffect(() => {
+    if (navigateTab === "validation" || navigateTab === "launchpad" || navigateTab === "growth") {
+      setActiveTab(navigateTab);
+      setNavigateTab(null);
+    }
+  }, [navigateTab, setNavigateTab]);
 
   // "Create My Project" from the empty state → open the chat and start the
   // onboarding conversation (assess name + status, route to the right tab).
@@ -6679,10 +6698,15 @@ export default function Page() {
     return () => window.removeEventListener("execution-state-hydrated", onHydrated);
   }, [authUser?.uid]);
 
-  const handleCreateProject = async () => {
-    if (!createTitle.trim()) return;
-    setCreateSaving(true);
-    const project: DirectionCardData = { title: createTitle.trim(), oneliner: createDesc.trim() } as DirectionCardData;
+  // Create a project, persist it, and select it. Reused by the create dialog and
+  // by the onboarding chat's "Start Validate" action. Skips creating a duplicate
+  // if a project with the same title already exists (just selects it instead).
+  const createAndSelectProject = async (title: string, oneliner: string): Promise<DirectionCardData | null> => {
+    const t = title.trim();
+    if (!t) return null;
+    const existing = projects.find((p) => p.title === t);
+    if (existing) { setSelectedProject(existing); return existing; }
+    const project: DirectionCardData = { title: t, oneliner: oneliner.trim() } as DirectionCardData;
     const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
     if (token) {
       await fetch("/api/execution-projects/add", {
@@ -6693,11 +6717,33 @@ export default function Page() {
     }
     setProjects((prev) => [...prev, project]);
     setSelectedProject(project);
+    return project;
+  };
+
+  const handleCreateProject = async () => {
+    if (!createTitle.trim()) return;
+    setCreateSaving(true);
+    await createAndSelectProject(createTitle, createDesc);
     setCreateTitle("");
     setCreateDesc("");
     setCreateSaving(false);
     setCreateOpen(false);
   };
+
+  // "Start Validate" from the onboarding chat: create + select the project, then
+  // open the Validation tab.
+  const [startValidate, setStartValidate] = useAtom(executionStartValidateAtom);
+  useEffect(() => {
+    if (!startValidate) return;
+    const { title, oneliner } = startValidate;
+    setStartValidate(null);
+    (async () => {
+      await createAndSelectProject(title, oneliner);
+      setActiveTab("validation");
+      setChatOpen(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startValidate]);
 
 
   const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";

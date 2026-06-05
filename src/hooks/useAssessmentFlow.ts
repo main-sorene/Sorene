@@ -413,9 +413,19 @@ export function useAssessmentFlow() {
           // For onb_confirm_name: if user says "yes"/"correct"/"right"/etc., keep existing profile name
           const isAffirmative = /^\s*(yes[,.]?.*|yeah|yep|yup|correct|right|that'?s? (right|correct|me)|ok|okay|sure|✓|👍)\s*$/i.test(answerForLogic.trim());
           if (nodeId === "onb_confirm_name" && isAffirmative) {
-            // Keep firstName/lastName already on the profile — don't overwrite
+            // User confirmed the CV-extracted name — keep it and save immediately to Firestore
             pendingProfileRef.current.firstName = pendingProfileRef.current.firstName || firstName;
             pendingProfileRef.current.lastName = pendingProfileRef.current.lastName ?? (authUser?.profile?.lastName || "");
+            if (authUser?.uid) {
+              const confirmedFirst = pendingProfileRef.current.firstName || firstName;
+              const confirmedLast = pendingProfileRef.current.lastName || "";
+              try {
+                await saveUserProfile(authUser.uid, { firstName: confirmedFirst, lastName: confirmedLast } as any);
+                setAuthUser({ ...authUser, profile: { ...(authUser.profile as any), firstName: confirmedFirst, lastName: confirmedLast } });
+              } catch (e) {
+                console.warn("Failed to save confirmed name:", e);
+              }
+            }
           } else {
             const parts = answerForLogic.trim().split(/\s+/);
             pendingProfileRef.current.firstName = parts[0] || answerForLogic.trim();

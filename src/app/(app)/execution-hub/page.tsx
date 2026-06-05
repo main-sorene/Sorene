@@ -390,6 +390,123 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
 }
 
 // ─────────────────────────────────────────────
+// Opening Script Card
+// ─────────────────────────────────────────────
+
+function OpeningScriptCard({ project }: { project: DirectionCardData | null }) {
+  const authUser = useAtomValue(userAtom);
+  const [script, setScript] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const cacheKey = `opening-script-${project?.title ?? ""}`;
+
+  // Load cached script immediately
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) { setScript(cached); setGenerated(true); }
+    } catch { /* ignore */ }
+  }, [cacheKey, project?.title]);
+
+  const generate = async () => {
+    if (!project) return;
+    setLoading(true);
+    setScript("");
+    const dna = authUser?.profile?.dnaScores;
+    const dnaContext = dna ? [
+      dna.strengths_summary && `Strengths: ${dna.strengths_summary}`,
+      dna.motivation_driver && `Motivation: ${dna.motivation_driver}`,
+      dna.collaboration_mode && `Collaboration style: ${dna.collaboration_mode}`,
+      dna.energy_source && `Energy source: ${dna.energy_source}`,
+      dna.non_negotiable && `Non-negotiables: ${dna.non_negotiable}`,
+    ].filter(Boolean).join("\n") : null;
+
+    const prompt = `You are Sorene. Write a personalized outreach script for someone validating their idea.
+
+Project: "${project.title}"
+${project.oneliner ? `One-liner: ${project.oneliner}` : ""}
+${project.description ? `Description: ${project.description}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${dnaContext ? `\nFounder DNA:\n${dnaContext}` : ""}
+
+Write a short, natural-sounding opening message (2-4 sentences) they can use to reach out to potential customers. It must:
+- Feel authentic to this founder's personality and strengths
+- Not pitch or sell — only request a conversation
+- Mention the problem area naturally, not the solution
+- Be warm, direct, and human
+
+Use the template as a guide but make it genuinely personal:
+"Hi [name], I'm working on something and trying to understand [specific problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
+
+Output only the script text, in quotes. No explanation, no preamble.`;
+
+    try {
+      const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
+      if (!token) { setLoading(false); return; }
+      const res = await fetch("/api/direction-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: prompt, context: "script_generation", history: [] }),
+      });
+      if (!res.ok) { setLoading(false); return; }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          full += decoder.decode(value, { stream: true });
+          setScript(full);
+        }
+      }
+      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
+      setGenerated(true);
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  // Auto-generate on first load if no cache
+  useEffect(() => {
+    if (project?.title && !generated && !loading) generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+            <MessageCircle size={12} className="text-white" />
+          </div>
+          <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
+        </div>
+        {generated && !loading && (
+          <button onClick={() => { setGenerated(false); setScript(""); generate(); }}
+            className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline">
+            Regenerate
+          </button>
+        )}
+      </div>
+      {loading && !script && (
+        <div className="flex items-center gap-2 text-[#9A9A9A] text-sm py-2">
+          <Loader2 size={13} className="animate-spin" /> Generating your script…
+        </div>
+      )}
+      {script && (
+        <p className="text-label-medium text-[#62646A] leading-relaxed italic whitespace-pre-wrap">{script}</p>
+      )}
+      {!loading && !script && !project && (
+        <p className="text-label-medium text-[#62646A] leading-relaxed italic">
+          "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Pattern Summary Card
 // ─────────────────────────────────────────────
 
@@ -852,17 +969,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
               </ol>
             </div>
             {/* Script */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-                  <MessageCircle size={12} className="text-white" />
-                </div>
-                <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
-              </div>
-              <p className="text-label-medium text-[#62646A] leading-relaxed italic">
-                "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
-              </p>
-            </div>
+            <OpeningScriptCard project={project} />
             {/* Conversation Logger */}
             <ConversationLogger projectTitle={project?.title ?? ""} />
             {/* Pattern summary */}

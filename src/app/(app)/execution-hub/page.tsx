@@ -4625,18 +4625,7 @@ export default function Page() {
     },
   ];
 
-  const launchpadFolders: FolderDef[] = [
-    {
-      id: "launchpad",
-      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #FAC515 34.62%, #EF6820 100%)`,
-      iconNode: <Rocket size={18} />,
-      title: "The Launchpad",
-      tagline: "Elevator pitch · Business tools",
-      description: `Write your 3-sentence elevator pitch for ${projectLabel} and instantly spin up your business plan, pitch deck, brand, and content.`,
-      content: <LaunchpadContent />,
-      strengthTags: ["Business Plan", "Pitch Deck", "Brand Kit"],
-    },
-  ];
+  const launchpadFolders: FolderDef[] = [];
 
   const agentsFolders: FolderDef[] = [
     {

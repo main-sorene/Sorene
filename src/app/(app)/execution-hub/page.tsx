@@ -286,7 +286,29 @@ const VALIDATION_STAGES = [
 ];
 
 function ValidationProgress({ project, onCreateProject }: { project: DirectionCardData | null; onCreateProject: () => void }) {
-  const [activeStage, setActiveStage] = useState(1);
+  const stageKey = `validation-stage-${project?.title ?? ""}`;
+  const [activeStage, setActiveStageRaw] = useState<number>(() => {
+    if (!project?.title) return 1;
+    try { return parseInt(localStorage.getItem(`validation-stage-${project.title}`) ?? "1", 10) || 1; } catch { return 1; }
+  });
+
+  const setActiveStage = (val: number | ((prev: number) => number)) => {
+    setActiveStageRaw((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      try { localStorage.setItem(stageKey, String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // Sync when project changes (user switches projects)
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const saved = parseInt(localStorage.getItem(`validation-stage-${project.title}`) ?? "1", 10);
+      setActiveStageRaw(saved || 1);
+    } catch { setActiveStageRaw(1); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
 
   if (!project) {
     return (

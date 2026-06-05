@@ -273,11 +273,42 @@ const VALIDATION_STAGES = [
   { id: 5, label: "Launch Readiness", shortLabel: "LR" },
 ];
 
-function ValidationProgress() {
+function ValidationProgress({ project }: { project: DirectionCardData | null }) {
   const [activeStage, setActiveStage] = useState(1);
+
+  if (!project) {
+    return (
+      <div className="p-8 flex flex-col items-center text-center gap-5">
+        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+          <FolderOpen size={24} className="text-[#9A9A9A]" />
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="text-body-medium-medium text-[#151515]">Choose a project to get started</h3>
+          <p className="text-label-medium text-[#62646A] max-w-xs leading-relaxed">
+            Select a project from the dropdown above, or create a new one in the Direction section.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <a href="/direction"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
+            <ArrowRight size={15} /> Go to Direction
+          </a>
+          <a href="/direction?new=1"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
+            Create New Project
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
+      {/* Project label */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5FFD9] border border-[#32C382]/30 w-fit">
+        <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+        <span className="text-[12px] font-semibold text-[#151515] truncate max-w-[240px]">{project.title}</span>
+      </div>
       {/* Progress Bar */}
       <div className="relative">
         {/* Connector line */}
@@ -1036,7 +1067,7 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress />
+                        ? <ValidationProgress project={selectedProject} />
                         : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

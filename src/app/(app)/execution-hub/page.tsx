@@ -362,7 +362,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
           transition={{ duration: 0.2 }}
         >
           {activeStage <= 4 ? (
-            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} />
+            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} onAdvance={() => setActiveStage((s) => Math.min(s + 1, 5))} />
           ) : (
             <GoNoGoContent />
           )}
@@ -1253,7 +1253,7 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
 // Validate → Interview Readiness Bar
 // ─────────────────────────────────────────────
 
-function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
+function ValidateReadinessBar({ projectTitle, onAdvance }: { projectTitle: string; onAdvance: () => void }) {
   const [convCount, setConvCount] = useState(0);
   const [hasNotes, setHasNotes] = useState(false);
   const [patternDone, setPatternDone] = useState(false);
@@ -1356,12 +1356,29 @@ function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
             </div>
           ))}
         </div>
+
+        {/* Start Interview CTA — only at 100% */}
+        {score >= 100 && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-5 pt-4 border-t border-[#ECEDEE]"
+          >
+            <button
+              onClick={onAdvance}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors"
+            >
+              Start Interview <ArrowRight size={15} />
+            </button>
+          </motion.div>
+        )}
       </div>
     </div>
   );
 }
 
-function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null }) {
+function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null; onAdvance: () => void }) {
   const Icon = step.icon;
   const customers = useTargetCustomers(project);
 
@@ -1489,7 +1506,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
         </section>
 
         {/* ── Readiness score ── */}
-        <ValidateReadinessBar projectTitle={project?.title ?? ""} />
+        <ValidateReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />
 
       </div>
     );

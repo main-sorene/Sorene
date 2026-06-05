@@ -711,39 +711,59 @@ function TargetCustomerCard({
   );
 }
 
-// Simple markdown renderer for pattern summary output
+// Renders AI output that may contain light markdown or the structured plain-text
+// format we request (section titles, • bullets, **bold**).
 function MarkdownText({ text }: { text: string }) {
   const lines = text.split("\n");
   const elements: React.ReactNode[] = [];
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim() || line.trim() === "---" || line.trim() === "---") { i++; continue; }
+    const raw = lines[i];
+    const line = raw.trim();
+    // Skip blank lines and dividers
+    if (!line || /^-{2,}$/.test(line) || /^\*{2,}$/.test(line)) { i++; continue; }
+    // Markdown headings
     if (line.startsWith("### ")) {
-      elements.push(<h4 key={i} className="text-[13px] font-semibold text-[#151515] mt-4 mb-1.5">{line.slice(4)}</h4>);
+      elements.push(<p key={i} className="text-[13px] font-semibold text-[#151515] mt-5 mb-1">{line.slice(4)}</p>);
     } else if (line.startsWith("## ")) {
-      elements.push(<h3 key={i} className="text-[14px] font-semibold text-[#151515] mt-2 mb-2">{line.slice(3)}</h3>);
-    } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      elements.push(<p key={i} className="text-[13px] font-semibold text-[#151515] mt-5 mb-1">{line.slice(3)}</p>);
+    // Plain section header: a line with no bullet/number that is short and ends without a period
+    } else if (!line.startsWith("•") && !line.startsWith("-") && !line.startsWith("*") && !/^\d+\./.test(line) && line.length < 60 && !line.endsWith(".") && !line.includes("—")) {
+      elements.push(<p key={i} className="text-[13px] font-semibold text-[#151515] mt-5 mb-1">{renderInline(line)}</p>);
+    // Bullet: • or - or *
+    } else if (line.startsWith("• ") || line.startsWith("- ") || line.startsWith("* ")) {
+      const content = line.replace(/^[•\-*]\s+/, "");
       elements.push(
         <div key={i} className="flex gap-2 items-start mb-1">
-          <span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-[#151515]" />
-          <p className="text-[13px] text-[#62646A] leading-relaxed">{renderInline(line.slice(2))}</p>
+          <span className="mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full bg-[#9A9A9A]" />
+          <p className="text-[13px] text-[#62646A] leading-relaxed">{renderInline(content)}</p>
+        </div>
+      );
+    // Numbered list
+    } else if (/^\d+\.\s/.test(line)) {
+      const num = line.match(/^(\d+)\.\s/)?.[1] ?? "";
+      const content = line.replace(/^\d+\.\s+/, "");
+      elements.push(
+        <div key={i} className="flex gap-2.5 items-start mb-1">
+          <span className="text-[11px] font-bold text-[#9A9A9A] shrink-0 mt-0.5 w-4">{num}.</span>
+          <p className="text-[13px] text-[#62646A] leading-relaxed">{renderInline(content)}</p>
         </div>
       );
     } else {
-      elements.push(<p key={i} className="text-[13px] text-[#62646A] leading-relaxed mb-2">{renderInline(line)}</p>);
+      elements.push(<p key={i} className="text-[13px] text-[#62646A] leading-relaxed mb-1">{renderInline(line)}</p>);
     }
     i++;
   }
-  return <div className="space-y-0.5">{elements}</div>;
+  return <div>{elements}</div>;
 }
 
 function renderInline(text: string): React.ReactNode {
+  // Handle **bold** and remove stray * characters
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) =>
     part.startsWith("**") && part.endsWith("**")
       ? <strong key={i} className="font-semibold text-[#151515]">{part.slice(2, -2)}</strong>
-      : part
+      : part.replace(/\*/g, "")
   );
 }
 
@@ -795,7 +815,30 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
       : entries.map((e, i) =>
           `Conversation ${i + 1} — ${e.name || "Anonymous"} (${e.createdAt})\nNotes: ${e.notes || "no notes"}`
         ).join("\n\n");
-    const prompt = `You are Sorene, an execution coach helping an entrepreneur validate their idea: "${projectTitle}".\n\nHere are their customer conversation logs:\n\n${summary}\n\nAnalyze the patterns. Surface:\n1. The most common problems mentioned\n2. Exact language or phrases that repeat\n3. Pain frequency and intensity signals\n4. Whether people are already paying to solve this\n5. The strongest signal to build on\n\nThen ask 2-3 clarifying questions to deepen your understanding of the patterns. Be direct and specific.`;
+    const prompt = `You are Sorene, an execution coach helping an entrepreneur validate their idea: "${projectTitle}".
+
+Here are their customer conversation logs:
+
+${summary}
+
+Analyze the patterns and write your response in plain prose with clear section titles. Do NOT use markdown symbols like ##, ###, **, --, or ---. Use this exact structure:
+
+Most Common Problems
+List the top 2-3 problems customers mentioned, one per line, starting with a bullet •
+
+Repeating Language
+List exact words or phrases that appear in multiple conversations, one per line with •, and explain what each signals
+
+Pain Signals
+Rate the frequency and intensity: how often did it come up, how urgent did it feel?
+
+Paying to Solve It
+Are people already spending money on workarounds? What does that tell us?
+
+Strongest Signal
+One sentence: the single most actionable insight from these conversations.
+
+Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Write like a sharp co-founder, not a consultant.`;
     const msgs = [{ role: "user" as const, content: prompt }];
     const reply = await stream(msgs);
     setHistory([...msgs, { role: "assistant", content: reply }]);

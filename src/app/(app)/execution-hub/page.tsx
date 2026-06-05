@@ -711,9 +711,43 @@ function TargetCustomerCard({
   );
 }
 
-// ─────────────────────────────────────────────
-// Pattern Summary Card
-// ─────────────────────────────────────────────
+// Simple markdown renderer for pattern summary output
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim() || line.trim() === "---" || line.trim() === "---") { i++; continue; }
+    if (line.startsWith("### ")) {
+      elements.push(<h4 key={i} className="text-[13px] font-semibold text-[#151515] mt-4 mb-1.5">{line.slice(4)}</h4>);
+    } else if (line.startsWith("## ")) {
+      elements.push(<h3 key={i} className="text-[14px] font-semibold text-[#151515] mt-2 mb-2">{line.slice(3)}</h3>);
+    } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      elements.push(
+        <div key={i} className="flex gap-2 items-start mb-1">
+          <span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-[#151515]" />
+          <p className="text-[13px] text-[#62646A] leading-relaxed">{renderInline(line.slice(2))}</p>
+        </div>
+      );
+    } else {
+      elements.push(<p key={i} className="text-[13px] text-[#62646A] leading-relaxed mb-2">{renderInline(line)}</p>);
+    }
+    i++;
+  }
+  return <div className="space-y-0.5">{elements}</div>;
+}
+
+function renderInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={i} className="font-semibold text-[#151515]">{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
+
 
 function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
@@ -820,8 +854,8 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
           <div className="px-4 py-4 space-y-4 max-h-[420px] overflow-y-auto">
             {history.map((msg, i) => (
               msg.role === "assistant" ? (
-                <div key={i} className="text-label-medium text-[#151515] leading-relaxed whitespace-pre-wrap">
-                  {msg.content}
+                <div key={i}>
+                  <MarkdownText text={msg.content} />
                 </div>
               ) : i > 0 ? (
                 <div key={i} className="flex justify-end">
@@ -833,7 +867,7 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
             ))}
             {stage === "loading" && (
               output
-                ? <div className="text-label-medium text-[#151515] leading-relaxed whitespace-pre-wrap">{output}</div>
+                ? <div><MarkdownText text={output} /></div>
                 : <div className="flex items-center gap-2 text-[#9A9A9A] text-sm"><Loader2 size={14} className="animate-spin" /> Analysing patterns…</div>
             )}
             <div ref={bottomRef} />

@@ -4066,6 +4066,190 @@ const LAUNCH_PILLARS = [
 type PillarDef = typeof LAUNCH_PILLARS[number];
 type ChecklistStatus = "todo" | "progress" | "done";
 
+// ─────────────────────────────────────────────
+// BusinessNameSection — special item for biz_name
+// ─────────────────────────────────────────────
+
+function BusinessNameSection({ project, onNameChosen }: { project: DirectionCardData | null; onNameChosen: (name: string) => void }) {
+  const title = project?.title ?? "";
+  const storageKey = `business-name-${title}`;
+
+  const [chosen, setChosen] = useState(() => {
+    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+  });
+  const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const cached = localStorage.getItem(`business-name-suggestions-${title}`);
+      if (cached) { setSuggestions(JSON.parse(cached)); setStage("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const buildContext = () => {
+    const painkiller     = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer          = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const patternSummary = localStorage.getItem(`pattern-summary-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    return { painkiller, offer, patternSummary, targetCustomer };
+  };
+
+  const generateSuggestions = async () => {
+    if (!title) return;
+    setStage("loading");
+    const { painkiller, offer, patternSummary, targetCustomer } = buildContext();
+    const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
+    const prompt = `Suggest 3 business name options for this founder. Names must be clear, simple, and immediately communicate what the offer is — no abstract or clever wordplay.
+
+Project: "${title}"${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}
+
+Return JSON: [{"name": "...", "reason": "1 sentence why this works for this business"}, ...]`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setSuggestions(parsed); setStage("done");
+          try { localStorage.setItem(`business-name-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+        } else { setStage("idle"); }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  const sendChat = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput("");
+    const newHistory = [...chatHistory, { role: "user" as const, text: msg }];
+    setChatHistory(newHistory);
+    setChatLoading(true);
+    const { painkiller, offer, patternSummary, targetCustomer } = buildContext();
+    const system = `You are Sorene, a startup brand coach. Suggest business names that are clear, simple, and communicate the offer directly. Return a JSON array: [{"name": "...", "reason": "..."}]. No markdown outside the JSON.`;
+    const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+    const prompt = `Context — Project: "${title}"${targetCustomer ? `, target customer: "${targetCustomer}"` : ""}${painkiller ? `, painkiller: "${painkiller}"` : ""}${offer ? `, offer: "${offer}"` : ""}${patternSummary ? `, pattern: "${patternSummary.slice(0, 150)}"` : ""}. User says: "${msg}". Return a JSON array of 3 name suggestions.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system, history }) });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const match = reply.match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setSuggestions(parsed);
+          try { localStorage.setItem(`business-name-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 more options:" }]);
+        } else {
+          setChatHistory([...newHistory, { role: "ai", text: reply }]);
+        }
+      }
+    } catch { /* ignore */ }
+    setChatLoading(false);
+  };
+
+  const chooseName = (name: string) => {
+    setChosen(name);
+    try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
+    onNameChosen(name);
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {/* Description hint */}
+      <p className="text-[12px] text-[#62646A] leading-relaxed">
+        A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
+      </p>
+
+      {/* Chosen name badge */}
+      {chosen && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
+          <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+          <span className="text-[13px] font-semibold text-[#151515]">{chosen}</span>
+          <span className="text-[11px] text-[#32C382] ml-auto">Current choice</span>
+        </div>
+      )}
+
+      {/* Generate / suggestions */}
+      {stage === "idle" && (
+        <button onClick={generateSuggestions} disabled={!title}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+          <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest 3 name options
+        </button>
+      )}
+      {stage === "loading" && (
+        <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
+          <Loader2 size={11} className="animate-spin" /> Generating name ideas…
+        </div>
+      )}
+      {stage === "done" && suggestions.length > 0 && (
+        <div className="space-y-2">
+          {suggestions.map((s, i) => (
+            <div key={i} className={cn(
+              "rounded-xl border p-3 transition-all",
+              chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+            )}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-semibold text-[#151515]">{s.name}</span>
+                {chosen !== s.name ? (
+                  <button onClick={() => chooseName(s.name)}
+                    className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                    Choose
+                  </button>
+                ) : (
+                  <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+                )}
+              </div>
+              <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
+            </div>
+          ))}
+          <button onClick={generateSuggestions}
+            className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+            Regenerate
+          </button>
+        </div>
+      )}
+
+      {/* Chat for more options */}
+      {stage === "done" && (
+        <div className="border border-gray-100 rounded-xl overflow-hidden">
+          {chatHistory.length > 0 && (
+            <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
+              {chatHistory.map((m, i) => (
+                <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
+                  {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
+                </p>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendChat()}
+              placeholder="Ask for more ideas, e.g. something shorter…"
+              className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+            />
+            <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading}
+              className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
+              {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const PILLAR_GRADIENTS: Record<string, string> = {
   legal:       "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)",
   finance:     "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)",
@@ -4084,7 +4268,7 @@ const PILLAR_TAGLINES: Record<string, string> = {
   growth:      "Scale what works",
 };
 
-function PillarCard({ pillar, project }: { pillar: PillarDef; project: DirectionCardData | null }) {
+function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
   const title = project?.title ?? "";
   const [isExpanded, setIsExpanded] = useState(false);
   const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
@@ -4262,7 +4446,13 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
                           {item.label}
                         </span>
                       </button>
-                      {tip && (
+                      {item.id === "biz_name" && pillar.id === "brand_digital" && (
+                        <BusinessNameSection project={project} onNameChosen={(name) => {
+                          cycleStatus("biz_name");
+                          onNameChosen?.(name);
+                        }} />
+                      )}
+                      {tip && item.id !== "biz_name" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}
                         </p>
@@ -4283,11 +4473,11 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
 // LaunchPadContent — main component
 // ─────────────────────────────────────────────
 
-function LaunchPadContent({ project }: { project: DirectionCardData | null }) {
+function LaunchPadContent({ project, onNameChosen }: { project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
   return (
     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
-        <PillarCard key={pillar.id} pillar={pillar} project={project} />
+        <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen} />
       ))}
     </div>
   );
@@ -4667,11 +4857,13 @@ function ProjectPicker({
   selected,
   onSelect,
   onCreateProject,
+  customNames = {},
 }: {
   projects: DirectionCardData[];
   selected: DirectionCardData | null;
   onSelect: (p: DirectionCardData | null) => void;
   onCreateProject: () => void;
+  customNames?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -4684,7 +4876,8 @@ function ProjectPicker({
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const label = selected ? selected.title : "All Projects";
+  const displayName = (p: DirectionCardData) => customNames[p.title] || p.title;
+  const label = selected ? displayName(selected) : "All Projects";
 
   return (
     <div ref={ref} className="relative">
@@ -4740,7 +4933,7 @@ function ProjectPicker({
                     {(i + 1)}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-body-small-medium text-[#151515] truncate">{p.title}</p>
+                    <p className="text-body-small-medium text-[#151515] truncate">{displayName(p)}</p>
                     {p.oneliner && <p className="text-[11px] text-[#9A9A9A] truncate">{p.oneliner}</p>}
                   </div>
                   {selected?.title === p.title && <CheckCircle2 size={14} className="text-[#151515] ml-auto shrink-0" />}
@@ -4790,6 +4983,12 @@ export default function Page() {
   const [atomProject, setAtomProject] = useAtom(selectedExecutionProjectAtom);
   const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(atomProject);
   const [createOpen, setCreateOpen] = useState(false);
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem("custom-project-names");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
   const [createTitle, setCreateTitle] = useState("");
   const [createDesc, setCreateDesc] = useState("");
   const [createSaving, setCreateSaving] = useState(false);
@@ -4906,6 +5105,7 @@ export default function Page() {
                 selected={selectedProject}
                 onSelect={(p) => { setSelectedProject(p); setActiveTab("validation"); }}
                 onCreateProject={() => setCreateOpen(true)}
+                customNames={customNames}
               />
             </div>
 
@@ -4953,7 +5153,13 @@ export default function Page() {
                       {activeTab === "validation"
                         ? <ValidationProgress project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
                         : activeTab === "launchpad"
-                        ? <LaunchPadContent project={selectedProject ?? null} />
+                        ? <LaunchPadContent project={selectedProject ?? null} onNameChosen={(name) => {
+                            const key = selectedProject?.title ?? "";
+                            if (!key) return;
+                            const updated = { ...customNames, [key]: name };
+                            setCustomNames(updated);
+                            try { localStorage.setItem("custom-project-names", JSON.stringify(updated)); } catch { /* ignore */ }
+                          }} />
                         : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

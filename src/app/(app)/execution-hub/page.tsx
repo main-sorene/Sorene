@@ -397,20 +397,10 @@ function OpeningScriptCard({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
   const [script, setScript] = useState("");
   const [loading, setLoading] = useState(false);
-  const [generated, setGenerated] = useState(false);
+  const hasRun = useRef(false);
   const cacheKey = `opening-script-${project?.title ?? ""}`;
 
-  // Load cached script immediately
-  useEffect(() => {
-    if (!project?.title) return;
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) { setScript(cached); setGenerated(true); }
-    } catch { /* ignore */ }
-  }, [cacheKey, project?.title]);
-
-  const generate = async () => {
-    if (!project) return;
+  const generate = async (projectArg: DirectionCardData) => {
     setLoading(true);
     setScript("");
     const dna = authUser?.profile?.dnaScores;
@@ -424,10 +414,10 @@ function OpeningScriptCard({ project }: { project: DirectionCardData | null }) {
 
     const prompt = `You are Sorene. Write a personalized outreach script for someone validating their idea.
 
-Project: "${project.title}"
-${project.oneliner ? `One-liner: ${project.oneliner}` : ""}
-${project.description ? `Description: ${project.description}` : ""}
-${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+Project: "${projectArg.title}"
+${projectArg.oneliner ? `One-liner: ${projectArg.oneliner}` : ""}
+${projectArg.description ? `Description: ${projectArg.description}` : ""}
+${projectArg.first_10_customers ? `Target customer: ${projectArg.first_10_customers}` : ""}
 ${dnaContext ? `\nFounder DNA:\n${dnaContext}` : ""}
 
 Write a short, natural-sounding opening message (2-4 sentences) they can use to reach out to potential customers. It must:
@@ -462,14 +452,19 @@ Output only the script text, in quotes. No explanation, no preamble.`;
         }
       }
       try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
-      setGenerated(true);
     } catch { /* ignore */ }
     setLoading(false);
   };
 
-  // Auto-generate on first load if no cache
+  // Single effect: check cache first, generate if none
   useEffect(() => {
-    if (project?.title && !generated && !loading) generate();
+    if (!project?.title || hasRun.current) return;
+    hasRun.current = true;
+    try {
+      const cached = localStorage.getItem(`opening-script-${project.title}`);
+      if (cached) { setScript(cached); return; }
+    } catch { /* ignore */ }
+    generate(project);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.title]);
 
@@ -482,8 +477,8 @@ Output only the script text, in quotes. No explanation, no preamble.`;
           </div>
           <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
         </div>
-        {generated && !loading && (
-          <button onClick={() => { setGenerated(false); setScript(""); generate(); }}
+        {script && !loading && project && (
+          <button onClick={() => { try { localStorage.removeItem(cacheKey); } catch { /* ignore */ } generate(project); }}
             className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline">
             Regenerate
           </button>
@@ -497,7 +492,7 @@ Output only the script text, in quotes. No explanation, no preamble.`;
       {script && (
         <p className="text-label-medium text-[#62646A] leading-relaxed italic whitespace-pre-wrap">{script}</p>
       )}
-      {!loading && !script && !project && (
+      {!loading && !script && (
         <p className="text-label-medium text-[#62646A] leading-relaxed italic">
           "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
         </p>

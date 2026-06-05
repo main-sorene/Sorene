@@ -1602,7 +1602,11 @@ function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEP
     return <InterviewStage2 step={step} project={project} onAdvance={onAdvance} />;
   }
 
-  // Stages 3–4
+  if (step.id === 3) {
+    return <BuildDemoStage3 step={step} project={project} onAdvance={onAdvance} />;
+  }
+
+  // Stage 4
   return (
     <div className="space-y-8">
       <section>
@@ -2175,6 +2179,424 @@ function InterviewStage2({
 
       {/* ── Readiness ── */}
       <InterviewReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Build Demo Stage 3
+// ─────────────────────────────────────────────
+
+function OfferBuilderCard({ project }: { project: DirectionCardData | null }) {
+  const cacheKey = `mvo-offer-${project?.title ?? ""}`;
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [output, setOutput] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!project?.title || loaded) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) { setOutput(raw); setStage("done"); }
+    } catch { /* ignore */ }
+    setLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const handleBuild = async () => {
+    setStage("loading");
+    setOutput("");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const convRaw = localStorage.getItem(`convlog-${project?.title ?? ""}`);
+    const convs: { name?: string; notes?: string }[] = convRaw ? JSON.parse(convRaw) : [];
+    const convSample = convs.slice(0, 8).map((e, i) => `${i + 1}. ${e.name || "Anonymous"}: ${e.notes || "no notes"}`).join("\n");
+
+    const prompt = `You are Sorene, a sharp startup coach helping an entrepreneur build their Minimum Viable Offer (MVO).
+
+Project: "${project?.title}"
+${project?.oneliner ? `One-liner: ${project.oneliner}` : ""}
+${project?.simple_positioning ? `Positioning: ${project.simple_positioning}` : ""}
+Painkiller problem: "${painkiller || "not yet defined"}"
+${convs.length > 0 ? `Sample customer conversations:\n${convSample}` : ""}
+
+Build their MVO with these sections:
+
+**One-Sentence Offer** — "We help [who] [do/achieve X] [in Y time / without Z friction]"
+
+**Suggested Price Range** — give a specific range (e.g. $X–$Y) based on the pain level and what people are likely to pay, with 1-sentence rationale
+
+**Best MVO Format** — pick the single best format for this problem: workshop / PDF guide / 1-on-1 session / manual service / group program — explain why this one fits
+
+**Offer Clarity Checklist** — 4 bullets: Who it's for, What they get, The key outcome, The price
+
+**First Pitch** — one short paragraph they can say or send to 3 potential customers right now
+
+Be specific to this project. Bold key phrases. No fluff.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system: "You are Sorene, a sharp startup coach. Be specific, direct, and practical. Give real numbers and real formats." }),
+      });
+      if (!res.ok) { setStage("idle"); return; }
+      const data = await res.json();
+      const full: string = (data?.reply ?? "").trim();
+      setOutput(full);
+      setStage("done");
+      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
+    } catch { setStage("idle"); }
+  };
+
+  const handleReset = () => {
+    try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+    setOutput("");
+    setStage("idle");
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Lightbulb size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Sorene's Offer Builder</p>
+            <p className="text-[11px] text-[#9A9A9A]">One-sentence offer · price range · format · first pitch</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={handleReset}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#9A9A9A] hover:text-[#151515] border border-[#ECEDEE] hover:border-[#151515] transition-all">
+            Regenerate
+          </button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <p className="text-[13px] text-[#9A9A9A] leading-relaxed max-w-sm">
+              Sorene will craft your offer, suggest a price range, pick the best format, and write your first pitch — based on your painkiller problem and conversations.
+            </p>
+            <button onClick={handleBuild}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+              <Lightbulb size={14} /> Build my offer
+            </button>
+          </div>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 py-6 justify-center text-[#9A9A9A] text-[13px]">
+            <Loader2 size={14} className="animate-spin" /> Building your offer…
+          </div>
+        )}
+        {stage === "done" && output && (
+          <div className="text-[13px] text-[#151515] leading-relaxed">
+            <MarkdownText text={output} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BuildDemoGuidanceChat({ project }: { project: DirectionCardData | null }) {
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const cacheKey = `build-demo-chat-${project?.title ?? ""}`;
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) setMessages(JSON.parse(raw));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-offer-${project?.title ?? ""}`) ?? "";
+
+    const system = `You are Sorene, a sharp startup coach helping an entrepreneur build their Minimum Viable Offer (MVO) for the Build Demo stage.
+Project: "${project?.title}"${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nOffer built so far:\n${offer}` : ""}
+Give direct, practical guidance. Be specific. No fluff.`;
+
+    const newMessages: { role: "user" | "assistant"; content: string }[] = [...messages, { role: "user", content: userMsg }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userMsg, system, history: messages }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const updated = [...newMessages, { role: "assistant" as const, content: reply }];
+        setMessages(updated);
+        try { localStorage.setItem(cacheKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  const guidelines = [
+    { num: 1, text: "Start with the simplest version that delivers real value" },
+    { num: 2, text: "Pick one format: workshop, PDF guide, 1-on-1 session, or manual service" },
+    { num: 3, text: "Set up a simple landing page or pitch to 3 people directly" },
+    { num: 4, text: "Ask for real money — not interest, not sign-ups" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Guidance */}
+      <div className="space-y-3">
+        {guidelines.map((g) => (
+          <div key={g.num} className="flex gap-3 items-start">
+            <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{g.num}</div>
+            <p className="text-[13px] text-[#151515] leading-relaxed">{g.text}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Chat */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden mt-2">
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <MessageCircle size={13} className="text-[#9A9A9A]" />
+          <p className="text-[12px] font-semibold text-[#151515]">Ask Sorene anything about your demo</p>
+        </div>
+        {messages.length > 0 && (
+          <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div key={i} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "justify-start")}>
+                <div className={cn("rounded-2xl px-3 py-2 text-[12px] leading-relaxed max-w-[85%]",
+                  m.role === "user"
+                    ? "bg-[#151515] text-white rounded-br-sm"
+                    : "bg-[#F5F5F5] text-[#151515] rounded-bl-sm")}>
+                  {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-[#F5F5F5] rounded-2xl rounded-bl-sm px-3 py-2">
+                  <Loader2 size={12} className="animate-spin text-[#9A9A9A]" />
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        )}
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-[#ECEDEE]">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="How do I price this? What format should I pick?…"
+            className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+          />
+          <button onClick={handleSend} disabled={!input.trim() || loading}
+            className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0 hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+            <ArrowRight size={12} className="text-white" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MVODefinitionCard({ project }: { project: DirectionCardData | null }) {
+  const key = `mvo-defined-${project?.title ?? ""}`;
+  const [mvo, setMvo] = useState("");
+  const [savedIndicator, setSavedIndicator] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try { setMvo(localStorage.getItem(key) ?? ""); } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const handleChange = (val: string) => {
+    setMvo(val);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try { localStorage.setItem(key, val); } catch { /* ignore */ }
+      setSavedIndicator(true);
+      setTimeout(() => setSavedIndicator(false), 1500);
+    }, 600);
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Rocket size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Your Minimum Viable Offer</p>
+            <p className="text-[11px] text-[#9A9A9A]">Define what you will sell and for how much — in one paragraph</p>
+          </div>
+        </div>
+        {savedIndicator && (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]">
+            <CheckCircle2 size={12} /> Saved
+          </span>
+        )}
+      </div>
+      <div className="px-5 py-4 space-y-2">
+        <textarea
+          value={mvo}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="I offer [format] for [who], priced at [$X], delivering [outcome] in [timeframe]…"
+          rows={4}
+          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors"
+        />
+        <p className="text-[11px] text-[#9A9A9A]">Auto-saves as you type</p>
+      </div>
+    </div>
+  );
+}
+
+function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardData | null; onAdvance: () => void }) {
+  const title = project?.title ?? "";
+  const [hasOffer, setHasOffer] = useState(false);
+  const [hasMvo, setHasMvo] = useState(false);
+  const [hasPitched, setHasPitched] = useState(false);
+
+  const refresh = () => {
+    try { setHasOffer(!!localStorage.getItem(`mvo-offer-${title}`)); } catch { /* ignore */ }
+    try { setHasMvo(!!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim()); } catch { /* ignore */ }
+    try { setHasPitched(!!localStorage.getItem(`mvo-pitched-${title}`)); } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const checkItems = [
+    { done: hasOffer,   text: "Offer built with Sorene" },
+    { done: hasMvo,     text: "Your MVO defined" },
+    { done: hasPitched, text: "Pitched to at least 3 people" },
+  ];
+
+  const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
+  const canAdvance = checkItems.every((c) => c.done);
+
+  const { label, color, textColor } =
+    score === 0  ? { label: "Not started",      color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]"  } :
+    score <= 33  ? { label: "Just started",     color: "bg-[#FFA94D]", textColor: "text-[#C85B00]"  } :
+    score <= 66  ? { label: "In progress",      color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]"  } :
+                   { label: "Ready to launch",  color: "bg-[#32C382]", textColor: "text-[#0B5E35]"  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[13px] font-semibold text-[#151515]">Readiness to advance to Experiment</p>
+          <span className={cn("text-[13px] font-bold", textColor)}>{score}%</span>
+        </div>
+        <div className="w-full h-2.5 rounded-full bg-[#F0F1F2] overflow-hidden mb-3">
+          <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${score}%` }} />
+        </div>
+        <div className="mb-4">
+          <span className={cn("text-[12px] font-semibold", textColor)}>{label}</span>
+        </div>
+        <div className="space-y-2.5">
+          {checkItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              <div className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+                item.done ? "bg-[#32C382]" : "bg-[#F0F1F2]")}>
+                {item.done && <CheckCircle2 size={10} className="text-white" />}
+              </div>
+              <p className={cn("text-[12px]", item.done ? "text-[#151515] font-medium" : "text-[#9A9A9A]")}>{item.text}</p>
+            </div>
+          ))}
+          {/* Pitched toggle */}
+          {!hasPitched && (
+            <button onClick={() => { try { localStorage.setItem(`mvo-pitched-${title}`, "1"); } catch { /* ignore */ } refresh(); }}
+              className="ml-6 text-[11px] text-[#9A9A9A] hover:text-[#151515] underline underline-offset-2 transition-colors">
+              Mark as done — I have pitched to 3 people
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="px-5 pb-4">
+        {canAdvance ? (
+          <button onClick={onAdvance}
+            className="w-full py-3 rounded-xl bg-[#32C382] text-white text-[13px] font-semibold hover:bg-[#28a870] transition-colors flex items-center justify-center gap-2">
+            <ArrowRight size={15} /> Start Experiment
+          </button>
+        ) : (
+          <div className="rounded-xl bg-[#F5F5F5] border border-[#ECEDEE] px-4 py-3 flex items-center gap-2.5">
+            <Lock size={13} className="text-[#9A9A9A] shrink-0" />
+            <p className="text-[12px] text-[#9A9A9A]">
+              {checkItems.find((c) => !c.done)?.text
+                ? `Complete: ${checkItems.find((c) => !c.done)!.text.toLowerCase()}`
+                : "Complete all items to unlock Experiment."}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BuildDemoStage3({
+  step,
+  project,
+  onAdvance,
+}: {
+  step: typeof VIBE_STEPS[number];
+  project: DirectionCardData | null;
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="space-y-8">
+
+      {/* ── What is this? ── */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
+      </section>
+
+      {/* ── Sorene's Offer (collapsible) ── */}
+      <CollapseSection title="Sorene's Offer">
+        <OfferBuilderCard project={project} />
+      </CollapseSection>
+
+      {/* ── What You Should Do (collapsible, with chat) ── */}
+      <CollapseSection title="What You Should Do">
+        <BuildDemoGuidanceChat project={project} />
+      </CollapseSection>
+
+      {/* ── Your MVO (collapsible) ── */}
+      <CollapseSection title="Your Minimum Viable Offer">
+        <MVODefinitionCard project={project} />
+      </CollapseSection>
+
+      {/* ── Readiness ── */}
+      <BuildDemoReadinessBar project={project} onAdvance={onAdvance} />
 
     </div>
   );

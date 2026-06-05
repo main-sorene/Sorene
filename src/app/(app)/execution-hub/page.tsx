@@ -207,27 +207,208 @@ function IdeaValidatorContent() {
 // ─────────────────────────────────────────────
 
 const GO_CHECKS = [
-  { id: "market", label: "Market Validation", description: "User sign-ups, leads, sales, conversations logged, and quality of feedback received.", icon: BarChart3, items: ["User sign-ups", "Qualified leads", "Sales / paid customers", "Conversations logged", "Quality of feedback"] },
-  { id: "problem", label: "Problem & Solution Clarity", description: "Problem and solution defined from real market conversations — not AI-generated assumptions.", icon: Search, items: ["Problem defined from real conversations", "Solution tested with at least one real person", "Clear who the customer is", "Painkiller problem identified"] },
-  { id: "learning", label: "Foundation Learning", description: "Completion of the core learning module that prepares you to run a business.", icon: CheckCircle2, items: ["Completed foundation module", "Understand the VIBE framework", "Understand MVO (minimum viable offer)", "Know your DNA + Direction"] },
-  { id: "finance", label: "Finance Readiness", description: "A basic assessment of whether you are financially positioned to commit.", icon: DollarSign, items: ["Personal runway assessed", "Startup cost estimate done", "First revenue target set", "Funding / bootstrap path chosen"] },
+  {
+    id: "problem",
+    label: "Problem & Solution Clarity",
+    description: "Problem and solution defined from real market conversations — not AI-generated assumptions.",
+    icon: Search,
+    items: [
+      { key: "problem_defined",   label: "Painkiller problem identified from interviews",   autoKey: "painkiller-verdict-" },
+      { key: "conversations_done", label: "At least 10 conversations completed",             autoKey: "conversations-count-" },
+      { key: "solution_tested",   label: "Solution tested with at least one real person",   autoKey: null },
+      { key: "customer_clear",    label: "Clear who the target customer is",                autoKey: "target-customers-" },
+    ],
+  },
+  {
+    id: "market",
+    label: "Market Validation",
+    description: "Real market signal — paying customers, not just sign-ups or interest.",
+    icon: BarChart3,
+    items: [
+      { key: "paying_customers",  label: "3 paying customers secured",                     autoKey: "experiment-customers-" },
+      { key: "offer_built",       label: "Minimum viable offer defined and pitched",        autoKey: "mvo-defined-" },
+      { key: "validation_score",  label: "Validation score generated",                      autoKey: "experiment-validation-score-" },
+      { key: "responses_logged",  label: "Customer yes/no/maybe responses logged",          autoKey: "experiment-customers-" },
+      { key: "feedback_quality",  label: "Specific feedback notes collected",               autoKey: null },
+    ],
+  },
+  {
+    id: "learning",
+    label: "Foundation Learning",
+    description: "Completion of the core learning module that prepares you to run a business.",
+    icon: CheckCircle2,
+    items: [
+      { key: "vibe_completed",    label: "Completed all 4 VIBE stages",                    autoKey: null },
+      { key: "vibe_understood",   label: "Understand the VIBE framework",                  autoKey: null },
+      { key: "mvo_understood",    label: "Understand MVO (minimum viable offer)",          autoKey: "mvo-defined-" },
+      { key: "dna_direction",     label: "Know your DNA + Direction",                      autoKey: null },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance Readiness",
+    description: "A basic assessment of whether you are financially positioned to commit.",
+    icon: DollarSign,
+    items: [
+      { key: "runway",            label: "Personal runway assessed",                        autoKey: null },
+      { key: "startup_cost",      label: "Startup cost estimate done",                      autoKey: null },
+      { key: "revenue_target",    label: "First revenue target set",                        autoKey: null },
+      { key: "funding_path",      label: "Funding / bootstrap path chosen",                autoKey: null },
+    ],
+  },
 ];
 
+function useGoNoGoAutoDetect(project: DirectionCardData | null) {
+  const title = project?.title ?? "";
+  const [auto, setAuto] = useState<Record<string, boolean>>({});
+
+  const detect = () => {
+    if (!title) return;
+    const result: Record<string, boolean> = {};
+    try {
+      // problem_defined — painkiller verdict saved
+      result["problem_defined"] = !!(localStorage.getItem(`painkiller-verdict-${title}`) ?? "").trim();
+      // conversations_done — count ≥ 10 (check conversation entries)
+      const convRaw = localStorage.getItem(`interview-conversations-${title}`) ?? "[]";
+      try { result["conversations_done"] = JSON.parse(convRaw).length >= 10; } catch { result["conversations_done"] = false; }
+      // customer_clear — target customers data saved
+      result["customer_clear"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
+      // paying_customers — 3+ yes responses
+      const custRaw = localStorage.getItem(`experiment-customers-${title}`) ?? "[]";
+      try {
+        const customers = JSON.parse(custRaw);
+        result["paying_customers"] = customers.filter((c: { response: string }) => c.response === "yes").length >= 3;
+        result["responses_logged"] = customers.length > 0;
+        // feedback_quality — any entry has a note
+        result["feedback_quality"] = customers.some((c: { note?: string }) => (c.note ?? "").trim().length > 0);
+      } catch { result["paying_customers"] = false; result["responses_logged"] = false; result["feedback_quality"] = false; }
+      // offer_built — mvo-defined saved
+      result["offer_built"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
+      // validation_score saved
+      result["validation_score"] = !!(localStorage.getItem(`experiment-validation-score-${title}`) ?? "").trim();
+      // mvo_understood — mvo card ever filled
+      result["mvo_understood"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
+      // vibe_completed — stage reached 5
+      try { result["vibe_completed"] = parseInt(localStorage.getItem(`validation-stage-${title}`) ?? "1", 10) >= 5; } catch { result["vibe_completed"] = false; }
+    } catch { /* ignore */ }
+    setAuto(result);
+  };
+
+  useEffect(() => {
+    detect();
+    const t = setInterval(detect, 3000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  return auto;
+}
+
 function GoNoGoContent() {
-  const [scores, setScores] = useState<Record<string, Record<string, boolean>>>({});
-  const toggle = (checkId: string, item: string) => setScores((prev) => ({ ...prev, [checkId]: { ...(prev[checkId] || {}), [item]: !(prev[checkId]?.[item] ?? false) } }));
-  const total = GO_CHECKS.reduce((acc, c) => acc + c.items.length, 0);
-  const checked = Object.values(scores).reduce((acc, g) => acc + Object.values(g).filter(Boolean).length, 0);
+  const project = useAtomValue(selectedExecutionProjectAtom);
+  const auto = useGoNoGoAutoDetect(project);
+  const storageKey = `go-nogo-manual-${project?.title ?? ""}`;
+  const [manual, setManual] = useState<Record<string, boolean>>({});
+
+  // Load manual overrides
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setManual(JSON.parse(raw));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const toggle = (key: string) => {
+    setManual((prev) => {
+      const updated = { ...prev, [key]: !(prev[key] ?? auto[key] ?? false) };
+      try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      return updated;
+    });
+  };
+
+  const isChecked = (key: string) => manual[key] ?? auto[key] ?? false;
+  const isAuto = (key: string) => (auto[key] ?? false) && !(key in manual);
+
+  const allItems = GO_CHECKS.flatMap((c) => c.items);
+  const total = allItems.length;
+  const checked = allItems.filter((i) => isChecked(i.key)).length;
   const pct = Math.round((checked / total) * 100);
   const ready = pct >= 80;
   const scoreColor = ready ? "#32C382" : pct >= 50 ? "#F5B100" : "#151515";
 
+  // AI readiness analysis
+  type AStage = "idle" | "loading" | "done";
+  const analysisKey = `go-nogo-analysis-${project?.title ?? ""}`;
+  const [analysisStage, setAnalysisStage] = useState<AStage>("idle");
+  const [analysis, setAnalysis] = useState("");
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(analysisKey);
+      if (raw) { setAnalysis(raw); setAnalysisStage("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const generateAnalysis = async () => {
+    if (!project?.title) return;
+    setAnalysisStage("loading");
+    const title = project.title;
+    const painkiller = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const validationScore = localStorage.getItem(`experiment-validation-score-${title}`) ?? "";
+    let customerSummary = "No responses logged.";
+    try {
+      const customers = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+      if (customers.length > 0) {
+        const yes = customers.filter((c: { response: string }) => c.response === "yes").length;
+        const no = customers.filter((c: { response: string }) => c.response === "no").length;
+        const maybe = customers.filter((c: { response: string }) => c.response === "maybe").length;
+        customerSummary = `${customers.length} conversations: ${yes} paid, ${no} declined, ${maybe} maybe`;
+      }
+    } catch { /* ignore */ }
+
+    const checkedItems = allItems.filter((i) => isChecked(i.key)).map((i) => i.label);
+    const uncheckedItems = allItems.filter((i) => !isChecked(i.key)).map((i) => i.label);
+
+    const system = `You are Sorene, a direct startup coach assessing whether a founder is ready to launch. Respond in plain prose only — no JSON, no code blocks. Be honest, specific, and direct.`;
+    const prompt = `Give an honest launch readiness assessment for this founder.
+
+Project: "${title}"${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
+Customer responses: ${customerSummary}${validationScore ? `\nValidation score: "${validationScore}"` : ""}
+Readiness score: ${pct}% (${checked}/${total} criteria met)
+Completed: ${checkedItems.length > 0 ? checkedItems.join(", ") : "none"}
+Not yet done: ${uncheckedItems.length > 0 ? uncheckedItems.join(", ") : "none"}
+
+Write 3-4 sentences: (1) overall verdict — are they ready, close, or not ready; (2) the single biggest strength; (3) the single biggest gap; (4) one specific action to take this week. Be direct. No fluff.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        setAnalysis(reply);
+        setAnalysisStage("done");
+        try { localStorage.setItem(analysisKey, reply); } catch { /* ignore */ }
+      } else { setAnalysisStage("idle"); }
+    } catch { setAnalysisStage("idle"); }
+  };
+
   return (
     <div className="p-6 space-y-8">
-      {/* Stage description */}
       <p className="text-[15px] font-medium text-[#151515] leading-relaxed">
-        Launching too early wastes money and credibility — this step gives you a clear, honest score across market, problem, learning, and finance so you know exactly where you stand before you commit.
+        Launching too early wastes money and credibility — this gives you a clear, honest score across problem clarity, market validation, learning, and finance so you know exactly where you stand before you commit.
       </p>
+
+      {/* Score bar */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h4 className="text-base font-medium text-[#151515]">Readiness Score</h4>
@@ -242,9 +423,11 @@ function GoNoGoContent() {
           {ready ? "You're ready to launch. All core criteria are met." : `Complete ${total - checked} more criteria to unlock your Go / No-Go verdict.`}
         </div>
       </section>
+
+      {/* Check groups */}
       {GO_CHECKS.map((check, idx) => {
         const Icon = check.icon;
-        const groupChecked = check.items.filter((i) => scores[check.id]?.[i]).length;
+        const groupChecked = check.items.filter((i) => isChecked(i.key)).length;
         return (
           <motion.section key={check.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
             <div className="flex items-center justify-between mb-2">
@@ -255,13 +438,18 @@ function GoNoGoContent() {
             <Separator className="bg-gray-100 mb-3" />
             <div className="space-y-2.5">
               {check.items.map((item) => {
-                const on = scores[check.id]?.[item] ?? false;
+                const on = isChecked(item.key);
+                const autoDetected = isAuto(item.key);
                 return (
-                  <button key={item} onClick={() => toggle(check.id, item)} className="w-full flex items-center gap-3 text-left group">
-                    <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors", on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
+                  <button key={item.key} onClick={() => toggle(item.key)} className="w-full flex items-center gap-3 text-left group">
+                    <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                      on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
                       {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
-                    <span className={cn("text-label-medium transition-colors", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item}</span>
+                    <span className={cn("text-label-medium transition-colors flex-1", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item.label}</span>
+                    {autoDetected && (
+                      <span className="text-[10px] font-medium text-[#32C382] shrink-0">auto-detected</span>
+                    )}
                   </button>
                 );
               })}
@@ -269,6 +457,46 @@ function GoNoGoContent() {
           </motion.section>
         );
       })}
+
+      {/* AI readiness analysis */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-base font-medium text-[#151515]">Readiness Analysis</h4>
+          {analysisStage === "done" && (
+            <button onClick={generateAnalysis} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Refresh</button>
+          )}
+        </div>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+            <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+              <img src="/figmaAssets/starfour.svg" className="w-4 h-4" alt="" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Sorene's verdict</p>
+              <p className="text-[11px] text-[#9A9A9A]">AI analysis based on your full journey — conversations, offer, paying customers, and scores</p>
+            </div>
+          </div>
+          <div className="px-5 py-4">
+            {analysisStage === "idle" && (
+              <button onClick={generateAnalysis}
+                className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+                Analyse my readiness across all stages
+              </button>
+            )}
+            {analysisStage === "loading" && (
+              <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+                <Loader2 size={13} className="animate-spin" /> Reviewing your full journey…
+              </div>
+            )}
+            {analysisStage === "done" && analysis && (
+              <div className="text-[13px] text-[#151515] leading-relaxed">
+                <MarkdownText text={analysis} />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

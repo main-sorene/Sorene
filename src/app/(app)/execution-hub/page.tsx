@@ -273,30 +273,30 @@ const VALIDATION_STAGES = [
   { id: 5, label: "Launch Readiness", shortLabel: "LR" },
 ];
 
-function ValidationProgress({ project }: { project: DirectionCardData | null }) {
+function ValidationProgress({ project, onCreateProject }: { project: DirectionCardData | null; onCreateProject: () => void }) {
   const [activeStage, setActiveStage] = useState(1);
 
   if (!project) {
     return (
-      <div className="p-8 flex flex-col items-center text-center gap-5">
+      <div className="p-8 flex flex-col items-center text-center gap-6">
         <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-          <FolderOpen size={24} className="text-[#9A9A9A]" />
+          <Rocket size={24} className="text-[#9A9A9A]" />
         </div>
         <div className="space-y-1.5">
-          <h3 className="text-body-medium-medium text-[#151515]">Choose a project to get started</h3>
-          <p className="text-label-medium text-[#62646A] max-w-xs leading-relaxed">
-            Select a project from the dropdown above, or create a new one in the Direction section.
+          <h3 className="text-body-medium-medium text-[#151515]">Start your validation journey</h3>
+          <p className="text-label-medium text-[#62646A] max-w-sm leading-relaxed">
+            Choose a direction Sorene has generated for you, or describe your own project to begin.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <a href="/direction"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
-            <ArrowRight size={15} /> Go to Direction
+            <ArrowRight size={15} /> Choose a Direction
           </a>
-          <a href="/direction?new=1"
+          <button onClick={onCreateProject}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
-            Create New Project
-          </a>
+            Create My Project
+          </button>
         </div>
       </div>
     );
@@ -939,29 +939,69 @@ function ProjectPicker({
 export default function Page() {
   const authUser = useAtomValue(userAtom);
   const [activeTab, setActiveTab] = useState<Tab | null>("validation");
-  const [chatOpen, setChatOpen] = useState(false); // mobile only
-  const [chatCollapsed, setChatCollapsed] = useState(false); // desktop
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
   const [projects, setProjects] = useState<DirectionCardData[]>([]);
   const [atomProject, setAtomProject] = useAtom(selectedExecutionProjectAtom);
   const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(atomProject);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createSaving, setCreateSaving] = useState(false);
 
-  // Consume atom set by DirectionCard "Start Validate" then clear it
+  // Consume atom set by DirectionCard "Start Validate", persist to Firestore, then clear
   useEffect(() => {
-    if (atomProject) {
+    if (!atomProject || !authUser?.uid) return;
+    const add = async () => {
+      // Persist via API
+      const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken());
+      if (token) {
+        await fetch("/api/execution-projects/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ project: atomProject }),
+        }).catch(() => {});
+      }
+      setProjects((prev) => prev.some((p) => p.title === atomProject.title) ? prev : [...prev, atomProject]);
       setSelectedProject(atomProject);
       setAtomProject(null);
-    }
-  }, [atomProject, setAtomProject]);
+    };
+    add();
+  }, [atomProject, authUser?.uid, setAtomProject]);
 
-  // Load direction cards as projects
+  // Load saved execution projects from Firestore
   useEffect(() => {
     if (!authUser?.uid) return;
-    getUserProfile(authUser.uid).then((profile) => {
-      if (profile?.directionCards && profile.directionCards.length > 0) {
-        setProjects(profile.directionCards);
-      }
-    });
+    import("@/lib/firebase").then(({ auth }) =>
+      auth?.currentUser?.getIdToken().then((token) => {
+        if (!token) return;
+        fetch("/api/execution-projects/list", { headers: { Authorization: `Bearer ${token}` } })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => { if (data?.projects?.length) setProjects(data.projects); })
+          .catch(() => {});
+      })
+    );
   }, [authUser?.uid]);
+
+  const handleCreateProject = async () => {
+    if (!createTitle.trim()) return;
+    setCreateSaving(true);
+    const project: DirectionCardData = { title: createTitle.trim(), oneliner: createDesc.trim() } as DirectionCardData;
+    const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
+    if (token) {
+      await fetch("/api/execution-projects/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ project }),
+      }).catch(() => {});
+    }
+    setProjects((prev) => [...prev, project]);
+    setSelectedProject(project);
+    setCreateTitle("");
+    setCreateDesc("");
+    setCreateSaving(false);
+    setCreateOpen(false);
+  };
 
 
   const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";
@@ -1076,7 +1116,7 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress project={selectedProject} />
+                        ? <ValidationProgress project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
                         : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
@@ -1130,6 +1170,49 @@ export default function Page() {
           <MessageCircle size={22} className="text-white" />
         </button>
       )}
+
+      {/* ── Create My Project modal ── */}
+      <AnimatePresence>
+        {createOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setCreateOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ duration: 0.2 }}
+              className="bg-white rounded-[28px] p-8 w-full max-w-md shadow-xl"
+              onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-heading-xsmall text-[#151515] mb-1">Create My Project</h2>
+              <p className="text-label-medium text-[#62646A] mb-6">Describe your idea and we'll set it up as your validation project.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] block mb-1.5">Project name</label>
+                  <input value={createTitle} onChange={(e) => setCreateTitle(e.target.value)}
+                    placeholder="e.g. AI Workflow Tool for Agencies"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] block mb-1.5">Description <span className="normal-case font-normal text-[#9A9A9A]">(optional)</span></label>
+                  <textarea value={createDesc} onChange={(e) => setCreateDesc(e.target.value)}
+                    placeholder="What problem does it solve? Who is it for?"
+                    rows={3}
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors resize-none" />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setCreateOpen(false)}
+                  className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 text-sm font-medium text-[#62646A] hover:bg-gray-50 transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleCreateProject} disabled={!createTitle.trim() || createSaving}
+                  className="flex-1 px-4 py-3 rounded-2xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {createSaving && <Loader2 size={14} className="animate-spin" />}
+                  Start Validation
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

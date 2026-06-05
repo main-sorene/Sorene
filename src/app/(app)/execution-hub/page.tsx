@@ -4022,9 +4022,12 @@ const LAUNCH_PILLARS = [
     { id: "tagline", label: "Tagline" },
     { id: "benefit", label: "Benefit description" },
     { id: "offerings", label: "Offerings" },
-    { id: "domain", label: "Register domain" },
-    { id: "hosting", label: "Get web hosting" },
+    { id: "pricing", label: "Pricing packages" },
+    { id: "logo", label: "Logo concept" },
+    { id: "brand_color", label: "Brand color palette" },
+    { id: "domain", label: "Choose domain" },
     { id: "website", label: "Build website" },
+    { id: "hosting", label: "Get web hosting" },
     { id: "social", label: "Set up social media profiles" },
   ]},
   { id: "tools", label: "Tools Stack", icon: BarChart3, items: [
@@ -4281,7 +4284,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
 // BrandTextSection — generic for tagline / benefit / offerings
 // ─────────────────────────────────────────────
 
-type BrandTextType = "tagline" | "benefit" | "offerings";
+type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "website" | "hosting";
 
 const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
   tagline: {
@@ -4298,6 +4301,26 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
     hint: "A service description tells customers exactly what they get. Keep it to 1 clear sentence per offering, starting with a verb.",
     promptInstruction: `Generate 3 service/offering description options for this business. Each must be 1 sentence, start with a verb, and clearly state what the customer receives. Short, specific, benefit-focused — no jargon.\n\nReturn JSON where "text" is the actual offering copy and "reason" explains why it works: [{"text": "the offering description", "reason": "why it works"}, ...]`,
     placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
+  },
+  logo: {
+    hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling. Take this to a designer or tool like Looka or Canva.",
+    promptInstruction: `Generate 3 logo concept directions for this business. Each describes: (1) typography style, (2) any symbol or icon element, (3) the visual mood. 2-3 sentences per concept.\n\nReturn JSON where "text" is a short concept title and "reason" is the full visual description: [{"text": "concept title", "reason": "full description"}, ...]`,
+    placeholder: 'e.g. "Something more minimal and modern"',
+  },
+  domain: {
+    hint: "Your domain should match your business name closely. Check availability at namecheap.com or porkbun.com before registering.",
+    promptInstruction: `Suggest 5 domain name options for this business. Mix .com, .co, and .io. Short, easy to spell, close to the business name.\n\nReturn JSON where "text" is the full domain (e.g. "mybiz.co") and "reason" is a 1-sentence note: [{"text": "domain.com", "reason": "note"}, ...]`,
+    placeholder: 'e.g. "Something with .ai or shorter"',
+  },
+  website: {
+    hint: "At launch you need just 3 pages: Home, Services/Pricing, and Contact or Booking. Pick a platform you can launch in a weekend.",
+    promptInstruction: `Recommend 3 website platform options for this business type (e.g. Squarespace, Webflow, Carrd). For each, include the recommended pages to build first.\n\nReturn JSON where "text" is "Platform — Page1, Page2, Page3" and "reason" is why it fits: [{"text": "Squarespace — Home, Services, Contact", "reason": "why it fits"}, ...]`,
+    placeholder: 'e.g. "Something with booking built in"',
+  },
+  hosting: {
+    hint: "Most simple sites have hosting built in. Only set up separate hosting if you are building a custom coded site.",
+    promptInstruction: `Recommend 3 hosting or all-in-one website platform options for this business. Include typical price and the key feature that makes it right for this type of business.\n\nReturn JSON where "text" is "Platform — price/plan" and "reason" is why it fits: [{"text": "Squarespace Basic — ~$16/mo", "reason": "why it fits"}, ...]`,
+    placeholder: 'e.g. "What is the cheapest reliable option?"',
   },
 };
 
@@ -4485,6 +4508,405 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PricingPackageSection
+// ─────────────────────────────────────────────
+
+type PricingPackage = { id: string; name: string; price: string; description: string; features: string; disclaimer: string };
+
+function PricingPackageSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `brand-pricing-${title}`;
+
+  const [packages, setPackages] = useState<PricingPackage[]>([]);
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [collapsed, setCollapsed] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setPackages(JSON.parse(raw)); setStage("done"); setCollapsed(true); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const save = (pkgs: PricingPackage[]) => {
+    setPackages(pkgs);
+    try { localStorage.setItem(storageKey, JSON.stringify(pkgs)); } catch { /* ignore */ }
+  };
+
+  const buildPrompt = (extra = "") => {
+    const offer      = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const painkiller = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    const chosenName = localStorage.getItem(`business-name-${title}`) ?? "";
+    const chosenOffering = localStorage.getItem(`brand-offerings-${title}`) ?? "";
+    return `Generate 2-3 pricing packages for this business. Each package should have a clear name, price, short description (1-2 sentences), a bullet-point list of features (as a single string, one per line starting with •), and a short disclaimer (e.g. refund policy, what is not included, cancellation terms).${extra}
+
+Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${chosenOffering ? `\nOffering: "${chosenOffering}"` : ""}
+
+Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description":"short desc","features":"• feature1\n• feature2\n• feature3","disclaimer":"short disclaimer"}, ...]`;
+  };
+
+  const generate = async (extra = "") => {
+    if (!title) return;
+    setStage("loading");
+    const system = `You are Sorene, a startup pricing coach. Return ONLY valid JSON — no markdown, no preamble.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: buildPrompt(extra), system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed: PricingPackage[] = JSON.parse(match[0]).map((p: PricingPackage, i: number) => ({ ...p, id: `pkg-${i}` }));
+          save(parsed); setStage("done"); setCollapsed(false);
+        } else { setStage("idle"); }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  const sendChat = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput("");
+    const newHistory = [...chatHistory, { role: "user" as const, text: msg }];
+    setChatHistory(newHistory);
+    setChatLoading(true);
+    await generate(`\n\nUser feedback: "${msg}". Adjust accordingly.`);
+    setChatHistory([...newHistory, { role: "ai", text: "Updated packages based on your feedback." }]);
+    setChatLoading(false);
+  };
+
+  const updatePkg = (id: string, field: keyof PricingPackage, value: string) => {
+    const updated = packages.map((p) => p.id === id ? { ...p, [field]: value } : p);
+    save(updated);
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {!collapsed && <p className="text-[12px] text-[#62646A] leading-relaxed">Create 2-3 clear packages. Each needs a name, price, what is included, and a short disclaimer. Keep descriptions simple and benefit-focused.</p>}
+
+      {stage === "idle" && (
+        <button onClick={() => generate()} disabled={!title}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+          <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest pricing packages
+        </button>
+      )}
+      {stage === "loading" && <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Generating packages…</div>}
+
+      {stage === "done" && packages.length > 0 && (
+        <>
+          {collapsed ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
+              <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+              <span className="text-[13px] font-medium text-[#151515] flex-1">{packages.length} packages saved</span>
+              <button onClick={() => setCollapsed(false)} className="text-[11px] text-[#32C382] hover:underline">Edit</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {packages.map((pkg) => (
+                <div key={pkg.id} className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-[#9A9A9A] font-medium uppercase tracking-wide mb-1">Package name</p>
+                      <input value={pkg.name} onChange={(e) => updatePkg(pkg.id, "name", e.target.value)}
+                        className="w-full text-[13px] font-semibold text-[#151515] bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#151515]" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#9A9A9A] font-medium uppercase tracking-wide mb-1">Price</p>
+                      <input value={pkg.price} onChange={(e) => updatePkg(pkg.id, "price", e.target.value)}
+                        className="w-full text-[13px] font-semibold text-[#151515] bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#151515]" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#9A9A9A] font-medium uppercase tracking-wide mb-1">Description</p>
+                    <textarea value={pkg.description} onChange={(e) => updatePkg(pkg.id, "description", e.target.value)} rows={2}
+                      className="w-full text-[12px] text-[#151515] bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#151515] resize-none" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#9A9A9A] font-medium uppercase tracking-wide mb-1">Features (one per line)</p>
+                    <textarea value={pkg.features} onChange={(e) => updatePkg(pkg.id, "features", e.target.value)} rows={3}
+                      className="w-full text-[12px] text-[#151515] bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#151515] resize-none font-mono" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[#9A9A9A] font-medium uppercase tracking-wide mb-1">Disclaimer</p>
+                    <input value={pkg.disclaimer} onChange={(e) => updatePkg(pkg.id, "disclaimer", e.target.value)}
+                      className="w-full text-[12px] text-[#62646A] italic bg-white border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#151515]" />
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center gap-3">
+                <button onClick={() => generate()} className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
+                <button onClick={() => setCollapsed(true)} className="text-[10px] text-[#32C382] font-medium hover:underline">Save & collapse</button>
+              </div>
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                {chatHistory.length > 0 && (
+                  <div className="px-3 py-2 space-y-1 max-h-24 overflow-y-auto bg-[#FAFAFA]">
+                    {chatHistory.map((m, i) => (
+                      <p key={i} className={cn("text-[11px]", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
+                        {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                  <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                    placeholder='e.g. "Add a premium tier" or "Make it cheaper"'
+                    className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none" />
+                  <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading} className="shrink-0 text-[#32C382] disabled:opacity-30">
+                    {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// BrandColorSection
+// ─────────────────────────────────────────────
+
+type ColorPalette = { id: string; name: string; vibe: string; primary: string; secondary: string; accent: string; neutral: string };
+
+function BrandColorSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `brand-colors-${title}`;
+
+  const [palettes, setPalettes] = useState<ColorPalette[]>([]);
+  const [chosen, setChosen] = useState<ColorPalette | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { const d = JSON.parse(raw); setPalettes(d.palettes ?? []); setChosen(d.chosen ?? null); setStage("done"); setCollapsed(!!d.chosen); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const generate = async () => {
+    if (!title) return;
+    setStage("loading");
+    const painkiller     = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const chosenName     = localStorage.getItem(`business-name-${title}`) ?? "";
+    const chosenTagline  = localStorage.getItem(`brand-tagline-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
+    const prompt = `Generate 3 brand color palette options for this business. Each palette has a primary, secondary, accent, and neutral color. Colors must feel cohesive and reflect the brand personality.
+
+Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${chosenTagline ? `\nTagline: "${chosenTagline}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}
+
+Return JSON: [{"id":"p1","name":"palette name","vibe":"2-word mood description","primary":"#hexcode","secondary":"#hexcode","accent":"#hexcode","neutral":"#hexcode"}, ...]`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed: ColorPalette[] = JSON.parse(match[0]);
+          setPalettes(parsed); setStage("done");
+          try { localStorage.setItem(storageKey, JSON.stringify({ palettes: parsed, chosen })); } catch { /* ignore */ }
+        } else { setStage("idle"); }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  const choosePalette = (p: ColorPalette) => {
+    setChosen(p); setCollapsed(true);
+    try { localStorage.setItem(storageKey, JSON.stringify({ palettes, chosen: p })); } catch { /* ignore */ }
+  };
+
+  const Swatch = ({ hex, label }: { hex: string; label: string }) => (
+    <div className="flex flex-col items-center gap-1">
+      <div className="w-8 h-8 rounded-lg border border-white/30 shadow-sm" style={{ backgroundColor: hex }} />
+      <span className="text-[9px] text-[#9A9A9A] font-mono">{hex}</span>
+      <span className="text-[9px] text-[#62646A]">{label}</span>
+    </div>
+  );
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {!collapsed && <p className="text-[12px] text-[#62646A] leading-relaxed">Your brand palette should feel consistent across your website, social media, and materials. Pick 1 palette and stick to it.</p>}
+
+      {chosen && (
+        <div className="flex items-center gap-3 px-3 py-2.5 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
+          <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+          <div className="flex gap-1.5">
+            {[chosen.primary, chosen.secondary, chosen.accent, chosen.neutral].map((hex, i) => (
+              <div key={i} className="w-5 h-5 rounded-md border border-white/50 shadow-sm" style={{ backgroundColor: hex }} />
+            ))}
+          </div>
+          <span className="text-[12px] font-semibold text-[#151515] flex-1">{chosen.name}</span>
+          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">{collapsed ? "Change" : "Collapse"}</button>
+        </div>
+      )}
+
+      {!collapsed && (
+        <>
+          {stage === "idle" && (
+            <button onClick={generate} disabled={!title}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+              <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest color palettes
+            </button>
+          )}
+          {stage === "loading" && <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Generating palettes…</div>}
+          {stage === "done" && palettes.length > 0 && (
+            <div className="space-y-2">
+              {palettes.map((p) => (
+                <div key={p.id} className={cn("rounded-xl border p-3 transition-all",
+                  chosen?.name === p.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+                )}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div>
+                      <span className="text-[13px] font-semibold text-[#151515]">{p.name}</span>
+                      <span className="text-[11px] text-[#9A9A9A] ml-2">{p.vibe}</span>
+                    </div>
+                    {chosen?.name !== p.name ? (
+                      <button onClick={() => choosePalette(p)}
+                        className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                        Choose
+                      </button>
+                    ) : <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />}
+                  </div>
+                  <div className="flex gap-3">
+                    <Swatch hex={p.primary} label="Primary" />
+                    <Swatch hex={p.secondary} label="Secondary" />
+                    <Swatch hex={p.accent} label="Accent" />
+                    <Swatch hex={p.neutral} label="Neutral" />
+                  </div>
+                </div>
+              ))}
+              <button onClick={generate} className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SocialMediaSection
+// ─────────────────────────────────────────────
+
+const ALL_SOCIAL_CHANNELS = [
+  { id: "instagram", label: "Instagram", note: "Visual content, stories, reels" },
+  { id: "linkedin", label: "LinkedIn", note: "B2B, professional network" },
+  { id: "tiktok", label: "TikTok", note: "Short-form video, organic reach" },
+  { id: "twitter", label: "X (Twitter)", note: "Real-time updates, thought leadership" },
+  { id: "facebook", label: "Facebook", note: "Community, local business, ads" },
+  { id: "youtube", label: "YouTube", note: "Long-form video, tutorials" },
+  { id: "pinterest", label: "Pinterest", note: "Visual discovery, lifestyle, DIY" },
+  { id: "threads", label: "Threads", note: "Text-based, Instagram community" },
+  { id: "whatsapp", label: "WhatsApp Business", note: "Direct customer messaging" },
+];
+
+function SocialMediaSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const statusKey = (id: string) => `social-status-${id}-${title}`;
+  const [statuses, setStatuses] = useState<Record<string, boolean>>({});
+  const [priority, setPriority] = useState<string[]>([]);
+  const [priorityLoading, setPriorityLoading] = useState(false);
+  const [priorityDone, setPriorityDone] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    const loaded: Record<string, boolean> = {};
+    for (const ch of ALL_SOCIAL_CHANNELS) {
+      try { loaded[ch.id] = localStorage.getItem(statusKey(ch.id)) === "done"; } catch { loaded[ch.id] = false; }
+    }
+    setStatuses(loaded);
+    try {
+      const raw = localStorage.getItem(`social-priority-${title}`);
+      if (raw) { setPriority(JSON.parse(raw)); setPriorityDone(true); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const toggleChannel = (id: string) => {
+    setStatuses((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem(statusKey(id), next[id] ? "done" : "todo"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const suggestPriority = async () => {
+    if (!title) return;
+    setPriorityLoading(true);
+    const painkiller = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    const system = `You are Sorene. Return ONLY a JSON array of channel ids — no markdown, no preamble.`;
+    const channels = ALL_SOCIAL_CHANNELS.map((c) => c.id).join(", ");
+    const prompt = `Which 3 social media channels should this founder prioritise first? Return their ids only.\n\nChannels: ${channels}\nProject: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}\n\nReturn JSON array of 3 ids: ["id1","id2","id3"]`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const ids = JSON.parse(match[0]);
+          setPriority(ids); setPriorityDone(true);
+          try { localStorage.setItem(`social-priority-${title}`, JSON.stringify(ids)); } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+    setPriorityLoading(false);
+  };
+
+  const doneCount = ALL_SOCIAL_CHANNELS.filter((c) => statuses[c.id]).length;
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-[#62646A]">Mark each channel as set up. Start with the ones Sorene recommends for your business.</p>
+      </div>
+
+      {!priorityDone && (
+        <button onClick={suggestPriority} disabled={!title || priorityLoading}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+          {priorityLoading ? <Loader2 size={11} className="animate-spin" /> : <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" />}
+          {priorityLoading ? "Analysing…" : "Show which to prioritise"}
+        </button>
+      )}
+
+      <div className="space-y-2">
+        {ALL_SOCIAL_CHANNELS.map((ch) => {
+          const done = statuses[ch.id] ?? false;
+          const isPriority = priority.includes(ch.id);
+          return (
+            <button key={ch.id} onClick={() => toggleChannel(ch.id)} className="w-full flex items-center gap-2.5 text-left group">
+              <div className={cn("w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
+                done ? "bg-[#32C382] border-[#32C382]" : "bg-white border-gray-300 group-hover:border-[#151515]"
+              )} />
+              <span className={cn("text-[13px] flex-1 transition-colors", done ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{ch.label}</span>
+              {isPriority && !done && <span className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-1.5 py-0.5 rounded-full shrink-0">Start here</span>}
+              <span className="text-[11px] text-[#9A9A9A] shrink-0">{ch.note}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-[#9A9A9A]">{doneCount}/{ALL_SOCIAL_CHANNELS.length} channels set up</p>
     </div>
   );
 }
@@ -4694,7 +5116,19 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                       {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && pillar.id === "brand_digital" && (
                         <BrandTextSection type={item.id as BrandTextType} project={project} />
                       )}
-                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && (
+                      {item.id === "pricing" && pillar.id === "brand_digital" && (
+                        <PricingPackageSection project={project} />
+                      )}
+                      {(item.id === "logo" || item.id === "domain" || item.id === "website" || item.id === "hosting") && pillar.id === "brand_digital" && (
+                        <BrandTextSection type={item.id as BrandTextType} project={project} />
+                      )}
+                      {item.id === "brand_color" && pillar.id === "brand_digital" && (
+                        <BrandColorSection project={project} />
+                      )}
+                      {item.id === "social" && pillar.id === "brand_digital" && (
+                        <SocialMediaSection project={project} />
+                      )}
+                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "hosting" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}
                         </p>

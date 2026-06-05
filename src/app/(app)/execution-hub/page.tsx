@@ -4485,6 +4485,26 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
   };
 
+  const [customInput, setCustomInput] = useState("");
+  const [customChecking, setCustomChecking] = useState(false);
+  const [customResult, setCustomResult] = useState<boolean | null>(null);
+
+  const checkCustomDomain = async () => {
+    const d = customInput.trim().toLowerCase();
+    if (!d) return;
+    setCustomChecking(true);
+    setCustomResult(null);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/check-domain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains: [d] }) });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomResult(data.results?.[0]?.available ?? null);
+      }
+    } catch { /* ignore */ }
+    setCustomChecking(false);
+  };
+
   return (
     <div className="mt-2 ml-[26px] space-y-3">
       {!collapsed && (
@@ -4559,6 +4579,36 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
                 Regenerate
               </button>
             </motion.div>
+          )}
+          {type === "domain" && stage === "done" && (
+            <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
+              <p className="text-[11px] font-medium text-[#62646A]">Or check your own domain:</p>
+              <div className="flex items-center gap-2">
+                <input
+                  value={customInput}
+                  onChange={(e) => { setCustomInput(e.target.value); setCustomResult(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") checkCustomDomain(); }}
+                  placeholder="e.g. mybrand.com"
+                  className="flex-1 text-[13px] bg-white border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#32C382]"
+                />
+                <button onClick={checkCustomDomain} disabled={customChecking || !customInput.trim()}
+                  className="text-[11px] font-medium text-[#151515] border border-[#151515]/20 px-3 py-1.5 rounded-lg hover:bg-[#151515] hover:text-white transition-colors disabled:opacity-30 shrink-0">
+                  {customChecking ? <Loader2 size={12} className="animate-spin" /> : "Check"}
+                </button>
+              </div>
+              {customResult === true && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-[#32C382]">{customInput.trim().toLowerCase()} is available!</span>
+                  <button onClick={() => choose(customInput.trim().toLowerCase())}
+                    className="text-[10px] font-medium text-white bg-[#32C382] px-2.5 py-1 rounded-full hover:opacity-90 transition-opacity shrink-0">
+                    Choose this
+                  </button>
+                </div>
+              )}
+              {customResult === false && (
+                <span className="text-[11px] font-medium text-[#9A9A9A]">{customInput.trim().toLowerCase()} is already taken.</span>
+              )}
+            </div>
           )}
           {stage === "done" && (
             <div className="border border-gray-100 rounded-xl overflow-hidden">

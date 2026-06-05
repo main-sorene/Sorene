@@ -6821,7 +6821,7 @@ export default function Page() {
             {/* Tabs + inline accordion content */}
             <div className="px-4 lg:px-6 pt-4 pb-24 space-y-3">
               {/* Tab strip */}
-              <div className="inline-flex rounded-[22px] overflow-hidden shadow-sm border border-gray-100">
+              <div className="flex overflow-x-auto no-scrollbar rounded-[22px] shadow-sm border border-gray-100 w-full">
                 {TABS.map((tab, i) => {
                   const isActive = activeTab === tab.id as Tab | null;
                   return (
@@ -6829,7 +6829,7 @@ export default function Page() {
                       key={tab.id}
                       onClick={() => setActiveTab(activeTab === tab.id ? null : tab.id)}
                       className={cn(
-                        "relative flex items-center gap-2.5 px-[22px] py-[13px] text-[14px] font-semibold transition-all duration-300",
+                        "relative flex items-center gap-2 px-4 py-3 text-[13px] font-semibold transition-all duration-300 shrink-0",
                         i > 0 && "border-l border-white/20",
                         isActive ? "text-white" : "text-[#9A9A9A] hover:text-[#62646A]"
                       )}

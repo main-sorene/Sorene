@@ -67,23 +67,23 @@ function ThinkingDots() {
 
 function CvRequestCard({ onSkip }: { onSkip: () => void }) {
   return (
-    <div className="mt-5 rounded-xl border border-gray-200 p-5 space-y-3 bg-gray-50/60">
-      <p className="font-semibold text-[#151515] text-[15px]">
+    <div className="mt-4 rounded-xl border border-gray-200 px-4 py-3.5 space-y-2 bg-gray-50/60">
+      <p className="font-semibold text-[#151515] text-[14px]">
         Would you like to share your CV or portfolio?
       </p>
-      <p className="text-sm text-gray-600">This is completely optional, but it helps me understand:</p>
-      <ul className="space-y-1.5 text-sm text-gray-600">
+      <p className="text-[13px] text-gray-600">Optional, but helps me understand:</p>
+      <ul className="space-y-1 text-[13px] text-gray-600">
         <li>• What you&apos;ve done professionally</li>
         <li>• What skills and experience you bring</li>
-        <li>• What patterns might exist in your career journey</li>
-        <li>• What you might be moving away from or toward</li>
+        <li>• What patterns exist in your career journey</li>
+        <li>• What you might be moving toward</li>
       </ul>
-      <p className="text-sm text-gray-500 pt-1">
-        If you&apos;d prefer not to share anything, that&apos;s fine too. We&apos;ll just start with questions.
+      <p className="text-[12px] text-gray-400">
+        Prefer not to share? That&apos;s fine — we&apos;ll start with questions.
       </p>
       <button
         onClick={onSkip}
-        className="mt-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+        className="mt-1 px-3 py-1.5 text-[13px] border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
       >
         Skip — just ask me questions
       </button>
@@ -320,7 +320,7 @@ export function AssessmentChatPage() {
                   : isWaiting
                   ? "Sorene is thinking…"
                   : isCvRequest
-                  ? "Type a reply, or skip with the button above"
+                  ? "Type a reply, or use the Skip button"
                   : "Type your answer"
               }
               rows={1}

@@ -130,26 +130,26 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   }, [messages.length]);
 
   // Persist the Execution Hub conversation into the global sidebar (segment
-  // "execution") + localStorage, mirroring the DNA/Direction chats. The id is
-  // deterministic per project so the desktop + mobile mounts and refreshes all
-  // resolve to the same entry instead of creating duplicates. Only persisted
-  // once the user has actually said something, to avoid empty placeholder rows.
+  // "execution") + localStorage, mirroring the proven DNA/Direction pattern.
+  // The id is deterministic per project so desktop + mobile mounts and refreshes
+  // all resolve to the same entry instead of creating duplicates.
   const projectKey = (project?.title || "general").replace(/[^a-z0-9]/gi, "-").toLowerCase();
   const convId = `execution-${projectKey}`;
-  useEffect(() => {
+  const persistToSidebar = (msgs: ChatMsg[]) => {
     const uid = authUser?.uid || "local";
-    const realMessages = messages.filter((m) => !m.isStatusButtons);
+    const realMessages = msgs.filter((m) => !m.isStatusButtons);
+    // Only persist once the user has actually said something.
     if (!realMessages.some((m) => m.role === "user")) return;
 
     const sidebarMessages: Message[] = realMessages.map((m) => ({
       id: m.id, role: m.role, content: m.content, timestamp: new Date(), type: "chat" as const,
     }));
-    const title = project?.title
+    const titleSrc = project?.title
       ? `Execution: ${project.title}`
-      : realMessages.find((m) => m.role === "user")?.content.slice(0, 50) || "Execution Hub";
+      : realMessages.find((m) => m.role === "user")?.content || "Execution Hub";
     const conv: Conversation = {
       id: convId,
-      title: title.length > 50 ? `${title.slice(0, 50)}...` : title,
+      title: titleSrc.length > 50 ? `${titleSrc.slice(0, 50)}...` : titleSrc,
       messages: sidebarMessages,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -163,7 +163,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       return prev.map((c) => (c.id === convId ? conv : c));
     });
     try { localStorage.setItem(`execution_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
-  }, [messages, convId, project?.title, authUser?.uid, setConversations]);
+  };
 
   const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
     setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, ...extra }]);
@@ -303,7 +303,9 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     }
 
     const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    let afterUser: ChatMsg[] = [];
+    setMessages((prev) => { afterUser = [...prev, userMsg]; return afterUser; });
+    persistToSidebar(afterUser);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
@@ -348,14 +350,16 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
         }),
       });
       const id = (Date.now() + 1).toString();
-      if (res.ok) {
-        const data = await res.json();
-        setMessages((prev) => [...prev, { id, role: "assistant", content: data?.reply ?? "Sorry, I couldn't respond." }]);
-      } else {
-        setMessages((prev) => [...prev, { id, role: "assistant", content: "Sorry, I had trouble with that. Please try again." }]);
-      }
+      const reply = res.ok
+        ? ((await res.json())?.reply ?? "Sorry, I couldn't respond.")
+        : "Sorry, I had trouble with that. Please try again.";
+      let afterReply: ChatMsg[] = [];
+      setMessages((prev) => { afterReply = [...prev, { id, role: "assistant", content: reply }]; return afterReply; });
+      persistToSidebar(afterReply);
     } catch {
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, I had trouble reaching the coach. Please try again." }]);
+      let afterErr: ChatMsg[] = [];
+      setMessages((prev) => { afterErr = [...prev, { id: (Date.now() + 1).toString(), role: "assistant" as const, content: "Sorry, I had trouble reaching the coach. Please try again." }]; return afterErr; });
+      persistToSidebar(afterErr);
     } finally {
       setLoading(false);
     }

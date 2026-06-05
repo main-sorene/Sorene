@@ -598,7 +598,7 @@ export function Sidebar({
             ).length > 0 && (
               <div className="mb-4">
                 <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  Other
+                  OTHER
                 </p>
                 <div className="space-y-0.5">
                   {conversations

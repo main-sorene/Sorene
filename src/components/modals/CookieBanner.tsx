@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,19 @@ const STORAGE_KEY = "sorene_cookie_consent";
 
 export function CookieBanner() {
   const pathname = usePathname();
-  const [visible, setVisible] = useState(() => {
+  // Start hidden so the server HTML and the first client render match exactly.
+  // Reading localStorage during render caused a hydration mismatch that broke
+  // interactivity on every page (no event handlers attached). Decide visibility
+  // in an effect, which only runs on the client after hydration.
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) !== "accepted";
+      setVisible(localStorage.getItem(STORAGE_KEY) !== "accepted");
     } catch {
-      return true;
+      setVisible(true);
     }
-  });
+  }, []);
 
   // Don't render on legal pages so the user can read them without the banner overlapping
   const isLegalPage = /^\/(privacy|terms)/.test(pathname || "");

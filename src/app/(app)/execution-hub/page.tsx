@@ -4089,12 +4089,17 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
   const title = project?.title ?? "";
   const storageKey = `business-name-${title}`;
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
@@ -4340,12 +4345,17 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
   const storageKey = `brand-${type}-${title}`;
   const meta = BRAND_TEXT_META[type];
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string; available?: boolean | null }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);

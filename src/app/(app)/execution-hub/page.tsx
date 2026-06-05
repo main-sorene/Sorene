@@ -4349,13 +4349,27 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
       const cached = localStorage.getItem(`brand-${type}-suggestions-${title}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        // Migrate old data: if items have "name" but no "text", rename to "text"
-        const migrated = Array.isArray(parsed) ? parsed.map((s: { name?: string; text?: string; reason?: string; available?: boolean | null }) => ({
-          text: s.text || s.name || "",
-          reason: s.reason || "",
-          ...(s.available !== undefined ? { available: s.available } : {}),
-        })) : parsed;
+        const wordCount = (s: string) => (s || "").trim().split(/\s+/).length;
+        // Migrate old data: normalize to {text, reason}. If text looks like the
+        // explanation (long) and reason looks like the copy (short), they were swapped
+        // by the AI — correct them. Thresholds per type:
+        // tagline: copy ≤ 10 words; benefit/offerings: copy ≤ 35 words; others: lenient
+        const maxCopyWords: Partial<Record<BrandTextType, number>> = { tagline: 10, benefit: 35, offerings: 35 };
+        const threshold = maxCopyWords[type] ?? 999;
+        const migrated = Array.isArray(parsed) ? parsed.map((s: { name?: string; text?: string; reason?: string; available?: boolean | null }) => {
+          const candidateText = s.text || s.name || "";
+          const candidateReason = s.reason || "";
+          // If candidate text is longer than threshold and reason is shorter, they are swapped
+          const swapped = wordCount(candidateText) > threshold && wordCount(candidateReason) < wordCount(candidateText);
+          return {
+            text: swapped ? candidateReason : candidateText,
+            reason: swapped ? candidateText : candidateReason,
+            ...(s.available !== undefined ? { available: s.available } : {}),
+          };
+        }) : parsed;
         setSuggestions(migrated);
+        // Re-save corrected data so next load is already clean
+        try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(migrated)); } catch { /* ignore */ }
         setStage("done");
       }
     } catch { /* ignore */ }

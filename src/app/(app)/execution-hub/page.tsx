@@ -4069,10 +4069,13 @@ const LAUNCH_PILLARS = [
 
 // Growth lives in its own top-level tab (not inside Launchpad).
 const GROWTH_PILLAR = { id: "growth", label: "Growth", icon: BarChart3, items: [
-  { id: "marketing", label: "Build marketing strategy" },
-  { id: "first_hire", label: "Plan first hire" },
-  { id: "partner_contracts", label: "Sign partner & customer contracts" },
-  { id: "funding_pitch", label: "Prepare funding pitch (if applicable)" },
+  { id: "business_plan", label: "Business plan" },
+  { id: "marketing_plan", label: "Marketing plan" },
+  { id: "gtm_strategy", label: "Go-to-market strategy" },
+  { id: "sales_playbook", label: "Sales playbook" },
+  { id: "financial_model", label: "Financial model & projections" },
+  { id: "growth_metrics", label: "Growth metrics / North Star" },
+  { id: "pitch_deck", label: "Pitch deck" },
 ] } as const;
 
 type PillarDef = typeof LAUNCH_PILLARS[number] | typeof GROWTH_PILLAR;

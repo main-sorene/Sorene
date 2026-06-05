@@ -41,7 +41,9 @@ export const PROFILE_NODES: QuestionNode[] = [
       const fullName = [ctx.profile.firstName, ctx.profile.lastName].filter(Boolean).join(" ");
       return `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${fullName}**. Is that correct? If not, just type your full name.`;
     },
-    inputType: "freetext",
+    inputType: "choice",
+    choices: ["Yes, that's correct"],
+    allowCustom: true,
     next: "onb_birthday",
   },
   {

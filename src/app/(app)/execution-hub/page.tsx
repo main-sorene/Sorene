@@ -4286,17 +4286,17 @@ type BrandTextType = "tagline" | "benefit" | "offerings";
 const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
   tagline: {
     hint: "A great tagline is short (under 8 words), benefit-focused, and instantly tells people what is in it for them.",
-    promptInstruction: `Generate 3 tagline options. Each must be under 8 words, benefit-focused, and speak directly to the target customer's desired outcome. No clever slogans — plain language that sells the result.`,
+    promptInstruction: `Generate 3 tagline options for this business. Each tagline must be under 8 words, benefit-focused, and speak directly to what the customer gains. No clever slogans — plain language that sells the result.\n\nReturn JSON where "text" is the actual tagline copy and "reason" explains why it works: [{"text": "the tagline itself", "reason": "why it works"}, ...]`,
     placeholder: 'e.g. "Launch your business without the guesswork"',
   },
   benefit: {
     hint: "A benefit description explains the single biggest positive outcome customers get. Keep it to 1-2 sentences, positive, and jargon-free.",
-    promptInstruction: `Generate 3 benefit description options (1-2 sentences each). Each must describe the single biggest positive outcome the customer gets — specific, positive, and jargon-free. No feature lists.`,
+    promptInstruction: `Generate 3 benefit description options for this business. Each must be 1-2 sentences describing the single biggest positive outcome the customer gets — specific, positive, and jargon-free. No feature lists.\n\nReturn JSON where "text" is the actual benefit copy and "reason" explains why it works: [{"text": "the benefit description", "reason": "why it works"}, ...]`,
     placeholder: 'e.g. "We help you go from employee to founder in 6 months — without the guesswork."',
   },
   offerings: {
     hint: "A service description tells customers exactly what they get. Keep it to 1 clear sentence per offering, starting with a verb.",
-    promptInstruction: `Generate 3 service/offering description options (1 sentence each). Each must start with a verb and clearly state what the customer receives. Short, specific, benefit-focused — no jargon.`,
+    promptInstruction: `Generate 3 service/offering description options for this business. Each must be 1 sentence, start with a verb, and clearly state what the customer receives. Short, specific, benefit-focused — no jargon.\n\nReturn JSON where "text" is the actual offering copy and "reason" explains why it works: [{"text": "the offering description", "reason": "why it works"}, ...]`,
     placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
   },
 };
@@ -4312,7 +4312,7 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
   const [collapsed, setCollapsed] = useState(() => {
     try { return !!localStorage.getItem(storageKey); } catch { return false; }
   });
-  const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
+  const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
@@ -4434,15 +4434,17 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
           )}
           {stage === "done" && suggestions.length > 0 && (
             <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
-              {suggestions.map((s, i) => (
+              {suggestions.map((s, i) => {
+                const displayText = s.text || s.name || "";
+                return (
                 <div key={i} className={cn(
                   "rounded-xl border p-3 transition-all",
-                  chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+                  chosen === displayText ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
                 )}>
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-[13px] font-semibold text-[#151515] leading-snug flex-1">{s.name}</span>
-                    {chosen !== s.name ? (
-                      <button onClick={() => choose(s.name)}
+                    <span className="text-[13px] font-semibold text-[#151515] leading-snug flex-1">{displayText}</span>
+                    {chosen !== displayText ? (
+                      <button onClick={() => choose(displayText)}
                         className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
                         Choose
                       </button>
@@ -4450,9 +4452,10 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
                       <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
                     )}
                   </div>
-                  <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
+                  {s.reason && <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>}
                 </div>
-              ))}
+                );
+              })}
               <button onClick={generateSuggestions}
                 className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
                 Regenerate

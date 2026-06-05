@@ -1490,10 +1490,8 @@ function ValidateStage1({
         </div>
       </CollapseSection>
 
-      {/* ── Sorene generates for you ── */}
-      <section>
-        <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Generates For You</h4>
-        <Separator className="bg-[#D8D9DB] mb-4" />
+      {/* ── Sorene generates for you (collapsible) ── */}
+      <CollapseSection title="Sorene Generates For You">
         <div className="space-y-4">
 
           {/* Interview questions */}
@@ -1533,7 +1531,7 @@ function ValidateStage1({
           {/* Pattern Summary */}
           <PatternSummaryCard projectTitle={project?.title ?? ""} />
         </div>
-      </section>
+      </CollapseSection>
 
       {/* ── Readiness score ── */}
       <ValidateReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSetAtom } from "jotai";
 import { selectedExecutionProjectAtom } from "@/store/atoms";
@@ -127,6 +127,17 @@ export function DirectionCard({
   );
   const [section3Open, setSection3Open] = useState(false);
   const [section4Open, setSection4Open] = useState(false);
+  const constraintFetchedRef = useRef(false);
+
+  // Auto-fetch constraint analysis for old cards where reason is "—" but section 4 data already exists
+  useEffect(() => {
+    const missingReason = !cardData?.constraint_check?.reason || cardData.constraint_check.reason === "—";
+    const hasSection4 = !!cardData?.startup_cost_usd;
+    if (missingReason && hasSection4 && !isLoadingSection4 && !constraintFetchedRef.current) {
+      constraintFetchedRef.current = true;
+      onLoadSection4?.();
+    }
+  }, [cardData?.constraint_check?.reason, cardData?.startup_cost_usd, isLoadingSection4, onLoadSection4]);
 
   const isExpanded = isExpandedProp ?? internalIsExpanded;
 

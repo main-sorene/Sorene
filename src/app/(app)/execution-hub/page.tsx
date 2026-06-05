@@ -1046,7 +1046,12 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
   const authUser = useAtomValue(userAtom);
   const [entries, setEntries] = useState<ConversationEntry[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [, forceRender] = useState(0);
+  const expandedId = _expandedIds[projectTitle] ?? null;
+  const setExpandedId = (id: string | null) => {
+    _expandedIds[projectTitle] = id;
+    forceRender((n) => n + 1);
+  };
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1401,6 +1406,9 @@ function ValidateReadinessBar({ projectTitle, onAdvance }: { projectTitle: strin
     </div>
   );
 }
+
+// Module-level store so expandedId survives ConversationLogger remounts
+const _expandedIds: Record<string, string | null> = {};
 
 // Collapsible section header shared across stage 1
 function CollapseSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {

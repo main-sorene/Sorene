@@ -2970,17 +2970,28 @@ function PayingCustomerTracker({ project }: { project: DirectionCardData | null 
 function ValidationScoreSection({ project }: { project: DirectionCardData | null }) {
   type AStage = "idle" | "loading" | "done";
   const storageKey = `experiment-validation-score-${project?.title ?? ""}`;
+  const chatKey = `experiment-validation-score-chat-${project?.title ?? ""}`;
   const [stage, setStage] = useState<AStage>("idle");
   const [result, setResult] = useState("");
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!project?.title) return;
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) { setResult(raw); setStage("done"); }
+      const chatRaw = localStorage.getItem(chatKey);
+      if (chatRaw) setChatMessages(JSON.parse(chatRaw));
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.title]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const generate = async () => {
     setStage("loading");
@@ -2998,18 +3009,19 @@ function ValidationScoreSection({ project }: { project: DirectionCardData | null
       }
     } catch { /* ignore */ }
 
+    const system = `You are Sorene, a direct startup coach. Respond in plain prose only — no JSON, no code blocks, no bullet lists formatted as JSON. Write in clear sentences.`;
     const prompt = `Assess the validation signal strength for this project at the Experiment stage.
 Project: "${project?.title}"${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
 Customer responses: ${customerSummary}
 
-Give a short validation score assessment (2-3 sentences): what's the signal strength, what it means, and one specific next action. Be direct and honest.`;
+Write 3-4 sentences in plain text: (1) the signal strength with a score out of 10, (2) what it means, (3) one specific next action. Be direct and honest. No JSON, no code blocks.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, system }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -3019,6 +3031,37 @@ Give a short validation score assessment (2-3 sentences): what's the signal stre
         try { localStorage.setItem(storageKey, reply); } catch { /* ignore */ }
       } else { setStage("idle"); }
     } catch { setStage("idle"); }
+  };
+
+  const handleChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${project?.title ?? ""}`) ?? "";
+    const system = `You are Sorene, a startup coach discussing validation results.
+Project: "${project?.title}"${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
+${result ? `Validation assessment: "${result}"` : ""}
+Respond in plain prose. No JSON, no code blocks. Be direct and actionable.`;
+    const newMessages: { role: "user" | "assistant"; content: string }[] = [...chatMessages, { role: "user", content: userMsg }];
+    setChatMessages(newMessages);
+    setChatLoading(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userMsg, system, history: chatMessages }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const updated = [...newMessages, { role: "assistant" as const, content: reply }];
+        setChatMessages(updated);
+        try { localStorage.setItem(chatKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+    setChatLoading(false);
   };
 
   return (
@@ -3037,7 +3080,7 @@ Give a short validation score assessment (2-3 sentences): what's the signal stre
           <button onClick={generate} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Refresh</button>
         )}
       </div>
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 space-y-4">
         {stage === "idle" && (
           <button onClick={generate}
             className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
@@ -3052,6 +3095,49 @@ Give a short validation score assessment (2-3 sentences): what's the signal stre
         {stage === "done" && result && (
           <div className="text-[13px] text-[#151515] leading-relaxed">
             <MarkdownText text={result} />
+          </div>
+        )}
+        {stage === "done" && (
+          <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+              <MessageCircle size={12} className="text-[#9A9A9A]" />
+              <p className="text-[11px] font-semibold text-[#151515]">Ask Sorene about your validation score</p>
+            </div>
+            {chatMessages.length > 0 && (
+              <div className="px-4 py-3 space-y-3 max-h-56 overflow-y-auto">
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "justify-start")}>
+                    <div className={cn("rounded-2xl px-3 py-2 text-[12px] leading-relaxed max-w-[85%]",
+                      m.role === "user"
+                        ? "bg-[#151515] text-white rounded-br-sm"
+                        : "bg-[#F5F5F5] text-[#151515] rounded-bl-sm")}>
+                      {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex gap-2 justify-start">
+                    <div className="bg-[#F5F5F5] rounded-2xl rounded-bl-sm px-3 py-2">
+                      <Loader2 size={12} className="animate-spin text-[#9A9A9A]" />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+            )}
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-[#ECEDEE]">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
+                placeholder="What does this score mean for my next step?…"
+                className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+              />
+              <button onClick={handleChat} disabled={!chatInput.trim() || chatLoading}
+                className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0 hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+                <ArrowRight size={12} className="text-white" />
+              </button>
+            </div>
           </div>
         )}
       </div>

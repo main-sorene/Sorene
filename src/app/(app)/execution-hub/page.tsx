@@ -1071,10 +1071,25 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
   // Stage 1 gets the full guided experience
   if (step.id === 1) {
     const problemArea = project?.oneliner || project?.title || "your problem area";
-    const targetCustomer = project?.first_10_customers || project?.simple_positioning || "your target customers";
     const q1 = `What is your biggest challenge with ${problemArea}?`;
     const q2 = "What have you already tried to fix it?";
     const q3 = "What would you pay to solve this completely?";
+
+    // Read AI-generated main customer profile from TargetCustomerCard cache for beautiful mission wording
+    let missionWho = "real people who live this problem every day";
+    try {
+      const cached = project?.title ? localStorage.getItem(`target-customers-${project.title}`) : null;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const main = parsed?.main;
+        if (main?.label && main?.who) {
+          const who = main.who.replace(/\.$/, "");
+          missionWho = `${main.label} — ${who.charAt(0).toLowerCase()}${who.slice(1)}`;
+        } else if (main?.label) {
+          missionWho = main.label;
+        }
+      }
+    } catch { /* ignore */ }
 
     return (
       <div className="space-y-8">
@@ -1108,7 +1123,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
           <h4 className="text-base font-semibold text-[#151515] mb-3">Your Mission</h4>
           <Separator className="bg-[#D8D9DB] mb-4" />
           <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
-            Have <strong className="text-[#151515] font-semibold">10 to 50 conversations</strong> (30 minutes each) with {targetCustomer}. The goal is not to pitch — it is to listen deeply.
+            Have <strong className="text-[#151515] font-semibold">as many conversations as you can</strong> (aim for 30 minutes each) with {missionWho}. The goal is not to pitch — it is to listen deeply and understand their world.
           </p>
           <div className="space-y-3">
             {[

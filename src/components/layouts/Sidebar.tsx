@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, MoreHorizontal, Trash2, Rocket, Layers } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Conversation,
   activeConversationIdAtom,
@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import { deleteHistory, getChatUserId, getConvoHistory } from "@/lib/chatApi";
+import { getCloudConversations, saveCloudConversation, deleteCloudConversation } from "@/lib/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 function ConversationItem({ conv }: { conv: Conversation }) {
@@ -67,6 +68,9 @@ function ConversationItem({ conv }: { conv: Conversation }) {
     // Local-only conversations (e.g. direction chat) don't exist on the backend
     if (conv.isCreatedOnBackend === false) {
       try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
+      try { localStorage.removeItem(`dna_chat_${userId}_${conv.id}`); } catch {}
+      // Remove from cross-device cloud history too.
+      if (authUser?.uid) deleteCloudConversation(authUser.uid, conv.id).catch(() => {});
       return;
     }
     try {
@@ -241,6 +245,25 @@ export function Sidebar({
       });
     }
     refetchConvo();
+
+    // Pull cross-device history from the cloud and merge it in. This is what
+    // makes assessment/DNA/Direction chats follow the user to a new device.
+    const uid = authUser.uid;
+    getCloudConversations(uid)
+      .then((cloud) => {
+        if (cloud.length === 0) return;
+        setConversations((prev) => {
+          const merged = [...prev];
+          cloud.forEach((cc) => {
+            const idx = merged.findIndex((m) => m.id === cc.id);
+            if (idx === -1) merged.push(cc);
+            // Prefer the version with more messages (a fuller copy).
+            else if ((cc.messages?.length || 0) > (merged[idx].messages?.length || 0)) merged[idx] = cc;
+          });
+          return sortConvos(merged);
+        });
+      })
+      .catch(() => {});
   }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When assessment completes, force-reload from localStorage so the
@@ -307,6 +330,30 @@ export function Sidebar({
       localStorage.setItem(convoStorageKey, JSON.stringify(conversations));
     } catch {}
   }, [conversations, convoStorageKey]);
+
+  // Mirror local-only conversations (assessment/DNA/Direction) to Firestore so
+  // history follows the user across devices. Debounced, and we only write the
+  // ones whose content actually changed since the last sync to bound writes.
+  const cloudSyncedRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const uid = authUser?.uid;
+    if (!uid || conversations.length === 0) return;
+    const timer = setTimeout(() => {
+      for (const conv of conversations) {
+        // Backend chats already sync via the history API — only mirror local ones.
+        if (conv.isCreatedOnBackend !== false) continue;
+        let serialized = "";
+        try { serialized = JSON.stringify(conv); } catch { continue; }
+        if (cloudSyncedRef.current[conv.id] === serialized) continue;
+        cloudSyncedRef.current[conv.id] = serialized;
+        saveCloudConversation(uid, conv).catch(() => {
+          // Allow a retry on the next change if the write failed.
+          delete cloudSyncedRef.current[conv.id];
+        });
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [conversations, authUser?.uid]);
 
   useEffect(() => {
     if (!convoData?.chats) return;

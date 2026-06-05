@@ -1643,6 +1643,33 @@ function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEP
 // Interview Stage 2 — Painkiller Problem
 // ─────────────────────────────────────────────
 
+type ConfidenceLevel = "High" | "Medium-High" | "Medium" | "Medium-Low" | "Low";
+
+function parseConfidenceLevel(text: string): ConfidenceLevel | null {
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf("confidence level");
+  if (idx === -1) return null;
+  const slice = text.slice(idx, idx + 120);
+  if (/medium-high/i.test(slice)) return "Medium-High";
+  if (/medium-low/i.test(slice))  return "Medium-Low";
+  if (/\bhigh\b/i.test(slice))    return "High";
+  if (/\bmedium\b/i.test(slice))  return "Medium";
+  if (/\blow\b/i.test(slice))     return "Low";
+  return null;
+}
+
+const CONFIDENCE_STYLE: Record<ConfidenceLevel, { bg: string; text: string; border: string }> = {
+  "High":        { bg: "bg-[#D3F9E3]", text: "text-[#0B5E35]", border: "border-[#32C382]" },
+  "Medium-High": { bg: "bg-[#DBF0FF]", text: "text-[#1864AB]", border: "border-[#74C0FC]" },
+  "Medium":      { bg: "bg-[#FFF3CD]", text: "text-[#7B5D00]", border: "border-[#FFD43B]" },
+  "Medium-Low":  { bg: "bg-[#FFE8CC]", text: "text-[#C85B00]", border: "border-[#FFA94D]" },
+  "Low":         { bg: "bg-[#FFE0E0]", text: "text-[#9B1C1C]", border: "border-[#FF6B6B]" },
+};
+
+function isConfidenceHighEnough(level: ConfidenceLevel | null): boolean {
+  return level === "High" || level === "Medium-High";
+}
+
 function PainkillerAnalysisCard({ projectTitle }: { projectTitle: string }) {
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [output, setOutput] = useState("");
@@ -1692,9 +1719,9 @@ Based on the conversations above, provide a sharp painkiller problem analysis wi
 **Severity Signal** — which pain causes the most frustration and disruption to their life
 **Spending Signal** — which problems are people already paying (or willing to pay) to solve
 **Painkiller Verdict** — one clear sentence: "The painkiller problem is [X] because [Y]"
-**Confidence Level** — High / Medium / Low, and why
+**Confidence Level** — one of: High / Medium-High / Medium / Medium-Low / Low. Then explain in 2-3 sentences: what drives the confidence up, and what specific gap or missing signal keeps it from being higher.
 
-Be direct. Use real examples from the conversations. No fluff.`;
+Be direct. Use real examples from the conversations. Bold the most important phrases in your explanation. No fluff.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -1754,11 +1781,28 @@ Be direct. Use real examples from the conversations. No fluff.`;
             <Loader2 size={14} className="animate-spin" /> Analysing patterns…
           </div>
         )}
-        {stage === "done" && output && (
-          <div className="prose prose-sm max-w-none text-[13px] text-[#151515] leading-relaxed">
-            <MarkdownText text={output} />
-          </div>
-        )}
+        {stage === "done" && output && (() => {
+          const confidence = parseConfidenceLevel(output);
+          const style = confidence ? CONFIDENCE_STYLE[confidence] : null;
+          return (
+            <div className="space-y-4">
+              {confidence && style && (
+                <div className={cn("rounded-2xl border px-5 py-4", style.bg, style.border)}>
+                  <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "inherit", opacity: 0.6 }}>Confidence Level</p>
+                  <p className={cn("text-[22px] font-bold leading-tight mb-2", style.text)}>{confidence}</p>
+                  <p className={cn("text-[12px] leading-relaxed font-medium", style.text, "opacity-80")}>
+                    {isConfidenceHighEnough(confidence)
+                      ? "Signal is strong enough to define your painkiller problem and advance."
+                      : "More conversations or clearer spending signals needed before advancing."}
+                  </p>
+                </div>
+              )}
+              <div className="text-[13px] text-[#151515] leading-relaxed">
+                <MarkdownText text={output} />
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -1817,13 +1861,18 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [hasVerdict, setHasVerdict] = useState(false);
   const [convCount, setConvCount] = useState(0);
+  const [confidence, setConfidence] = useState<ConfidenceLevel | null>(null);
 
   const refresh = () => {
     try {
       const raw = localStorage.getItem(`convlog-${projectTitle}`);
       setConvCount(raw ? JSON.parse(raw).length : 0);
     } catch { /* ignore */ }
-    try { setHasAnalysis(!!localStorage.getItem(`painkiller-analysis-${projectTitle}`)); } catch { /* ignore */ }
+    try {
+      const analysisText = localStorage.getItem(`painkiller-analysis-${projectTitle}`) ?? "";
+      setHasAnalysis(!!analysisText);
+      setConfidence(parseConfidenceLevel(analysisText));
+    } catch { /* ignore */ }
     try { setHasVerdict(!!(localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "").trim()); } catch { /* ignore */ }
   };
 
@@ -1834,19 +1883,23 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle]);
 
+  const highEnoughConfidence = isConfidenceHighEnough(confidence);
+
   const checkItems = [
-    { done: convCount >= 10, text: `${convCount} conversation${convCount !== 1 ? "s" : ""} logged from Validate stage` },
-    { done: hasAnalysis,     text: "Painkiller analysis run" },
-    { done: hasVerdict,      text: "Painkiller problem defined" },
+    { done: convCount >= 20,      text: `${convCount} conversations logged (target: 20–100)` },
+    { done: hasAnalysis,          text: "Painkiller analysis run" },
+    { done: highEnoughConfidence, text: `Confidence level Medium-High or above${confidence ? ` (current: ${confidence})` : ""}` },
+    { done: hasVerdict,           text: "Painkiller problem defined" },
   ];
 
   const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
-  const canAdvance = score >= 67;
+  const canAdvance = checkItems.every((c) => c.done);
 
   const { label, color, textColor } =
     score === 0   ? { label: "Not started",    color: "bg-[#ECEDEE]",  textColor: "text-[#9A9A9A]"  } :
-    score <= 33   ? { label: "Just started",   color: "bg-[#FFA94D]",  textColor: "text-[#C85B00]"  } :
-    score <= 66   ? { label: "In progress",    color: "bg-[#FFD43B]",  textColor: "text-[#7B5D00]"  } :
+    score <= 25   ? { label: "Just started",   color: "bg-[#FFA94D]",  textColor: "text-[#C85B00]"  } :
+    score <= 50   ? { label: "In progress",    color: "bg-[#FFD43B]",  textColor: "text-[#7B5D00]"  } :
+    score <= 75   ? { label: "Almost there",   color: "bg-[#74C0FC]",  textColor: "text-[#1864AB]"  } :
                     { label: "Ready to build", color: "bg-[#32C382]",  textColor: "text-[#0B5E35]"  };
 
   return (
@@ -1904,18 +1957,6 @@ function InterviewStage2({
         <Separator className="bg-[#D8D9DB] mb-4" />
         <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
       </section>
-
-      {/* ── What Sorene provides (collapsible) ── */}
-      <CollapseSection title="What Sorene provides">
-        <div className="space-y-3">
-          {step.soreneDoes.map((s, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
-              <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
-            </div>
-          ))}
-        </div>
-      </CollapseSection>
 
       {/* ── What to look for (collapsible) ── */}
       <CollapseSection title="What to look for">

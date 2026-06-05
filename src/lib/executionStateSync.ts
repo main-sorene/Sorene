@@ -7,6 +7,7 @@ const SYNCED_PREFIXES = [
   "launchpad-",
   "brand-",
   "business-name",
+  "business-status",
   "custom-project-names",
   "social-",
   "social-status-",

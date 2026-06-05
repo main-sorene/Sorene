@@ -6,15 +6,61 @@ import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { DirectionCardData } from "@/lib/directionTypes";
 
-const SUGGESTIONS = [
-  "Where do I start?",
-  "Review my progress",
-  "Help me validate my idea",
-  "What's my next step?",
+// Recipe buttons — each maps to a recipeId the coach endpoint understands.
+const SUGGESTIONS: { label: string; recipeId: string }[] = [
+  { label: "Where do I start?", recipeId: "start" },
+  { label: "Review my progress", recipeId: "progress" },
+  { label: "Help me validate my idea", recipeId: "validate" },
+  { label: "What's my next step?", recipeId: "next" },
+  { label: "Update business status", recipeId: "update_status" },
 ];
 
 interface ChatMsg { id: string; role: "user" | "assistant"; content: string }
+
+// Build a compact snapshot of the project's progress from localStorage so the
+// coach can answer recipes against the user's real status.
+function gatherProjectStatus(title: string): Record<string, unknown> {
+  if (!title) return {};
+  const status: Record<string, unknown> = {};
+  const launchpadDone: string[] = [];
+  const brandAssets: Record<string, string> = {};
+  const validation: Record<string, string> = {};
+  try {
+    const suffix = `-${title}`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.endsWith(suffix)) continue;
+      const val = localStorage.getItem(key);
+      if (val == null || val === "") continue;
+      const base = key.slice(0, -suffix.length);
+
+      if (base.startsWith("launchpad-status-")) {
+        if (val === "done" || val === "progress") launchpadDone.push(`${base.replace("launchpad-status-", "")}:${val}`);
+      } else if (base === "business-name") {
+        brandAssets.businessName = val;
+      } else if (base.startsWith("brand-") && !base.endsWith("-suggestions") && !base.includes("suggestions")) {
+        brandAssets[base.replace("brand-", "")] = val.slice(0, 120);
+      } else if (base === "painkiller-verdict") {
+        validation.painkillerVerdict = val.slice(0, 200);
+      } else if (base === "mvo-defined") {
+        validation.offerDefined = val.slice(0, 200);
+      } else if (base === "pattern-summary") {
+        validation.conversationPattern = val.slice(0, 300);
+      } else if (base === "experiment-validation-score") {
+        validation.validationScore = val;
+      } else if (base === "business-status") {
+        status.latestBusinessStatus = val.slice(0, 400);
+      }
+    }
+  } catch { /* ignore */ }
+
+  if (launchpadDone.length) status.launchpadItems = launchpadDone;
+  if (Object.keys(brandAssets).length) status.brandAssets = brandAssets;
+  if (Object.keys(validation).length) status.validation = validation;
+  return status;
+}
 
 function FormattedMessage({ content }: { content: string }) {
   return (
@@ -32,12 +78,13 @@ function FormattedMessage({ content }: { content: string }) {
   );
 }
 
-export function ExecutionHubChat({ onClose }: { onClose?: () => void }) {
+export function ExecutionHubChat({ project, onClose }: { project?: DirectionCardData | null; onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const awaitingStatusRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -47,39 +94,63 @@ export function ExecutionHubChat({ onClose }: { onClose?: () => void }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const send = async (text: string) => {
+  const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
     const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
+
+    // Persist a free-text business status update when the user is replying to
+    // the "Update business status" prompt, so it survives sessions and feeds
+    // future coach answers.
+    if (recipeId === "update_status") {
+      awaitingStatusRef.current = true;
+    } else if (awaitingStatusRef.current && project?.title) {
+      try { localStorage.setItem(`business-status-${project.title}`, text); } catch { /* ignore */ }
+      awaitingStatusRef.current = false;
+    }
     try {
-      const res = await authFetch("/api/direction-chat", {
+      const profile = authUser?.profile;
+      const res = await authFetch("/api/execution-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          context: "execution_hub",
+          recipeId,
           history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+          userProfile: profile ? {
+            firstName: profile.firstName,
+            occupation: profile.occupation,
+            cvSummary: profile.cvSummary,
+            dnaScores: profile.dnaScores,
+            dnaNarrative: profile.dna_narrative,
+            assessmentAnswers: profile.assessmentAnswers,
+          } : undefined,
+          project: project ? {
+            title: project.title,
+            oneliner: project.oneliner,
+            description: project.description,
+            simple_positioning: project.simple_positioning,
+            path_label: project.path_label,
+            first_10_customers: project.first_10_customers,
+            distribution_path: project.distribution_path,
+            key_competitors: project.key_competitors,
+          } : null,
+          projectStatus: project ? gatherProjectStatus(project.title) : null,
         }),
       });
+      const id = (Date.now() + 1).toString();
       if (res.ok) {
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-        let full = "";
-        const id = (Date.now() + 1).toString();
-        setMessages((prev) => [...prev, { id, role: "assistant", content: "" }]);
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            full += decoder.decode(value, { stream: true });
-            setMessages((prev) => prev.map((m) => m.id === id ? { ...m, content: full } : m));
-          }
-        }
+        const data = await res.json();
+        setMessages((prev) => [...prev, { id, role: "assistant", content: data?.reply ?? "Sorry, I couldn't respond." }]);
+      } else {
+        setMessages((prev) => [...prev, { id, role: "assistant", content: "Sorry, I had trouble with that. Please try again." }]);
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, I had trouble reaching the coach. Please try again." }]);
+    } finally {
       setLoading(false);
     }
   };
@@ -147,10 +218,10 @@ export function ExecutionHubChat({ onClose }: { onClose?: () => void }) {
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
           <div className="flex flex-wrap gap-2">
             {SUGGESTIONS.map((s) => (
-              <button key={s} onClick={() => send(s)} disabled={loading}
+              <button key={s.recipeId} onClick={() => send(s.label, s.recipeId)} disabled={loading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap disabled:opacity-50">
                 <img src="/figmaAssets/starfour.svg" className="w-3 h-3 shrink-0" alt="" />
-                {s}
+                {s.label}
               </button>
             ))}
           </div>

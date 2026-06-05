@@ -421,41 +421,44 @@ function DirectSyncCard({ channel }: { channel: SyncChannel }) {
   };
 
   return (
-    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col">
-      {/* Header */}
-      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col", isExpanded ? "p-6 pb-8" : "p-6")}
-        style={{ background: isExpanded ? channel.gradient : "transparent" }}>
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
+      onClick={!isExpanded ? handleToggle : undefined}
+    >
+      {/* Gradient header — always visible */}
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-6 pb-10" : "p-6")}
+        style={{ background: channel.gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
         <AnimatePresence>
           {isExpanded && (
             <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              onClick={handleToggle}
-              className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-body-small-medium mb-8 w-fit">
-              <ChevronLeft size={20} />Back to summary
+              onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-8 w-fit relative z-10">
+              <ChevronLeft size={18} />Back to summary
             </motion.button>
           )}
         </AnimatePresence>
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start relative z-10">
           <div className="flex items-center gap-3">
-            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden",
-              isExpanded ? "bg-white/20" : "bg-gray-50")}>
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 overflow-hidden">
               {channel.icon}
             </div>
             <div>
-              <h3 className={cn("text-heading-xsmall font-medium leading-tight tracking-tight",
-                isExpanded ? "text-white" : "text-[#151515]")}>
-                {channel.name}
-              </h3>
-              {!isExpanded && <p className="text-[11px] text-[#9A9A9A] font-medium uppercase tracking-wide mt-0.5">{channel.tagline}</p>}
+              <h3 className="text-heading-xsmall font-medium leading-tight tracking-tight text-white">{channel.name}</h3>
+              {!isExpanded && <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{channel.tagline}</p>}
             </div>
           </div>
           {!isExpanded && (
-            <motion.button layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              onClick={handleToggle}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-gray-100 hover:bg-gray-50 transition-all shadow-sm shrink-0">
-              Open <ArrowRight size={14} />
-            </motion.button>
+            <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 text-white text-[13px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
+              Open <ArrowRight size={13} />
+            </motion.div>
           )}
         </div>
       </motion.div>
@@ -464,9 +467,9 @@ function DirectSyncCard({ channel }: { channel: SyncChannel }) {
       <AnimatePresence>
         {!isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
-            className="px-6 pb-6 flex flex-col flex-1">
+            className="px-6 pb-6 pt-4 flex flex-col flex-1">
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">{channel.description}</p>
-            <div className="mt-auto flex flex-wrap gap-2 pt-2">
+            <div className="mt-auto flex flex-wrap gap-2">
               {channel.strengthTags.map((tag) => (
                 <span key={tag} className="px-3 py-1 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-xsmall-medium shadow-sm">{tag}</span>
               ))}
@@ -480,7 +483,7 @@ function DirectSyncCard({ channel }: { channel: SyncChannel }) {
         {isExpanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
-            className="overflow-hidden bg-white">
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 space-y-6">
               <section>
                 <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">What you get</h4>
@@ -540,42 +543,61 @@ function FolderCard({ folder }: { folder: FolderDef }) {
   const handleToggle = (e: React.MouseEvent) => { e.stopPropagation(); setIsExpanded((v) => !v); };
 
   return (
-    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col">
-      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col", isExpanded ? "p-6 pb-8" : "p-6")}
-        style={{ background: isExpanded ? folder.gradient : "transparent" }}>
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col group cursor-pointer"
+      onClick={!isExpanded ? handleToggle : undefined}
+    >
+      {/* Gradient header — fills collapsed card on hover, always shown when expanded */}
+      <motion.div
+        layout
+        transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-6 pb-10" : "p-6")}
+        style={{ background: folder.gradient }}
+      >
+        {/* Subtle dark overlay for depth (matches DNA card style) */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+
         <AnimatePresence>
           {isExpanded && (
-            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              onClick={handleToggle} className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-body-small-medium mb-8 w-fit">
-              <ChevronLeft size={20} />Back to summary
+            <motion.button
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-8 w-fit relative z-10"
+            >
+              <ChevronLeft size={18} />Back to summary
             </motion.button>
           )}
         </AnimatePresence>
-        <div className="flex justify-between items-start">
+
+        <div className="flex justify-between items-start relative z-10">
           <div className="flex items-center gap-3">
-            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", isExpanded ? "bg-white/20" : "bg-gray-100")}>
-              <span className={isExpanded ? "text-white [&>svg]:text-white" : "text-[#151515]"}>{folder.iconNode}</span>
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <span className="text-white [&>svg]:text-white">{folder.iconNode}</span>
             </div>
-            <h3 className={cn("text-heading-xsmall font-medium leading-tight tracking-tight", isExpanded ? "text-white" : "text-[#151515]")}>{folder.title}</h3>
+            <div>
+              <h3 className="text-heading-xsmall font-medium leading-tight tracking-tight text-white">{folder.title}</h3>
+              {!isExpanded && <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{folder.tagline}</p>}
+            </div>
           </div>
           {!isExpanded && (
-            <motion.button layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} onClick={handleToggle}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-gray-100 hover:bg-gray-50 transition-all shadow-sm shrink-0">
-              Open <ArrowRight size={14} />
-            </motion.button>
+            <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 text-white text-[13px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
+              Open <ArrowRight size={13} />
+            </motion.div>
           )}
         </div>
       </motion.div>
 
+      {/* Collapsed body */}
       <AnimatePresence>
         {!isExpanded && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="px-6 pb-6 flex flex-col flex-1">
-            <p className="text-[11px] text-[#9A9A9A] font-medium mb-1 uppercase tracking-wide">{folder.tagline}</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
+            className="px-6 pb-6 pt-4 flex flex-col flex-1">
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">{folder.description}</p>
             {folder.strengthTags && (
-              <div className="mt-auto flex flex-wrap gap-2 pt-2">
+              <div className="mt-auto flex flex-wrap gap-2">
                 {folder.strengthTags.map((tag) => (
                   <span key={tag} className="px-3 py-1 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-xsmall-medium shadow-sm">{tag}</span>
                 ))}
@@ -585,10 +607,12 @@ function FolderCard({ folder }: { folder: FolderDef }) {
         )}
       </AnimatePresence>
 
+      {/* Expanded body */}
       <AnimatePresence initial={false}>
         {isExpanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }} className="overflow-hidden bg-white">
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}>
             {folder.content}
           </motion.div>
         )}
@@ -603,11 +627,31 @@ function FolderCard({ folder }: { folder: FolderDef }) {
 
 type Tab = "validation" | "launchpad" | "agents" | "direct-sync";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "validation", label: "Validation" },
-  { id: "launchpad", label: "Launchpad" },
-  { id: "agents", label: "Agents System" },
-  { id: "direct-sync", label: "Direct Sync" },
+const TABS: { id: Tab; label: string; gradient: string; dotColor: string }[] = [
+  {
+    id: "validation",
+    label: "Validation",
+    gradient: `linear-gradient(135deg, #16B364 0%, #A3E635 100%)`,
+    dotColor: "#16B364",
+  },
+  {
+    id: "launchpad",
+    label: "Launchpad",
+    gradient: `linear-gradient(135deg, #EF6820 0%, #FAC515 100%)`,
+    dotColor: "#EF6820",
+  },
+  {
+    id: "agents",
+    label: "Agents System",
+    gradient: `linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)`,
+    dotColor: "#8B5CF6",
+  },
+  {
+    id: "direct-sync",
+    label: "Direct Sync",
+    gradient: `linear-gradient(135deg, #0891B2 0%, #2DD4BF 100%)`,
+    dotColor: "#0891B2",
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -804,29 +848,30 @@ export default function Page() {
             </div>
 
             {/* Tabs */}
-            <div className="px-4 lg:px-6 pt-3 pb-2">
-              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-[#F3F4F6] border border-gray-100 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
-                {TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "relative px-4 py-2 rounded-xl text-body-small-medium transition-all duration-200 whitespace-nowrap",
-                      activeTab === tab.id
-                        ? "text-[#151515]"
-                        : "text-[#9A9A9A] hover:text-[#62646A]"
-                    )}
-                  >
-                    {activeTab === tab.id && (
-                      <motion.div
-                        layoutId="tab-pill"
-                        className="absolute inset-0 rounded-xl bg-white shadow-sm border border-gray-100"
-                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+            <div className="px-4 lg:px-6 pt-4 pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                {TABS.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        "relative flex items-center gap-2 px-4 py-2 rounded-2xl text-body-small-medium transition-all duration-200 whitespace-nowrap border",
+                        isActive
+                          ? "text-white border-transparent shadow-md"
+                          : "text-[#62646A] bg-white border-gray-100 hover:border-gray-200 hover:bg-[#F8F9FA] shadow-sm"
+                      )}
+                      style={isActive ? { background: tab.gradient } : undefined}
+                    >
+                      <span
+                        className={cn("w-2 h-2 rounded-full shrink-0 transition-all", isActive ? "bg-white/70" : "")}
+                        style={!isActive ? { backgroundColor: tab.dotColor } : undefined}
                       />
-                    )}
-                    <span className="relative z-10">{tab.label}</span>
-                  </button>
-                ))}
+                      {tab.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

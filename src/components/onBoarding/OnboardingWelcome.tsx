@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 const OnboardingWelcome = ({ onNext }: { onNext: () => void }) => {
   return (
     <div className="relative min-h-screen w-full bg-white flex items-center justify-center p-4">
@@ -34,15 +33,25 @@ const OnboardingWelcome = ({ onNext }: { onNext: () => void }) => {
       </div>
 
       {/* Footer Text */}
-      <div className="absolute bottom-8 w-full text-center text-gray-500 text-sm">
-        By using Sorene, you agree to our 
-        {" "}<Link href="/terms-of-service" className="underline hover:text-gray-700">
-        Terms
-        </Link>{" "}
-         and have read our{" "}
-        <Link href="/privacy-policy" className="underline hover:text-gray-700">
+      <div className="absolute bottom-8 left-0 w-full text-center text-gray-500 text-sm z-10 pointer-events-auto px-4">
+        By using Sorene, you agree to our{" "}
+        <a
+          href="/terms-of-service"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-gray-700"
+        >
+          Terms
+        </a>{" "}
+        and have read our{" "}
+        <a
+          href="/privacy-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-gray-700"
+        >
           Privacy Policy
-        </Link>
+        </a>
       </div>
     </div>
   );

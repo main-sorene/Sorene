@@ -225,7 +225,7 @@ function GoNoGoContent() {
   return (
     <div className="p-6 space-y-8">
       {/* Stage description */}
-      <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4">
+      <p className="text-[15px] font-medium text-[#151515] leading-relaxed">
         Launching too early wastes money and credibility — this step gives you a clear, honest score across market, problem, learning, and finance so you know exactly where you stand before you commit.
       </p>
       <section>
@@ -946,7 +946,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
 
         {/* ── Mission ── */}
         <section>
-          <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4 mb-6">{step.whatIs}</p>
+          <p className="text-[15px] font-medium text-[#151515] leading-relaxed mb-6">{step.whatIs}</p>
           <h4 className="text-base font-medium text-[#151515] mb-4">Your Mission</h4>
           <Separator className="bg-[#ECEDEE] mb-5" />
           <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
@@ -1012,7 +1012,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
   return (
     <div className="space-y-8">
       <section>
-        <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4">{step.whatIs}</p>
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
       </section>
       <section>
         <div className="flex items-center gap-3 mb-4">

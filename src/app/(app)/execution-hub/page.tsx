@@ -1781,28 +1781,11 @@ Be direct. Use real examples from the conversations. Bold the most important phr
             <Loader2 size={14} className="animate-spin" /> Analysing patterns…
           </div>
         )}
-        {stage === "done" && output && (() => {
-          const confidence = parseConfidenceLevel(output);
-          const style = confidence ? CONFIDENCE_STYLE[confidence] : null;
-          return (
-            <div className="space-y-4">
-              {confidence && style && (
-                <div className={cn("rounded-2xl border px-5 py-4", style.bg, style.border)}>
-                  <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: "inherit", opacity: 0.6 }}>Confidence Level</p>
-                  <p className={cn("text-[22px] font-bold leading-tight mb-2", style.text)}>{confidence}</p>
-                  <p className={cn("text-[12px] leading-relaxed font-medium", style.text, "opacity-80")}>
-                    {isConfidenceHighEnough(confidence)
-                      ? "Signal is strong enough to define your painkiller problem and advance."
-                      : "More conversations or clearer spending signals needed before advancing."}
-                  </p>
-                </div>
-              )}
-              <div className="text-[13px] text-[#151515] leading-relaxed">
-                <MarkdownText text={output} />
-              </div>
-            </div>
-          );
-        })()}
+        {stage === "done" && output && (
+          <div className="text-[13px] text-[#151515] leading-relaxed">
+            <MarkdownText text={output} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1811,7 +1794,8 @@ Be direct. Use real examples from the conversations. Bold the most important phr
 function PainkillerVerdictCard({ projectTitle }: { projectTitle: string }) {
   const verdictKey = `painkiller-verdict-${projectTitle}`;
   const [verdict, setVerdict] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [savedIndicator, setSavedIndicator] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!projectTitle) return;
@@ -1819,39 +1803,194 @@ function PainkillerVerdictCard({ projectTitle }: { projectTitle: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle]);
 
-  const handleSave = () => {
-    try { localStorage.setItem(verdictKey, verdict); } catch { /* ignore */ }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleChange = (val: string) => {
+    setVerdict(val);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try { localStorage.setItem(verdictKey, val); } catch { /* ignore */ }
+      setSavedIndicator(true);
+      setTimeout(() => setSavedIndicator(false), 1500);
+    }, 600);
   };
 
   return (
     <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-        <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-          <Lightbulb size={14} className="text-white" />
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Lightbulb size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Your painkiller problem</p>
+            <p className="text-[11px] text-[#9A9A9A]">Define it in one clear sentence — this becomes your north star</p>
+          </div>
         </div>
-        <div>
-          <p className="text-[13px] font-semibold text-[#151515]">Your painkiller problem</p>
-          <p className="text-[11px] text-[#9A9A9A]">Define it in one clear sentence — this becomes your north star</p>
-        </div>
+        {savedIndicator && (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]">
+            <CheckCircle2 size={12} /> Saved
+          </span>
+        )}
       </div>
-      <div className="px-5 py-4 space-y-3">
+      <div className="px-5 py-4">
         <textarea
           value={verdict}
-          onChange={(e) => { setVerdict(e.target.value); setSaved(false); }}
+          onChange={(e) => handleChange(e.target.value)}
           placeholder="The painkiller problem is… because customers are already…"
-          rows={3}
+          rows={4}
           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors"
         />
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] text-[#9A9A9A]">Write this after reviewing Sorene's analysis above</p>
-          <button onClick={handleSave} disabled={!verdict.trim()}
-            className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",
-              saved ? "bg-[#32C382] text-white" : "bg-[#151515] text-white hover:bg-[#2a2a2a] disabled:opacity-30 disabled:cursor-not-allowed")}>
-            {saved ? <><CheckCircle2 size={12} /> Saved</> : "Save"}
-          </button>
+        <p className="text-[11px] text-[#9A9A9A] mt-2">Saves automatically as you type</p>
+      </div>
+    </div>
+  );
+}
+
+function ConfidenceLevelCard({ projectTitle }: { projectTitle: string }) {
+  const cacheKey = `confidence-level-${projectTitle}`;
+  type CStage = "idle" | "waiting" | "loading" | "done";
+  const [stage, setStage] = useState<CStage>("idle");
+  const stageRef = useRef<CStage>("idle");
+  const setStageSync = (s: CStage) => { stageRef.current = s; setStage(s); };
+  const [output, setOutput] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!projectTitle || loaded) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) { setOutput(raw); setStageSync("done"); setLoaded(true); return; }
+    } catch { /* ignore */ }
+    setLoaded(true);
+    const hasAnalysis = !!localStorage.getItem(`painkiller-analysis-${projectTitle}`);
+    const hasVerdict = !!(localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "").trim();
+    if (hasAnalysis && hasVerdict) setStageSync("waiting");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (stageRef.current === "done" || stageRef.current === "loading") return;
+      const hasAnalysis = !!localStorage.getItem(`painkiller-analysis-${projectTitle}`);
+      const hasVerdict = !!(localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "").trim();
+      if (hasAnalysis && hasVerdict) setStageSync("waiting");
+    }, 2000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const handleGenerate = async () => {
+    const analysisText = localStorage.getItem(`painkiller-analysis-${projectTitle}`) ?? "";
+    const verdictText = localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "";
+
+    setStageSync("loading");
+    setOutput("");
+
+    const prompt = `You are Sorene, an execution coach assessing an entrepreneur's confidence level after their customer discovery.
+
+Project: "${projectTitle}"
+
+Painkiller Analysis (from conversations):
+${analysisText}
+
+User's defined painkiller problem:
+"${verdictText}"
+
+Assess confidence level as a separate, focused evaluation. Return:
+
+**Confidence Level** — one of: High / Medium-High / Medium / Medium-Low / Low
+
+**What drives the confidence up** — 2-3 specific signals from their data that are strong
+
+**What keeps it from being higher** — 1-2 specific gaps or missing signals
+
+**What to do next** — one concrete action that would move confidence up one level
+
+Be direct. Bold the most important phrases. No fluff.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system: "You are Sorene, a sharp execution coach. Be direct, specific, and honest about confidence." }),
+      });
+      if (!res.ok) { setStageSync("waiting"); return; }
+      const data = await res.json();
+      const full: string = (data?.reply ?? "").trim();
+      setOutput(full);
+      setStageSync("done");
+      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
+    } catch { setStageSync("waiting"); }
+  };
+
+  const handleReset = () => {
+    try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+    setOutput("");
+    setStageSync("waiting");
+  };
+
+  const confidence = stage === "done" ? parseConfidenceLevel(output) : null;
+  const style = confidence ? CONFIDENCE_STYLE[confidence] : null;
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <BarChart3 size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Confidence Level</p>
+            <p className="text-[11px] text-[#9A9A9A]">Generated after your analysis and painkiller problem are ready</p>
+          </div>
         </div>
+        {stage === "done" && (
+          <button onClick={handleReset}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#9A9A9A] hover:text-[#151515] border border-[#ECEDEE] hover:border-[#151515] transition-all">
+            Regenerate
+          </button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <p className="text-[13px] text-[#9A9A9A] py-4 text-center">
+            Complete the Painkiller Analysis and define your Painkiller Problem first.
+          </p>
+        )}
+        {stage === "waiting" && (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <p className="text-[13px] text-[#9A9A9A] leading-relaxed max-w-sm">
+              Both your analysis and problem statement are ready. Sorene will now assess your confidence level.
+            </p>
+            <button onClick={handleGenerate}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+              <BarChart3 size={14} /> Assess my confidence
+            </button>
+          </div>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 py-6 justify-center text-[#9A9A9A] text-[13px]">
+            <Loader2 size={14} className="animate-spin" /> Assessing confidence…
+          </div>
+        )}
+        {stage === "done" && output && (
+          <div className="space-y-4">
+            {confidence && style && (
+              <div className={cn("rounded-2xl border px-5 py-4", style.bg, style.border)}>
+                <p className="text-[11px] font-bold uppercase tracking-widest opacity-60 mb-1">Confidence Level</p>
+                <p className={cn("text-[26px] font-bold leading-tight mb-2", style.text)}>{confidence}</p>
+                <p className={cn("text-[12px] leading-relaxed font-medium opacity-80", style.text)}>
+                  {isConfidenceHighEnough(confidence)
+                    ? "Signal is strong enough to define your painkiller and advance."
+                    : "You need stronger signals before advancing to Build Demo."}
+                </p>
+              </div>
+            )}
+            <div className="text-[13px] text-[#151515] leading-relaxed">
+              <MarkdownText text={output} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1868,10 +2007,10 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
       const raw = localStorage.getItem(`convlog-${projectTitle}`);
       setConvCount(raw ? JSON.parse(raw).length : 0);
     } catch { /* ignore */ }
+    try { setHasAnalysis(!!localStorage.getItem(`painkiller-analysis-${projectTitle}`)); } catch { /* ignore */ }
     try {
-      const analysisText = localStorage.getItem(`painkiller-analysis-${projectTitle}`) ?? "";
-      setHasAnalysis(!!analysisText);
-      setConfidence(parseConfidenceLevel(analysisText));
+      const confText = localStorage.getItem(`confidence-level-${projectTitle}`) ?? "";
+      setConfidence(confText ? parseConfidenceLevel(confText) : null);
     } catch { /* ignore */ }
     try { setHasVerdict(!!(localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "").trim()); } catch { /* ignore */ }
   };
@@ -1888,7 +2027,7 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
   const checkItems = [
     { done: convCount >= 20,      text: `${convCount} conversations logged (target: 20–100)` },
     { done: hasAnalysis,          text: "Painkiller analysis run" },
-    { done: highEnoughConfidence, text: `Confidence level Medium-High or above${confidence ? ` (current: ${confidence})` : ""}` },
+    { done: highEnoughConfidence, text: `Confidence assessed at Medium-High or above${confidence ? ` — current: ${confidence}` : " (run Confidence Level section)"}` },
     { done: hasVerdict,           text: "Painkiller problem defined" },
   ];
 
@@ -1989,6 +2128,11 @@ function InterviewStage2({
       {/* ── Your Painkiller Problem (collapsible) ── */}
       <CollapseSection title="Your Painkiller Problem">
         <PainkillerVerdictCard projectTitle={project?.title ?? ""} />
+      </CollapseSection>
+
+      {/* ── Confidence Level (collapsible, auto-generated) ── */}
+      <CollapseSection title="Confidence Level">
+        <ConfidenceLevelCard projectTitle={project?.title ?? ""} />
       </CollapseSection>
 
       {/* ── Readiness ── */}

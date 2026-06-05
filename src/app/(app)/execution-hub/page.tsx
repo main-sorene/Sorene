@@ -5338,7 +5338,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                       </AnimatePresence>
                       {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "hosting" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
-                          <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}
+                          {tip}
                         </p>
                       )}
                     </div>

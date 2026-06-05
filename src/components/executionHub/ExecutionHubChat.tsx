@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -18,6 +18,10 @@ const SUGGESTIONS: { label: string; recipeId: string }[] = [
 ];
 
 interface ChatMsg { id: string; role: "user" | "assistant"; content: string }
+
+// Shared across chat instances (desktop + mobile both mount) so an onboarding
+// trigger only fires once.
+let lastHandledOnboard = 0;
 
 // Build a compact snapshot of the project's progress from localStorage so the
 // coach can answer recipes against the user's real status.
@@ -154,6 +158,51 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       setLoading(false);
     }
   };
+
+  // Onboarding kickoff — Sorene opens the conversation (no user bubble) to
+  // collect the project name + status and route the user to the right tab.
+  const kickoffOnboarding = async () => {
+    setMessages([]);
+    setLoading(true);
+    try {
+      const profile = authUser?.profile;
+      const res = await authFetch("/api/execution-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "[start onboarding]",
+          recipeId: "onboard",
+          history: [],
+          userProfile: profile ? {
+            firstName: profile.firstName,
+            occupation: profile.occupation,
+            cvSummary: profile.cvSummary,
+            dnaScores: profile.dnaScores,
+            dnaNarrative: profile.dna_narrative,
+            assessmentAnswers: profile.assessmentAnswers,
+          } : undefined,
+          project: null,
+          projectStatus: null,
+        }),
+      });
+      const id = Date.now().toString();
+      if (res.ok) {
+        const data = await res.json();
+        setMessages([{ id, role: "assistant", content: data?.reply ?? "Let's set up your project. What are you working on?" }]);
+      }
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  const onboardTrigger = useAtomValue(executionOnboardTriggerAtom);
+  useEffect(() => {
+    if (onboardTrigger > lastHandledOnboard) {
+      lastHandledOnboard = onboardTrigger;
+      kickoffOnboarding();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardTrigger]);
 
   return (
     <div className="flex flex-col h-full xl:h-[97vh] w-full bg-white xl:border-l xl:border-gray-100 xl:rounded-4xl xl:my-6 overflow-hidden shrink-0">

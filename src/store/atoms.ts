@@ -13,6 +13,10 @@ export interface AuthUser {
 export const userAtom = atom<AuthUser | null>(null);
 export const authLoadingAtom = atom<boolean>(true);
 
+// Bumped to kick off the "Create My Project" onboarding conversation in the
+// Execution Hub chat (assess name + status, then route the user to the right tab).
+export const executionOnboardTriggerAtom = atom<number>(0);
+
 export const activeNavAtom = atom<string>("Home");
 
 export const billingYearlyAtom = atom<boolean>(true);

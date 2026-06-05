@@ -18,7 +18,25 @@ const RECIPES: Record<string, string> = {
   validate: `The user clicked "Help me validate my idea". Using their project, DNA and current validation status, give them a focused validation plan: who exactly to talk to, what to ask, and the signal that means "keep going". If they've already logged conversations or a pattern summary, build on it rather than restarting. 3-5 sentences, end with the next validation action.`,
   next: `The user clicked "What's my next step?". From the status below, find the next incomplete, highest-leverage task and tell them exactly what to do and where in the Hub to do it (Validation / Launchpad / Growth / Connect tab). One clear step, 2-4 sentences.`,
   update_status: `The user clicked "Update business status". Invite them, in a warm and specific way, to tell you what's changed since last time — new conversations, a launched asset, revenue, a blocker. Reference where they currently are (from the status below) so the ask feels informed. Then say you'll fold it into their plan and next steps. Keep it to 2-3 sentences ending with a clear, friendly question.`,
+  onboard: `The user clicked "Create My Project" — they want to start a new project from scratch and you're onboarding them. There is NO project selected yet.
+
+Turn 1 (now): warmly greet them by name in ONE sentence, then ask TWO things in a short, friendly way: (1) what they're building — a name or a one-line description, and (2) where they're at today. Offer these stages so they can self-identify: "just an idea", "talking to customers / validating", "built something / ready to launch", or "already launched and growing". Keep it to 2-3 short sentences. Do not lecture.
+
+On their reply: acknowledge the project in one line, then ROUTE them to the right place based on the stage they described, using this map:
+- Just an idea or unsure → Validation tab: start from the beginning with customer interviews (VIBE framework) to confirm the problem is real before building.
+- Validating / mid-conversations → Validation tab: keep going and run the Go / No-Go readiness check to decide if they're ready to move on.
+- Built / ready to launch → Launchpad tab: lock the brand & digital presence (business name, tagline, pricing, logo, domain, website, social).
+- Launched / growing → Growth tab: work through the strategic deliverables (business plan, marketing plan, GTM, sales playbook, financial model, metrics, pitch deck).
+Tell them the single first action to take in that tab. Be specific to what they told you. End by noting they can create the project from the project picker (top-left) to start tracking progress there.`,
 };
+
+// Where each kind of work lives — used so the coach routes users accurately.
+const SECTIONS_GUIDE = `EXECUTION HUB SECTIONS (route users here):
+- Validation tab — validate the idea from the beginning: customer interviews via the VIBE framework, log conversations, find the pattern, then a Go / No-Go readiness check. For anyone at idea or validation stage.
+- Launchpad tab — Brand & Digital Presence: finalise business name, tagline, benefit, offerings, pricing, logo, brand colours, domain, website, hosting, social profiles. For when the idea is validated and they're setting up to launch.
+- Growth tab — strategic deliverables: business plan, marketing plan, go-to-market strategy, sales playbook, financial model & projections, growth metrics / North Star, pitch deck. For launched/growing businesses.
+- Agents tab — AI agents that automate parts of execution (coming soon).
+- Connect tab — link WhatsApp/Telegram for coaching on the go, and join the founder community.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -90,6 +108,9 @@ ${project.description ? `Description: ${String(project.description).slice(0, 400
 You have FULL ACCESS to who they are (DNA), what they're building (their chosen Direction/Project), and exactly how far they've got (Live Execution Status). USE all three in every answer. Never give generic advice — everything must be specific to this person and this project. If you reference a next step, name the exact Hub location (Validation, Launchpad, Growth, Agents, or Connect tab).
 
 Keep replies concise and skimmable (2-5 sentences, short paragraphs, **bold** the key action). No fluff, no restating their whole profile back to them. If the project or status is empty, gently guide them to the right starting point.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${SECTIONS_GUIDE}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${dnaBlock}

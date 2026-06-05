@@ -32,8 +32,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useAtomValue, useAtom } from "jotai";
-import { userAtom, selectedExecutionProjectAtom } from "@/store/atoms";
+import { useAtomValue, useAtom, useSetAtom } from "jotai";
+import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -828,7 +828,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
         <div className="flex flex-col sm:flex-row gap-3">
           <a href="/direction"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
-            <ArrowRight size={15} /> Choose a Direction
+            Choose a Direction
           </a>
           <button onClick={onCreateProject}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
@@ -6596,6 +6596,15 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<Tab | null>("validation");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const bumpOnboard = useSetAtom(executionOnboardTriggerAtom);
+
+  // "Create My Project" from the empty state → open the chat and start the
+  // onboarding conversation (assess name + status, route to the right tab).
+  const startProjectOnboarding = () => {
+    setChatCollapsed(false);
+    setChatOpen(true);
+    bumpOnboard((n) => n + 1);
+  };
   const [projects, setProjects] = useState<DirectionCardData[]>([]);
   const [atomProject, setAtomProject] = useAtom(selectedExecutionProjectAtom);
   const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(atomProject);
@@ -6805,7 +6814,7 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
+                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} />
                         : activeTab === "launchpad"
                         ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} onNameChosen={(name) => {
                             const key = selectedProject?.title ?? "";

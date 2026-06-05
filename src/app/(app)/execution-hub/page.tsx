@@ -4167,7 +4167,7 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
       <motion.div
         layout
         transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col relative", isExpanded ? "p-6 pb-10" : "p-6")}
+        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-4")}
         style={{ background: gradient }}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
@@ -4177,27 +4177,27 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
             <motion.button
               initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
               onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
-              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-8 w-fit relative z-10"
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-6 w-fit relative z-10"
             >
               <ChevronLeft size={18} />Back
             </motion.button>
           )}
         </AnimatePresence>
 
-        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Icon size={14} className="text-white" />
+        <div className="flex justify-between items-center relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Icon size={13} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-[14px] font-semibold leading-tight tracking-tight text-white">{pillar.label}</h3>
-              {!isExpanded && <p className="text-[10px] text-white/60 font-medium uppercase tracking-wide mt-0.5 truncate">{tagline}</p>}
+              <h3 className="text-[13px] font-semibold leading-snug tracking-tight text-white">{pillar.label}</h3>
+              {!isExpanded && <p className="text-[10px] text-white/60 font-medium uppercase tracking-wide truncate">{tagline}</p>}
             </div>
           </div>
           {!isExpanded && (
             <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/20 text-white text-[12px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
-              Open <ArrowRight size={11} />
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/20 text-white text-[11px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
+              Open <ArrowRight size={10} />
             </motion.div>
           )}
         </div>
@@ -4207,11 +4207,9 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
       <AnimatePresence>
         {!isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
-            className="px-6 pb-6 pt-4 flex flex-col flex-1">
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">
-              {doneCount}/{pillar.items.length} tasks complete
-            </p>
-            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+            className="px-4 pt-3 pb-4">
+            <p className="text-[12px] text-[#9A9A9A] mb-2">{doneCount}/{pillar.items.length} tasks complete</p>
+            <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
               <div
                 className="h-full rounded-full bg-[#32C382] transition-all duration-500"
                 style={{ width: `${pillar.items.length > 0 ? Math.round((doneCount / pillar.items.length) * 100) : 0}%` }}

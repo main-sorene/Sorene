@@ -43,7 +43,7 @@ import type { DirectionCardData } from "@/lib/directionTypes";
 const VIBE_STEPS = [
   {
     id: 1, vibe: "V + I", title: "Talk to as many potential customers as you can", icon: Users, duration: "~1–2 weeks",
-    whatIs: "The first step is about getting out of the building and having real conversations with the people you want to serve. No building, no coding — just listening.",
+    whatIs: "You cannot validate an idea at a desk — this step forces you into real conversations with real people so you know whether the problem you are solving actually matters.",
     soreneDoes: [
       "3 tailored interview questions (generated from DNA + idea)",
       "Script for opening the conversation",
@@ -62,7 +62,7 @@ const VIBE_STEPS = [
   },
   {
     id: 2, vibe: "I", title: "Identify the painkiller problem", icon: Search, duration: "~2–3 days",
-    whatIs: "Once you have logged enough conversations, you look for patterns. This step turns raw feedback into a single, clear problem worth solving.",
+    whatIs: "Most ideas fail because founders build for the wrong problem — this step forces you to find the one pain that is frequent, severe, and people will already pay to fix.",
     soreneDoes: [
       "Pattern summary from logged responses",
       "Frequency count per problem theme",
@@ -80,7 +80,7 @@ const VIBE_STEPS = [
   },
   {
     id: 3, vibe: "B", title: "Create a minimum viable offer", icon: Lightbulb, duration: "~3–5 days",
-    whatIs: "Before building a product, you create the simplest possible offer that delivers real value. This could be a workshop, a PDF, a session, or a manual service.",
+    whatIs: "Spending months building before a single sale is the most common founder mistake — this step gets something real in front of buyers without writing a line of code.",
     soreneDoes: [
       "One-sentence offer builder template",
       "Suggested price range from DNA + interview data",
@@ -97,7 +97,7 @@ const VIBE_STEPS = [
   },
   {
     id: 4, vibe: "E", title: "Get paying customers", icon: DollarSign, duration: "~1 week",
-    whatIs: "Real validation only happens when someone pays. This step is about making the actual offer to real people and getting real money — not interest, not sign-ups.",
+    whatIs: "Interest and sign-ups are not validation — money is, and getting three paying customers before building anything is the only proof your idea deserves to exist.",
     soreneDoes: [
       "Validation score updated from real customer responses",
       "Tracker: 0 / 3 paying customers",
@@ -224,12 +224,16 @@ function GoNoGoContent() {
 
   return (
     <div className="p-6 space-y-8">
+      {/* Stage description */}
+      <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4">
+        Launching too early wastes money and credibility — this step gives you a clear, honest score across market, problem, learning, and finance so you know exactly where you stand before you commit.
+      </p>
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-body-medium-medium text-[#151515] tracking-widest uppercase">Readiness Score</h4>
+          <h4 className="text-base font-medium text-[#151515]">Readiness Score</h4>
           <span className="text-[28px] font-medium leading-none" style={{ color: scoreColor }}>{pct}%</span>
         </div>
-        <Separator className="bg-gray-100 mb-5" />
+        <Separator className="bg-[#ECEDEE] mb-5" />
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-4">
           <motion.div className="h-full rounded-full" style={{ backgroundColor: scoreColor }} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} />
         </div>
@@ -942,6 +946,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
 
         {/* ── Mission ── */}
         <section>
+          <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4 mb-6">{step.whatIs}</p>
           <h4 className="text-base font-medium text-[#151515] mb-4">Your Mission</h4>
           <Separator className="bg-[#ECEDEE] mb-5" />
           <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
@@ -1007,9 +1012,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
   return (
     <div className="space-y-8">
       <section>
-        <h4 className="text-base font-medium text-[#151515] mb-4">What Is This Step</h4>
-        <Separator className="bg-[#ECEDEE] mb-5" />
-        <p className="text-[13px] text-[#62646A] leading-relaxed">{step.whatIs}</p>
+        <p className="text-[13px] text-[#62646A] leading-relaxed border-l-2 border-[#ECEDEE] pl-4">{step.whatIs}</p>
       </section>
       <section>
         <div className="flex items-center gap-3 mb-4">

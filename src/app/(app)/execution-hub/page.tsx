@@ -35,6 +35,7 @@ import type { DirectionCardData } from "@/lib/directionTypes";
 const VIBE_STEPS = [
   {
     id: 1, vibe: "V + I", title: "Talk to as many potential customers as you can", icon: Users, duration: "~1–2 weeks",
+    whatIs: "The first step is about getting out of the building and having real conversations with the people you want to serve. No building, no coding — just listening.",
     soreneDoes: [
       "3 tailored interview questions (generated from DNA + idea)",
       "Script for opening the conversation",
@@ -53,6 +54,7 @@ const VIBE_STEPS = [
   },
   {
     id: 2, vibe: "I", title: "Identify the painkiller problem", icon: Search, duration: "~2–3 days",
+    whatIs: "Once you have logged enough conversations, you look for patterns. This step turns raw feedback into a single, clear problem worth solving.",
     soreneDoes: [
       "Pattern summary from logged responses",
       "Frequency count per problem theme",
@@ -70,6 +72,7 @@ const VIBE_STEPS = [
   },
   {
     id: 3, vibe: "B", title: "Create a minimum viable offer", icon: Lightbulb, duration: "~3–5 days",
+    whatIs: "Before building a product, you create the simplest possible offer that delivers real value. This could be a workshop, a PDF, a session, or a manual service.",
     soreneDoes: [
       "One-sentence offer builder template",
       "Suggested price range from DNA + interview data",
@@ -85,7 +88,8 @@ const VIBE_STEPS = [
     insight: null,
   },
   {
-    id: 4, vibe: "E", title: "Get 3 paying customers", icon: DollarSign, duration: "~1 week",
+    id: 4, vibe: "E", title: "Get paying customers", icon: DollarSign, duration: "~1 week",
+    whatIs: "Real validation only happens when someone pays. This step is about making the actual offer to real people and getting real money — not interest, not sign-ups.",
     soreneDoes: [
       "Validation score updated from real customer responses",
       "Tracker: 0 / 3 paying customers",
@@ -322,7 +326,7 @@ function ValidationProgress() {
           transition={{ duration: 0.2 }}
         >
           {activeStage <= 4 ? (
-            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} stageLabel={VALIDATION_STAGES[activeStage - 1].label} />
+            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} />
           ) : (
             <GoNoGoContent />
           )}
@@ -351,20 +355,23 @@ function ValidationProgress() {
   );
 }
 
-function VibeStageContent({ step, stageLabel }: { step: typeof VIBE_STEPS[number]; stageLabel: string }) {
+function VibeStageContent({ step }: { step: typeof VIBE_STEPS[number] }) {
   const Icon = step.icon;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-          <Icon size={16} className="text-white" />
+    <div className="space-y-5">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-1.5">What is this step</p>
+        <p className="text-label-medium text-[#62646A] leading-relaxed">{step.whatIs}</p>
+      </div>
+      <div className="flex items-start gap-3 rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3.5">
+        <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0 mt-0.5">
+          <Icon size={15} className="text-white" />
         </div>
         <div>
-          <p className="text-[11px] text-[#9A9A9A] uppercase tracking-wide font-semibold">{stageLabel}</p>
-          <h4 className="text-body-medium-medium text-[#151515]">Objective</h4>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-1">Objective</p>
+          <p className="text-body-small-medium text-[#151515] leading-snug">{step.title}</p>
         </div>
       </div>
-      <p className="text-label-medium text-[#62646A] leading-relaxed">{step.title}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene provides</p>

@@ -953,7 +953,7 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
           <p className="text-body-small-medium text-[#151515]">Pattern summary</p>
         </div>
         {stage === "idle" && (
-          <button onClick={handleAnalyze}
+          <button onClick={() => handleAnalyze()}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors">
             <BarChart3 size={12} /> Summarise Patterns
           </button>

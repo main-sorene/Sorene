@@ -5487,39 +5487,286 @@ function GrowthContent({ project }: { project: DirectionCardData | null }) {
 }
 
 // ─────────────────────────────────────────────
-// Agents System (placeholder)
+// Agents — all tiers, DNA/Direction card design
 // ─────────────────────────────────────────────
 
-function AgentsSystemContent() {
-  const agents = [
-    { name: "Validation Agent", description: "Runs your customer interview process end-to-end — generates questions, logs responses, surfaces patterns.", status: "coming-soon" },
-    { name: "Offer Agent", description: "Builds your minimum viable offer based on interview data and your DNA profile.", status: "coming-soon" },
-    { name: "Outreach Agent", description: "Drafts personalised outreach messages to potential customers.", status: "coming-soon" },
-    { name: "Progress Agent", description: "Tracks your execution milestones and sends proactive nudges.", status: "coming-soon" },
-  ];
+interface AgentDef {
+  id: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  gradient: string;
+  name: string;
+  tagline: string;
+  description: string;
+  tags: string[];
+  whatItDoes: string[];
+  output: string;
+}
+
+const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDef[] }[] = [
+  {
+    tier: "tier1",
+    label: "Build first",
+    blurb: "The core loop — find who to talk to, reach them, build an audience.",
+    agents: [
+      {
+        id: "customer_research",
+        icon: Search,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #A3E635 34.62%, #16B364 100%)`,
+        name: "Customer Research Agent",
+        tagline: "Validation · Interviews",
+        description: "Finds and qualifies your target customers, drafts interview scripts, and synthesizes patterns from the conversations you log.",
+        tags: ["Find customers", "Interview scripts", "Pattern synthesis"],
+        whatItDoes: [
+          "Identifies and ranks your ideal customer segments",
+          "Drafts tailored interview questions and outreach to recruit them",
+          "Reads your logged conversations and surfaces recurring pains",
+          "Delivers a painkiller verdict and who to talk to next",
+        ],
+        output: "Ranked pains, painkiller verdict, next interview targets",
+      },
+      {
+        id: "outreach",
+        icon: Mail,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #F38744 34.62%, #EF4444 100%)`,
+        name: "Outreach Agent",
+        tagline: "Distribution · Pipeline",
+        description: "Writes and personalises cold DMs and emails to prospects, partners, and early users, then tracks replies and suggests follow-ups.",
+        tags: ["Cold DMs", "Personalisation", "Follow-ups"],
+        whatItDoes: [
+          "Drafts personalised messages from your offer and a prospect's context",
+          "Suggests channels and the best time to reach out",
+          "Tracks replies in a simple pipeline view",
+          "Recommends follow-up timing and copy",
+        ],
+        output: "Ready-to-send messages + a lightweight pipeline",
+      },
+      {
+        id: "content_social",
+        icon: MessageCircle,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)`,
+        name: "Content & Social Agent",
+        tagline: "Build-in-public · Inbound",
+        description: "Turns your founder journey and offer into posts and a weekly calendar, adapting tone and format per channel (X, Threads, LinkedIn).",
+        tags: ["X", "Threads", "LinkedIn", "Content calendar"],
+        whatItDoes: [
+          "Generates post ideas from your journey, wins, and customer insights",
+          "Adapts each idea to the norms of X, Threads, and LinkedIn",
+          "Builds a weekly content calendar in your brand voice",
+          "Keeps a backlog so you never start from a blank page",
+        ],
+        output: "Channel-ready posts + a weekly calendar",
+      },
+    ],
+  },
+  {
+    tier: "tier2",
+    label: "Strong follow-ups",
+    blurb: "Sharpen your offer and convert the attention you're building.",
+    agents: [
+      {
+        id: "market_intel",
+        icon: BarChart3,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #38BDF8 34.62%, #0284C7 100%)`,
+        name: "Competitor & Market Intelligence Agent",
+        tagline: "Signals · Alerts",
+        description: "Monitors competitors, pricing changes, and market signals, then alerts you to threats and opportunities as they emerge.",
+        tags: ["Competitor watch", "Pricing signals", "Alerts"],
+        whatItDoes: [
+          "Tracks named competitors and their public moves",
+          "Flags pricing, positioning, and launch changes",
+          "Surfaces emerging opportunities in your space",
+          "Sends a digest so you stay aware without the busywork",
+        ],
+        output: "Competitor digest + opportunity/threat alerts",
+      },
+      {
+        id: "offer_pricing",
+        icon: DollarSign,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #FCD34D 34.62%, #F59E0B 100%)`,
+        name: "Offer & Pricing Agent",
+        tagline: "Packaging · Willingness to pay",
+        description: "Stress-tests your pricing, suggests packages and tiers, and frames 'would you pay?' tests so you price with evidence, not guesswork.",
+        tags: ["Packages", "Tiers", "Pricing tests"],
+        whatItDoes: [
+          "Proposes package and tier structures for your offer",
+          "Stress-tests price points against your target customer",
+          "Frames willingness-to-pay questions for interviews",
+          "Recommends a launch price with rationale",
+        ],
+        output: "Pricing options + tiers + a recommended launch price",
+      },
+      {
+        id: "lead_crm",
+        icon: Users,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #F472B6 34.62%, #DB2777 100%)`,
+        name: "Lead Qualification & CRM Agent",
+        tagline: "Inbound · Prioritisation",
+        description: "Watches inbound from your connected channels, scores leads, logs them, and tells you exactly who to prioritise next.",
+        tags: ["Lead scoring", "Auto-logging", "Prioritisation"],
+        whatItDoes: [
+          "Captures inbound from WhatsApp, Telegram, and forms",
+          "Scores each lead against your ideal customer profile",
+          "Logs and organises contacts automatically",
+          "Tells you who to follow up with first",
+        ],
+        output: "Scored, organised lead list with next actions",
+      },
+      {
+        id: "coach",
+        icon: CheckCircle2,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)`,
+        name: "Accountability & Coach Agent",
+        tagline: "Check-ins · Nudges",
+        description: "Runs daily and weekly check-ins through your connected channels, nudges stalled tasks across Launchpad and Growth, and celebrates wins.",
+        tags: ["Check-ins", "Nudges", "Momentum"],
+        whatItDoes: [
+          "Sends scheduled check-ins via WhatsApp or Telegram",
+          "Spots stalled tasks across your Hub and nudges you",
+          "Helps you set the week's focus and review it",
+          "Celebrates milestones to keep momentum",
+        ],
+        output: "Regular check-ins + proactive nudges on stalled work",
+      },
+    ],
+  },
+  {
+    tier: "tier3",
+    label: "As you scale",
+    blurb: "Operational leverage once you have traction.",
+    agents: [
+      {
+        id: "finance_runway",
+        icon: DollarSign,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #34D399 34.62%, #059669 100%)`,
+        name: "Finance & Runway Agent",
+        tagline: "Burn · Runway",
+        description: "Tracks your burn, runway, and revenue targets, and flags the moment you need to act — before it becomes urgent.",
+        tags: ["Burn tracking", "Runway", "Targets"],
+        whatItDoes: [
+          "Tracks spend, revenue, and runway month over month",
+          "Compares progress to your revenue targets",
+          "Flags when runway gets short enough to act",
+          "Surfaces cost and pricing levers to extend runway",
+        ],
+        output: "Live runway view + act-now alerts",
+      },
+      {
+        id: "hiring",
+        icon: User,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #A78BFA 34.62%, #7C3AED 100%)`,
+        name: "Hiring Agent",
+        tagline: "First hire · Screening",
+        description: "Drafts job descriptions, screens applicants, and helps you plan and sequence your first hire so you bring on the right person at the right time.",
+        tags: ["Job specs", "Screening", "First hire"],
+        whatItDoes: [
+          "Drafts role descriptions from your needs and stage",
+          "Suggests when and what to hire first",
+          "Screens and summarises applicants against the role",
+          "Prepares interview questions tailored to the hire",
+        ],
+        output: "Job spec + screened shortlist + interview kit",
+      },
+      {
+        id: "legal",
+        icon: FileText,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #94A3B8 34.62%, #475569 100%)`,
+        name: "Legal & Compliance Agent",
+        tagline: "Incorporation · Contracts",
+        description: "Guides incorporation, contracts, and permits, and flags upcoming deadlines so nothing legal slips through the cracks.",
+        tags: ["Incorporation", "Contracts", "Deadlines"],
+        whatItDoes: [
+          "Walks you through incorporation steps for your region",
+          "Drafts starter contracts for partners and customers",
+          "Tracks permits, licences, and filing deadlines",
+          "Flags what needs a real lawyer vs. what you can self-serve",
+        ],
+        output: "Step-by-step legal checklist + deadline reminders",
+      },
+      {
+        id: "fundraising",
+        icon: Rocket,
+        gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #FB7185 34.62%, #E11D48 100%)`,
+        name: "Investor & Fundraising Agent",
+        tagline: "Narrative · Investors",
+        description: "Builds your pitch narrative, finds matched investors, and preps the updates that keep them warm between conversations.",
+        tags: ["Pitch", "Investor match", "Updates"],
+        whatItDoes: [
+          "Shapes your traction and story into a pitch narrative",
+          "Finds investors matched to your stage and space",
+          "Drafts investor updates to keep momentum",
+          "Preps answers to the questions investors will ask",
+        ],
+        output: "Pitch narrative + matched investor list + update drafts",
+      },
+    ],
+  },
+];
+
+function AgentDetail({ agent }: { agent: AgentDef }) {
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 space-y-6">
       <section>
-        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">Your AI Agents</h4>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">What it does</h4>
         <Separator className="bg-gray-100 mb-5" />
-        <p className="text-label-medium text-[#62646A] leading-relaxed mb-6">Specialised agents that run parts of your execution so you can focus on the work only you can do.</p>
         <div className="divide-y divide-gray-100 border-t border-gray-100">
-          {agents.map((agent) => (
-            <div key={agent.name} className="flex items-start gap-4 py-5">
-              <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                <img src="/figmaAssets/starfour.svg" className="w-4 h-4" alt="" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <p className="text-body-small-medium text-[#151515]">{agent.name}</p>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Coming soon</span>
-                </div>
-                <p className="text-label-medium text-[#62646A] leading-relaxed">{agent.description}</p>
-              </div>
+          {agent.whatItDoes.map((f, i) => (
+            <div key={i} className="flex items-start gap-3 py-3.5">
+              <CheckCircle2 size={14} className="text-[#32C382] shrink-0 mt-0.5" />
+              <p className="text-label-medium text-[#151515]">{f}</p>
             </div>
           ))}
         </div>
       </section>
+      <section>
+        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">What you get</h4>
+        <Separator className="bg-gray-100 mb-5" />
+        <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
+          <p className="text-[13px] text-[#151515] leading-relaxed">{agent.output}</p>
+        </div>
+      </section>
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Coming soon</span>
+        <p className="text-[12px] text-[#9A9A9A]">This agent is on the roadmap.</p>
+      </div>
+    </div>
+  );
+}
+
+function AgentsContent() {
+  return (
+    <div className="p-6 space-y-8">
+      <div>
+        <h3 className="text-[15px] font-semibold text-[#151515]">AI Agents</h3>
+        <p className="text-[13px] text-[#62646A] leading-relaxed mt-1">
+          Specialised agents that run parts of your execution so you can focus on the work only you can do. Built around your project&rsquo;s data.
+        </p>
+      </div>
+      {AGENT_TIERS.map((tier) => (
+        <section key={tier.tier}>
+          <div className="flex items-baseline gap-3 mb-1">
+            <h4 className="text-[12px] font-semibold uppercase tracking-widest text-[#151515]">{tier.label}</h4>
+            <span className="text-[11px] text-[#9A9A9A]">{tier.agents.length} agents</span>
+          </div>
+          <p className="text-[12px] text-[#62646A] mb-4">{tier.blurb}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {tier.agents.map((agent) => (
+              <FolderCard
+                key={agent.id}
+                folder={{
+                  id: agent.id,
+                  gradient: agent.gradient,
+                  iconNode: <agent.icon size={18} />,
+                  title: agent.name,
+                  tagline: agent.tagline,
+                  description: agent.description,
+                  content: <AgentDetail agent={agent} />,
+                  strengthTags: agent.tags,
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -6468,20 +6715,7 @@ export default function Page() {
 
   const launchpadFolders: FolderDef[] = [];
 
-  const agentsFolders: FolderDef[] = [
-    {
-      id: "agents",
-      gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)`,
-      iconNode: <img src="/figmaAssets/starfour.svg" className="w-4 h-4 invert" alt="" />,
-      title: "Agents System",
-      tagline: "AI agents · Automated execution",
-      description: "Specialised AI agents that run parts of your execution so you can focus on the work only you can do.",
-      content: <AgentsSystemContent />,
-      strengthTags: ["Validation", "Offer", "Outreach", "Progress"],
-    },
-  ];
-
-  const currentFolders = activeTab === "validation" ? validationFolders : activeTab === "launchpad" ? launchpadFolders : agentsFolders;
+  const currentFolders = activeTab === "validation" ? validationFolders : launchpadFolders;
   const isDirectSync = activeTab === "direct-sync";
   const isActive = (id: Tab) => activeTab === id;
 
@@ -6564,7 +6798,7 @@ export default function Page() {
                     <div
                       key={`${selectedProject?.title ?? "all"}-${activeTab}`}
                       className={cn(
-                        activeTab === "validation" || activeTab === "launchpad" || activeTab === "growth" || activeTab === "direct-sync" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+                        activeTab === "validation" || activeTab === "launchpad" || activeTab === "growth" || activeTab === "direct-sync" || activeTab === "agents" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
                       )}
                     >
                       {activeTab === "validation"
@@ -6579,6 +6813,8 @@ export default function Page() {
                           }} />
                         : activeTab === "growth"
                         ? <GrowthContent key={`gr-${hydratedTick}`} project={selectedProject ?? null} />
+                        : activeTab === "agents"
+                        ? <AgentsContent />
                         : isDirectSync
                         ? <ConnectContent />
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

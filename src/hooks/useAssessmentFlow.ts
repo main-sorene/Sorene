@@ -411,7 +411,7 @@ export function useAssessmentFlow() {
       if (nodeId.startsWith("onb_")) {
         if (nodeId === "onb_confirm_name" || nodeId === "onb_name_full") {
           // For onb_confirm_name: if user says "yes"/"correct"/"right"/etc., keep existing profile name
-          const isAffirmative = /^\s*(yes|yeah|yep|yup|correct|right|that'?s? (right|correct|me)|ok|okay|sure|✓|👍)\s*$/i.test(answerForLogic.trim());
+          const isAffirmative = /^\s*(yes[,.]?.*|yeah|yep|yup|correct|right|that'?s? (right|correct|me)|ok|okay|sure|✓|👍)\s*$/i.test(answerForLogic.trim());
           if (nodeId === "onb_confirm_name" && isAffirmative) {
             // Keep firstName/lastName already on the profile — don't overwrite
             pendingProfileRef.current.firstName = pendingProfileRef.current.firstName || firstName;

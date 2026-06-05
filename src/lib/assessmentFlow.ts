@@ -42,7 +42,7 @@ export const PROFILE_NODES: QuestionNode[] = [
       return `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${fullName}**. Is that correct? If not, just type your full name.`;
     },
     inputType: "choice",
-    choices: ["Yes, that's correct"],
+    choices: ["Yes"],
     allowCustom: true,
     next: "onb_birthday",
   },

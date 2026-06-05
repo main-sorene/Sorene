@@ -642,13 +642,20 @@ export function DirectionCard({
                       className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
                     >
                       <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
-                      {isLoadingDetail && !cardData?.ikigai_filters ? (
-                        <Spinner />
-                      ) : section1Open ? (
-                        <ChevronUp size={16} className="text-[#9CA3AF]" />
-                      ) : (
-                        <ChevronDown size={16} className="text-[#9CA3AF]" />
-                      )}
+                      <div className="flex items-center gap-2">
+                        {cardData.composite_score != null && (
+                          <span className={cn("text-[15px] font-semibold tabular-nums", filterScoreClass(cardData.composite_score))}>
+                            {cardData.composite_score}
+                          </span>
+                        )}
+                        {isLoadingDetail && !cardData?.ikigai_filters ? (
+                          <Spinner />
+                        ) : section1Open ? (
+                          <ChevronUp size={16} className="text-[#9CA3AF]" />
+                        ) : (
+                          <ChevronDown size={16} className="text-[#9CA3AF]" />
+                        )}
+                      </div>
                     </button>
                     <AnimatePresence initial={false}>
                       {section1Open && (
@@ -667,13 +674,6 @@ export function DirectionCard({
                               </div>
                             ) : (cardData.ikigai_filters || cardData.four_filters) ? (
                               <>
-                                {cardData.composite_score != null && (
-                                  <div className="flex justify-end">
-                                    <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                                      {cardData.composite_score}
-                                    </span>
-                                  </div>
-                                )}
                                 <div className="space-y-3">
                                   {(cardData.ikigai_filters
                                     ? [
@@ -944,13 +944,20 @@ export function DirectionCard({
           className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
         >
           <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
-          {isLoadingDetail && !cardData?.ikigai_filters ? (
-            <Spinner />
-          ) : section1Open ? (
-            <ChevronUp size={16} className="text-[#9CA3AF]" />
-          ) : (
-            <ChevronDown size={16} className="text-[#9CA3AF]" />
-          )}
+          <div className="flex items-center gap-2">
+            {cardData.composite_score != null && (
+              <span className={cn("text-[15px] font-semibold tabular-nums", filterScoreClass(cardData.composite_score))}>
+                {cardData.composite_score}
+              </span>
+            )}
+            {isLoadingDetail && !cardData?.ikigai_filters ? (
+              <Spinner />
+            ) : section1Open ? (
+              <ChevronUp size={16} className="text-[#9CA3AF]" />
+            ) : (
+              <ChevronDown size={16} className="text-[#9CA3AF]" />
+            )}
+          </div>
         </button>
         <AnimatePresence initial={false}>
           {section1Open && (
@@ -969,13 +976,6 @@ export function DirectionCard({
                   </div>
                 ) : (cardData.ikigai_filters || cardData.four_filters) ? (
                   <>
-                    {cardData.composite_score != null && (
-                      <div className="flex justify-end">
-                        <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                          {cardData.composite_score}
-                        </span>
-                      </div>
-                    )}
                     <div className="space-y-3">
                       {(cardData.ikigai_filters
                         ? [

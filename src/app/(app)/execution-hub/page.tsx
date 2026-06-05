@@ -328,68 +328,65 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
   return auto;
 }
 
-function FinanceInputCard({ project }: { project: DirectionCardData | null }) {
-  const titleRef = useRef(project?.title ?? "");
-  titleRef.current = project?.title ?? "";
-  const title = project?.title ?? "";
+function FinanceField({ fieldKey, label, placeholder, projectTitle }: { fieldKey: string; label: string; placeholder: string; projectTitle: string }) {
+  const storageKey = `finance-${fieldKey}-${projectTitle}`;
+  const [val, setVal] = useState("");
+  const [saved, setSaved] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!projectTitle) return;
+    try { setVal(localStorage.getItem(storageKey) ?? ""); } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const handleChange = (v: string) => {
+    setVal(v);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      if (!projectTitle) return;
+      try { localStorage.setItem(storageKey, v); } catch { /* ignore */ }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    }, 600);
+  };
+
+  return (
+    <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <p className="text-[12px] font-semibold text-[#151515]">{label}</p>
+        {saved && <span className="flex items-center gap-1 text-[10px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>}
+      </div>
+      <div className="px-4 py-3">
+        <input
+          value={val}
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FinanceInputCard({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
   const fields = [
     { key: "runway",         label: "Personal runway",          placeholder: "e.g. 6 months savings, $15k set aside…" },
     { key: "startup_cost",   label: "Startup cost estimate",    placeholder: "e.g. $500 for tools, $0 no-code MVP…" },
     { key: "revenue_target", label: "First revenue target",     placeholder: "e.g. $3k/month within 90 days…" },
     { key: "funding_path",   label: "Funding / bootstrap path", placeholder: "e.g. bootstrapping from savings, pre-selling…" },
   ];
-  const [vals, setVals] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<Record<string, boolean>>({});
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  useEffect(() => {
-    if (!title) return;
-    const loaded: Record<string, string> = {};
-    fields.forEach((f) => {
-      try { loaded[f.key] = localStorage.getItem(`finance-${f.key}-${title}`) ?? ""; } catch { /* ignore */ }
-    });
-    setVals(loaded);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
-
-  const handleChange = (key: string, val: string) => {
-    setVals((prev) => ({ ...prev, [key]: val }));
-    if (timers.current[key]) clearTimeout(timers.current[key]);
-    timers.current[key] = setTimeout(() => {
-      const t = titleRef.current;
-      if (!t) return;
-      try { localStorage.setItem(`finance-${key}-${t}`, val); } catch { /* ignore */ }
-      setSaved((prev) => ({ ...prev, [key]: true }));
-      setTimeout(() => setSaved((prev) => ({ ...prev, [key]: false })), 1500);
-    }, 600);
-  };
-
   return (
     <div className="space-y-3">
       {fields.map((f) => (
-        <div key={f.key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-            <p className="text-[12px] font-semibold text-[#151515]">{f.label}</p>
-            {saved[f.key] && <span className="flex items-center gap-1 text-[10px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>}
-          </div>
-          <div className="px-4 py-3">
-            <input
-              value={vals[f.key] ?? ""}
-              onChange={(e) => handleChange(f.key, e.target.value)}
-              placeholder={f.placeholder}
-              className="w-full text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
-            />
-          </div>
-        </div>
+        <FinanceField key={`${f.key}-${title}`} fieldKey={f.key} label={f.label} placeholder={f.placeholder} projectTitle={title} />
       ))}
     </div>
   );
 }
 
 function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
-  const projectTitleRef = useRef(project?.title ?? "");
-  projectTitleRef.current = project?.title ?? "";
   const auto = useGoNoGoAutoDetect(project);
   const storageKey = `go-nogo-manual-${project?.title ?? ""}`;
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -415,31 +412,36 @@ function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
   const isChecked = (key: string) => manual[key] ?? auto[key] ?? false;
   const isAuto = (key: string) => (auto[key] ?? false) && !(key in manual);
 
-  const allItems = GO_CHECKS.flatMap((c) => c.items);
-  const total = allItems.length;
-  const checked = allItems.filter((i) => isChecked(i.key)).length;
-  const pct = Math.round((checked / total) * 100);
-  const ready = pct >= 80;
+  // Exclude "coming soon" learning items from score — they can never be checked
+  const scorableItems = GO_CHECKS.filter((c) => c.id !== "learning").flatMap((c) => c.items);
+  const allItems      = GO_CHECKS.flatMap((c) => c.items);
+  const total   = scorableItems.length;
+  const checked = scorableItems.filter((i) => isChecked(i.key)).length;
+  const pct     = total > 0 ? Math.round((checked / total) * 100) : 0;
+  const ready   = pct >= 80;
   const scoreColor = ready ? "#32C382" : pct >= 50 ? "#F5B100" : "#151515";
 
   // AI readiness analysis
   type AStage = "idle" | "loading" | "done";
-  const analysisKey = `go-nogo-analysis-${project?.title ?? ""}`;
+  const projectTitle  = project?.title ?? "";
+  const analysisKey   = projectTitle ? `go-nogo-analysis-${projectTitle}` : null;
   const [analysisStage, setAnalysisStage] = useState<AStage>("idle");
   const [analysis, setAnalysis] = useState("");
+  const [analysisError, setAnalysisError] = useState("");
 
   useEffect(() => {
-    if (!project?.title) return;
+    if (!analysisKey) return;
     try {
       const raw = localStorage.getItem(analysisKey);
       if (raw) { setAnalysis(raw); setAnalysisStage("done"); }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.title]);
+  }, [projectTitle]);
 
   const generateAnalysis = async () => {
-    const t = projectTitleRef.current || project?.title || "";
-    if (!t) return;
+    const t = projectTitle;
+    if (!t) { setAnalysisError("No project selected. Please select a project first."); return; }
+    setAnalysisError("");
     setAnalysisStage("loading");
 
     // ── Stage 1: Validate ──
@@ -524,9 +526,16 @@ Write 4-5 sentences: (1) overall verdict — ready, close, or not ready and why;
         const reply = (data?.reply ?? "").trim();
         setAnalysis(reply);
         setAnalysisStage("done");
-        try { localStorage.setItem(analysisKey, reply); } catch { /* ignore */ }
-      } else { setAnalysisStage("idle"); }
-    } catch { setAnalysisStage("idle"); }
+        if (analysisKey) { try { localStorage.setItem(analysisKey, reply); } catch { /* ignore */ } }
+      } else {
+        setAnalysisStage("idle");
+        setAnalysisError("Analysis failed. Please try again.");
+      }
+    } catch (err) {
+      setAnalysisStage("idle");
+      setAnalysisError("Network error. Please try again.");
+      console.error("generateAnalysis error:", err);
+    }
   };
 
   return (
@@ -629,11 +638,14 @@ Write 4-5 sentences: (1) overall verdict — ready, close, or not ready and why;
               <p className="text-[11px] text-[#9A9A9A]">AI analysis based on your full journey — conversations, offer, paying customers, and scores</p>
             </div>
           </div>
-          <div className="px-5 py-4">
+          <div className="px-5 py-4 space-y-3">
+            {analysisError && (
+              <p className="text-[11px] text-[#DF2E16]">{analysisError}</p>
+            )}
             {analysisStage === "idle" && (
-              <button onClick={generateAnalysis}
-                className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
-                Analyse my readiness across all stages
+              <button onClick={generateAnalysis} disabled={!projectTitle}
+                className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                {projectTitle ? "Analyse my readiness across all stages" : "Select a project first"}
               </button>
             )}
             {analysisStage === "loading" && (

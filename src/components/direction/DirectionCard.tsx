@@ -128,6 +128,7 @@ export function DirectionCard({
   const [section3Open, setSection3Open] = useState(false);
   const [section4Open, setSection4Open] = useState(false);
   const constraintFetchedRef = useRef(false);
+  const detailFetchedRef = useRef(false);
 
   // Auto-fetch constraint analysis for old cards where reason is "—" but section 4 data already exists
   useEffect(() => {
@@ -140,6 +141,14 @@ export function DirectionCard({
   }, [cardData?.constraint_check?.reason, cardData?.startup_cost_usd, isLoadingSection4, onLoadSection4]);
 
   const isExpanded = isExpandedProp ?? internalIsExpanded;
+
+  // When card is expanded externally (e.g. via atom) and Section 1 not yet loaded, auto-fetch it
+  useEffect(() => {
+    if (isExpanded && !cardData?.ikigai_filters && !cardData?.four_filters && !isLoadingDetail && !detailFetchedRef.current) {
+      detailFetchedRef.current = true;
+      onLoadDetail?.();
+    }
+  }, [isExpanded, cardData?.ikigai_filters, cardData?.four_filters, isLoadingDetail, onLoadDetail]);
 
   const handleToggle = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

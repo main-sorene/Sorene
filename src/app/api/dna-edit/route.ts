@@ -84,6 +84,8 @@ Do not include markdown, code fences, or anything outside the JSON object.`;
       messages: [{ role: "user", content: prompt }],
     });
 
+    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
+
     const block = msg.content[0];
     let raw = block && block.type === "text" ? block.text.trim() : "{}";
     // Strip markdown code fences if Claude wraps the JSON

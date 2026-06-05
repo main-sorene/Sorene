@@ -31,60 +31,78 @@ export interface CreditStatus {
   used: number;
   limit: number;
   plan: string;
+  resetAt: number;
 }
 
 export async function checkCredits(email: string): Promise<CreditStatus> {
   const db = getDb();
   const ref = db.collection("users").doc(email);
-  const snap = await ref.get();
-  const data = snap.data() || {};
 
-  const plan: string = data.subscription?.active ? (data.subscription.plan ?? "free") : "free";
-  const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
+  // Use a transaction to atomically read + conditionally reset, preventing
+  // concurrent requests from triggering multiple resets in the same window.
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() || {};
 
-  const now = Date.now();
-  const resetAt: number = data.credits?.reset_at ?? 0;
-  const needsReset = now > resetAt;
+    const plan: string = data.subscription?.active ? (data.subscription.plan ?? "free") : "free";
+    const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
 
-  let used: number = data.credits?.used ?? 0;
+    const now = Date.now();
+    const resetAt: number = data.credits?.reset_at ?? 0;
+    const needsReset = now > resetAt;
 
-  if (needsReset) {
-    // Reset monthly counter
-    const nextReset = now + 30 * 24 * 60 * 60 * 1000;
-    await ref.set(
-      { credits: { used: 0, limit, reset_at: nextReset } },
-      { merge: true },
-    );
-    used = 0;
-  }
+    let used: number = data.credits?.used ?? 0;
 
-  return { ok: used < limit, used, limit, plan };
+    if (needsReset) {
+      const nextReset = now + 30 * 24 * 60 * 60 * 1000;
+      tx.set(ref, { credits: { used: 0, limit, reset_at: nextReset } }, { merge: true });
+      used = 0;
+      return { ok: true, used: 0, limit, plan, resetAt: nextReset };
+    }
+
+    return { ok: used < limit, used, limit, plan, resetAt };
+  });
 }
 
 export async function deductCredits(email: string, amount: number): Promise<void> {
   if (amount <= 0) return;
   const db = getDb();
-  await db
-    .collection("users")
-    .doc(email)
-    .set(
-      { credits: { used: FieldValue.increment(amount) } },
-      { merge: true },
-    );
+  try {
+    await db
+      .collection("users")
+      .doc(email)
+      .set(
+        { credits: { used: FieldValue.increment(amount) } },
+        { merge: true },
+      );
+  } catch (err) {
+    console.error("[deductCredits] failed to deduct", amount, "for", email, err);
+  }
 }
 
-export async function setCreditsLimit(email: string, plan: string): Promise<void> {
+export async function setCreditsLimit(email: string, plan: string, resetUsage = false): Promise<void> {
   const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
   const db = getDb();
   const snap = await db.collection("users").doc(email).get();
   const existing = snap.data()?.credits;
-  // Keep usage, just update limit (and reset if upgrading)
   const nextReset = Date.now() + 30 * 24 * 60 * 60 * 1000;
+
+  // On plan change: keep existing usage unless resetUsage=true or user is downgrading
+  // and their current usage already exceeds the new limit (avoid permanently locked-out users).
+  const currentUsed = existing?.used ?? 0;
+  const usedAfterChange = resetUsage || currentUsed > limit ? 0 : currentUsed;
+
   await db
     .collection("users")
     .doc(email)
     .set(
-      { credits: { limit, used: existing?.used ?? 0, reset_at: existing?.reset_at ?? nextReset } },
+      {
+        credits: {
+          limit,
+          used: usedAfterChange,
+          reset_at: existing?.reset_at ?? nextReset,
+        },
+      },
       { merge: true },
     );
 }

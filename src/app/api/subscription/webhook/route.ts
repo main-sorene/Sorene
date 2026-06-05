@@ -16,6 +16,7 @@ export const runtime = "nodejs";
 async function upsertSubscription(
   db: FirebaseFirestore.Firestore,
   subscription: Stripe.Subscription,
+  resetUsage = false,
 ) {
   const email =
     subscription.metadata?.email ||
@@ -46,8 +47,8 @@ async function upsertSubscription(
     { merge: true },
   );
 
-  // Update credit limit to match new plan
-  await setCreditsLimit(email, effectivePlan);
+  // Update credit limit to match new plan; reset usage on new subscriptions
+  await setCreditsLimit(email, effectivePlan, resetUsage);
 }
 
 export async function POST(req: NextRequest) {
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
             await getStripe().subscriptions.update(sub.id, { metadata: session.metadata });
             sub.metadata = session.metadata;
           }
-          await upsertSubscription(db, sub);
+          await upsertSubscription(db, sub, true); // new subscription — reset usage counter
         }
         break;
       }

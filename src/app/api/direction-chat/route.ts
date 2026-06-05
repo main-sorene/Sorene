@@ -171,12 +171,12 @@ function getClient() {
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const creditCheck = await checkCredits(user.uid);
   if (!creditCheck.ok) {
-    return NextResponse.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
+    return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
   }
 
   try {
@@ -423,6 +423,8 @@ Sorene Direction Engine v1.1`;
           }
         }
         controller.close();
+        const final = await anthropicStream.finalMessage();
+        void deductCredits(user.uid, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
       },
     });
 

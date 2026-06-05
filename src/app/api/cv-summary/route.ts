@@ -103,6 +103,8 @@ export async function POST(req: NextRequest) {
       ],
     });
 
+    void deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens));
+
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";
 

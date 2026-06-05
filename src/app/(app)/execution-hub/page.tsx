@@ -397,12 +397,25 @@ function OpeningScriptCard({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
   const [script, setScript] = useState("");
   const [loading, setLoading] = useState(false);
-  const hasRun = useRef(false);
+  // Track which project+user combo we've already run for
+  const ranFor = useRef("");
+
   const cacheKey = `opening-script-${project?.title ?? ""}`;
 
-  const generate = async (projectArg: DirectionCardData) => {
+  const generate = async (projectArg: DirectionCardData, uid: string) => {
+    const runKey = `${uid}::${projectArg.title}`;
+    if (ranFor.current === runKey) return;
+    ranFor.current = runKey;
+
+    // Check cache first
+    try {
+      const cached = localStorage.getItem(`opening-script-${projectArg.title}`);
+      if (cached) { setScript(cached); return; }
+    } catch { /* ignore */ }
+
     setLoading(true);
     setScript("");
+
     const dna = authUser?.profile?.dnaScores;
     const dnaContext = dna ? [
       dna.strengths_summary && `Strengths: ${dna.strengths_summary}`,
@@ -432,11 +445,10 @@ Use the template as a guide but make it genuinely personal:
 Output only the script text, in quotes. No explanation, no preamble.`;
 
     try {
-      const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
-      if (!token) { setLoading(false); return; }
-      const res = await fetch("/api/direction-chat", {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/direction-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: prompt, context: "script_generation", history: [] }),
       });
       if (!res.ok) { setLoading(false); return; }
@@ -451,22 +463,18 @@ Output only the script text, in quotes. No explanation, no preamble.`;
           setScript(full);
         }
       }
-      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
+      try { localStorage.setItem(`opening-script-${projectArg.title}`, full); } catch { /* ignore */ }
     } catch { /* ignore */ }
     setLoading(false);
   };
 
-  // Single effect: check cache first, generate if none
+  // Fire when both project and authenticated user are ready
   useEffect(() => {
-    if (!project?.title || hasRun.current) return;
-    hasRun.current = true;
-    try {
-      const cached = localStorage.getItem(`opening-script-${project.title}`);
-      if (cached) { setScript(cached); return; }
-    } catch { /* ignore */ }
-    generate(project);
+    if (project?.title && authUser?.uid) {
+      generate(project, authUser.uid);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.title]);
+  }, [project?.title, authUser?.uid]);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4">
@@ -477,8 +485,12 @@ Output only the script text, in quotes. No explanation, no preamble.`;
           </div>
           <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
         </div>
-        {script && !loading && project && (
-          <button onClick={() => { try { localStorage.removeItem(cacheKey); } catch { /* ignore */ } generate(project); }}
+        {script && !loading && project && authUser?.uid && (
+          <button onClick={() => {
+            try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+            ranFor.current = "";
+            generate(project, authUser.uid!);
+          }}
             className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline">
             Regenerate
           </button>

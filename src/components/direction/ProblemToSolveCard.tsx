@@ -54,7 +54,10 @@ export function ProblemToSolveCard() {
                 ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><Search size={18} className="text-white" /></motion.div>
                 : <Search size={18} className="text-white" />}
             </div>
-            <h3 className="text-white font-semibold text-[17px] tracking-tight leading-snug">Problem to Solve</h3>
+            <div>
+              <h3 className="text-white font-semibold text-[17px] tracking-tight leading-snug">Problem to Solve</h3>
+              <p className="text-white/60 text-[12px] mt-0.5">Real pain signals with demand but no good solution yet</p>
+            </div>
           </div>
           <StatusPill status={status} lastRun={lastRun} />
         </div>

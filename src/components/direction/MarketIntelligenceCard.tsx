@@ -75,7 +75,10 @@ export function MarketIntelligenceCard() {
                 ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><Activity size={18} className="text-white" /></motion.div>
                 : <Activity size={18} className="text-white" />}
             </div>
-            <h3 className="text-white font-semibold text-[17px] tracking-tight leading-snug">Market Intelligence</h3>
+            <div>
+              <h3 className="text-white font-semibold text-[17px] tracking-tight leading-snug">Market Intelligence</h3>
+              <p className="text-white/60 text-[12px] mt-0.5">Live trends and niche opportunities matched to your DNA</p>
+            </div>
           </div>
           <StatusPill status={status} lastRun={lastRun} />
         </div>

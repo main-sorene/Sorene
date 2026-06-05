@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
@@ -18,12 +18,15 @@ import {
   BarChart3,
   Lock,
   Loader2,
+  FolderOpen,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
+import { getUserProfile } from "@/lib/firestore";
+import type { DirectionCardData } from "@/lib/directionTypes";
 
 // ─────────────────────────────────────────────
 // Idea Validator
@@ -611,12 +614,125 @@ const TABS: { id: Tab; label: string }[] = [
 // Page
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// Project picker dropdown
+// ─────────────────────────────────────────────
+
+function ProjectPicker({
+  projects,
+  selected,
+  onSelect,
+}: {
+  projects: DirectionCardData[];
+  selected: DirectionCardData | null;
+  onSelect: (p: DirectionCardData | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const label = selected ? selected.title : "All Projects";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-[#151515] text-sm font-medium hover:bg-gray-50 transition-all shadow-sm"
+      >
+        <FolderOpen size={15} className="text-[#62646A] shrink-0" />
+        <span className="max-w-[160px] truncate">{label}</span>
+        <ChevronDown size={14} className={cn("text-[#9A9A9A] transition-transform shrink-0", open && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.08)] z-50 overflow-hidden"
+          >
+            <div className="p-1.5">
+              {/* All projects option */}
+              <button
+                onClick={() => { onSelect(null); setOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors",
+                  !selected ? "bg-[#F3F4F6]" : "hover:bg-[#F8F9FA]"
+                )}
+              >
+                <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                  <FolderOpen size={13} className="text-[#62646A]" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-body-small-medium text-[#151515]">All Projects</p>
+                  <p className="text-[11px] text-[#9A9A9A]">Overview</p>
+                </div>
+                {!selected && <CheckCircle2 size={14} className="text-[#151515] ml-auto shrink-0" />}
+              </button>
+
+              {projects.length > 0 && <div className="h-px bg-gray-100 my-1" />}
+
+              {projects.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => { onSelect(p); setOpen(false); }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors",
+                    selected?.title === p.title ? "bg-[#F3F4F6]" : "hover:bg-[#F8F9FA]"
+                  )}
+                >
+                  <div className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0 text-white text-[11px] font-bold">
+                    {(i + 1)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-body-small-medium text-[#151515] truncate">{p.title}</p>
+                    {p.oneliner && <p className="text-[11px] text-[#9A9A9A] truncate">{p.oneliner}</p>}
+                  </div>
+                  {selected?.title === p.title && <CheckCircle2 size={14} className="text-[#151515] ml-auto shrink-0" />}
+                </button>
+              ))}
+
+              {projects.length === 0 && (
+                <div className="px-3 py-4 text-center">
+                  <p className="text-label-medium text-[#9A9A9A]">No directions generated yet.</p>
+                  <p className="text-[11px] text-[#9A9A9A] mt-0.5">Complete your DNA assessment to unlock projects.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function Page() {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useState<Tab>("validation");
   const [chatOpen, setChatOpen] = useState(false); // mobile only
   const [chatCollapsed, setChatCollapsed] = useState(false); // desktop
+  const [projects, setProjects] = useState<DirectionCardData[]>([]);
+  const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(null);
+
+  // Load direction cards as projects
+  useEffect(() => {
+    if (!authUser?.uid) return;
+    getUserProfile(authUser.uid).then((profile) => {
+      if (profile?.directionCards && profile.directionCards.length > 0) {
+        setProjects(profile.directionCards);
+      }
+    });
+  }, [authUser?.uid]);
 
   const initials = (
     authUser?.profile?.firstName?.[0] ||
@@ -625,6 +741,8 @@ export default function Page() {
     "U"
   ).toUpperCase();
 
+  const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";
+
   const validationFolders: FolderDef[] = [
     {
       id: "idea-validator",
@@ -632,7 +750,7 @@ export default function Page() {
       iconNode: <Search size={18} />,
       title: "Idea Validator",
       tagline: "VIBE Framework · 2–4 weeks",
-      description: "Validate your idea with real people before building anything. Sorene structures the process — you have the conversations.",
+      description: `Validate ${projectLabel} with real people before building anything. Sorene structures the process — you have the conversations.`,
       content: <IdeaValidatorContent />,
       strengthTags: ["Validate", "Interview", "Build", "Experiment"],
     },
@@ -642,7 +760,7 @@ export default function Page() {
       iconNode: <BarChart3 size={18} />,
       title: "The Go / No-Go Check",
       tagline: "Launch readiness · Health check",
-      description: "A crystal-clear assessment that tells you if you're ready to launch — measured across market validation, problem clarity, learning, and finance.",
+      description: `A crystal-clear assessment that tells you if you're ready to launch ${projectLabel} — measured across market validation, problem clarity, learning, and finance.`,
       content: <GoNoGoContent />,
       strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
@@ -655,7 +773,7 @@ export default function Page() {
       iconNode: <Rocket size={18} />,
       title: "The Launchpad",
       tagline: "Elevator pitch · Business tools",
-      description: "Write your 3-sentence elevator pitch and instantly spin up your business plan, pitch deck, brand, and content.",
+      description: `Write your 3-sentence elevator pitch for ${projectLabel} and instantly spin up your business plan, pitch deck, brand, and content.`,
       content: <LaunchpadContent />,
       strengthTags: ["Business Plan", "Pitch Deck", "Brand Kit"],
     },
@@ -683,8 +801,13 @@ export default function Page() {
       <div className={cn("flex-1 flex flex-col h-full overflow-hidden", chatOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="max-w-6xl mx-auto">
-            {/* Top bar — avatar only, no title */}
-            <div className="flex items-center justify-end px-4 pt-6 pb-2 lg:px-6">
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-4 pt-6 pb-2 lg:px-6">
+              <ProjectPicker
+                projects={projects}
+                selected={selectedProject}
+                onSelect={(p) => { setSelectedProject(p); setActiveTab("validation"); }}
+              />
               <div className="flex items-center gap-2">
                 <a href="https://discord.gg/2YtvCm2SWp" target="_blank" rel="noopener noreferrer"
                   className="hidden sm:flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all">
@@ -722,7 +845,10 @@ export default function Page() {
                   {SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div
+                  key={`${selectedProject?.title ?? "all"}-${activeTab}`}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                >
                   {currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
                 </div>
               )}

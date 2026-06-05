@@ -21,8 +21,8 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -717,7 +717,6 @@ function ProjectPicker({
 
 export default function Page() {
   const authUser = useAtomValue(userAtom);
-  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useState<Tab>("validation");
   const [chatOpen, setChatOpen] = useState(false); // mobile only
   const [chatCollapsed, setChatCollapsed] = useState(false); // desktop
@@ -734,12 +733,6 @@ export default function Page() {
     });
   }, [authUser?.uid]);
 
-  const initials = (
-    authUser?.profile?.firstName?.[0] ||
-    authUser?.displayName?.[0] ||
-    authUser?.email?.[0] ||
-    "U"
-  ).toUpperCase();
 
   const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";
 
@@ -802,24 +795,12 @@ export default function Page() {
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="max-w-6xl mx-auto">
             {/* Top bar */}
-            <div className="flex items-center justify-between px-4 pt-6 pb-2 lg:px-6">
+            <div className="flex items-center px-4 pt-6 pb-2 lg:px-6">
               <ProjectPicker
                 projects={projects}
                 selected={selectedProject}
                 onSelect={(p) => { setSelectedProject(p); setActiveTab("validation"); }}
               />
-              <div className="flex items-center gap-2">
-                <a href="https://discord.gg/2YtvCm2SWp" target="_blank" rel="noopener noreferrer"
-                  className="hidden sm:flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all">
-                  Product Feedback
-                </a>
-                <button onClick={() => setIsSettingsOpen(true)}
-                  className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0">
-                  {authUser?.profile?.photoUrl
-                    ? <img src={authUser.profile.photoUrl} alt="User" className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-[#3D3D3D] flex items-center justify-center text-white text-sm font-semibold">{initials}</div>}
-                </button>
-              </div>
             </div>
 
             {/* Tabs */}

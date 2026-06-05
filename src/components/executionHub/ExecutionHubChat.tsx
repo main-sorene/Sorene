@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,6 +34,7 @@ function FormattedMessage({ content }: { content: string }) {
 
 export function ExecutionHubChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
+  const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,12 +86,26 @@ export function ExecutionHubChat({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex flex-col h-full xl:h-[97vh] w-full bg-white xl:border-l xl:border-gray-100 xl:rounded-4xl xl:my-6 overflow-hidden shrink-0">
-      {/* Header — close button only when rendered as mobile overlay */}
-      {onClose && (
-        <div className="flex items-center p-6 pb-0 shrink-0">
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"><X size={20} /></button>
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 gap-3 shrink-0">
+        {onClose
+          ? <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"><X size={20} /></button>
+          : <div />}
+        <div className="flex items-center gap-3">
+          <a href="https://discord.gg/2YtvCm2SWp" target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all">
+            Product Feedback
+          </a>
+          <button onClick={() => setIsSettingsOpen(true)}
+            className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0">
+            {authUser?.profile?.photoUrl
+              ? <img src={authUser.profile.photoUrl} alt="User" className="w-full h-full object-cover" />
+              : <div className="w-full h-full bg-[#3D3D3D] flex items-center justify-center text-white text-sm font-semibold">
+                  {(authUser?.profile?.firstName?.[0] || authUser?.displayName?.[0] || authUser?.email?.[0] || "U").toUpperCase()}
+                </div>}
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Messages */}
       <div className="flex-1 flex flex-col min-h-0">

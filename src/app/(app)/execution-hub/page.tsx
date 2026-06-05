@@ -309,6 +309,12 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
 
       // vibe_completed — reached stage 5
       try { result["vibe_completed"] = parseInt(localStorage.getItem(`validation-stage-${t}`) ?? "1", 10) >= 5; } catch { result["vibe_completed"] = false; }
+
+      // finance fields — auto-check when user has typed something
+      result["runway"]          = !!(localStorage.getItem(`finance-runway-${t}`) ?? "").trim();
+      result["startup_cost"]    = !!(localStorage.getItem(`finance-startup_cost-${t}`) ?? "").trim();
+      result["revenue_target"]  = !!(localStorage.getItem(`finance-revenue_target-${t}`) ?? "").trim();
+      result["funding_path"]    = !!(localStorage.getItem(`finance-funding_path-${t}`) ?? "").trim();
     } catch { /* ignore */ }
     setAuto(result);
   });
@@ -320,6 +326,73 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
   }, [title]);
 
   return auto;
+}
+
+function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue<typeof selectedExecutionProjectAtom>> }) {
+  const title = project?.title ?? "";
+  const fields = [
+    { key: "runway",         label: "Personal runway",          placeholder: "e.g. 6 months savings, $15k set aside…" },
+    { key: "startup_cost",   label: "Startup cost estimate",    placeholder: "e.g. $500 for tools, $0 no-code MVP…" },
+    { key: "revenue_target", label: "First revenue target",     placeholder: "e.g. $3k/month within 90 days…" },
+    { key: "funding_path",   label: "Funding / bootstrap path", placeholder: "e.g. bootstrapping from savings, pre-selling…" },
+  ];
+  const storageKey = (k: string) => `finance-${k}-${title}`;
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    if (!title) return;
+    const loaded: Record<string, string> = {};
+    fields.forEach((f) => { try { loaded[f.key] = localStorage.getItem(storageKey(f.key)) ?? ""; } catch { /* ignore */ } });
+    setVals(loaded);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  // Also prefill from DNA/project if available
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const dnaRaw = localStorage.getItem(`target-customers-${title}`);
+      if (!dnaRaw) return;
+      const dna = JSON.parse(dnaRaw);
+      if (dna.fundingPath && !localStorage.getItem(storageKey("funding_path"))) {
+        setVals((prev) => ({ ...prev, funding_path: dna.fundingPath }));
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const handleChange = (key: string, val: string) => {
+    setVals((prev) => ({ ...prev, [key]: val }));
+    if (timers.current[key]) clearTimeout(timers.current[key]);
+    timers.current[key] = setTimeout(() => {
+      try { localStorage.setItem(storageKey(key), val); } catch { /* ignore */ }
+      setSaved((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setSaved((prev) => ({ ...prev, [key]: false })), 1500);
+    }, 600);
+  };
+
+  return (
+    <div className="space-y-3">
+      {fields.map((f) => (
+        <div key={f.key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+            <p className="text-[12px] font-semibold text-[#151515]">{f.label}</p>
+            {saved[f.key] && <span className="flex items-center gap-1 text-[10px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>}
+          </div>
+          <div className="px-4 py-3">
+            <input
+              value={vals[f.key] ?? ""}
+              onChange={(e) => handleChange(f.key, e.target.value)}
+              placeholder={f.placeholder}
+              className="w-full text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function GoNoGoContent() {
@@ -392,11 +465,16 @@ function GoNoGoContent() {
     const checkedItems = allItems.filter((i) => isChecked(i.key)).map((i) => i.label);
     const uncheckedItems = allItems.filter((i) => !isChecked(i.key)).map((i) => i.label);
 
+    const runway         = localStorage.getItem(`finance-runway-${title}`) ?? "";
+    const startupCost    = localStorage.getItem(`finance-startup_cost-${title}`) ?? "";
+    const revenueTarget  = localStorage.getItem(`finance-revenue_target-${title}`) ?? "";
+    const fundingPath    = localStorage.getItem(`finance-funding_path-${title}`) ?? "";
+
     const system = `You are Sorene, a direct startup coach assessing whether a founder is ready to launch. Respond in plain prose only — no JSON, no code blocks. Be honest, specific, and direct.`;
     const prompt = `Give an honest launch readiness assessment for this founder.
 
 Project: "${title}"${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
-Customer responses: ${customerSummary}${validationScore ? `\nValidation score: "${validationScore}"` : ""}
+Customer responses: ${customerSummary}${validationScore ? `\nValidation score: "${validationScore}"` : ""}${runway ? `\nPersonal runway: "${runway}"` : ""}${startupCost ? `\nStartup cost estimate: "${startupCost}"` : ""}${revenueTarget ? `\nFirst revenue target: "${revenueTarget}"` : ""}${fundingPath ? `\nFunding path: "${fundingPath}"` : ""}
 Readiness score: ${pct}% (${checked}/${total} criteria met)
 Completed: ${checkedItems.length > 0 ? checkedItems.join(", ") : "none"}
 Not yet done: ${uncheckedItems.length > 0 ? uncheckedItems.join(", ") : "none"}
@@ -422,9 +500,15 @@ Write 3-4 sentences: (1) overall verdict — are they ready, close, or not ready
 
   return (
     <div className="p-6 space-y-8">
-      <p className="text-[15px] font-medium text-[#151515] leading-relaxed">
-        Launching too early wastes money and credibility — this gives you a clear, honest score across problem clarity, market validation, learning, and finance so you know exactly where you stand before you commit.
-      </p>
+
+      {/* What is this? */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">
+          Launching too early wastes money and credibility — this gives you a clear, honest score across problem clarity, market validation, learning, and finance so you know exactly where you stand before you commit.
+        </p>
+      </section>
 
       {/* Score bar */}
       <section>
@@ -445,33 +529,73 @@ Write 3-4 sentences: (1) overall verdict — are they ready, close, or not ready
       {/* Check groups */}
       {GO_CHECKS.map((check, idx) => {
         const Icon = check.icon;
-        const groupChecked = check.items.filter((i) => isChecked(i.key)).length;
+        const isLearning = check.id === "learning";
+        const isFinance  = check.id === "finance";
+        const groupChecked = isLearning ? 0 : check.items.filter((i) => isChecked(i.key)).length;
+
         return (
           <motion.section key={check.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}>
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2"><Icon size={14} className="text-[#62646A]" /><h5 className="text-body-small-medium text-[#151515]">{check.label}</h5></div>
-              <span className="text-[12px] text-[#9A9A9A]">{groupChecked}/{check.items.length}</span>
+              <div className="flex items-center gap-2">
+                <Icon size={14} className="text-[#62646A]" />
+                <h5 className="text-body-small-medium text-[#151515]">{check.label}</h5>
+                {isLearning && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A]">Coming soon</span>}
+              </div>
+              {!isLearning && <span className="text-[12px] text-[#9A9A9A]">{groupChecked}/{check.items.length}</span>}
             </div>
             <p className="text-label-medium text-[#62646A] leading-relaxed mb-3">{check.description}</p>
             <Separator className="bg-gray-100 mb-3" />
-            <div className="space-y-2.5">
-              {check.items.map((item) => {
-                const on = isChecked(item.key);
-                const autoDetected = isAuto(item.key);
-                return (
-                  <button key={item.key} onClick={() => toggle(item.key)} className="w-full flex items-center gap-3 text-left group">
-                    <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
-                      on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
-                      {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </div>
-                    <span className={cn("text-label-medium transition-colors flex-1", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item.label}</span>
-                    {autoDetected && (
-                      <span className="text-[10px] font-medium text-[#32C382] shrink-0">auto-detected</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+
+            {/* Foundation Learning — coming soon placeholder */}
+            {isLearning && (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center">
+                <p className="text-[12px] text-[#9A9A9A]">Foundation learning tracking is coming soon. This section will automatically reflect your completed modules.</p>
+              </div>
+            )}
+
+            {/* Finance Readiness — input cards */}
+            {isFinance && (
+              <div className="space-y-3">
+                <FinanceInputCard project={project} />
+                {/* auto-check items based on filled inputs */}
+                <div className="space-y-2 pt-1">
+                  {check.items.map((item) => {
+                    const on = isChecked(item.key);
+                    const autoDetected = isAuto(item.key);
+                    return (
+                      <button key={item.key} onClick={() => toggle(item.key)} className="w-full flex items-center gap-3 text-left group">
+                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                          on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
+                          {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                        <span className={cn("text-label-medium transition-colors flex-1", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item.label}</span>
+                        {autoDetected && <span className="text-[10px] font-medium text-[#32C382] shrink-0">auto-detected</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Problem / Market — normal checklist */}
+            {!isLearning && !isFinance && (
+              <div className="space-y-2.5">
+                {check.items.map((item) => {
+                  const on = isChecked(item.key);
+                  const autoDetected = isAuto(item.key);
+                  return (
+                    <button key={item.key} onClick={() => toggle(item.key)} className="w-full flex items-center gap-3 text-left group">
+                      <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                        on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
+                        {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <span className={cn("text-label-medium transition-colors flex-1", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item.label}</span>
+                      {autoDetected && <span className="text-[10px] font-medium text-[#32C382] shrink-0">auto-detected</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </motion.section>
         );
       })}

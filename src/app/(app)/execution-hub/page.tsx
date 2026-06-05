@@ -922,6 +922,13 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
     return (
       <div className="space-y-8">
 
+        {/* ── What is this? ── */}
+        <section>
+          <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+          <Separator className="bg-[#D8D9DB] mb-4" />
+          <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
+        </section>
+
         {/* ── Project context ── */}
         {project && (
           <section>
@@ -945,13 +952,6 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
             </div>
           </section>
         )}
-
-        {/* ── What is this? ── */}
-        <section>
-          <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
-          <Separator className="bg-[#D8D9DB] mb-4" />
-          <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
-        </section>
 
         {/* ── Mission ── */}
         <section>

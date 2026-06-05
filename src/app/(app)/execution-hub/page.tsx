@@ -328,7 +328,16 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
   return auto;
 }
 
-function FinanceField({ fieldKey, label, placeholder, projectTitle }: { fieldKey: string; label: string; placeholder: string; projectTitle: string }) {
+const FINANCE_FIELDS = [
+  { key: "runway",         label: "Personal runway",          placeholder: "How many months / $ do you have?" },
+  { key: "startup_cost",   label: "Startup cost estimate",    placeholder: "What will it cost to get started?" },
+  { key: "revenue_target", label: "First revenue target",     placeholder: "What's your 90-day revenue goal?" },
+  { key: "funding_path",   label: "Funding / bootstrap path", placeholder: "How will you fund this?" },
+];
+
+function FinanceField({ fieldKey, label, placeholder, suggestion, projectTitle }: {
+  fieldKey: string; label: string; placeholder: string; suggestion: string; projectTitle: string;
+}) {
   const storageKey = `finance-${fieldKey}-${projectTitle}`;
   const [val, setVal] = useState("");
   const [saved, setSaved] = useState(false);
@@ -357,11 +366,17 @@ function FinanceField({ fieldKey, label, placeholder, projectTitle }: { fieldKey
         <p className="text-[12px] font-semibold text-[#151515]">{label}</p>
         {saved && <span className="flex items-center gap-1 text-[10px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>}
       </div>
+      {suggestion && (
+        <div className="px-4 pt-3 pb-0 flex gap-2 items-start">
+          <span className="text-[10px] font-semibold text-[#32C382] shrink-0 mt-0.5 uppercase tracking-wide">Sorene</span>
+          <p className="text-[12px] text-[#62646A] leading-relaxed italic">{suggestion}</p>
+        </div>
+      )}
       <div className="px-4 py-3">
         <input
           value={val}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={suggestion ? "Your actual answer…" : placeholder}
           className="w-full text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
         />
       </div>
@@ -371,16 +386,102 @@ function FinanceField({ fieldKey, label, placeholder, projectTitle }: { fieldKey
 
 function FinanceInputCard({ project }: { project: DirectionCardData | null }) {
   const title = project?.title ?? "";
-  const fields = [
-    { key: "runway",         label: "Personal runway",          placeholder: "e.g. 6 months savings, $15k set aside…" },
-    { key: "startup_cost",   label: "Startup cost estimate",    placeholder: "e.g. $500 for tools, $0 no-code MVP…" },
-    { key: "revenue_target", label: "First revenue target",     placeholder: "e.g. $3k/month within 90 days…" },
-    { key: "funding_path",   label: "Funding / bootstrap path", placeholder: "e.g. bootstrapping from savings, pre-selling…" },
-  ];
+  const suggestionsKey = `finance-suggestions-${title}`;
+  type SugState = "idle" | "loading" | "done";
+  const [sugState, setSugState] = useState<SugState>("idle");
+  const [suggestions, setSuggestions] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(suggestionsKey);
+      if (raw) { setSuggestions(JSON.parse(raw)); setSugState("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const generateSuggestions = async () => {
+    if (!title) return;
+    setSugState("loading");
+    const painkiller     = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer          = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const validationScore = localStorage.getItem(`experiment-validation-score-${title}`) ?? "";
+    const targetRaw      = localStorage.getItem(`target-customers-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(targetRaw)?.main?.label ?? ""; } catch { /* ignore */ }
+    let customerSummary = "";
+    try {
+      const customers: { response: string }[] = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+      if (customers.length > 0) {
+        const yes = customers.filter((c) => c.response === "yes").length;
+        customerSummary = `${customers.length} conversations, ${yes} paying customers`;
+      }
+    } catch { /* ignore */ }
+
+    const system = `You are Sorene, a direct startup coach. Respond in JSON only — a single object with keys: runway, startup_cost, revenue_target, funding_path. Each value is a short, specific, realistic suggestion (1-2 sentences max). No extra keys, no explanation outside the JSON object.`;
+    const prompt = `Based on this founder's journey, suggest realistic finance figures.
+
+Project: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${customerSummary ? `\nCustomer traction: ${customerSummary}` : ""}${validationScore ? `\nValidation signal: "${validationScore}"` : ""}
+
+Return JSON with:
+- runway: how many months of personal savings/runway they realistically need before first revenue
+- startup_cost: realistic startup cost estimate for this type of business
+- revenue_target: a specific first 90-day revenue target based on their offer and traction
+- funding_path: whether they should bootstrap, pre-sell, or seek funding, and why`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        try {
+          const match = reply.match(/\{[\s\S]*\}/);
+          if (match) {
+            const parsed = JSON.parse(match[0]);
+            setSuggestions(parsed);
+            setSugState("done");
+            try { localStorage.setItem(suggestionsKey, JSON.stringify(parsed)); } catch { /* ignore */ }
+          } else { setSugState("idle"); }
+        } catch { setSugState("idle"); }
+      } else { setSugState("idle"); }
+    } catch { setSugState("idle"); }
+  };
+
   return (
     <div className="space-y-3">
-      {fields.map((f) => (
-        <FinanceField key={`${f.key}-${title}`} fieldKey={f.key} label={f.label} placeholder={f.placeholder} projectTitle={title} />
+      {/* Generate suggestions button */}
+      {sugState === "idle" && (
+        <button onClick={generateSuggestions} disabled={!title}
+          className="w-full py-2 rounded-xl border border-dashed border-[#32C382]/50 text-[12px] text-[#32C382] hover:border-[#32C382] hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center justify-center gap-1.5">
+          <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+          Get Sorene's suggestions based on your journey
+        </button>
+      )}
+      {sugState === "loading" && (
+        <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]">
+          <Loader2 size={12} className="animate-spin" /> Analysing your project to suggest figures…
+        </div>
+      )}
+      {sugState === "done" && (
+        <div className="flex items-center justify-between py-1">
+          <p className="text-[11px] text-[#32C382] font-medium">Sorene's suggestions shown · Fill in your actual answers below</p>
+          <button onClick={generateSuggestions} className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Refresh</button>
+        </div>
+      )}
+      {FINANCE_FIELDS.map((f) => (
+        <FinanceField
+          key={`${f.key}-${title}`}
+          fieldKey={f.key}
+          label={f.label}
+          placeholder={f.placeholder}
+          suggestion={suggestions[f.key] ?? ""}
+          projectTitle={title}
+        />
       ))}
     </div>
   );

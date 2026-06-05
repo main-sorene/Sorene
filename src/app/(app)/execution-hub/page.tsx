@@ -266,29 +266,45 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
     if (!title) return;
     const result: Record<string, boolean> = {};
     try {
-      // problem_defined — painkiller verdict saved
+      // problem_defined — painkiller-verdict-<title> saved (Interview stage)
       result["problem_defined"] = !!(localStorage.getItem(`painkiller-verdict-${title}`) ?? "").trim();
-      // conversations_done — count ≥ 10 (check conversation entries)
-      const convRaw = localStorage.getItem(`interview-conversations-${title}`) ?? "[]";
-      try { result["conversations_done"] = JSON.parse(convRaw).length >= 10; } catch { result["conversations_done"] = false; }
-      // customer_clear — target customers data saved
-      result["customer_clear"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
-      // paying_customers — 3+ yes responses
-      const custRaw = localStorage.getItem(`experiment-customers-${title}`) ?? "[]";
+
+      // conversations_done — convlog-<title> has ≥ 10 entries (Validate stage)
       try {
-        const customers = JSON.parse(custRaw);
-        result["paying_customers"] = customers.filter((c: { response: string }) => c.response === "yes").length >= 3;
-        result["responses_logged"] = customers.length > 0;
-        // feedback_quality — any entry has a note
-        result["feedback_quality"] = customers.some((c: { note?: string }) => (c.note ?? "").trim().length > 0);
+        const convRaw = localStorage.getItem(`convlog-${title}`) ?? "[]";
+        result["conversations_done"] = JSON.parse(convRaw).length >= 10;
+      } catch { result["conversations_done"] = false; }
+
+      // solution_tested — painkiller analysis generated (Interview stage)
+      result["solution_tested"] = !!(localStorage.getItem(`painkiller-analysis-${title}`) ?? "").trim();
+
+      // customer_clear — target-customers-<title> saved (Validate stage)
+      result["customer_clear"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
+
+      // paying_customers, responses_logged, feedback_quality — experiment-customers (Experiment stage)
+      try {
+        const customers: { response: string; note?: string }[] = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+        result["paying_customers"]  = customers.filter((c) => c.response === "yes").length >= 3;
+        result["responses_logged"]  = customers.length > 0;
+        result["feedback_quality"]  = customers.some((c) => (c.note ?? "").trim().length > 0);
       } catch { result["paying_customers"] = false; result["responses_logged"] = false; result["feedback_quality"] = false; }
-      // offer_built — mvo-defined saved
+
+      // offer_built — mvo-defined-<title> saved (Build Demo stage)
       result["offer_built"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
-      // validation_score saved
+
+      // validation_score — experiment-validation-score-<title> saved (Experiment stage)
       result["validation_score"] = !!(localStorage.getItem(`experiment-validation-score-${title}`) ?? "").trim();
-      // mvo_understood — mvo card ever filled
+
+      // vibe_understood — pattern-summary-<title> saved (Validate stage completed analysis)
+      result["vibe_understood"] = !!(localStorage.getItem(`pattern-summary-${title}`) ?? "").trim();
+
+      // mvo_understood — mvo-defined-<title> saved (Build Demo stage)
       result["mvo_understood"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
-      // vibe_completed — stage reached 5
+
+      // dna_direction — target-customers-<title> saved (DNA/direction saved)
+      result["dna_direction"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
+
+      // vibe_completed — validation-stage-<title> >= 5
       try { result["vibe_completed"] = parseInt(localStorage.getItem(`validation-stage-${title}`) ?? "1", 10) >= 5; } catch { result["vibe_completed"] = false; }
     } catch { /* ignore */ }
     setAuto(result);

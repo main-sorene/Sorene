@@ -307,6 +307,9 @@ Return JSON {"cards": [{ "title": "${phase1Card.title}", ...fields }]} with ONLY
 - hours_per_week: string — at 1-client scale, e.g. "8–12 hrs/week"
 - first_10_customers: string — 1 sentence, specific channel
 - distribution_path: string — specific community/subreddit/group
+- constraint_check: { status: "Pass"|"Warn", reason: "<1 sentence specifically referencing their actual constraints — capital, runway, hours, income floor — and how this direction fits or strains them. NEVER output Fail. NEVER output '—' or empty string.>" }
+
+CRITICAL: constraint_check.reason must always explain the specific tension (Warn) or fit (Pass) using the user's actual numbers — e.g. runway months, capital amount, income floor. Never generic.
 
 Return JSON only, no markdown fences.`;
 }

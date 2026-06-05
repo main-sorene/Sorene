@@ -276,6 +276,7 @@ export function SettingsModal() {
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
   const [nickname, setNickname] = React.useState(authUser?.profile?.nickname || "");
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
+  const [savedGeneral, setSavedGeneral] = React.useState(false);
   const genderDropdownRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -447,7 +448,8 @@ export function SettingsModal() {
           ? { ...authUser.profile, firstName, lastName, birthday, sex: gender, nickname }
           : undefined,
       });
-      toast({ description: "Settings saved." });
+      setSavedGeneral(true);
+      setTimeout(() => setSavedGeneral(false), 3000);
     } catch {
       toast({ description: "Failed to save settings.", variant: "destructive" });
     } finally {
@@ -646,13 +648,18 @@ export function SettingsModal() {
             </div>
 
             {/* Save */}
-            <button
-              onClick={handleSaveGeneral}
-              disabled={isSavingGeneral}
-              className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
-            >
-              {isSavingGeneral ? "Saving…" : "Save changes"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveGeneral}
+                disabled={isSavingGeneral}
+                className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                {isSavingGeneral ? "Saving…" : "Save changes"}
+              </button>
+              {savedGeneral && (
+                <span className="text-sm text-green-600 font-medium">Saved ✓</span>
+              )}
+            </div>
           </div>
         );
       }

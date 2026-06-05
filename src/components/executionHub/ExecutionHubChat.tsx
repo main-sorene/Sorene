@@ -98,6 +98,14 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  const submitInput = () => {
+    const text = (textareaRef.current?.value ?? input).trim();
+    if (!text || loading) return;
+    setInput("");
+    if (textareaRef.current) { textareaRef.current.value = ""; textareaRef.current.style.height = "auto"; }
+    send(text);
+  };
+
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
     const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
@@ -263,33 +271,38 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       </div>
 
       {/* Input */}
-      <div className="p-6 pt-0 shrink-0">
-        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          <div className="flex flex-wrap gap-2">
+      <div className="px-3 pb-3 pt-0 shrink-0">
+        <div className="flex flex-col gap-2 p-3 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          <div className="grid grid-cols-2 gap-1.5">
             {SUGGESTIONS.map((s) => (
               <button key={s.recipeId} onClick={() => send(s.label, s.recipeId)} disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap disabled:opacity-50">
-                <img src="/figmaAssets/starfour.svg" className="w-3 h-3 shrink-0" alt="" />
-                {s.label}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all truncate disabled:opacity-50">
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{s.label}</span>
               </button>
             ))}
           </div>
-          <textarea ref={textareaRef} value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-            onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
-            placeholder="Ask anything about your execution"
-            rows={1} disabled={loading}
-            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
-          />
-          <div className="flex items-center justify-end">
-            <button onClick={() => send(input)} disabled={!input.trim() || loading}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-              <ArrowUp size={16} />
+          <div className="flex items-end gap-2">
+            <textarea ref={textareaRef} value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submitInput();
+                }
+              }}
+              onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
+              placeholder="Ask anything about your execution"
+              rows={1} disabled={loading}
+              className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
+            />
+            <button onClick={() => submitInput()} disabled={!input.trim() || loading}
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              <ArrowUp size={14} />
             </button>
           </div>
         </div>
-        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+        <p className="text-center text-[10px] text-[#9CA3AF] mt-2">
           <a href="https://sorene.ai/responsible-ai" target="_blank" rel="noopener noreferrer"
             className="underline hover:text-[#6B7280] transition-colors">
             Sorene can make mistakes. Consider checking important information.

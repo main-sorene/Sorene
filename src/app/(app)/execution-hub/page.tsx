@@ -1046,13 +1046,26 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
   const authUser = useAtomValue(userAtom);
   const [entries, setEntries] = useState<ConversationEntry[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const expandedKey = `convlog-expanded-${projectTitle}`;
+  const [expandedId, setExpandedIdRaw] = useState<string | null>(() => {
+    try { return localStorage.getItem(expandedKey); } catch { return null; }
+  });
+  const setExpandedId = (id: string | null) => {
+    setExpandedIdRaw(id);
+    try { if (id) localStorage.setItem(expandedKey, id); else localStorage.removeItem(expandedKey); } catch { /* ignore */ }
+  };
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "", fileName: "" });
 
   const getToken = () => import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
+
+  // Sync expandedId when projectTitle changes
+  useEffect(() => {
+    try { setExpandedIdRaw(localStorage.getItem(expandedKey)); } catch { setExpandedIdRaw(null); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
 
   // Load from Firestore, fall back to localStorage while fetching
   useEffect(() => {

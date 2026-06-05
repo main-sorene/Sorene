@@ -829,9 +829,13 @@ export function DirectionCard({
                                         style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                                         {constraintLabel(cardData.constraint_check.status)}
                                       </span>
-                                      {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—" && (
-                                        <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-                                      )}
+                                      <p className="text-[12px] text-[#62646A] leading-relaxed">
+                                        {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—"
+                                          ? cardData.constraint_check.reason
+                                          : cardData.constraint_check.status === "Pass"
+                                            ? "This direction fits within your stated resources and constraints."
+                                            : "Some constraints may be tight — review your resources and timeline before committing."}
+                                      </p>
                                     </div>
                                   </div>
                                 )}
@@ -1097,9 +1101,13 @@ export function DirectionCard({
                             style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                             {constraintLabel(cardData.constraint_check.status)}
                           </span>
-                          {cardData.constraint_check.reason && (
-                            <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-                          )}
+                          <p className="text-[12px] text-[#62646A] leading-relaxed">
+                            {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—"
+                              ? cardData.constraint_check.reason
+                              : cardData.constraint_check.status === "Pass"
+                                ? "This direction fits within your stated resources and constraints."
+                                : "Some constraints may be tight — review your resources and timeline before committing."}
+                          </p>
                         </div>
                       </div>
                     )}

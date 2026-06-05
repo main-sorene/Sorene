@@ -19,6 +19,14 @@ import {
   Lock,
   Loader2,
   FolderOpen,
+  Plus,
+  Paperclip,
+  Phone,
+  Mail,
+  User,
+  FileText,
+  Trash2,
+  ChevronUp,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom } from "jotai";
@@ -381,6 +389,198 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
   );
 }
 
+// ─────────────────────────────────────────────
+// Conversation Logger
+// ─────────────────────────────────────────────
+
+interface ConversationEntry {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  notes: string;
+  fileName?: string;
+  createdAt: string;
+}
+
+function ConversationLogger({ projectTitle }: { projectTitle: string }) {
+  const authUser = useAtomValue(userAtom);
+  const [entries, setEntries] = useState<ConversationEntry[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "", fileName: "" });
+
+  const storageKey = `convlog-${projectTitle}`;
+
+  // Load from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setEntries(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [storageKey]);
+
+  const persist = (updated: ConversationEntry[]) => {
+    setEntries(updated);
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setForm((prev) => ({ ...prev, fileName: f.name }));
+  };
+
+  const handleAdd = () => {
+    if (!form.name.trim() && !form.notes.trim()) return;
+    setSaving(true);
+    const entry: ConversationEntry = {
+      id: Date.now().toString(),
+      name: form.name.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim(),
+      notes: form.notes.trim(),
+      fileName: form.fileName || undefined,
+      createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    };
+    persist([entry, ...entries]);
+    setForm({ name: "", phone: "", email: "", notes: "", fileName: "" });
+    if (fileRef.current) fileRef.current.value = "";
+    setAddOpen(false);
+    setSaving(false);
+  };
+
+  const handleDelete = (id: string) => {
+    persist(entries.filter((e) => e.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+            <Users size={12} className="text-white" />
+          </div>
+          <p className="text-body-small-medium text-[#151515]">
+            Customer conversations
+            {entries.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-semibold text-[#62646A]">{entries.length}</span>}
+          </p>
+        </div>
+        <button onClick={() => setAddOpen((v) => !v)}
+          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all",
+            addOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+          <Plus size={13} />{addOpen ? "Cancel" : "Add"}
+        </button>
+      </div>
+
+      {/* Add form */}
+      <AnimatePresence initial={false}>
+        {addOpen && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+            className="overflow-hidden border-b border-gray-100">
+            <div className="p-4 space-y-3 bg-[#FAFAFA]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="relative">
+                  <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+                  <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Name" className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                </div>
+                <div className="relative">
+                  <Phone size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+                  <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="Phone number" className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                </div>
+                <div className="relative">
+                  <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9A9A9A]" />
+                  <input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="Email address" className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                </div>
+              </div>
+              <textarea value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                placeholder="Notes from the conversation — what problems did they mention? What words did they use? How much pain?"
+                rows={4} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border border-dashed border-gray-200 hover:border-[#151515] transition-colors text-sm text-[#62646A] hover:text-[#151515]">
+                  <Paperclip size={13} />
+                  {form.fileName ? <span className="text-[#151515] font-medium truncate max-w-[200px]">{form.fileName}</span> : "Attach recap (Word / PDF)"}
+                  <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={handleFile} />
+                </label>
+                <button onClick={handleAdd} disabled={!form.name.trim() && !form.notes.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  {saving && <Loader2 size={13} className="animate-spin" />}
+                  Save conversation
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Entries */}
+      {entries.length === 0 && !addOpen && (
+        <div className="px-4 py-6 text-center">
+          <p className="text-label-medium text-[#9A9A9A]">No conversations logged yet.</p>
+          <p className="text-[11px] text-[#9A9A9A] mt-0.5">Click <strong>Add</strong> after each customer chat.</p>
+        </div>
+      )}
+      <div className="divide-y divide-gray-50">
+        {entries.map((entry) => {
+          const isOpen = expandedId === entry.id;
+          return (
+            <div key={entry.id}>
+              <button onClick={() => setExpandedId(isOpen ? null : entry.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                <div className="w-7 h-7 rounded-full bg-[#F3F4F6] flex items-center justify-center shrink-0 text-[11px] font-bold text-[#62646A]">
+                  {(entry.name?.[0] || "?").toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-body-small-medium text-[#151515] truncate">{entry.name || "Anonymous"}</p>
+                  <p className="text-[11px] text-[#9A9A9A] truncate">{entry.email || entry.phone || entry.createdAt}</p>
+                </div>
+                {entry.fileName && <FileText size={13} className="text-[#9A9A9A] shrink-0" />}
+                <span className="text-[11px] text-[#9A9A9A] shrink-0">{entry.createdAt}</span>
+                {isOpen ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
+              </button>
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                    className="overflow-hidden">
+                    <div className="px-4 pb-4 space-y-3 bg-[#FAFAFA]">
+                      <div className="flex flex-wrap gap-4 pt-2 text-[12px]">
+                        {entry.phone && <span className="flex items-center gap-1.5 text-[#62646A]"><Phone size={11} />{entry.phone}</span>}
+                        {entry.email && <span className="flex items-center gap-1.5 text-[#62646A]"><Mail size={11} />{entry.email}</span>}
+                      </div>
+                      {entry.notes && (
+                        <div className="rounded-xl bg-white border border-gray-100 px-3 py-2.5">
+                          <p className="text-label-medium text-[#151515] leading-relaxed whitespace-pre-wrap">{entry.notes}</p>
+                        </div>
+                      )}
+                      {entry.fileName && (
+                        <div className="flex items-center gap-2 text-[12px] text-[#62646A]">
+                          <Paperclip size={12} />{entry.fileName}
+                        </div>
+                      )}
+                      <button onClick={() => handleDelete(entry.id)}
+                        className="flex items-center gap-1.5 text-[12px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null }) {
   const Icon = step.icon;
 
@@ -472,22 +672,8 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
                 "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
               </p>
             </div>
-            {/* Debrief */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={12} className="text-white" />
-                </div>
-                <p className="text-body-small-medium text-[#151515]">Debrief form after each conversation</p>
-              </div>
-              <div className="space-y-1.5">
-                {["What was their #1 problem?", "What exact words did they use?", "Are they already paying for a solution?", "Pain level (1–10)", "Would they pay for a fix?"].map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 text-label-medium text-[#62646A]">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />{f}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Conversation Logger */}
+            <ConversationLogger projectTitle={project?.title ?? ""} />
             {/* Pattern summary */}
             <div className="rounded-2xl border border-[#32C382]/30 bg-[#F5FFD9] p-4">
               <div className="flex items-center gap-2 mb-1">

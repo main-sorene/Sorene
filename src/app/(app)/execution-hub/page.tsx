@@ -4184,20 +4184,20 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
           )}
         </AnimatePresence>
 
-        <div className="flex justify-between items-start relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Icon size={16} className="text-white" />
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Icon size={14} className="text-white" />
             </div>
-            <div>
-              <h3 className="text-heading-xsmall font-medium leading-tight tracking-tight text-white">{pillar.label}</h3>
-              {!isExpanded && <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{tagline}</p>}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-[14px] font-semibold leading-tight tracking-tight text-white">{pillar.label}</h3>
+              {!isExpanded && <p className="text-[10px] text-white/60 font-medium uppercase tracking-wide mt-0.5 truncate">{tagline}</p>}
             </div>
           </div>
           {!isExpanded && (
             <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 text-white text-[13px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
-              Open <ArrowRight size={13} />
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/20 text-white text-[12px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
+              Open <ArrowRight size={11} />
             </motion.div>
           )}
         </div>
@@ -4288,7 +4288,7 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
 function LaunchPadContent({ project }: { project: DirectionCardData | null }) {
   return (
     <div className="p-6">
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {LAUNCH_PILLARS.map((pillar) => (
           <PillarCard key={pillar.id} pillar={pillar} project={project} />
         ))}

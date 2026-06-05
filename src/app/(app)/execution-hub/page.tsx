@@ -1090,22 +1090,26 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
   const Icon = step.icon;
   const customers = useTargetCustomers(project);
 
+  // Derive mission wording reactively from customers.main — using state so it
+  // persists even if parent re-renders for unrelated reasons
+  const [missionWho, setMissionWho] = useState("real people who live this problem every day");
+  useEffect(() => {
+    const m = customers.main;
+    if (!m) return;
+    if (m.label && m.who) {
+      const who = m.who.replace(/\.$/, "").trim();
+      setMissionWho(`${m.label} — ${who.charAt(0).toLowerCase()}${who.slice(1)}`);
+    } else if (m.label) {
+      setMissionWho(m.label);
+    }
+  }, [customers.main]);
+
   // Stage 1 gets the full guided experience
   if (step.id === 1) {
     const problemArea = project?.oneliner || project?.title || "your problem area";
     const q1 = `What is your biggest challenge with ${problemArea}?`;
     const q2 = "What have you already tried to fix it?";
     const q3 = "What would you pay to solve this completely?";
-
-    // Beautiful mission wording built from the AI-identified main customer profile
-    const main = customers.main;
-    let missionWho = "real people who live this problem every day";
-    if (main?.label && main?.who) {
-      const who = main.who.replace(/\.$/, "");
-      missionWho = `${main.label} — ${who.charAt(0).toLowerCase()}${who.slice(1)}`;
-    } else if (main?.label) {
-      missionWho = main.label;
-    }
 
     return (
       <div className="space-y-8">

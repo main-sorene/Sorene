@@ -136,6 +136,8 @@ export const DirectionSection = () => {
     generateError,
     canGenerateMore,
     directionCardsCount,
+    newestCardTitle,
+    clearNewestCard,
     loadCardDetail,
     loadCardSection3,
     loadCardSection4,
@@ -158,6 +160,7 @@ export const DirectionSection = () => {
   const hasRCData = Object.values(rcForm).some((v) => v.trim() !== "");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [heroRecipeId, setHeroRecipeId] = useState<string | null>(null);
+  const [heroDirectionTitle, setHeroDirectionTitle] = useState<string | null>(null);
 
   // Promote a newly added recipe card to hero and auto-expand it
   useEffect(() => {
@@ -167,6 +170,15 @@ export const DirectionSection = () => {
       setNewRecipeCardId(null);
     }
   }, [newRecipeCardId, setNewRecipeCardId]);
+
+  // Promote a newly button-generated direction card to hero
+  useEffect(() => {
+    if (newestCardTitle) {
+      setHeroDirectionTitle(newestCardTitle);
+      setExpandedId(null);
+      clearNewestCard();
+    }
+  }, [newestCardTitle, clearNewestCard]);
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem("hiddenDirectionIds");
@@ -237,14 +249,19 @@ export const DirectionSection = () => {
     const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title));
     const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
 
+    // Newest button-generated alt card gets promoted to hero slot
+    const heroDirectionAlt = heroDirectionTitle && heroDirectionTitle !== primaryCard.title
+      ? visibleAltCards.find((c) => c.title === heroDirectionTitle) ?? null
+      : null;
+
     // If a recipe card was just generated from the chat bar, show it as the hero
     const heroRecipe = heroRecipeId ? visibleRecipes.find((rd) => rd.id === heroRecipeId) ?? null : null;
 
-    // Promote first visible alt or recipe to hero if primary is hidden (and no heroRecipe)
-    const promotedAlt = !heroRecipe && primaryHidden && visibleAltCards.length > 0 ? visibleAltCards[0] : null;
-    const promotedRecipe = !heroRecipe && primaryHidden && !promotedAlt && visibleRecipes.length > 0 ? visibleRecipes[0] : null;
-    const gridAltCards = visibleAltCards.filter((c) => c.title !== promotedAlt?.title);
-    // heroRecipe goes in hero slot — exclude from grid; also exclude promoted recipe
+    // Promote first visible alt or recipe to hero if primary is hidden (and no heroRecipe/heroDirectionAlt)
+    const promotedAlt = !heroRecipe && !heroDirectionAlt && primaryHidden && visibleAltCards.length > 0 ? visibleAltCards[0] : null;
+    const promotedRecipe = !heroRecipe && !heroDirectionAlt && primaryHidden && !promotedAlt && visibleRecipes.length > 0 ? visibleRecipes[0] : null;
+    const gridAltCards = visibleAltCards.filter((c) => c.title !== promotedAlt?.title && c.title !== heroDirectionAlt?.title);
+    // heroRecipe/heroDirectionAlt go in hero slot — exclude from grid; also exclude promoted recipe
     const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id && rd.id !== heroRecipe?.id);
 
     const allHidden = [
@@ -259,6 +276,23 @@ export const DirectionSection = () => {
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         {/* Hero — newest chat-generated card takes top slot when present */}
         <section>
+          {heroDirectionAlt && (
+            <DirectionCard
+              variant="hero"
+              title={heroDirectionAlt.title}
+              description={heroDirectionAlt.description}
+              actionText="See Detail"
+              score={String(heroDirectionAlt.compatibility)}
+              cardData={heroDirectionAlt}
+              onHide={() => { hideCard(heroDirectionAlt.title); setHeroDirectionTitle(null); }}
+              onLoadDetail={() => loadCardDetail(heroDirectionAlt.title)}
+              onLoadSection3={() => loadCardSection3(heroDirectionAlt.title)}
+              onLoadSection4={() => loadCardSection4(heroDirectionAlt.title)}
+              isLoadingDetail={loadingDetailFor === heroDirectionAlt.title}
+              isLoadingSection3={loadingSection3For === heroDirectionAlt.title}
+              isLoadingSection4={loadingSection4For === heroDirectionAlt.title}
+            />
+          )}
           {heroRecipe && (
             <DirectionCard
               variant="hero"

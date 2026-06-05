@@ -26,6 +26,7 @@ export function useDirectionResult() {
   const [needsRC, setNeedsRC] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [newestCardTitle, setNewestCardTitle] = useState<string | null>(null);
   const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
   const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
   const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
@@ -357,6 +358,7 @@ export function useDirectionResult() {
           if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
           return updated;
         });
+        setNewestCardTitle(newCard.title);
       } else {
         setGenerateError("The engine returned no direction. Please try again.");
       }
@@ -527,6 +529,8 @@ export function useDirectionResult() {
     // Structured cards (new path)
     primaryCard,
     altCards,
+    newestCardTitle,
+    clearNewestCard: () => setNewestCardTitle(null),
     // Legacy text path
     directionText: streamedText,
     // Shared

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom } from "@/store/atoms";
+import { useRouter } from "next/navigation";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -102,6 +103,8 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setNavigateTab = useSetAtom(executionNavigateTabAtom);
+  const setStartValidate = useSetAtom(executionStartValidateAtom);
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -207,6 +210,23 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     setNavigateTab(tab);
     onClose?.();
     setTimeout(() => addAssistant(`Opening the ${TAB_LABELS[tab] ?? tab} tab now — let's get to work.`), 200);
+  };
+
+  // New-idea path: check founder/market fit first → generate a Direction Card.
+  const handleCheckFit = () => {
+    addUser("Check Founder & Market Fit");
+    setTimeout(() => addAssistant("Smart move — let's pressure-test the fit first. Taking you to the Direction generator to map your founder–market fit and surface the strongest angles."), 150);
+    onClose?.();
+    setTimeout(() => router.push("/direction"), 600);
+  };
+
+  // New-idea path: skip ahead and start validating this idea now.
+  const handleStartValidate = () => {
+    const d = onboardDataRef.current;
+    addUser("Start validating");
+    setStartValidate({ title: d.name || "My project", oneliner: d.description || "" });
+    onClose?.();
+    setTimeout(() => addAssistant(`Done — I've set up **${d.name || "your project"}** in your project bar and opened the Validation tab. Start with the Idea Validator to talk to real people before building.`), 200);
   };
 
   const handleStatusSelect = (option: { label: string; value: string }) => {
@@ -376,16 +396,31 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
                         </div>
                       )}
                       {m.confirmTab && onboardStep === "done" && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <button onClick={() => handleConfirmTab(m.confirmTab!)}
-                            className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
-                            Yes, take me to {TAB_LABELS[m.confirmTab] ?? m.confirmTab}
-                          </button>
-                          <button onClick={() => addAssistant("No problem — ask me anything, or pick a different tab whenever you're ready.")}
-                            className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
-                            Not yet
-                          </button>
-                        </div>
+                        m.confirmTab === "validation" ? (
+                          <div className="flex flex-col gap-2 mt-3">
+                            <button onClick={handleCheckFit}
+                              className="text-left px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] hover:border-[#D1D5DB] transition-all">
+                              Check Founder &amp; Market Fit
+                              <span className="block text-xs font-normal text-[#6B7280] mt-0.5">See if the idea fits you and the market before committing</span>
+                            </button>
+                            <button onClick={handleStartValidate}
+                              className="text-left px-4 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+                              Start Validate
+                              <span className="block text-xs font-normal text-white/70 mt-0.5">Set up the project and start talking to real users now</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button onClick={() => handleConfirmTab(m.confirmTab!)}
+                              className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+                              Yes, take me to {TAB_LABELS[m.confirmTab] ?? m.confirmTab}
+                            </button>
+                            <button onClick={() => addAssistant("No problem — ask me anything, or pick a different tab whenever you're ready.")}
+                              className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
+                              Not yet
+                            </button>
+                          </div>
+                        )
                       )}
                     </div>
                   </div>

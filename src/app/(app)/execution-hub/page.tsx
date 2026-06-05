@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
-import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom, executionNavigateTabAtom } from "@/store/atoms";
+import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -6698,10 +6698,15 @@ export default function Page() {
     return () => window.removeEventListener("execution-state-hydrated", onHydrated);
   }, [authUser?.uid]);
 
-  const handleCreateProject = async () => {
-    if (!createTitle.trim()) return;
-    setCreateSaving(true);
-    const project: DirectionCardData = { title: createTitle.trim(), oneliner: createDesc.trim() } as DirectionCardData;
+  // Create a project, persist it, and select it. Reused by the create dialog and
+  // by the onboarding chat's "Start Validate" action. Skips creating a duplicate
+  // if a project with the same title already exists (just selects it instead).
+  const createAndSelectProject = async (title: string, oneliner: string): Promise<DirectionCardData | null> => {
+    const t = title.trim();
+    if (!t) return null;
+    const existing = projects.find((p) => p.title === t);
+    if (existing) { setSelectedProject(existing); return existing; }
+    const project: DirectionCardData = { title: t, oneliner: oneliner.trim() } as DirectionCardData;
     const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
     if (token) {
       await fetch("/api/execution-projects/add", {
@@ -6712,11 +6717,33 @@ export default function Page() {
     }
     setProjects((prev) => [...prev, project]);
     setSelectedProject(project);
+    return project;
+  };
+
+  const handleCreateProject = async () => {
+    if (!createTitle.trim()) return;
+    setCreateSaving(true);
+    await createAndSelectProject(createTitle, createDesc);
     setCreateTitle("");
     setCreateDesc("");
     setCreateSaving(false);
     setCreateOpen(false);
   };
+
+  // "Start Validate" from the onboarding chat: create + select the project, then
+  // open the Validation tab.
+  const [startValidate, setStartValidate] = useAtom(executionStartValidateAtom);
+  useEffect(() => {
+    if (!startValidate) return;
+    const { title, oneliner } = startValidate;
+    setStartValidate(null);
+    (async () => {
+      await createAndSelectProject(title, oneliner);
+      setActiveTab("validation");
+      setChatOpen(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startValidate]);
 
 
   const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";

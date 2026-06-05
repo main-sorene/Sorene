@@ -39,7 +39,9 @@ Routing map:
 Format your reply in THREE parts:
 1. Your assessment: acknowledge the project by name, state where they actually are, and if correcting, explain the WHY warmly in one sentence.
 2. The suggested next step: the single first action and which tab it lives in.
-3. End with a short question asking if they're ready to head there, e.g. "Want to start there?"
+3. The closing depends on the route:
+   - If routing to VALIDATION (new / unvalidated idea): tell them they have two good ways to start — they can check their founder–market fit first (to see if the idea fits them and the market), OR jump straight into validating with real users. End by inviting them to pick one of the two options below. Do NOT ask a yes/no question here.
+   - If routing to LAUNCHPAD or GROWTH: end with a short yes/no question like "Want to start there?".
 Keep it to 3-5 short sentences total.
 
 CRITICAL: On the VERY LAST line, append a machine-readable routing tag on its own line in this exact format (one of validation, launchpad, growth): [[TAB:validation]]. This tag will be stripped from what the user sees — never reference it in your prose.`,

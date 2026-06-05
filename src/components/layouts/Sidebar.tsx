@@ -159,29 +159,37 @@ function loadLocalConversations(uid: string): Conversation[] {
     out.push({ ...c, createdAt: new Date(c.createdAt), updatedAt: new Date(c.updatedAt) });
   };
 
-  try {
-    const stored = localStorage.getItem(`convos_${uid}`);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Conversation[];
-      if (Array.isArray(parsed)) parsed.forEach(push);
-    }
-  } catch {}
+  // Read for a given owner suffix. We read BOTH the real uid AND "local",
+  // because chat components fall back to a "local" key when the user atom
+  // isn't populated yet at save time (a race). Without this, those chats were
+  // written but never shown — the most common cause of "history disappeared".
+  const owners = [uid, "local"];
+
+  for (const owner of owners) {
+    try {
+      const stored = localStorage.getItem(`convos_${owner}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Conversation[];
+        if (Array.isArray(parsed)) parsed.forEach(push);
+      }
+    } catch {}
+
+    try {
+      const stored = localStorage.getItem(`assessment_conv_${owner}`);
+      if (stored) push(JSON.parse(stored));
+    } catch {}
+  }
 
   try {
     Object.keys(localStorage)
       .filter((k) =>
-        k.startsWith(`dna_chat_${uid}_`) ||
-        k.startsWith(`direction_chat_${uid}_`) ||
-        k.startsWith(`execution_chat_${uid}_`),
+        k.startsWith(`dna_chat_${uid}_`) || k.startsWith(`dna_chat_local_`) ||
+        k.startsWith(`direction_chat_${uid}_`) || k.startsWith(`direction_chat_local_`) ||
+        k.startsWith(`execution_chat_${uid}_`) || k.startsWith(`execution_chat_local_`),
       )
       .forEach((k) => {
         try { push(JSON.parse(localStorage.getItem(k)!)); } catch {}
       });
-  } catch {}
-
-  try {
-    const stored = localStorage.getItem(`assessment_conv_${uid}`);
-    if (stored) push(JSON.parse(stored));
   } catch {}
 
   return sortConvos(out);
@@ -298,7 +306,8 @@ export function Sidebar({
 
     let conv: Conversation | null = null;
     try {
-      const stored = localStorage.getItem(`assessment_conv_${uid}`);
+      const stored = localStorage.getItem(`assessment_conv_${uid}`)
+        || localStorage.getItem(`assessment_conv_local`);
       if (stored) conv = JSON.parse(stored);
     } catch {}
 
@@ -729,6 +738,14 @@ export function Sidebar({
                     ))}
                 </div>
               </div>
+            )}
+
+            {/* Empty state — confirms the list is rendering, just has nothing yet */}
+            {conversations.length === 0 && (
+              <p className="px-3 mt-2 text-[12px] leading-5 text-[#9A9A9A]">
+                No conversations yet. Your assessment and chats in DNA,
+                Direction and Execution will appear here.
+              </p>
             )}
           </div>
         </ScrollArea>

@@ -521,6 +521,165 @@ Output only the script text, in quotes. No explanation, no preamble.`;
 }
 
 // ─────────────────────────────────────────────
+// Target Customer Card — identifies main + secondary profiles
+// ─────────────────────────────────────────────
+
+type CustomerProfile = {
+  label: string;
+  who: string;
+  pains: string;
+  where: string;
+};
+
+function TargetCustomerCard({ project }: { project: DirectionCardData | null }) {
+  const authUser = useAtomValue(userAtom);
+  const [main, setMain] = useState<CustomerProfile | null>(null);
+  const [secondary, setSecondary] = useState<CustomerProfile | null>(null);
+  const [loading, setLoading] = useState(false);
+  const ranFor = useRef("");
+
+  const cacheKey = `target-customers-${project?.title ?? ""}`;
+
+  const generate = async (projectArg: DirectionCardData, uid: string) => {
+    const runKey = `${uid}::${projectArg.title}`;
+    if (ranFor.current === runKey) return;
+    ranFor.current = runKey;
+
+    try {
+      const cached = localStorage.getItem(`target-customers-${projectArg.title}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setMain(parsed.main ?? null);
+        setSecondary(parsed.secondary ?? null);
+        return;
+      }
+    } catch { /* ignore */ }
+
+    setLoading(true);
+    setMain(null);
+    setSecondary(null);
+
+    const prompt = `You are Sorene. Identify the target customer profiles for this validation project.
+
+Project: "${projectArg.title}"
+${projectArg.oneliner ? `One-liner: ${projectArg.oneliner}` : ""}
+${projectArg.description ? `Description: ${projectArg.description}` : ""}
+${projectArg.first_10_customers ? `Initial customer notes: ${projectArg.first_10_customers}` : ""}
+${projectArg.simple_positioning ? `Positioning: ${projectArg.simple_positioning}` : ""}
+
+Define TWO customer profiles to interview during validation:
+1. MAIN — the primary, highest-priority customer most likely to feel this pain acutely and pay first.
+2. SECONDARY — an adjacent profile worth testing as a fallback or expansion.
+
+Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
+{
+  "main": { "label": "short profile name (3-5 words)", "who": "one sentence describing who they are", "pains": "one sentence on their core pain", "where": "one sentence on where to find/reach them" },
+  "secondary": { "label": "short profile name (3-5 words)", "who": "one sentence", "pains": "one sentence", "where": "one sentence" }
+}`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/direction-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt, context: "target_customers", history: [] }),
+      });
+      if (!res.ok) { setLoading(false); return; }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let full = "";
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          full += decoder.decode(value, { stream: true });
+        }
+      }
+      // Parse the JSON out of the streamed text
+      const jsonMatch = full.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        setMain(parsed.main ?? null);
+        setSecondary(parsed.secondary ?? null);
+        try { localStorage.setItem(`target-customers-${projectArg.title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (project?.title && authUser?.uid) {
+      generate(project, authUser.uid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title, authUser?.uid]);
+
+  const ProfileBlock = ({ profile, tone }: { profile: CustomerProfile; tone: "main" | "secondary" }) => (
+    <div className={cn(
+      "flex-1 rounded-2xl border px-4 py-4",
+      tone === "main" ? "border-[#151515]/15 bg-[#F5FFD9]/40" : "border-[#ECEDEE] bg-[#FAFAFA]"
+    )}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={cn(
+          "text-[10px] font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full",
+          tone === "main" ? "bg-[#151515] text-white" : "bg-[#ECEDEE] text-[#62646A]"
+        )}>
+          {tone === "main" ? "Main" : "Secondary"}
+        </span>
+        <p className="text-[13px] font-semibold text-[#151515]">{profile.label}</p>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-[12px] text-[#62646A] leading-relaxed"><span className="font-semibold text-[#151515]">Who:</span> {profile.who}</p>
+        <p className="text-[12px] text-[#62646A] leading-relaxed"><span className="font-semibold text-[#151515]">Pain:</span> {profile.pains}</p>
+        <p className="text-[12px] text-[#62646A] leading-relaxed"><span className="font-semibold text-[#151515]">Where:</span> {profile.where}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Users size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Target customer profiles</p>
+            <p className="text-[11px] text-[#9A9A9A]">Who to interview first — and who's next</p>
+          </div>
+        </div>
+        {(main || secondary) && !loading && project && authUser?.uid && (
+          <button onClick={() => {
+            try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+            ranFor.current = "";
+            generate(project, authUser.uid!);
+          }}
+            className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline shrink-0">
+            Regenerate
+          </button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {loading && !main && (
+          <div className="flex items-center gap-2 text-[#9A9A9A] text-[13px]">
+            <Loader2 size={13} className="animate-spin" /> Identifying your customer profiles…
+          </div>
+        )}
+        {(main || secondary) && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            {main && <ProfileBlock profile={main} tone="main" />}
+            {secondary && <ProfileBlock profile={secondary} tone="secondary" />}
+          </div>
+        )}
+        {!loading && !main && !secondary && project?.first_10_customers && (
+          <p className="text-[13px] text-[#62646A] leading-relaxed">{project.first_10_customers}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Pattern Summary Card
 // ─────────────────────────────────────────────
 
@@ -934,20 +1093,13 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
             <Separator className="bg-[#D8D9DB] mb-4" />
             <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
             {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
-            <div className="flex flex-col sm:flex-row gap-3">
-              {project.first_10_customers && (
-                <div className="flex-1 rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Target Customer</p>
-                  <p className="text-[13px] text-[#151515] leading-relaxed">{project.first_10_customers}</p>
-                </div>
-              )}
-              {project.simple_positioning && (
-                <div className="flex-1 rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Positioning</p>
-                  <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
-                </div>
-              )}
-            </div>
+            {project.simple_positioning && (
+              <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3 mb-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Positioning</p>
+                <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
+              </div>
+            )}
+            <TargetCustomerCard project={project} />
           </section>
         )}
 

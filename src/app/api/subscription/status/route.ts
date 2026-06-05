@@ -22,12 +22,17 @@ export async function GET(req: NextRequest) {
     const credits = data.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
     const creditsLimit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
-    const creditsUsed = credits?.used ?? 0;
+
+    // Mirror checkCredits(): if the 30-day window has elapsed, the counter is
+    // effectively 0 even though the next API call hasn't physically reset it yet.
+    // Without this, the UI shows a stale (often "exhausted") count after rollover.
+    const resetAt: number = credits?.reset_at ?? 0;
+    const creditsUsed = Date.now() > resetAt ? 0 : (credits?.used ?? 0);
 
     if (!sub || !sub.active) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
-        credits: { used: creditsUsed, limit: creditsLimit },
+        credits: { used: creditsUsed, limit: creditsLimit, resetAt },
       });
     }
 
@@ -36,7 +41,7 @@ export async function GET(req: NextRequest) {
       plan: sub.plan,
       status: sub.status,
       duration: sub.duration,
-      credits: { used: creditsUsed, limit: creditsLimit },
+      credits: { used: creditsUsed, limit: creditsLimit, resetAt },
     });
   } catch (err: unknown) {
     console.error("[status]", err);

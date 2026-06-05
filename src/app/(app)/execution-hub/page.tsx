@@ -562,30 +562,43 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
   const [addOpen, setAddOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "", fileName: "" });
 
-  const storageKey = `convlog-${projectTitle}`;
+  const getToken = () => import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
 
-  // Load from localStorage
+  // Load from Firestore, fall back to localStorage while fetching
   useEffect(() => {
+    if (!projectTitle) { setLoading(false); return; }
+    // Show localStorage data immediately while fetching
     try {
-      const raw = localStorage.getItem(storageKey);
+      const raw = localStorage.getItem(`convlog-${projectTitle}`);
       if (raw) setEntries(JSON.parse(raw));
     } catch { /* ignore */ }
-  }, [storageKey]);
 
-  const persist = (updated: ConversationEntry[]) => {
-    setEntries(updated);
-    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
-  };
+    getToken().then((token) => {
+      if (!token) { setLoading(false); return; }
+      fetch(`/api/execution-projects/conversations?project=${encodeURIComponent(projectTitle)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.entries?.length) {
+            setEntries(data.entries);
+            try { localStorage.setItem(`convlog-${projectTitle}`, JSON.stringify(data.entries)); } catch { /* ignore */ }
+          }
+        })
+        .finally(() => setLoading(false));
+    });
+  }, [projectTitle]);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) setForm((prev) => ({ ...prev, fileName: f.name }));
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name.trim() && !form.notes.trim()) return;
     setSaving(true);
     const entry: ConversationEntry = {
@@ -597,16 +610,37 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
       fileName: form.fileName || undefined,
       createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
     };
-    persist([entry, ...entries]);
+    const updated = [entry, ...entries];
+    setEntries(updated);
+    try { localStorage.setItem(`convlog-${projectTitle}`, JSON.stringify(updated)); } catch { /* ignore */ }
+    // Persist to Firestore
+    const token = await getToken();
+    if (token) {
+      fetch("/api/execution-projects/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ projectTitle, entry }),
+      }).catch(() => {});
+    }
     setForm({ name: "", phone: "", email: "", notes: "", fileName: "" });
     if (fileRef.current) fileRef.current.value = "";
     setAddOpen(false);
     setSaving(false);
   };
 
-  const handleDelete = (id: string) => {
-    persist(entries.filter((e) => e.id !== id));
+  const handleDelete = async (id: string) => {
+    const updated = entries.filter((e) => e.id !== id);
+    setEntries(updated);
+    try { localStorage.setItem(`convlog-${projectTitle}`, JSON.stringify(updated)); } catch { /* ignore */ }
     if (expandedId === id) setExpandedId(null);
+    const token = await getToken();
+    if (token) {
+      fetch("/api/execution-projects/conversations", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ projectTitle, entryId: id }),
+      }).catch(() => {});
+    }
   };
 
   return (
@@ -676,8 +710,12 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
       {/* Entries */}
       {entries.length === 0 && !addOpen && (
         <div className="px-4 py-6 text-center">
-          <p className="text-label-medium text-[#9A9A9A]">No conversations logged yet.</p>
-          <p className="text-[11px] text-[#9A9A9A] mt-0.5">Click <strong>Add</strong> after each customer chat.</p>
+          {loading
+            ? <Loader2 size={16} className="animate-spin text-[#9A9A9A] mx-auto" />
+            : <>
+                <p className="text-label-medium text-[#9A9A9A]">No conversations logged yet.</p>
+                <p className="text-[11px] text-[#9A9A9A] mt-0.5">Click <strong>Add</strong> after each customer chat.</p>
+              </>}
         </div>
       )}
       <div className="divide-y divide-gray-50">

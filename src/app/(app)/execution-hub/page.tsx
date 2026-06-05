@@ -3062,15 +3062,22 @@ Give a short validation score assessment (2-3 sentences): what's the signal stre
 function RevisitPromptSection({ project }: { project: DirectionCardData | null }) {
   type AStage = "idle" | "loading" | "done";
   const storageKey = `experiment-revisit-${project?.title ?? ""}`;
+  const chatKey = `experiment-revisit-chat-${project?.title ?? ""}`;
   const [stage, setStage] = useState<AStage>("idle");
   const [result, setResult] = useState("");
   const [visible, setVisible] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!project?.title) return;
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) { setResult(raw); setStage("done"); }
+      const chatRaw = localStorage.getItem(chatKey);
+      if (chatRaw) setChatMessages(JSON.parse(chatRaw));
       // Show only when 0 paying customers logged
       const customersRaw = localStorage.getItem(`experiment-customers-${project?.title ?? ""}`) ?? "[]";
       const customers: CustomerResponse[] = JSON.parse(customersRaw);
@@ -3078,6 +3085,10 @@ function RevisitPromptSection({ project }: { project: DirectionCardData | null }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.title]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   // Poll to update visibility
   useEffect(() => {
@@ -3130,6 +3141,37 @@ Give 2-3 specific, actionable suggestions — should they revisit the idea, chan
     } catch { setStage("idle"); }
   };
 
+  const handleChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg = chatInput.trim();
+    setChatInput("");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${project?.title ?? ""}`) ?? "";
+    const system = `You are Sorene, a startup coach helping a founder who has 0 paying customers so far.
+Project: "${project?.title}"${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
+${result ? `Your previous assessment: "${result}"` : ""}
+Be direct, honest, and actionable. Help them figure out what to change.`;
+    const newMessages: { role: "user" | "assistant"; content: string }[] = [...chatMessages, { role: "user", content: userMsg }];
+    setChatMessages(newMessages);
+    setChatLoading(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userMsg, system, history: chatMessages }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const updated = [...newMessages, { role: "assistant" as const, content: reply }];
+        setChatMessages(updated);
+        try { localStorage.setItem(chatKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+    setChatLoading(false);
+  };
+
   return (
     <div className="rounded-2xl border border-[#FFA94D]/40 bg-[#FFF8F0] overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-[#FFA94D]/20">
@@ -3146,7 +3188,7 @@ Give 2-3 specific, actionable suggestions — should they revisit the idea, chan
           <button onClick={generate} className="text-[11px] text-[#C85B00] hover:text-[#151515] transition-colors font-medium">Refresh</button>
         )}
       </div>
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 space-y-4">
         {stage === "idle" && (
           <button onClick={generate}
             className="w-full py-2.5 rounded-xl border border-dashed border-[#FFA94D]/50 text-[12px] text-[#C85B00] hover:border-[#FFA94D] transition-colors">
@@ -3161,6 +3203,50 @@ Give 2-3 specific, actionable suggestions — should they revisit the idea, chan
         {stage === "done" && result && (
           <div className="text-[13px] text-[#151515] leading-relaxed">
             <MarkdownText text={result} />
+          </div>
+        )}
+        {/* Chat */}
+        {stage === "done" && (
+          <div className="rounded-2xl border border-[#FFA94D]/30 overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 bg-[#FFF3E0] border-b border-[#FFA94D]/20">
+              <MessageCircle size={12} className="text-[#C85B00]" />
+              <p className="text-[11px] font-semibold text-[#C85B00]">Ask Sorene a follow-up</p>
+            </div>
+            {chatMessages.length > 0 && (
+              <div className="px-4 py-3 space-y-3 max-h-56 overflow-y-auto bg-[#FFFBF5]">
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "justify-start")}>
+                    <div className={cn("rounded-2xl px-3 py-2 text-[12px] leading-relaxed max-w-[85%]",
+                      m.role === "user"
+                        ? "bg-[#FFA94D] text-white rounded-br-sm"
+                        : "bg-white border border-[#FFA94D]/20 text-[#151515] rounded-bl-sm")}>
+                      {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex gap-2 justify-start">
+                    <div className="bg-white border border-[#FFA94D]/20 rounded-2xl rounded-bl-sm px-3 py-2">
+                      <Loader2 size={12} className="animate-spin text-[#C85B00]" />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+            )}
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-[#FFA94D]/20 bg-[#FFFBF5]">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleChat(); } }}
+                placeholder="Should I change my price? Try a different audience?…"
+                className="flex-1 text-[12px] text-[#151515] placeholder-[#C85B00]/40 bg-transparent focus:outline-none"
+              />
+              <button onClick={handleChat} disabled={!chatInput.trim() || chatLoading}
+                className="w-7 h-7 rounded-lg bg-[#FFA94D] flex items-center justify-center shrink-0 hover:bg-[#E8951F] transition-colors disabled:opacity-30">
+                <ArrowRight size={12} className="text-white" />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -880,7 +880,8 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
     return full;
   };
 
-  const handleAnalyze = async () => {
+  // prevHistory = saved Q&A from a previous run (carried over on Regenerate)
+  const handleAnalyze = async (prevHistory: { role: "user" | "assistant"; content: string }[] = []) => {
     const entries = getConversations();
     setStage("loading");
     setOutput("");
@@ -912,7 +913,11 @@ Are people already spending money on workarounds? What does that tell us?
 Strongest Signal
 One sentence: the single most actionable insight from these conversations.
 
-Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Write like a sharp co-founder, not a consultant.`;
+Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Write like a sharp co-founder, not a consultant.${
+  prevHistory.length > 0
+    ? `\n\nContext from previous analysis session (the user already answered some of your earlier questions — factor this in and don't repeat questions they've already answered):\n${prevHistory.map((m) => `${m.role === "user" ? "Founder" : "Sorene"}: ${m.content}`).join("\n\n")}`
+    : ""
+}`;
     const msgs = [{ role: "user" as const, content: prompt }];
     const reply = await stream(msgs);
     // Store only the assistant reply in history (not the giant system prompt)
@@ -954,9 +959,16 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
           </button>
         )}
         {stage === "done" && (
-          <button onClick={() => { setStage("idle"); setOutput(""); setHistory([]); clearPersisted(); }}
-            className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline">
-            Reset
+          <button
+            onClick={() => {
+              const prev = history;
+              setOutput("");
+              setHistory([]);
+              clearPersisted();
+              handleAnalyze(prev);
+            }}
+            className="flex items-center gap-1.5 text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline">
+            Regenerate
           </button>
         )}
       </div>

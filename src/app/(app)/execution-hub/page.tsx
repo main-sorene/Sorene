@@ -2580,14 +2580,14 @@ function BuildDemoStage3({
         <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
       </section>
 
-      {/* ── Sorene's Offer (collapsible) ── */}
-      <CollapseSection title="Sorene's Offer">
-        <OfferBuilderCard project={project} />
-      </CollapseSection>
-
       {/* ── What You Should Do (collapsible, with chat) ── */}
       <CollapseSection title="What You Should Do">
         <BuildDemoGuidanceChat project={project} />
+      </CollapseSection>
+
+      {/* ── Sorene's Offer (collapsible) ── */}
+      <CollapseSection title="Sorene's Offer">
+        <OfferBuilderCard project={project} />
       </CollapseSection>
 
       {/* ── Your MVO (collapsible) ── */}

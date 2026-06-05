@@ -1390,6 +1390,158 @@ function ValidateReadinessBar({ projectTitle, onAdvance }: { projectTitle: strin
   );
 }
 
+// Collapsible section header shared across stage 1
+function CollapseSection({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between mb-3 group"
+      >
+        <h4 className="text-base font-semibold text-[#151515]">{title}</h4>
+        <ChevronDown
+          size={16}
+          className={cn("text-[#9A9A9A] transition-transform duration-200 group-hover:text-[#151515]", open ? "rotate-0" : "-rotate-90")}
+        />
+      </button>
+      <Separator className="bg-[#D8D9DB]" />
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-4">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+function ValidateStage1({
+  step,
+  project,
+  customers,
+  missionWho,
+  interviewQuestions,
+  onAdvance,
+}: {
+  step: typeof VIBE_STEPS[number];
+  project: DirectionCardData | null;
+  customers: ReturnType<typeof useTargetCustomers>;
+  missionWho: string;
+  interviewQuestions: string[];
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="space-y-8">
+
+      {/* ── What is this? ── */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
+      </section>
+
+      {/* ── Your Project (collapsible) ── */}
+      {project && (
+        <CollapseSection title="Your Project">
+          <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
+          {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
+          {project.simple_positioning && (
+            <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3 mb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Positioning</p>
+              <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
+            </div>
+          )}
+          <TargetCustomerCard
+            project={project}
+            main={customers.main}
+            secondary={customers.secondary}
+            loading={customers.loading}
+            regenerate={customers.regenerate}
+            canRegenerate={customers.canRegenerate}
+          />
+        </CollapseSection>
+      )}
+
+      {/* ── Your Mission (collapsible) ── */}
+      <CollapseSection title="Your Mission">
+        <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
+          Have <strong className="text-[#151515] font-semibold">as many conversations as you can</strong> (aim for 30 minutes each) with {missionWho}. The goal is not to pitch — it is to listen deeply and understand their world.
+        </p>
+        <div className="space-y-3">
+          {[
+            "Focus on their problems, not your solution",
+            "Listen more than you talk",
+            "Record real quotes and exact language used",
+            "Log responses here — we will analyze the pattern together",
+          ].map((rule, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
+              <p className="text-[13px] text-[#151515] leading-relaxed">{rule}</p>
+            </div>
+          ))}
+        </div>
+      </CollapseSection>
+
+      {/* ── Sorene generates for you ── */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Generates For You</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <div className="space-y-4">
+
+          {/* Interview questions */}
+          <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+              <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+                <Search size={14} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-[#151515]">3 tailored interview questions</p>
+                <p className="text-[11px] text-[#9A9A9A]">Based on your project's problem area</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              {customers.loading && customers.questions.length === 0 && (
+                <div className="flex items-center gap-2 text-[#9A9A9A] text-[13px]">
+                  <Loader2 size={13} className="animate-spin" /> Tailoring your questions…
+                </div>
+              )}
+              {(!customers.loading || customers.questions.length > 0) && interviewQuestions.map((q, i) => (
+                <div key={i} className="flex gap-3 items-start">
+                  <span className="text-[11px] font-bold text-[#9A9A9A] w-4 shrink-0 mt-0.5">{i + 1}.</span>
+                  <p className="text-[13px] text-[#62646A] leading-relaxed">{q}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Opening Script */}
+          <OpeningScriptCard project={project} />
+
+          {/* Conversation Logger (collapsible handled internally by its own header) */}
+          <CollapseSection title="Customer conversations" defaultOpen={true}>
+            <ConversationLogger projectTitle={project?.title ?? ""} />
+          </CollapseSection>
+
+          {/* Pattern Summary */}
+          <PatternSummaryCard projectTitle={project?.title ?? ""} />
+        </div>
+      </section>
+
+      {/* ── Readiness score ── */}
+      <ValidateReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />
+
+    </div>
+  );
+}
+
 function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null; onAdvance: () => void }) {
   const Icon = step.icon;
   const customers = useTargetCustomers(project);
@@ -1418,110 +1570,14 @@ function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEP
     ];
     const interviewQuestions = customers.questions.length >= 3 ? customers.questions.slice(0, 3) : fallbackQuestions;
 
-    return (
-      <div className="space-y-8">
-
-        {/* ── What is this? ── */}
-        <section>
-          <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
-          <Separator className="bg-[#D8D9DB] mb-4" />
-          <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
-        </section>
-
-        {/* ── Project context ── */}
-        {project && (
-          <section>
-            <h4 className="text-base font-semibold text-[#151515] mb-3">Your Project</h4>
-            <Separator className="bg-[#D8D9DB] mb-4" />
-            <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
-            {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
-            {project.simple_positioning && (
-              <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3 mb-3">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Positioning</p>
-                <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
-              </div>
-            )}
-            <TargetCustomerCard
-              project={project}
-              main={customers.main}
-              secondary={customers.secondary}
-              loading={customers.loading}
-              regenerate={customers.regenerate}
-              canRegenerate={customers.canRegenerate}
-            />
-          </section>
-        )}
-
-        {/* ── Mission ── */}
-        <section>
-          <h4 className="text-base font-semibold text-[#151515] mb-3">Your Mission</h4>
-          <Separator className="bg-[#D8D9DB] mb-4" />
-          <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
-            Have <strong className="text-[#151515] font-semibold">as many conversations as you can</strong> (aim for 30 minutes each) with {missionWho}. The goal is not to pitch — it is to listen deeply and understand their world.
-          </p>
-          <div className="space-y-3">
-            {[
-              "Focus on their problems, not your solution",
-              "Listen more than you talk",
-              "Record real quotes and exact language used",
-              "Log responses here — we will analyze the pattern together",
-            ].map((rule, i) => (
-              <div key={i} className="flex gap-3 items-start">
-                <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
-                <p className="text-[13px] text-[#151515] leading-relaxed">{rule}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Sorene generates for you ── */}
-        <section>
-          <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Generates For You</h4>
-          <Separator className="bg-[#D8D9DB] mb-4" />
-          <div className="space-y-4">
-
-            {/* Interview questions */}
-            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-                <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-                  <Search size={14} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-[#151515]">3 tailored interview questions</p>
-                  <p className="text-[11px] text-[#9A9A9A]">Based on your project's problem area</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {customers.loading && customers.questions.length === 0 && (
-                  <div className="flex items-center gap-2 text-[#9A9A9A] text-[13px]">
-                    <Loader2 size={13} className="animate-spin" /> Tailoring your questions…
-                  </div>
-                )}
-                {(!customers.loading || customers.questions.length > 0) && interviewQuestions.map((q, i) => (
-                  <div key={i} className="flex gap-3 items-start">
-                    <span className="text-[11px] font-bold text-[#9A9A9A] w-4 shrink-0 mt-0.5">{i + 1}.</span>
-                    <p className="text-[13px] text-[#62646A] leading-relaxed">{q}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Opening Script */}
-            <OpeningScriptCard project={project} />
-
-            {/* Conversation Logger */}
-            <ConversationLogger projectTitle={project?.title ?? ""} />
-
-            {/* Pattern Summary */}
-            <PatternSummaryCard projectTitle={project?.title ?? ""} />
-          </div>
-        </section>
-
-        {/* ── Readiness score ── */}
-        <ValidateReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />
-
-      </div>
-    );
+    return <ValidateStage1
+      step={step}
+      project={project}
+      customers={customers}
+      missionWho={missionWho}
+      interviewQuestions={interviewQuestions}
+      onAdvance={onAdvance}
+    />;
   }
 
   // Stages 2–4

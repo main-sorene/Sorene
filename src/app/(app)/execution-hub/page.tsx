@@ -261,60 +261,62 @@ const GO_CHECKS = [
 function useGoNoGoAutoDetect(project: DirectionCardData | null) {
   const title = project?.title ?? "";
   const [auto, setAuto] = useState<Record<string, boolean>>({});
+  const titleRef = useRef(title);
+  titleRef.current = title;
 
-  const detect = () => {
-    if (!title) return;
+  const detect = useRef(() => {
+    const t = titleRef.current;
+    if (!t) return;
     const result: Record<string, boolean> = {};
     try {
-      // problem_defined — painkiller-verdict-<title> saved (Interview stage)
-      result["problem_defined"] = !!(localStorage.getItem(`painkiller-verdict-${title}`) ?? "").trim();
+      // problem_defined — painkiller-verdict-<title> (Interview stage)
+      result["problem_defined"] = !!(localStorage.getItem(`painkiller-verdict-${t}`) ?? "").trim();
 
       // conversations_done — convlog-<title> has ≥ 10 entries (Validate stage)
       try {
-        const convRaw = localStorage.getItem(`convlog-${title}`) ?? "[]";
+        const convRaw = localStorage.getItem(`convlog-${t}`) ?? "[]";
         result["conversations_done"] = JSON.parse(convRaw).length >= 10;
       } catch { result["conversations_done"] = false; }
 
-      // solution_tested — painkiller analysis generated (Interview stage)
-      result["solution_tested"] = !!(localStorage.getItem(`painkiller-analysis-${title}`) ?? "").trim();
+      // solution_tested — painkiller-analysis-<title> generated (Interview stage)
+      result["solution_tested"] = !!(localStorage.getItem(`painkiller-analysis-${t}`) ?? "").trim();
 
       // customer_clear — target-customers-<title> saved (Validate stage)
-      result["customer_clear"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
+      result["customer_clear"] = !!(localStorage.getItem(`target-customers-${t}`) ?? "").trim();
 
-      // paying_customers, responses_logged, feedback_quality — experiment-customers (Experiment stage)
+      // paying_customers, responses_logged, feedback_quality (Experiment stage)
       try {
-        const customers: { response: string; note?: string }[] = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+        const customers: { response: string; note?: string }[] = JSON.parse(localStorage.getItem(`experiment-customers-${t}`) ?? "[]");
         result["paying_customers"]  = customers.filter((c) => c.response === "yes").length >= 3;
         result["responses_logged"]  = customers.length > 0;
         result["feedback_quality"]  = customers.some((c) => (c.note ?? "").trim().length > 0);
       } catch { result["paying_customers"] = false; result["responses_logged"] = false; result["feedback_quality"] = false; }
 
-      // offer_built — mvo-defined-<title> saved (Build Demo stage)
-      result["offer_built"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
+      // offer_built — mvo-defined-<title> (Build Demo stage)
+      result["offer_built"] = !!(localStorage.getItem(`mvo-defined-${t}`) ?? "").trim();
 
-      // validation_score — experiment-validation-score-<title> saved (Experiment stage)
-      result["validation_score"] = !!(localStorage.getItem(`experiment-validation-score-${title}`) ?? "").trim();
+      // validation_score — experiment-validation-score-<title> (Experiment stage)
+      result["validation_score"] = !!(localStorage.getItem(`experiment-validation-score-${t}`) ?? "").trim();
 
-      // vibe_understood — pattern-summary-<title> saved (Validate stage completed analysis)
-      result["vibe_understood"] = !!(localStorage.getItem(`pattern-summary-${title}`) ?? "").trim();
+      // vibe_understood — pattern-summary-<title> generated (Validate stage)
+      result["vibe_understood"] = !!(localStorage.getItem(`pattern-summary-${t}`) ?? "").trim();
 
-      // mvo_understood — mvo-defined-<title> saved (Build Demo stage)
-      result["mvo_understood"] = !!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim();
+      // mvo_understood — mvo-defined-<title> (Build Demo stage)
+      result["mvo_understood"] = !!(localStorage.getItem(`mvo-defined-${t}`) ?? "").trim();
 
-      // dna_direction — target-customers-<title> saved (DNA/direction saved)
-      result["dna_direction"] = !!(localStorage.getItem(`target-customers-${title}`) ?? "").trim();
+      // dna_direction — target-customers-<title> (Validate stage)
+      result["dna_direction"] = !!(localStorage.getItem(`target-customers-${t}`) ?? "").trim();
 
-      // vibe_completed — validation-stage-<title> >= 5
-      try { result["vibe_completed"] = parseInt(localStorage.getItem(`validation-stage-${title}`) ?? "1", 10) >= 5; } catch { result["vibe_completed"] = false; }
+      // vibe_completed — reached stage 5
+      try { result["vibe_completed"] = parseInt(localStorage.getItem(`validation-stage-${t}`) ?? "1", 10) >= 5; } catch { result["vibe_completed"] = false; }
     } catch { /* ignore */ }
     setAuto(result);
-  };
+  });
 
   useEffect(() => {
-    detect();
-    const t = setInterval(detect, 3000);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    detect.current();
+    const timer = setInterval(() => detect.current(), 2000);
+    return () => clearInterval(timer);
   }, [title]);
 
   return auto;

@@ -4017,34 +4017,12 @@ function BuildDemoStage3({
 // ─────────────────────────────────────────────
 
 const LAUNCH_PILLARS = [
-  { id: "legal", label: "Legal & Structure", icon: FileText, items: [
-    { id: "incorporation", label: "Business incorporation" },
-    { id: "dba_name", label: "Register fictitious/DBA name" },
-    { id: "ein", label: "Get federal Tax ID (EIN)" },
-    { id: "lawyer", label: "Hire a business lawyer" },
-    { id: "permits", label: "Get business permits & licenses" },
-    { id: "contracts", label: "Draft contracts (partners & customers)" },
-  ]},
-  { id: "finance", label: "Financial Setup", icon: DollarSign, items: [
-    { id: "bank_account", label: "Open business bank account" },
-    { id: "credit_card", label: "Get business credit card" },
-    { id: "accounting_setup", label: "Set up accounting system" },
-    { id: "tax_pro", label: "Hire tax professional + tax planning" },
-    { id: "insurance", label: "Get business insurance" },
-    { id: "funding_plan", label: "Finalize funding plan" },
-  ]},
   { id: "brand_digital", label: "Brand & Digital Presence", icon: Rocket, items: [
     { id: "biz_name", label: "Finalise business name" },
     { id: "domain", label: "Register domain" },
     { id: "hosting", label: "Get web hosting" },
     { id: "website", label: "Build website" },
     { id: "social", label: "Set up social media profiles" },
-  ]},
-  { id: "operations", label: "Operations", icon: Users, items: [
-    { id: "processes", label: "Identify core business processes" },
-    { id: "office", label: "Get office space / set up remote" },
-    { id: "it", label: "IT capabilities (hardware, cloud, security)" },
-    { id: "ops_docs", label: "Document operational processes" },
   ]},
   { id: "tools", label: "Tools Stack", icon: BarChart3, items: [
     { id: "crm", label: "CRM (customer relationship management)" },
@@ -4055,11 +4033,33 @@ const LAUNCH_PILLARS = [
     { id: "social_tool", label: "Social media scheduler" },
     { id: "expense", label: "Expense tracking" },
   ]},
+  { id: "operations", label: "Operations", icon: Users, items: [
+    { id: "processes", label: "Identify core business processes" },
+    { id: "office", label: "Get office space / set up remote" },
+    { id: "it", label: "IT capabilities (hardware, cloud, security)" },
+    { id: "ops_docs", label: "Document operational processes" },
+  ]},
   { id: "growth", label: "Growth", icon: BarChart3, items: [
     { id: "marketing", label: "Build marketing strategy" },
     { id: "first_hire", label: "Plan first hire" },
     { id: "partner_contracts", label: "Sign partner & customer contracts" },
     { id: "funding_pitch", label: "Prepare funding pitch (if applicable)" },
+  ]},
+  { id: "finance", label: "Financial Setup", icon: DollarSign, items: [
+    { id: "bank_account", label: "Open business bank account" },
+    { id: "credit_card", label: "Get business credit card" },
+    { id: "accounting_setup", label: "Set up accounting system" },
+    { id: "tax_pro", label: "Hire tax professional + tax planning" },
+    { id: "insurance", label: "Get business insurance" },
+    { id: "funding_plan", label: "Finalize funding plan" },
+  ]},
+  { id: "legal", label: "Legal & Structure", icon: FileText, items: [
+    { id: "incorporation", label: "Business incorporation" },
+    { id: "dba_name", label: "Register fictitious/DBA name" },
+    { id: "ein", label: "Get federal Tax ID (EIN)" },
+    { id: "lawyer", label: "Hire a business lawyer" },
+    { id: "permits", label: "Get business permits & licenses" },
+    { id: "contracts", label: "Draft contracts (partners & customers)" },
   ]},
 ];
 
@@ -4288,7 +4288,7 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
 function LaunchPadContent({ project }: { project: DirectionCardData | null }) {
   return (
     <div className="p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {LAUNCH_PILLARS.map((pillar) => (
           <PillarCard key={pillar.id} pillar={pillar} project={project} />
         ))}

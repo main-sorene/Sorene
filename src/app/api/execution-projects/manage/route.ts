@@ -11,9 +11,10 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { action, projectTitle } = (await req.json()) as {
-    action: "archive" | "unarchive" | "delete";
+  const { action, projectTitle, oneliner } = (await req.json()) as {
+    action: "archive" | "unarchive" | "delete" | "update";
     projectTitle: string;
+    oneliner?: string;
   };
   if (!action || !projectTitle) {
     return Response.json({ error: "Missing fields" }, { status: 400 });
@@ -22,7 +23,15 @@ export async function POST(req: NextRequest) {
   const db = getAdminFirestore();
   const userRef = db.collection("users").doc(user.uid);
   const snap = await userRef.get();
-  const projects: { title: string; archived?: boolean }[] = snap.data()?.executionProjects ?? [];
+  const projects: { title: string; archived?: boolean; oneliner?: string }[] = snap.data()?.executionProjects ?? [];
+
+  if (action === "update") {
+    const updated = projects.map((p) =>
+      p.title === projectTitle ? { ...p, ...(oneliner !== undefined ? { oneliner } : {}) } : p
+    );
+    await userRef.set({ executionProjects: updated }, { merge: true });
+    return Response.json({ success: true, projects: updated });
+  }
 
   if (action === "delete") {
     const remaining = projects.filter((p) => p.title !== projectTitle);

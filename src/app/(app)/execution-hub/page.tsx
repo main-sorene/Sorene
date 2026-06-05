@@ -5992,28 +5992,58 @@ function ProjectPicker({
 // ProjectSettings — archive / delete the current project
 // ─────────────────────────────────────────────
 
+function SettingsRow({ icon, title, subtitle, onClick, disabled, danger }: {
+  icon: React.ReactNode; title: string; subtitle: string; onClick: () => void; disabled?: boolean; danger?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors disabled:opacity-40", danger ? "hover:bg-[#FEF2F2]" : "hover:bg-[#F8F9FA]")}>
+      <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", danger ? "bg-[#FEF2F2]" : "bg-gray-100")}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className={cn("text-body-small-medium", danger ? "text-[#EF4444]" : "text-[#151515]")}>{title}</p>
+        <p className="text-[11px] text-[#9A9A9A]">{subtitle}</p>
+      </div>
+    </button>
+  );
+}
+
+type SettingsMode = "menu" | "confirmDelete" | "rename" | "editOneliner" | "confirmReset";
+
 function ProjectSettings({
   project,
+  displayName,
   onArchived,
   onDeleted,
+  onRenamed,
+  onUpdated,
 }: {
   project: DirectionCardData;
+  displayName: string;
   onArchived: (archived: boolean) => void;
   onDeleted: () => void;
+  onRenamed: (name: string) => void;
+  onUpdated: (oneliner: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [mode, setMode] = useState<SettingsMode>("menu");
   const [busy, setBusy] = useState(false);
+  const [nameInput, setNameInput] = useState(displayName);
+  const [onelinerInput, setOnelinerInput] = useState(project.oneliner ?? "");
   const ref = useRef<HTMLDivElement>(null);
   const archived = !!(project as DirectionCardData & { archived?: boolean }).archived;
 
   useEffect(() => {
     function close(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setConfirmDelete(false); }
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setMode("menu"); }
     }
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
+
+  // Keep inputs in sync when switching projects.
+  useEffect(() => { setNameInput(displayName); setOnelinerInput(project.oneliner ?? ""); }, [displayName, project.oneliner]);
 
   const manage = async (action: "archive" | "unarchive" | "delete") => {
     setBusy(true);
@@ -6028,10 +6058,77 @@ function ProjectSettings({
         if (action === "delete") onDeleted();
         else onArchived(action === "archive");
         setOpen(false);
-        setConfirmDelete(false);
+        setMode("menu");
       }
     } catch { /* ignore */ }
     setBusy(false);
+  };
+
+  const saveRename = () => {
+    const name = nameInput.trim();
+    if (!name) return;
+    onRenamed(name);
+    setOpen(false);
+    setMode("menu");
+  };
+
+  const saveOneliner = async () => {
+    setBusy(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-projects/manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", projectTitle: project.title, oneliner: onelinerInput.trim() }),
+      });
+      if (res.ok) { onUpdated(onelinerInput.trim()); setOpen(false); setMode("menu"); }
+    } catch { /* ignore */ }
+    setBusy(false);
+  };
+
+  // Export every localStorage key tied to this project as a JSON file.
+  const exportProject = () => {
+    const data: Record<string, string> = {};
+    try {
+      const suffix = `-${project.title}`;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.endsWith(suffix)) {
+          const v = localStorage.getItem(key);
+          if (v !== null) data[key] = v;
+        }
+      }
+    } catch { /* ignore */ }
+    const payload = { title: project.title, oneliner: project.oneliner ?? "", exportedAt: new Date().toISOString(), data };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.title.replace(/[^a-zA-Z0-9_-]/g, "_")}-export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setOpen(false);
+    setMode("menu");
+  };
+
+  // Clear all of this project's progress keys (kept project + identity).
+  const resetProgress = () => {
+    try {
+      const suffix = `-${project.title}`;
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        // Preserve the chosen business name / custom display name; wipe progress.
+        if (key && key.endsWith(suffix) && key !== `business-name-${project.title}`) {
+          toRemove.push(key);
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+    setOpen(false);
+    setMode("menu");
+    // Notify the hub to re-read storage (remount content).
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("execution-state-hydrated"));
   };
 
   return (
@@ -6056,44 +6153,83 @@ function ProjectSettings({
           >
             <div className="px-4 py-3 border-b border-gray-100">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Project Settings</p>
-              <p className="text-[13px] font-semibold text-[#151515] truncate mt-0.5">{project.title}</p>
+              <p className="text-[13px] font-semibold text-[#151515] truncate mt-0.5">{displayName}</p>
             </div>
 
-            {!confirmDelete ? (
+            {mode === "menu" && (
               <div className="p-1.5">
-                <button
-                  onClick={() => manage(archived ? "unarchive" : "archive")}
-                  disabled={busy}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#F8F9FA] transition-colors disabled:opacity-40"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
-                    <Archive size={13} className="text-[#62646A]" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-body-small-medium text-[#151515]">{archived ? "Unarchive project" : "Archive project"}</p>
-                    <p className="text-[11px] text-[#9A9A9A]">{archived ? "Restore to active projects" : "Hide without deleting data"}</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={busy}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#FEF2F2] transition-colors disabled:opacity-40"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
-                    <Trash2 size={13} className="text-[#EF4444]" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-body-small-medium text-[#EF4444]">Delete project</p>
-                    <p className="text-[11px] text-[#9A9A9A]">Permanently remove all data</p>
-                  </div>
-                </button>
+                <SettingsRow icon={<User size={13} className="text-[#62646A]" />} title="Rename project" subtitle="Change the display name"
+                  onClick={() => { setNameInput(displayName); setMode("rename"); }} disabled={busy} />
+                <SettingsRow icon={<FileText size={13} className="text-[#62646A]" />} title="Edit one-liner" subtitle="Update the short description"
+                  onClick={() => { setOnelinerInput(project.oneliner ?? ""); setMode("editOneliner"); }} disabled={busy} />
+                <SettingsRow icon={<ArrowRight size={13} className="text-[#62646A]" />} title="Export project" subtitle="Download all progress as JSON"
+                  onClick={exportProject} disabled={busy} />
+                <div className="h-px bg-gray-100 my-1" />
+                <SettingsRow icon={<Archive size={13} className="text-[#62646A]" />} title={archived ? "Unarchive project" : "Archive project"} subtitle={archived ? "Restore to active projects" : "Hide without deleting data"}
+                  onClick={() => manage(archived ? "unarchive" : "archive")} disabled={busy} />
+                <SettingsRow icon={<Loader2 size={13} className="text-[#62646A]" />} title="Reset progress" subtitle="Clear checklists & answers"
+                  onClick={() => setMode("confirmReset")} disabled={busy} />
+                <SettingsRow icon={<Trash2 size={13} className="text-[#EF4444]" />} title="Delete project" subtitle="Permanently remove all data" danger
+                  onClick={() => setMode("confirmDelete")} disabled={busy} />
               </div>
-            ) : (
+            )}
+
+            {mode === "rename" && (
+              <div className="p-4 space-y-3">
+                <div>
+                  <p className="text-[12px] font-medium text-[#151515] mb-1.5">Display name</p>
+                  <input autoFocus value={nameInput} onChange={(e) => setNameInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveRename(); }}
+                    className="w-full text-[13px] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382]" />
+                  <p className="text-[11px] text-[#9A9A9A] mt-1.5">Shown in the picker and across the hub. Your saved progress is kept.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setMode("menu")} className="flex-1 text-[13px] font-medium text-[#151515] border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={saveRename} disabled={!nameInput.trim()} className="flex-1 text-[13px] font-medium text-white bg-[#151515] px-3 py-2 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40">Save</button>
+                </div>
+              </div>
+            )}
+
+            {mode === "editOneliner" && (
+              <div className="p-4 space-y-3">
+                <div>
+                  <p className="text-[12px] font-medium text-[#151515] mb-1.5">One-liner</p>
+                  <textarea autoFocus value={onelinerInput} onChange={(e) => setOnelinerInput(e.target.value)} rows={3}
+                    className="w-full text-[13px] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382] resize-none" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setMode("menu")} disabled={busy} className="flex-1 text-[13px] font-medium text-[#151515] border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-40">Cancel</button>
+                  <button onClick={saveOneliner} disabled={busy} className="flex-1 text-[13px] font-medium text-white bg-[#151515] px-3 py-2 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-1.5">
+                    {busy ? <Loader2 size={13} className="animate-spin" /> : null} Save
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mode === "confirmReset" && (
+              <div className="p-4">
+                <div className="flex items-start gap-2.5 mb-3">
+                  <AlertTriangle size={16} className="text-[#F59E0B] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#151515]">Reset progress?</p>
+                    <p className="text-[12px] text-[#62646A] leading-relaxed mt-1">
+                      This clears all checklists, brand copy, and saved answers for this project. The project itself stays. This cannot be undone.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setMode("menu")} className="flex-1 text-[13px] font-medium text-[#151515] border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
+                  <button onClick={resetProgress} className="flex-1 text-[13px] font-medium text-white bg-[#F59E0B] px-3 py-2 rounded-xl hover:bg-[#D97706] transition-colors">Reset</button>
+                </div>
+              </div>
+            )}
+
+            {mode === "confirmDelete" && (
               <div className="p-4">
                 <div className="flex items-start gap-2.5 mb-3">
                   <AlertTriangle size={16} className="text-[#EF4444] shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[13px] font-semibold text-[#151515]">Delete &ldquo;{project.title}&rdquo;?</p>
+                    <p className="text-[13px] font-semibold text-[#151515]">Delete &ldquo;{displayName}&rdquo;?</p>
                     <p className="text-[12px] text-[#62646A] leading-relaxed mt-1">
                       This permanently removes the project and all its progress, conversations, and settings from your account. This cannot be undone.
                     </p>
@@ -6101,7 +6237,7 @@ function ProjectSettings({
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setConfirmDelete(false)}
+                    onClick={() => setMode("menu")}
                     disabled={busy}
                     className="flex-1 text-[13px] font-medium text-[#151515] border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-40"
                   >
@@ -6286,6 +6422,7 @@ export default function Page() {
               {selectedProject && (
                 <ProjectSettings
                   project={selectedProject}
+                  displayName={customNames[selectedProject.title] || selectedProject.title}
                   onArchived={(archived) => {
                     setProjects((prev) => prev.map((p) => p.title === selectedProject.title ? { ...p, archived } : p));
                     setSelectedProject((prev) => prev ? { ...prev, archived } as DirectionCardData : prev);
@@ -6294,6 +6431,15 @@ export default function Page() {
                     setProjects((prev) => prev.filter((p) => p.title !== selectedProject.title));
                     setSelectedProject(null);
                     setActiveTab("validation");
+                  }}
+                  onRenamed={(name) => {
+                    const updated = { ...customNames, [selectedProject.title]: name };
+                    setCustomNames(updated);
+                    try { localStorage.setItem("custom-project-names", JSON.stringify(updated)); } catch { /* ignore */ }
+                  }}
+                  onUpdated={(oneliner) => {
+                    setProjects((prev) => prev.map((p) => p.title === selectedProject.title ? { ...p, oneliner } : p));
+                    setSelectedProject((prev) => prev ? { ...prev, oneliner } as DirectionCardData : prev);
                   }}
                 />
               )}

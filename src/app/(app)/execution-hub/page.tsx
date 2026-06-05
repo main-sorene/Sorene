@@ -4046,12 +4046,6 @@ const LAUNCH_PILLARS = [
     { id: "it", label: "IT capabilities (hardware, cloud, security)" },
     { id: "ops_docs", label: "Document operational processes" },
   ]},
-  { id: "growth", label: "Growth", icon: BarChart3, items: [
-    { id: "marketing", label: "Build marketing strategy" },
-    { id: "first_hire", label: "Plan first hire" },
-    { id: "partner_contracts", label: "Sign partner & customer contracts" },
-    { id: "funding_pitch", label: "Prepare funding pitch (if applicable)" },
-  ]},
   { id: "finance", label: "Financial Setup", icon: DollarSign, items: [
     { id: "bank_account", label: "Open business bank account" },
     { id: "credit_card", label: "Get business credit card" },
@@ -4070,7 +4064,15 @@ const LAUNCH_PILLARS = [
   ]},
 ];
 
-type PillarDef = typeof LAUNCH_PILLARS[number];
+// Growth lives in its own top-level tab (not inside Launchpad).
+const GROWTH_PILLAR = { id: "growth", label: "Growth", icon: BarChart3, items: [
+  { id: "marketing", label: "Build marketing strategy" },
+  { id: "first_hire", label: "Plan first hire" },
+  { id: "partner_contracts", label: "Sign partner & customer contracts" },
+  { id: "funding_pitch", label: "Prepare funding pitch (if applicable)" },
+] } as const;
+
+type PillarDef = typeof LAUNCH_PILLARS[number] | typeof GROWTH_PILLAR;
 type ChecklistStatus = "todo" | "progress" | "done";
 
 // ─────────────────────────────────────────────
@@ -5368,6 +5370,120 @@ function LaunchPadContent({ project, onNameChosen }: { project: DirectionCardDat
 }
 
 // ─────────────────────────────────────────────
+// GrowthContent — top-level Growth tab (full width)
+// ─────────────────────────────────────────────
+
+function GrowthContent({ project }: { project: DirectionCardData | null }) {
+  const pillar = GROWTH_PILLAR;
+  const title = project?.title ?? "";
+  const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
+  const [tips, setTips] = useState<Record<string, string>>({});
+  const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
+
+  useEffect(() => {
+    if (!title) return;
+    const loaded: Record<string, ChecklistStatus> = {};
+    for (const item of pillar.items) {
+      try {
+        const v = localStorage.getItem(`launchpad-status-${item.id}-${title}`) as ChecklistStatus | null;
+        loaded[item.id] = v ?? "todo";
+      } catch { loaded[item.id] = "todo"; }
+    }
+    setStatuses(loaded);
+    try {
+      const raw = localStorage.getItem(`launchpad-tips-${pillar.id}-${title}`);
+      if (raw) { setTips(JSON.parse(raw)); setTipsStage("done"); }
+      else { setTips({}); setTipsStage("idle"); }
+    } catch { setTips({}); setTipsStage("idle"); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const cycleStatus = (itemId: string) => {
+    setStatuses((prev) => {
+      const cur = prev[itemId] ?? "todo";
+      const next: ChecklistStatus = cur === "todo" ? "progress" : cur === "progress" ? "done" : "todo";
+      const updated = { ...prev, [itemId]: next };
+      try { localStorage.setItem(`launchpad-status-${itemId}-${title}`, next); } catch { /* ignore */ }
+      return updated;
+    });
+  };
+
+  const generateTips = async () => {
+    if (!title) return;
+    setTipsStage("loading");
+    const painkiller      = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer           = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const patternSummary  = localStorage.getItem(`pattern-summary-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    const itemList = pillar.items.map((i) => `"${i.id}": "${i.label}"`).join(", ");
+    const system = `You are Sorene, a startup coach. Respond ONLY with valid JSON — a single object. No markdown, no preamble.`;
+    const prompt = `Give a short, specific tip (1 sentence, max 20 words) for each checklist item for this founder.\n\nProject: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}\n\nPillar: "${pillar.label}"\nItems: { ${itemList} }\n\nReturn JSON: { [itemId]: "tip string" }`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setTips(parsed); setTipsStage("done");
+          try { localStorage.setItem(`launchpad-tips-${pillar.id}-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+        } else { setTipsStage("idle"); }
+      } else { setTipsStage("idle"); }
+    } catch { setTipsStage("idle"); }
+  };
+
+  const doneCount = pillar.items.filter((i) => (statuses[i.id] ?? "todo") === "done").length;
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <span className="text-[12px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
+        {tipsStage === "idle" && (
+          <button onClick={generateTips} disabled={!title}
+            className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center gap-1">
+            <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Get personalised tips
+          </button>
+        )}
+        {tipsStage === "loading" && (
+          <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
+            <Loader2 size={11} className="animate-spin" /> Getting tips…
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        {pillar.items.map((item) => {
+          const status = statuses[item.id] ?? "todo";
+          const tip = tips[item.id];
+          return (
+            <div key={item.id}>
+              <button onClick={() => cycleStatus(item.id)} className="w-full flex items-center gap-3 text-left group">
+                <div className={cn(
+                  "w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
+                  status === "done"       ? "bg-[#32C382] border-[#32C382]"
+                  : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
+                  : "bg-white border-gray-300 group-hover:border-[#151515]"
+                )} />
+                <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
+                  {item.label}
+                </span>
+              </button>
+              {tip && (
+                <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
+                  {tip}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Agents System (placeholder)
 // ─────────────────────────────────────────────
 
@@ -5699,7 +5815,7 @@ function FolderCard({ folder }: { folder: FolderDef }) {
 // Tabs
 // ─────────────────────────────────────────────
 
-type Tab = "validation" | "launchpad" | "agents" | "direct-sync";
+type Tab = "validation" | "launchpad" | "growth" | "agents" | "direct-sync";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; gradient: string }[] = [
   {
@@ -5713,6 +5829,12 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; gradient: string }[
     label: "Launchpad",
     icon: <Rocket size={14} />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #EF6820 0%, #FAC515 100%)`,
+  },
+  {
+    id: "growth",
+    label: "Growth",
+    icon: <BarChart3 size={14} />,
+    gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)`,
   },
   {
     id: "agents",
@@ -6057,7 +6179,7 @@ export default function Page() {
                     <div
                       key={`${selectedProject?.title ?? "all"}-${activeTab}`}
                       className={cn(
-                        activeTab === "validation" || activeTab === "launchpad" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+                        activeTab === "validation" || activeTab === "launchpad" || activeTab === "growth" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
                       )}
                     >
                       {activeTab === "validation"
@@ -6070,6 +6192,8 @@ export default function Page() {
                             setCustomNames(updated);
                             try { localStorage.setItem("custom-project-names", JSON.stringify(updated)); } catch { /* ignore */ }
                           }} />
+                        : activeTab === "growth"
+                        ? <GrowthContent key={`gr-${hydratedTick}`} project={selectedProject ?? null} />
                         : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

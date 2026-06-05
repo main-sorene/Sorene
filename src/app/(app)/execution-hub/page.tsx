@@ -2041,14 +2041,14 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle]);
 
-  const highEnoughConfidence = isConfidenceHighEnough(confidence);
-
   const checkItems = [
-    { done: convCount >= 20,      text: `${convCount} conversations logged (target: 20–100)` },
-    { done: hasAnalysis,          text: "Painkiller analysis run" },
-    { done: highEnoughConfidence, text: `Confidence assessed at Medium-High or above${confidence ? ` — current: ${confidence}` : " (run Confidence Level section)"}` },
-    { done: hasVerdict,           text: "Painkiller problem defined" },
+    { done: convCount >= 20, text: `${convCount} conversations logged (target: 20–100)` },
+    { done: hasAnalysis,     text: "Painkiller analysis run" },
+    { done: hasVerdict,      text: "Painkiller problem defined" },
   ];
+
+  // Confidence is informational only — shown as context, not a gate
+  const confidenceNote = confidence ? `Confidence: ${confidence}` : null;
 
   const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
   const canAdvance = checkItems.every((c) => c.done);
@@ -2083,6 +2083,15 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
               <p className={cn("text-[12px]", item.done ? "text-[#151515] font-medium" : "text-[#9A9A9A]")}>{item.text}</p>
             </div>
           ))}
+          {confidenceNote && (
+            <div className="flex items-center gap-2.5 pt-1">
+              <div className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+                isConfidenceHighEnough(confidence) ? "bg-[#32C382]" : "bg-[#FFD43B]")}>
+                <BarChart3 size={8} className="text-white" />
+              </div>
+              <p className="text-[12px] text-[#9A9A9A]">{confidenceNote} — informational, not a gate</p>
+            </div>
+          )}
         </div>
       </div>
       <div className="px-5 pb-4">
@@ -2097,9 +2106,7 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
             <p className="text-[12px] text-[#9A9A9A] leading-relaxed">
               {(() => {
                 const failing = checkItems.find((c) => !c.done);
-                if (!failing) return "Complete all items above to unlock Build Demo.";
-                if (!highEnoughConfidence && hasAnalysis) return "Confidence must reach Medium-High or above — re-run the Confidence Level section after more conversations.";
-                return `Complete: ${failing.text.split(" —")[0].toLowerCase()}`;
+                return failing ? `Complete: ${failing.text.split(" (")[0].toLowerCase()}` : "Complete all items above to unlock Build Demo.";
               })()}
             </p>
           </div>

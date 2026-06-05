@@ -75,7 +75,7 @@ export function DirectionCard({
   variant = "standard",
   score,
   badges,
-  actionText = "View detail",
+  actionText = "See Detail",
   className,
   cardData,
   whyFitsYou = [

@@ -463,7 +463,7 @@ export async function POST(req: NextRequest) {
       const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
-        max_tokens: 1000,
+        max_tokens: 2000,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });

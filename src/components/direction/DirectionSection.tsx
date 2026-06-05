@@ -264,7 +264,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={heroRecipe.title}
               description={heroRecipe.description}
-              actionText="View detail"
+              actionText="See Detail"
               score={String(heroRecipe.score)}
               whyFitsYou={heroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
               keyRisks={heroRecipe.keyRisks}
@@ -286,7 +286,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={primaryCard.title}
               description={primaryCard.description}
-              actionText="View detail"
+              actionText="See Detail"
               score={String(primaryCard.compatibility)}
               cardData={primaryCard}
               onHide={() => hideCard(heroPrimaryId)}
@@ -303,7 +303,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={promotedAlt.title}
               description={promotedAlt.description}
-              actionText="View detail"
+              actionText="See Detail"
               score={String(promotedAlt.compatibility)}
               cardData={promotedAlt}
               onHide={() => hideCard(promotedAlt.title)}
@@ -321,7 +321,7 @@ export const DirectionSection = () => {
               title={promotedRecipe.title}
               description={promotedRecipe.description}
 
-              actionText="View detail"
+              actionText="See Detail"
               score={String(promotedRecipe.score)}
               whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
               keyRisks={promotedRecipe.keyRisks}
@@ -363,7 +363,7 @@ export const DirectionSection = () => {
                   title={expandedAlt.title}
                   description={expandedAlt.description}
                   score={String(expandedAlt.compatibility)}
-                  actionText="View detail"
+                  actionText="See Detail"
                   cardData={expandedAlt}
                   isExpanded={true}
                   onToggle={() => setExpandedId(null)}
@@ -384,7 +384,7 @@ export const DirectionSection = () => {
                   description={expandedRecipe.description}
     
                   score={String(expandedRecipe.score)}
-                  actionText="View detail"
+                  actionText="See Detail"
                   whyFitsYou={expandedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
                   keyRisks={expandedRecipe.keyRisks}
                   isExpanded={true}
@@ -404,7 +404,7 @@ export const DirectionSection = () => {
                       title={card.title}
                       description={card.description}
                       score={String(card.compatibility)}
-                      actionText="View detail"
+                      actionText="See Detail"
                       cardData={card}
                       isExpanded={false}
                       onToggle={() => setExpandedId(card.title)}
@@ -424,7 +424,7 @@ export const DirectionSection = () => {
                       title={rd.title}
                       description={rd.description}
                       score={String(rd.score)}
-                      actionText="View detail"
+                      actionText="See Detail"
                       whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
                       keyRisks={rd.keyRisks}
                       isExpanded={false}
@@ -478,7 +478,7 @@ export const DirectionSection = () => {
               variant="hero"
               title={legacyHeroRecipe.title}
               description={legacyHeroRecipe.description}
-              actionText="View detail"
+              actionText="See Detail"
               score={String(legacyHeroRecipe.score)}
               whyFitsYou={legacyHeroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
               keyRisks={legacyHeroRecipe.keyRisks}
@@ -501,7 +501,7 @@ export const DirectionSection = () => {
               title={model || "Your Direction"}
               description={directionText}
 
-              actionText="View detail"
+              actionText="See Detail"
               score={String(bestCompatibility ?? 100)}
               onHide={() => hideCard("__hero__")}
             />
@@ -512,7 +512,7 @@ export const DirectionSection = () => {
               title={a.model}
               description={a.summary || ""}
 
-              actionText="View detail"
+              actionText="See Detail"
               score={String(a.compatibility)}
               onHide={() => hideCard(a.model)}
             />
@@ -523,7 +523,7 @@ export const DirectionSection = () => {
               title={rd.title}
               description={rd.description}
 
-              actionText="View detail"
+              actionText="See Detail"
               score={String(rd.score)}
               whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
               keyRisks={rd.keyRisks}
@@ -556,7 +556,7 @@ export const DirectionSection = () => {
                   title={alt.model}
                   description={alt.summary || "Sorene is generating this alternative direction…"}
                   score={String(alt.compatibility)}
-                  actionText="View detail"
+                  actionText="See Detail"
                   onHide={() => hideCard(alt.model)}
                 />
               ))}
@@ -573,7 +573,7 @@ export const DirectionSection = () => {
                     whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
                     keyRisks={rd.keyRisks}
                     recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
-                    actionText="View detail"
+                    actionText="See Detail"
                     isExpanded={expandedId === rd.id}
                     onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                     onHide={() => hideCard(rd.id)}
@@ -667,7 +667,7 @@ export const DirectionSection = () => {
             variant="hero"
             title={ideationHeroRecipe.title}
             description={ideationHeroRecipe.description}
-            actionText="View detail"
+            actionText="See Detail"
             score={String(ideationHeroRecipe.score)}
             whyFitsYou={ideationHeroRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
             keyRisks={ideationHeroRecipe.keyRisks}
@@ -688,7 +688,7 @@ export const DirectionSection = () => {
           <DirectionCard
             variant="hero"
             {...mapIdeaToCardProps(displayedHero)}
-            actionText="View detail"
+            actionText="See Detail"
             onHide={() => hideCard(displayedHero.name)}
           />
         )}
@@ -697,7 +697,7 @@ export const DirectionSection = () => {
             variant="hero"
             title={rd.title}
             description={rd.description}
-            actionText="View detail"
+            actionText="See Detail"
             score={String(rd.score)}
             whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
             keyRisks={rd.keyRisks}
@@ -757,7 +757,7 @@ export const DirectionSection = () => {
                 whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
                 keyRisks={rd.keyRisks}
                 recommendedFirstStep={rd.firstStep ? { progress: 0, steps: [{ id: "1", label: rd.firstStep, completed: false }] } : undefined}
-                actionText="View detail"
+                actionText="See Detail"
                 isExpanded={expandedId === rd.id}
                 onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                 onHide={() => hideCard(rd.id)}

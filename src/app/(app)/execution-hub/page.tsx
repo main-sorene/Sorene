@@ -1598,55 +1598,361 @@ function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEP
     />;
   }
 
-  // Stages 2–4
+  if (step.id === 2) {
+    return <InterviewStage2 step={step} project={project} onAdvance={onAdvance} />;
+  }
+
+  // Stages 3–4
   return (
     <div className="space-y-8">
       <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
         <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
       </section>
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-            <Icon size={16} className="text-white" />
-          </div>
-          <h4 className="text-base font-medium text-[#151515]">Objective</h4>
-        </div>
-        <Separator className="bg-[#D8D9DB] mb-4" />
-        <p className="text-[13px] text-[#151515] font-medium leading-relaxed">{step.title}</p>
-      </section>
-      <section>
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Provides</h4>
-            <Separator className="bg-[#ECEDEE] mb-4" />
-            <div className="space-y-3">
-              {step.soreneDoes.map((s, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
-                  <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
-                </div>
-              ))}
+      <CollapseSection title="Sorene Provides">
+        <div className="space-y-3">
+          {step.soreneDoes.map((s, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
+              <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
             </div>
-          </div>
-          <div className="flex-1">
-            <h4 className="text-base font-semibold text-[#151515] mb-3">You Must Do</h4>
-            <Separator className="bg-[#ECEDEE] mb-4" />
-            <div className="space-y-3">
-              {step.userDoes.map((s, i) => (
-                <div key={i} className="flex gap-3 items-start">
-                  <span className="mt-2 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" />
-                  <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
-      </section>
+      </CollapseSection>
+      <CollapseSection title="You Must Do">
+        <div className="space-y-3">
+          {step.userDoes.map((s, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
+              <p className="text-[13px] text-[#151515] leading-relaxed">{s}</p>
+            </div>
+          ))}
+        </div>
+      </CollapseSection>
       {step.insight && (
         <div className="rounded-2xl bg-[#F5FFD9] border border-[#32C382]/30 px-4 py-3">
           <p className="text-label-medium text-[#151515] leading-relaxed">{step.insight}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Interview Stage 2 — Painkiller Problem
+// ─────────────────────────────────────────────
+
+function PainkillerAnalysisCard({ projectTitle }: { projectTitle: string }) {
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [output, setOutput] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const cacheKey = `painkiller-analysis-${projectTitle}`;
+
+  useEffect(() => {
+    if (!projectTitle || loaded) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) { setOutput(raw); setStage("done"); }
+    } catch { /* ignore */ }
+    setLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const handleAnalyze = async () => {
+    const convRaw = localStorage.getItem(`convlog-${projectTitle}`);
+    const convs: { name?: string; notes?: string; createdAt?: string }[] = convRaw ? JSON.parse(convRaw) : [];
+    const patternRaw = localStorage.getItem(`pattern-summary-${projectTitle}`);
+    let patternText = "";
+    try {
+      const p = JSON.parse(patternRaw ?? "");
+      const hist: { role: string; content: string }[] = p?.history ?? p ?? [];
+      patternText = hist.filter((m) => m.role === "assistant").map((m) => m.content).join("\n\n");
+    } catch { /* ignore */ }
+
+    setStage("loading");
+    setOutput("");
+
+    const convSummary = convs.length === 0
+      ? "No conversations logged yet."
+      : convs.map((e, i) => `Conversation ${i + 1} — ${e.name || "Anonymous"} (${e.createdAt || ""})\nNotes: ${e.notes || "no notes"}`).join("\n\n");
+
+    const prompt = `You are Sorene, an execution coach helping an entrepreneur identify their painkiller problem.
+
+Project: "${projectTitle}"
+
+Customer conversations (${convs.length} total):
+${convSummary}
+
+${patternText ? `Pattern summary from stage 1:\n${patternText}` : ""}
+
+Based on the conversations above, provide a sharp painkiller problem analysis with these sections:
+
+**Most Frequent Pain** — which problem came up the most, and how many times
+**Severity Signal** — which pain causes the most frustration and disruption to their life
+**Spending Signal** — which problems are people already paying (or willing to pay) to solve
+**Painkiller Verdict** — one clear sentence: "The painkiller problem is [X] because [Y]"
+**Confidence Level** — High / Medium / Low, and why
+
+Be direct. Use real examples from the conversations. No fluff.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system: "You are Sorene, a sharp execution coach. Be direct and specific. Surface real patterns from the data provided." }),
+      });
+      if (!res.ok) { setStage("idle"); return; }
+      const data = await res.json();
+      const full: string = (data?.reply ?? "").trim();
+      setOutput(full);
+      setStage("done");
+      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
+    } catch { setStage("idle"); }
+  };
+
+  const handleReset = () => {
+    try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+    setOutput("");
+    setStage("idle");
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Search size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Painkiller Analysis</p>
+            <p className="text-[11px] text-[#9A9A9A]">Sorene finds the sharpest signal from your conversations</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={handleReset}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#9A9A9A] hover:text-[#151515] border border-[#ECEDEE] hover:border-[#151515] transition-all">
+            Regenerate
+          </button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <p className="text-[13px] text-[#9A9A9A] leading-relaxed max-w-sm">
+              Sorene will scan all your logged conversations and pattern summary to surface the clearest painkiller signal.
+            </p>
+            <button onClick={handleAnalyze}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+              <Search size={14} /> Analyse my conversations
+            </button>
+          </div>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 py-6 justify-center text-[#9A9A9A] text-[13px]">
+            <Loader2 size={14} className="animate-spin" /> Analysing patterns…
+          </div>
+        )}
+        {stage === "done" && output && (
+          <div className="prose prose-sm max-w-none text-[13px] text-[#151515] leading-relaxed">
+            <MarkdownText text={output} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PainkillerVerdictCard({ projectTitle }: { projectTitle: string }) {
+  const verdictKey = `painkiller-verdict-${projectTitle}`;
+  const [verdict, setVerdict] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!projectTitle) return;
+    try { setVerdict(localStorage.getItem(verdictKey) ?? ""); } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const handleSave = () => {
+    try { localStorage.setItem(verdictKey, verdict); } catch { /* ignore */ }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+          <Lightbulb size={14} className="text-white" />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-[#151515]">Your painkiller problem</p>
+          <p className="text-[11px] text-[#9A9A9A]">Define it in one clear sentence — this becomes your north star</p>
+        </div>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <textarea
+          value={verdict}
+          onChange={(e) => { setVerdict(e.target.value); setSaved(false); }}
+          placeholder="The painkiller problem is… because customers are already…"
+          rows={3}
+          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors"
+        />
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-[#9A9A9A]">Write this after reviewing Sorene's analysis above</p>
+          <button onClick={handleSave} disabled={!verdict.trim()}
+            className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",
+              saved ? "bg-[#32C382] text-white" : "bg-[#151515] text-white hover:bg-[#2a2a2a] disabled:opacity-30 disabled:cursor-not-allowed")}>
+            {saved ? <><CheckCircle2 size={12} /> Saved</> : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: string; onAdvance: () => void }) {
+  const [hasAnalysis, setHasAnalysis] = useState(false);
+  const [hasVerdict, setHasVerdict] = useState(false);
+  const [convCount, setConvCount] = useState(0);
+
+  const refresh = () => {
+    try {
+      const raw = localStorage.getItem(`convlog-${projectTitle}`);
+      setConvCount(raw ? JSON.parse(raw).length : 0);
+    } catch { /* ignore */ }
+    try { setHasAnalysis(!!localStorage.getItem(`painkiller-analysis-${projectTitle}`)); } catch { /* ignore */ }
+    try { setHasVerdict(!!(localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "").trim()); } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const checkItems = [
+    { done: convCount >= 10, text: `${convCount} conversation${convCount !== 1 ? "s" : ""} logged from Validate stage` },
+    { done: hasAnalysis,     text: "Painkiller analysis run" },
+    { done: hasVerdict,      text: "Painkiller problem defined" },
+  ];
+
+  const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
+  const canAdvance = score >= 67;
+
+  const { label, color, textColor } =
+    score === 0   ? { label: "Not started",    color: "bg-[#ECEDEE]",  textColor: "text-[#9A9A9A]"  } :
+    score <= 33   ? { label: "Just started",   color: "bg-[#FFA94D]",  textColor: "text-[#C85B00]"  } :
+    score <= 66   ? { label: "In progress",    color: "bg-[#FFD43B]",  textColor: "text-[#7B5D00]"  } :
+                    { label: "Ready to build", color: "bg-[#32C382]",  textColor: "text-[#0B5E35]"  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[13px] font-semibold text-[#151515]">Readiness to advance to Build Demo</p>
+          <span className={cn("text-[13px] font-bold", textColor)}>{score}%</span>
+        </div>
+        <div className="w-full h-2.5 rounded-full bg-[#F0F1F2] overflow-hidden mb-3">
+          <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${score}%` }} />
+        </div>
+        <div className="flex items-center justify-between mb-4">
+          <span className={cn("text-[12px] font-semibold", textColor)}>{label}</span>
+        </div>
+        <div className="space-y-2.5">
+          {checkItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              <div className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+                item.done ? "bg-[#32C382]" : "bg-[#F0F1F2]")}>
+                {item.done && <CheckCircle2 size={10} className="text-white" />}
+              </div>
+              <p className={cn("text-[12px]", item.done ? "text-[#151515] font-medium" : "text-[#9A9A9A]")}>{item.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {canAdvance && (
+        <div className="px-5 pb-4">
+          <button onClick={onAdvance}
+            className="w-full py-3 rounded-xl bg-[#32C382] text-white text-[13px] font-semibold hover:bg-[#28a870] transition-colors flex items-center justify-center gap-2">
+            <ArrowRight size={15} /> Start Build Demo
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InterviewStage2({
+  step,
+  project,
+  onAdvance,
+}: {
+  step: typeof VIBE_STEPS[number];
+  project: DirectionCardData | null;
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="space-y-8">
+
+      {/* ── What is this? ── */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
+      </section>
+
+      {/* ── What Sorene provides (collapsible) ── */}
+      <CollapseSection title="What Sorene provides">
+        <div className="space-y-3">
+          {step.soreneDoes.map((s, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
+              <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
+            </div>
+          ))}
+        </div>
+      </CollapseSection>
+
+      {/* ── What to look for (collapsible) ── */}
+      <CollapseSection title="What to look for">
+        <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
+          Not all problems are painkillers. You are looking for the one that is <strong className="text-[#151515] font-semibold">frequent, severe, and people already spend money to solve</strong>. These three signals together = painkiller.
+        </p>
+        <div className="space-y-3">
+          {[
+            { label: "Frequency", desc: "Did multiple people mention the same problem unprompted? Aim for 3+ mentions." },
+            { label: "Severity",  desc: "Does it disrupt their day, cost them money, or cause real frustration? Not just annoying." },
+            { label: "Spending",  desc: "Are they already paying for a workaround or partial solution? That's your strongest signal." },
+            { label: "Language",  desc: "When they described it, what exact words did they use? That's your product copy." },
+          ].map((item, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
+              <div>
+                <p className="text-[13px] font-semibold text-[#151515]">{item.label}</p>
+                <p className="text-[13px] text-[#62646A] leading-relaxed">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CollapseSection>
+
+      {/* ── Painkiller Analysis (collapsible) ── */}
+      <CollapseSection title="Painkiller Analysis">
+        <PainkillerAnalysisCard projectTitle={project?.title ?? ""} />
+      </CollapseSection>
+
+      {/* ── Your Painkiller Problem (collapsible) ── */}
+      <CollapseSection title="Your Painkiller Problem">
+        <PainkillerVerdictCard projectTitle={project?.title ?? ""} />
+      </CollapseSection>
+
+      {/* ── Readiness ── */}
+      <InterviewReadinessBar projectTitle={project?.title ?? ""} onAdvance={onAdvance} />
+
     </div>
   );
 }

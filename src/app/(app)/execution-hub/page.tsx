@@ -5525,7 +5525,7 @@ function AgentsSystemContent() {
 }
 
 // ─────────────────────────────────────────────
-// Direct Sync — card-based tab content
+// Connect tab content (formerly Direct Sync)
 // ─────────────────────────────────────────────
 
 const WA_ICON = (
@@ -5542,177 +5542,258 @@ const TG_ICON = (
   </svg>
 );
 
-interface SyncChannel {
-  platform: "whatsapp" | "telegram";
-  name: string;
-  tagline: string;
-  description: string;
-  gradient: string;
-  icon: React.ReactNode;
-  features: string[];
-  strengthTags: string[];
-}
+const DISCORD_ICON = (
+  <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
+    <circle cx="16" cy="16" r="16" fill="#5865F2" />
+    <path d="M22.2 10.5a15 15 0 0 0-3.7-1.1l-.2.3c1.4.3 2.7.9 3.9 1.6a12.9 12.9 0 0 0-8.4-.3c-.4.1-.7.2-1 .3 1.2-.8 2.6-1.3 4-1.6l-.1-.3a15 15 0 0 0-3.8 1.2C10.4 13.8 9.4 17 9.4 20.2c1.2 1.4 3 2.3 4.9 2.3l.6-1a9 9 0 0 1-2.5-1.2l.6-.4a9.3 9.3 0 0 0 7.9 0l.6.4a9 9 0 0 1-2.6 1.2l.6 1c1.9 0 3.7-.9 4.9-2.3.1-3.2-.9-6.4-3.2-9.7zm-8.8 7.8c-.8 0-1.5-.7-1.5-1.6s.7-1.6 1.5-1.6 1.5.7 1.5 1.6-.7 1.6-1.5 1.6zm5.3 0c-.8 0-1.5-.7-1.5-1.6s.7-1.6 1.5-1.6 1.5.7 1.5 1.6-.7 1.6-1.5 1.6z" fill="white" />
+  </svg>
+);
 
-const SYNC_CHANNELS: SyncChannel[] = [
-  {
-    platform: "whatsapp",
-    name: "WhatsApp",
-    tagline: "Weekly check-ins · Progress tracking",
-    description: "Link your WhatsApp to Sorene for structured weekly accountability check-ins. Every conversation is logged and synced back to your Execution Hub progress.",
-    gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)`,
-    icon: WA_ICON,
-    features: [
-      "Weekly accountability prompts from Sorene",
-      "Log customer conversations via chat",
-      "Progress synced to your Execution Hub",
-      "Tap to link — one-time setup",
-    ],
-    strengthTags: ["Weekly Check-ins", "Progress Sync", "Accountability"],
-  },
-  {
-    platform: "telegram",
-    name: "Telegram",
-    tagline: "Instant messaging · Real-time coaching",
-    description: "Link your Telegram for instant access to Sorene. Ask questions, log progress, and get coaching between sessions — all synced to your account.",
-    gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #38BDF8 34.62%, #0284C7 100%)`,
-    icon: TG_ICON,
-    features: [
-      "Real-time coaching between sessions",
-      "Log progress and milestones instantly",
-      "Ask Sorene anything on the go",
-      "Tap to link — one-time setup",
-    ],
-    strengthTags: ["Real-time", "On the go", "Instant coaching"],
-  },
+const FB_ICON = (
+  <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
+    <circle cx="16" cy="16" r="16" fill="#1877F2" />
+    <path d="M21 16h-3v10h-4V16h-2v-3.5h2v-2c0-2.5 1.5-4 4-4 1.1 0 2.2.1 3 .2V10h-2c-1.1 0-1.3.5-1.3 1.3v1.2H21L20.5 16z" fill="white" />
+  </svg>
+);
+
+const COMMUNITY_CHANNELS = [
+  { id: "discord",   label: "Discord",   icon: DISCORD_ICON,  description: "Join our Discord — daily standups, founder channels, co-working sessions, and the fastest path to real peer accountability.",   color: "#5865F2", link: "#" },
+  { id: "whatsapp",  label: "WhatsApp",  icon: WA_ICON,       description: "A private WhatsApp community for Sorene founders. Share wins, ask questions, get feedback — in a group that understands early-stage.",   color: "#25D366", link: "#" },
+  { id: "facebook",  label: "Facebook",  icon: FB_ICON,       description: "The Sorene Facebook Group — weekly challenges, founder spotlights, and a broader network of entrepreneurs at every stage.",            color: "#1877F2", link: "#" },
 ];
 
-function DirectSyncCard({ channel }: { channel: SyncChannel }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [linkState, setLinkState] = useState<"idle" | "loading" | "linked">("idle");
+type ConnectSetting = {
+  id: string;
+  label: string;
+  description: string;
+  type: "toggle" | "select";
+  options?: string[];
+  defaultValue: string | boolean;
+};
 
-  const handleToggle = (e: React.MouseEvent) => { e.stopPropagation(); setIsExpanded((v) => !v); };
+const CHANNEL_SETTINGS: Record<"whatsapp" | "telegram", ConnectSetting[]> = {
+  whatsapp: [
+    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Weekly" },
+    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article via WhatsApp each morning.",         type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Off" },
+    { id: "checkin_prompt",  label: "Weekly accountability check-in", description: "Sorene asks how your week went every Monday.",                     type: "toggle",  defaultValue: true },
+    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
+  ],
+  telegram: [
+    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
+    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article each morning.",                      type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
+    { id: "realtime_coach",  label: "Real-time coaching",         description: "Ask Sorene anything via Telegram between sessions.",                   type: "toggle",  defaultValue: true },
+    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
+  ],
+};
 
-  const handleLink = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (linkState !== "idle") return;
-    setLinkState("loading");
+const MESSENGER_FEATURES = [
+  "Real-time coaching between sessions",
+  "Ask Sorene anything on the go",
+  "Log customer conversations via chat",
+  "Progress synced to your Execution Hub",
+  "Daily reminders via message",
+  "Business status update prompts",
+  "Business knowledge learning in chat",
+];
+
+function MessengerConnectCard() {
+  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
+  const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
+    whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
+    telegram: Object.fromEntries(CHANNEL_SETTINGS.telegram.map((s) => [s.id, s.defaultValue])),
+  });
+  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle", telegram: "idle" });
+
+  const handleLink = async (platform: "whatsapp" | "telegram") => {
+    if (linkState[platform] !== "idle") return;
+    setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
     try {
       const token = await auth?.currentUser?.getIdToken();
       if (!token) throw new Error("Not authenticated");
       const res = await fetch("/api/messaging/generate-link", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ platform: channel.platform }),
+        body: JSON.stringify({ platform }),
       });
       if (!res.ok) throw new Error("Failed");
       const { deepLink } = await res.json();
       window.open(deepLink, "_blank");
-      setLinkState("linked");
+      setLinkState((prev) => ({ ...prev, [platform]: "linked" }));
     } catch {
-      setLinkState("idle");
+      setLinkState((prev) => ({ ...prev, [platform]: "idle" }));
     }
   };
 
+  const setSetting = (platform: "whatsapp" | "telegram", id: string, val: string | boolean) => {
+    setSettings((prev) => ({ ...prev, [platform]: { ...prev[platform], [id]: val } }));
+  };
+
+  const platforms: { id: "whatsapp" | "telegram"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
+    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Weekly check-ins · Progress tracking" },
+    { id: "telegram", name: "Telegram",  icon: TG_ICON, color: "#229ED9", tagline: "Instant messaging · Real-time coaching" },
+  ];
+
   return (
-    <motion.div
-      layout
-      transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
-      onClick={!isExpanded ? handleToggle : undefined}
-    >
-      {/* Gradient header — always visible */}
-      <motion.div
-        layout
-        transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col relative", isExpanded ? "p-6 pb-10" : "p-6")}
-        style={{ background: channel.gradient }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-8 w-fit relative z-10">
-              <ChevronLeft size={18} />Back to summary
-            </motion.button>
-          )}
-        </AnimatePresence>
-        <div className="flex justify-between items-start relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 overflow-hidden">
-              {channel.icon}
-            </div>
-            <div>
-              <h3 className="text-heading-xsmall font-medium leading-tight tracking-tight text-white">{channel.name}</h3>
-              {!isExpanded && <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{channel.tagline}</p>}
-            </div>
+    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
+      {/* Header */}
+      <div className="p-6 pb-5">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="flex -space-x-2">
+            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
+            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{TG_ICON}</div>
           </div>
-          {!isExpanded && (
-            <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/20 text-white text-[13px] font-medium border border-white/30 shrink-0 backdrop-blur-sm">
-              Open <ArrowRight size={13} />
-            </motion.div>
-          )}
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp or Telegram</h3>
+            <p className="text-[12px] text-[#9A9A9A]">Sorene in your pocket — coaching, logging, reminders</p>
+          </div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Collapsed body */}
-      <AnimatePresence>
-        {!isExpanded && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
-            className="px-6 pb-6 pt-4 flex flex-col flex-1">
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">{channel.description}</p>
-            <div className="mt-auto flex flex-wrap gap-2">
-              {channel.strengthTags.map((tag) => (
-                <span key={tag} className="px-3 py-1 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-xsmall-medium shadow-sm">{tag}</span>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Features list */}
+      <div className="px-6 pb-5">
+        <div className="flex flex-wrap gap-1.5">
+          {MESSENGER_FEATURES.map((f) => (
+            <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
+          ))}
+        </div>
+      </div>
 
-      {/* Expanded body */}
-      <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
-            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 space-y-6">
-              <section>
-                <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">What you get</h4>
-                <Separator className="bg-gray-100 mb-5" />
-                <div className="divide-y divide-gray-100 border-t border-gray-100">
-                  {channel.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-3 py-3.5">
-                      <CheckCircle2 size={14} className="text-[#32C382] shrink-0" />
-                      <p className="text-label-medium text-[#151515]">{f}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section>
-                <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">Connect</h4>
-                <Separator className="bg-gray-100 mb-5" />
-                <p className="text-label-medium text-[#62646A] leading-relaxed mb-5">
-                  Click below to open {channel.name}. Sorene will send you a link — tap it to complete the one-time setup. All conversations will sync back to your Execution Hub.
-                </p>
-                <button onClick={handleLink} disabled={linkState === "loading"}
-                  className={cn("flex items-center gap-3 px-5 py-3 rounded-2xl text-body-small-medium transition-all",
-                    linkState === "linked"
-                      ? "bg-[#CEF2E2] text-[#196141]"
-                      : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
-                    linkState === "loading" && "opacity-60 cursor-not-allowed")}>
-                  {linkState === "loading" && <Loader2 size={16} className="animate-spin" />}
-                  {linkState === "linked" && <CheckCircle2 size={16} />}
-                  {linkState === "idle" && <span className="text-lg leading-none">{channel.platform === "whatsapp" ? "💬" : "✈️"}</span>}
-                  {linkState === "linked" ? `Linked to ${channel.name} ✓` : `Open ${channel.name}`}
-                </button>
-              </section>
+      {/* Platform buttons + settings */}
+      <div className="px-6 pb-6 space-y-3">
+        {platforms.map((p) => (
+          <div key={p.id} className="rounded-2xl border border-gray-100 overflow-hidden">
+            {/* Platform row */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: p.color + "20" }}>
+                {p.icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-[#151515]">{p.name}</p>
+                <p className="text-[11px] text-[#9A9A9A]">{p.tagline}</p>
+              </div>
+              <button
+                onClick={() => setSettingsOpen(settingsOpen === p.id ? null : p.id)}
+                className={cn("p-2 rounded-lg transition-colors", settingsOpen === p.id ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
+                title="Settings"
+              >
+                <Settings size={14} />
+              </button>
+              <button
+                onClick={() => handleLink(p.id)}
+                disabled={linkState[p.id] === "loading"}
+                className={cn(
+                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
+                  linkState[p.id] === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30"
+                  : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+                  linkState[p.id] === "loading" && "opacity-60 cursor-not-allowed"
+                )}
+              >
+                {linkState[p.id] === "loading" && <Loader2 size={12} className="animate-spin" />}
+                {linkState[p.id] === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
+              </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+
+            {/* Settings panel */}
+            <AnimatePresence initial={false}>
+              {settingsOpen === p.id && (
+                <motion.div
+                  initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden border-t border-gray-100"
+                >
+                  <div className="px-4 py-3 space-y-3 bg-[#FAFAFA]">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
+                    {CHANNEL_SETTINGS[p.id].map((s) => (
+                      <div key={s.id} className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-medium text-[#151515]">{s.label}</p>
+                          <p className="text-[11px] text-[#9A9A9A] leading-snug">{s.description}</p>
+                        </div>
+                        {s.type === "toggle" ? (
+                          <button
+                            onClick={() => setSetting(p.id, s.id, !settings[p.id][s.id])}
+                            className={cn(
+                              "w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative",
+                              settings[p.id][s.id] ? "bg-[#32C382]" : "bg-gray-200"
+                            )}
+                          >
+                            <span className={cn(
+                              "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
+                              settings[p.id][s.id] ? "left-[18px]" : "left-0.5"
+                            )} />
+                          </button>
+                        ) : (
+                          <select
+                            value={settings[p.id][s.id] as string}
+                            onChange={(e) => setSetting(p.id, s.id, e.target.value)}
+                            className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0"
+                          >
+                            {s.options?.map((o) => <option key={o}>{o}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CommunityCard() {
+  return (
+    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
+      <div className="p-6 pb-5">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="flex -space-x-2">
+            {COMMUNITY_CHANNELS.map((c) => (
+              <div key={c.id} className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">
+                {c.icon}
+              </div>
+            ))}
+          </div>
+          <div>
+            <h3 className="text-[15px] font-semibold text-[#151515]">Sorene Entrepreneur Community</h3>
+            <p className="text-[12px] text-[#9A9A9A]">Join fellow founders — accountability, insights, real talk</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 pb-6 space-y-3">
+        {COMMUNITY_CHANNELS.map((c) => (
+          <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
+              {c.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
+              <p className="text-[11px] text-[#9A9A9A] leading-snug">{c.description}</p>
+            </div>
+            <a
+              href={c.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0"
+            >
+              Join <ArrowRight size={12} />
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConnectContent() {
+  return (
+    <div className="p-6 space-y-4">
+      <MessengerConnectCard />
+      <CommunityCard />
+    </div>
   );
 }
 
@@ -5847,7 +5928,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; gradient: string }[
   },
   {
     id: "direct-sync",
-    label: "Direct Sync",
+    label: "Connect",
     icon: <MessageCircle size={14} />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #0891B2 0%, #2DD4BF 100%)`,
   },
@@ -6483,7 +6564,7 @@ export default function Page() {
                     <div
                       key={`${selectedProject?.title ?? "all"}-${activeTab}`}
                       className={cn(
-                        activeTab === "validation" || activeTab === "launchpad" || activeTab === "growth" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+                        activeTab === "validation" || activeTab === "launchpad" || activeTab === "growth" || activeTab === "direct-sync" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
                       )}
                     >
                       {activeTab === "validation"
@@ -6499,7 +6580,7 @@ export default function Page() {
                         : activeTab === "growth"
                         ? <GrowthContent key={`gr-${hydratedTick}`} project={selectedProject ?? null} />
                         : isDirectSync
-                        ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
+                        ? <ConnectContent />
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
                     </div>
                   </motion.div>

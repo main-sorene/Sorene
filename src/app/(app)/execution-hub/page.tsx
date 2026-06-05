@@ -352,8 +352,6 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
         </div>
       </div>
 
-      <Separator className="bg-gray-100" />
-
       {/* Stage content */}
       <AnimatePresence mode="wait">
         <motion.div

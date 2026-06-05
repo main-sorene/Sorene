@@ -726,9 +726,9 @@ export function DirectionCard({
                                     <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
                                     <div className="mt-2 space-y-2">
                                       {cardData.key_competitors.map((c, i) => (
-                                        <div key={i} className="flex gap-2 items-start">
-                                          <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                                          <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+                                        <div key={i} className="p-3 rounded-xl bg-[#F5F5F7]">
+                                          <p className="text-[13px] font-medium text-[#151515] leading-snug">{c.name}</p>
+                                          <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{c.what_they_do}</p>
                                         </div>
                                       ))}
                                     </div>
@@ -994,9 +994,9 @@ export function DirectionCard({
                         <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
                         <div className="mt-2 space-y-2">
                           {cardData.key_competitors.map((c, i) => (
-                            <div key={i} className="flex gap-2 items-start">
-                              <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                              <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+                            <div key={i} className="p-3 rounded-xl bg-[#F5F5F7]">
+                              <p className="text-[13px] font-medium text-[#151515] leading-snug">{c.name}</p>
+                              <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{c.what_they_do}</p>
                             </div>
                           ))}
                         </div>

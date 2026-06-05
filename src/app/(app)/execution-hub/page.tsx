@@ -1719,9 +1719,8 @@ Based on the conversations above, provide a sharp painkiller problem analysis wi
 **Severity Signal** — which pain causes the most frustration and disruption to their life
 **Spending Signal** — which problems are people already paying (or willing to pay) to solve
 **Painkiller Verdict** — one clear sentence: "The painkiller problem is [X] because [Y]"
-**Confidence Level** — one of: High / Medium-High / Medium / Medium-Low / Low. Then explain in 2-3 sentences: what drives the confidence up, and what specific gap or missing signal keeps it from being higher.
 
-Be direct. Use real examples from the conversations. Bold the most important phrases in your explanation. No fluff.`;
+Be direct. Use real examples from the conversations. Bold the most important phrases. No fluff.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -1831,7 +1830,7 @@ function PainkillerVerdictCard({ projectTitle }: { projectTitle: string }) {
           </span>
         )}
       </div>
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 space-y-3">
         <textarea
           value={verdict}
           onChange={(e) => handleChange(e.target.value)}
@@ -1839,7 +1838,19 @@ function PainkillerVerdictCard({ projectTitle }: { projectTitle: string }) {
           rows={4}
           className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors"
         />
-        <p className="text-[11px] text-[#9A9A9A] mt-2">Saves automatically as you type</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-[#9A9A9A]">Auto-saves as you type</p>
+          <button
+            onClick={() => {
+              try { localStorage.setItem(verdictKey, verdict); } catch { /* ignore */ }
+              setSavedIndicator(true);
+              setTimeout(() => setSavedIndicator(false), 1500);
+            }}
+            disabled={!verdict.trim()}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1881,6 +1892,11 @@ function ConfidenceLevelCard({ projectTitle }: { projectTitle: string }) {
   const handleGenerate = async () => {
     const analysisText = localStorage.getItem(`painkiller-analysis-${projectTitle}`) ?? "";
     const verdictText = localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "";
+    const convRaw = localStorage.getItem(`convlog-${projectTitle}`);
+    const convs: { name?: string; notes?: string; createdAt?: string }[] = convRaw ? JSON.parse(convRaw) : [];
+    const convSummary = convs.length === 0
+      ? "No conversations logged."
+      : convs.map((e, i) => `Conversation ${i + 1} — ${e.name || "Anonymous"}\nNotes: ${e.notes || "no notes"}`).join("\n\n");
 
     setStageSync("loading");
     setOutput("");
@@ -1889,10 +1905,13 @@ function ConfidenceLevelCard({ projectTitle }: { projectTitle: string }) {
 
 Project: "${projectTitle}"
 
-Painkiller Analysis (from conversations):
+Raw customer conversations (${convs.length} total):
+${convSummary}
+
+Painkiller Analysis summary:
 ${analysisText}
 
-User's defined painkiller problem:
+Entrepreneur's defined painkiller problem:
 "${verdictText}"
 
 Assess confidence level as a separate, focused evaluation. Return:

@@ -163,6 +163,10 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       ? priorMessages.map((m) => ({ role: m.role, content: m.content }))
       : undefined;
 
+    const aiMsgId = `${Date.now()}-a`;
+    // Add empty assistant message immediately so the bubble appears while streaming
+    setMessages((prev) => [...prev, { id: aiMsgId, role: "assistant", content: "" }]);
+
     try {
       const res = await authFetch("/api/direction-chat", {
         method: "POST",
@@ -188,11 +192,27 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           ...(activeRecipeId ? { recipeId: activeRecipeId, history } : {}),
         }),
       });
-      const data = (await res.json()) as { reply: string };
-      const reply = data.reply || "Sorry, I couldn't respond. Try again.";
+
+      if (!res.body) throw new Error("No response body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let reply = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
+          try {
+            const { text } = JSON.parse(line.slice(6)) as { text: string };
+            reply += text;
+            setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: reply } : m));
+          } catch {}
+        }
+      }
 
       // If the AI signalled it's ready, strip the marker and show a Generate button.
-      // Tolerate spacing/case/formatting variants (e.g. **[[ READY_TO_GENERATE ]]**).
       let displayReply = reply;
       if (READY_MARKER_RE.test(reply)) {
         displayReply = reply
@@ -214,15 +234,13 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         displayReply = `Your new direction card **"${parsed.title}"** has been added and is now open on the left. Are you happy with this direction, or would you like to brainstorm further or adjust anything?`;
       }
 
-      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: displayReply };
-      const withAi = [...next, aiMsg];
-      setMessages(withAi);
+      setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: displayReply } : m));
+      const withAi = [...next, { id: aiMsgId, role: "assistant" as const, content: displayReply }];
       persistToSidebar(withAi);
     } catch {
-      const errMsg: ChatMessage = { id: `${Date.now()}-e`, role: "assistant", content: "Sorry, something went wrong. Please try again." };
-      const withErr = [...next, errMsg];
-      setMessages(withErr);
-      persistToSidebar(withErr);
+      const errContent = "Sorry, something went wrong. Please try again.";
+      setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: errContent } : m));
+      persistToSidebar([...next, { id: aiMsgId, role: "assistant" as const, content: errContent }]);
     } finally {
       setIsProcessing(false);
     }

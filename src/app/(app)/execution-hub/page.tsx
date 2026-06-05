@@ -1628,41 +1628,11 @@ function VibeStageContent({ step, project, onAdvance }: { step: typeof VIBE_STEP
     return <BuildDemoStage3 step={step} project={project} onAdvance={onAdvance} />;
   }
 
-  // Stage 4
-  return (
-    <div className="space-y-8">
-      <section>
-        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
-        <Separator className="bg-[#D8D9DB] mb-4" />
-        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
-      </section>
-      <CollapseSection title="Sorene Provides">
-        <div className="space-y-3">
-          {step.soreneDoes.map((s, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
-              <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
-            </div>
-          ))}
-        </div>
-      </CollapseSection>
-      <CollapseSection title="You Must Do">
-        <div className="space-y-3">
-          {step.userDoes.map((s, i) => (
-            <div key={i} className="flex gap-3 items-start">
-              <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
-              <p className="text-[13px] text-[#151515] leading-relaxed">{s}</p>
-            </div>
-          ))}
-        </div>
-      </CollapseSection>
-      {step.insight && (
-        <div className="rounded-2xl bg-[#F5FFD9] border border-[#32C382]/30 px-4 py-3">
-          <p className="text-label-medium text-[#151515] leading-relaxed">{step.insight}</p>
-        </div>
-      )}
-    </div>
-  );
+  if (step.id === 4) {
+    return <ExperimentStage4 step={step} project={project} onAdvance={onAdvance} />;
+  }
+
+  return null;
 }
 
 // ─────────────────────────────────────────────
@@ -2746,6 +2716,582 @@ function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardD
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Experiment Stage 4
+// ─────────────────────────────────────────────
+
+function ExperimentGuidanceChat({ project }: { project: DirectionCardData | null }) {
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const cacheKey = `experiment-chat-${project?.title ?? ""}`;
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) setMessages(JSON.parse(raw));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${project?.title ?? ""}`) ?? "";
+
+    const system = `You are Sorene, a startup coach helping an entrepreneur close their first paying customers in the Experiment stage.
+Project: "${project?.title}"${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
+Be direct and practical. Help them overcome objections, price confidently, and close real sales. No fluff.`;
+
+    const newMessages: { role: "user" | "assistant"; content: string }[] = [...messages, { role: "user", content: userMsg }];
+    setMessages(newMessages);
+    setLoading(true);
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: userMsg, system, history: messages }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const updated = [...newMessages, { role: "assistant" as const, content: reply }];
+        setMessages(updated);
+        try { localStorage.setItem(cacheKey, JSON.stringify(updated)); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  const guidelines = [
+    { num: 1, text: "Make the real offer to real people — not a survey, not a waitlist" },
+    { num: 2, text: "Ask for real money (not just interest or email sign-up)" },
+    { num: 3, text: "Record every response: yes / no / maybe — and why" },
+    { num: 4, text: "3 paying customers is the only validation that matters" },
+    { num: 5, text: "Log each result here to unlock the next stage" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {guidelines.map((g) => (
+          <div key={g.num} className="flex gap-3 items-start">
+            <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{g.num}</div>
+            <p className="text-[13px] text-[#151515] leading-relaxed">{g.text}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden mt-2">
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <MessageCircle size={13} className="text-[#9A9A9A]" />
+          <p className="text-[12px] font-semibold text-[#151515]">Ask Sorene about closing your first paying customers</p>
+        </div>
+        {messages.length > 0 && (
+          <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div key={i} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "justify-start")}>
+                <div className={cn("rounded-2xl px-3 py-2 text-[12px] leading-relaxed max-w-[85%]",
+                  m.role === "user"
+                    ? "bg-[#151515] text-white rounded-br-sm"
+                    : "bg-[#F5F5F5] text-[#151515] rounded-bl-sm")}>
+                  {m.role === "assistant" ? <MarkdownText text={m.content} /> : m.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-[#F5F5F5] rounded-2xl rounded-bl-sm px-3 py-2">
+                  <Loader2 size={12} className="animate-spin text-[#9A9A9A]" />
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        )}
+        <div className="flex items-center gap-2 px-4 py-3 border-t border-[#ECEDEE]">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="How do I handle price objections? What if they say maybe?…"
+            className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+          />
+          <button onClick={handleSend} disabled={!input.trim() || loading}
+            className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0 hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+            <ArrowRight size={12} className="text-white" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type CustomerResponse = { id: string; name: string; response: "yes" | "no" | "maybe"; note: string; date: string };
+
+function PayingCustomerTracker({ project }: { project: DirectionCardData | null }) {
+  const storageKey = `experiment-customers-${project?.title ?? ""}`;
+  const [entries, setEntries] = useState<CustomerResponse[]>([]);
+  const [name, setName] = useState("");
+  const [response, setResponse] = useState<"yes" | "no" | "maybe">("yes");
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setEntries(JSON.parse(raw));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const save = (updated: CustomerResponse[]) => {
+    setEntries(updated);
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
+  const addEntry = () => {
+    if (!name.trim()) return;
+    const entry: CustomerResponse = {
+      id: Date.now().toString(),
+      name: name.trim(),
+      response,
+      note: note.trim(),
+      date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    };
+    save([...entries, entry]);
+    setName(""); setNote(""); setResponse("yes");
+  };
+
+  const removeEntry = (id: string) => save(entries.filter((e) => e.id !== id));
+
+  const yesCount = entries.filter((e) => e.response === "yes").length;
+
+  const responseBadge = (r: CustomerResponse["response"]) =>
+    r === "yes"   ? "bg-[#CEF2E2] text-[#196141]" :
+    r === "no"    ? "bg-[#FDECEA] text-[#C0392B]" :
+                    "bg-[#FFF3CD] text-[#7B5D00]";
+
+  return (
+    <div className="space-y-4">
+      {/* Counter */}
+      <div className="flex items-center gap-4 rounded-2xl bg-[#F5FFD9] border border-[#32C382]/30 px-5 py-4">
+        <div className="flex-1">
+          <p className="text-[13px] font-semibold text-[#151515] mb-0.5">Paying Customers</p>
+          <p className="text-[12px] text-[#62646A]">3 paying customers = proceed to Launch Readiness</p>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <span className="text-[32px] font-bold text-[#151515] leading-none">{yesCount}</span>
+          <span className="text-[16px] text-[#9A9A9A] font-medium">/3</span>
+        </div>
+      </div>
+
+      {/* Log form */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <Plus size={13} className="text-[#9A9A9A]" />
+          <p className="text-[12px] font-semibold text-[#151515]">Log a customer conversation</p>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }}
+              placeholder="Person / company name…"
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors"
+            />
+            <select
+              value={response}
+              onChange={(e) => setResponse(e.target.value as CustomerResponse["response"])}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-[12px] text-[#151515] bg-white focus:outline-none focus:border-[#151515] transition-colors"
+            >
+              <option value="yes">✅ Yes — paid</option>
+              <option value="no">❌ No</option>
+              <option value="maybe">🤔 Maybe</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }}
+              placeholder="Note: what did they say? (optional)"
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors"
+            />
+            <button
+              onClick={addEntry}
+              disabled={!name.trim()}
+              className="px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-30"
+            >Log</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Entries list */}
+      {entries.length > 0 && (
+        <div className="space-y-2">
+          {entries.map((e) => (
+            <div key={e.id} className="flex items-start gap-3 rounded-xl border border-[#ECEDEE] px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[13px] font-semibold text-[#151515]">{e.name}</p>
+                  <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", responseBadge(e.response))}>
+                    {e.response === "yes" ? "Paid" : e.response === "no" ? "No" : "Maybe"}
+                  </span>
+                  <span className="text-[10px] text-[#9A9A9A]">{e.date}</span>
+                </div>
+                {e.note && <p className="text-[12px] text-[#62646A] leading-relaxed">{e.note}</p>}
+              </div>
+              <button onClick={() => removeEntry(e.id)} className="text-gray-300 hover:text-[#DF2E16] transition-colors mt-0.5">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ValidationScoreSection({ project }: { project: DirectionCardData | null }) {
+  type AStage = "idle" | "loading" | "done";
+  const storageKey = `experiment-validation-score-${project?.title ?? ""}`;
+  const [stage, setStage] = useState<AStage>("idle");
+  const [result, setResult] = useState("");
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setResult(raw); setStage("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  const generate = async () => {
+    setStage("loading");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${project?.title ?? ""}`) ?? "";
+    const customersRaw = localStorage.getItem(`experiment-customers-${project?.title ?? ""}`) ?? "[]";
+    let customerSummary = "No responses logged yet.";
+    try {
+      const customers: CustomerResponse[] = JSON.parse(customersRaw);
+      if (customers.length > 0) {
+        const yes = customers.filter((c) => c.response === "yes").length;
+        const no = customers.filter((c) => c.response === "no").length;
+        const maybe = customers.filter((c) => c.response === "maybe").length;
+        customerSummary = `${customers.length} conversations logged: ${yes} paid, ${no} declined, ${maybe} maybe. Notes: ${customers.map((c) => `"${c.name}: ${c.response}${c.note ? ` — ${c.note}` : ""}"`).join("; ")}`;
+      }
+    } catch { /* ignore */ }
+
+    const prompt = `Assess the validation signal strength for this project at the Experiment stage.
+Project: "${project?.title}"${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
+Customer responses: ${customerSummary}
+
+Give a short validation score assessment (2-3 sentences): what's the signal strength, what it means, and one specific next action. Be direct and honest.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        setResult(reply);
+        setStage("done");
+        try { localStorage.setItem(storageKey, reply); } catch { /* ignore */ }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <BarChart3 size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Validation Score</p>
+            <p className="text-[11px] text-[#9A9A9A]">AI assessment based on your customer responses</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={generate} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Refresh</button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <button onClick={generate}
+            className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+            Generate validation score from your responses
+          </button>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+            <Loader2 size={13} className="animate-spin" /> Analysing your responses…
+          </div>
+        )}
+        {stage === "done" && result && (
+          <div className="text-[13px] text-[#151515] leading-relaxed">
+            <MarkdownText text={result} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RevisitPromptSection({ project }: { project: DirectionCardData | null }) {
+  type AStage = "idle" | "loading" | "done";
+  const storageKey = `experiment-revisit-${project?.title ?? ""}`;
+  const [stage, setStage] = useState<AStage>("idle");
+  const [result, setResult] = useState("");
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!project?.title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setResult(raw); setStage("done"); }
+      // Show only when 0 paying customers logged
+      const customersRaw = localStorage.getItem(`experiment-customers-${project?.title ?? ""}`) ?? "[]";
+      const customers: CustomerResponse[] = JSON.parse(customersRaw);
+      setVisible(customers.filter((c) => c.response === "yes").length === 0);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  // Poll to update visibility
+  useEffect(() => {
+    const timer = setInterval(() => {
+      try {
+        const customersRaw = localStorage.getItem(`experiment-customers-${project?.title ?? ""}`) ?? "[]";
+        const customers: CustomerResponse[] = JSON.parse(customersRaw);
+        setVisible(customers.filter((c) => c.response === "yes").length === 0);
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.title]);
+
+  if (!visible) return null;
+
+  const generate = async () => {
+    setStage("loading");
+    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
+    const offer = localStorage.getItem(`mvo-defined-${project?.title ?? ""}`) ?? "";
+    const customersRaw = localStorage.getItem(`experiment-customers-${project?.title ?? ""}`) ?? "[]";
+    let customerSummary = "No responses yet.";
+    try {
+      const customers: CustomerResponse[] = JSON.parse(customersRaw);
+      if (customers.length > 0) {
+        customerSummary = customers.map((c) => `${c.name}: ${c.response}${c.note ? ` — ${c.note}` : ""}`).join("; ");
+      }
+    } catch { /* ignore */ }
+
+    const prompt = `This founder has 0 paying customers so far.
+Project: "${project?.title}"${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nCurrent offer: "${offer}"` : ""}
+Customer responses so far: ${customerSummary}
+
+Give 2-3 specific, actionable suggestions — should they revisit the idea, change the offer framing, or try a different audience? Be honest and direct. No fluff.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        setResult(reply);
+        setStage("done");
+        try { localStorage.setItem(storageKey, reply); } catch { /* ignore */ }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#FFA94D]/40 bg-[#FFF8F0] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[#FFA94D]/20">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#FFA94D] flex items-center justify-center shrink-0">
+            <Lightbulb size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">No paying customers yet — what to do</p>
+            <p className="text-[11px] text-[#C85B00]">Sorene will suggest what to revisit</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={generate} className="text-[11px] text-[#C85B00] hover:text-[#151515] transition-colors font-medium">Refresh</button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <button onClick={generate}
+            className="w-full py-2.5 rounded-xl border border-dashed border-[#FFA94D]/50 text-[12px] text-[#C85B00] hover:border-[#FFA94D] transition-colors">
+            Get suggestions to revisit idea or offer framing
+          </button>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 text-[12px] text-[#C85B00]">
+            <Loader2 size={13} className="animate-spin" /> Analysing what to change…
+          </div>
+        )}
+        {stage === "done" && result && (
+          <div className="text-[13px] text-[#151515] leading-relaxed">
+            <MarkdownText text={result} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExperimentReadinessBar({ project, onAdvance }: { project: DirectionCardData | null; onAdvance: () => void }) {
+  const title = project?.title ?? "";
+  const [yesCount, setYesCount] = useState(0);
+  const [hasResponses, setHasResponses] = useState(false);
+  const [hasScore, setHasScore] = useState(false);
+
+  const refresh = () => {
+    try {
+      const raw = localStorage.getItem(`experiment-customers-${title}`) ?? "[]";
+      const customers: CustomerResponse[] = JSON.parse(raw);
+      setYesCount(customers.filter((c) => c.response === "yes").length);
+      setHasResponses(customers.length > 0);
+    } catch { /* ignore */ }
+    try { setHasScore(!!(localStorage.getItem(`experiment-validation-score-${title}`) ?? "").trim()); } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const checkItems = [
+    { done: hasResponses,  text: "At least one customer conversation logged" },
+    { done: yesCount >= 3, text: "3 paying customers secured" },
+    { done: hasScore,      text: "Validation score generated" },
+  ];
+
+  const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
+  const canAdvance = checkItems.every((c) => c.done);
+
+  const { label, color, textColor } =
+    score === 0  ? { label: "Not started",         color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]" } :
+    score <= 33  ? { label: "Just started",        color: "bg-[#FFA94D]", textColor: "text-[#C85B00]" } :
+    score <= 66  ? { label: "In progress",         color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]" } :
+                   { label: "Ready to launch",     color: "bg-[#32C382]", textColor: "text-[#0B5E35]" };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[13px] font-semibold text-[#151515]">Readiness to advance to Launch Readiness</p>
+          <span className={cn("text-[13px] font-bold", textColor)}>{score}%</span>
+        </div>
+        <div className="w-full h-2.5 rounded-full bg-[#F0F1F2] overflow-hidden mb-3">
+          <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${score}%` }} />
+        </div>
+        <div className="mb-4">
+          <span className={cn("text-[12px] font-semibold", textColor)}>{label}</span>
+        </div>
+        <div className="space-y-2.5">
+          {checkItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              <div className={cn("w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+                item.done ? "bg-[#32C382]" : "bg-[#F0F1F2]")}>
+                {item.done && <CheckCircle2 size={10} className="text-white" />}
+              </div>
+              <p className={cn("text-[12px]", item.done ? "text-[#151515] font-medium" : "text-[#9A9A9A]")}>{item.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="px-5 pb-4">
+        {canAdvance ? (
+          <button onClick={onAdvance}
+            className="w-full py-3 rounded-xl bg-[#32C382] text-white text-[13px] font-semibold hover:bg-[#28a870] transition-colors flex items-center justify-center gap-2">
+            <ArrowRight size={15} /> Start Launch Readiness
+          </button>
+        ) : (
+          <div className="rounded-xl bg-[#F5F5F5] border border-[#ECEDEE] px-4 py-3 flex items-center gap-2.5">
+            <Lock size={13} className="text-[#9A9A9A] shrink-0" />
+            <p className="text-[12px] text-[#9A9A9A]">
+              {checkItems.find((c) => !c.done)?.text
+                ? `Complete: ${checkItems.find((c) => !c.done)!.text.toLowerCase()}`
+                : "Complete all items to unlock Launch Readiness."}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExperimentStage4({
+  step,
+  project,
+  onAdvance,
+}: {
+  step: typeof VIBE_STEPS[number];
+  project: DirectionCardData | null;
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="space-y-8">
+
+      {/* ── What is this? ── */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
+      </section>
+
+      {/* ── What You Should Do ── */}
+      <CollapseSection title="What You Should Do">
+        <ExperimentGuidanceChat project={project} />
+      </CollapseSection>
+
+      {/* ── Paying Customers Tracker ── */}
+      <CollapseSection title="Paying Customers Tracker">
+        <PayingCustomerTracker project={project} />
+      </CollapseSection>
+
+      {/* ── Validation Score ── */}
+      <CollapseSection title="Validation Score">
+        <ValidationScoreSection project={project} />
+      </CollapseSection>
+
+      {/* ── Revisit prompt (shown only when 0 paying) ── */}
+      <RevisitPromptSection project={project} />
+
+      {/* ── Readiness Gate ── */}
+      <ExperimentReadinessBar project={project} onAdvance={onAdvance} />
+
     </div>
   );
 }

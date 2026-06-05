@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useRouter } from "next/navigation";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom, conversationsAtom, type Conversation, type Message } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -104,6 +104,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setNavigateTab = useSetAtom(executionNavigateTabAtom);
   const setStartValidate = useSetAtom(executionStartValidateAtom);
+  const setConversations = useSetAtom(conversationsAtom);
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
@@ -127,6 +128,42 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // Persist the Execution Hub conversation into the global sidebar (segment
+  // "execution") + localStorage, mirroring the DNA/Direction chats. The id is
+  // deterministic per project so the desktop + mobile mounts and refreshes all
+  // resolve to the same entry instead of creating duplicates. Only persisted
+  // once the user has actually said something, to avoid empty placeholder rows.
+  const projectKey = (project?.title || "general").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+  const convId = `execution-${projectKey}`;
+  useEffect(() => {
+    const uid = authUser?.uid || "local";
+    const realMessages = messages.filter((m) => !m.isStatusButtons);
+    if (!realMessages.some((m) => m.role === "user")) return;
+
+    const sidebarMessages: Message[] = realMessages.map((m) => ({
+      id: m.id, role: m.role, content: m.content, timestamp: new Date(), type: "chat" as const,
+    }));
+    const title = project?.title
+      ? `Execution: ${project.title}`
+      : realMessages.find((m) => m.role === "user")?.content.slice(0, 50) || "Execution Hub";
+    const conv: Conversation = {
+      id: convId,
+      title: title.length > 50 ? `${title.slice(0, 50)}...` : title,
+      messages: sidebarMessages,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      model: "sorene-1",
+      segment: "execution",
+      isCreatedOnBackend: false,
+    };
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === convId);
+      if (idx === -1) return [conv, ...prev];
+      return prev.map((c) => (c.id === convId ? conv : c));
+    });
+    try { localStorage.setItem(`execution_chat_${uid}_${convId}`, JSON.stringify(conv)); } catch {}
+  }, [messages, convId, project?.title, authUser?.uid, setConversations]);
 
   const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
     setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, ...extra }]);

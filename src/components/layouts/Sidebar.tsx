@@ -69,6 +69,7 @@ function ConversationItem({ conv }: { conv: Conversation }) {
     if (conv.isCreatedOnBackend === false) {
       try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
       try { localStorage.removeItem(`dna_chat_${userId}_${conv.id}`); } catch {}
+      try { localStorage.removeItem(`execution_chat_${userId}_${conv.id}`); } catch {}
       // Remove from cross-device cloud history too.
       if (authUser?.uid) deleteCloudConversation(authUser.uid, conv.id).catch(() => {});
       return;
@@ -168,7 +169,11 @@ function loadLocalConversations(uid: string): Conversation[] {
 
   try {
     Object.keys(localStorage)
-      .filter((k) => k.startsWith(`dna_chat_${uid}_`) || k.startsWith(`direction_chat_${uid}_`))
+      .filter((k) =>
+        k.startsWith(`dna_chat_${uid}_`) ||
+        k.startsWith(`direction_chat_${uid}_`) ||
+        k.startsWith(`execution_chat_${uid}_`),
+      )
       .forEach((k) => {
         try { push(JSON.parse(localStorage.getItem(k)!)); } catch {}
       });
@@ -409,7 +414,11 @@ export function Sidebar({
       try {
         const uidKey = authUser?.uid || "local";
         Object.keys(localStorage)
-          .filter((k) => k.startsWith(`dna_chat_${uidKey}_`) || k.startsWith(`direction_chat_${uidKey}_`))
+          .filter((k) =>
+            k.startsWith(`dna_chat_${uidKey}_`) ||
+            k.startsWith(`direction_chat_${uidKey}_`) ||
+            k.startsWith(`execution_chat_${uidKey}_`),
+          )
           .forEach((k) => {
             try {
               const c = JSON.parse(localStorage.getItem(k)!);
@@ -670,6 +679,22 @@ export function Sidebar({
               </div>
             )}
 
+            {/* Execution Section */}
+            {conversations.filter((c) => c.segment === "execution").length > 0 && (
+              <div className="mb-4">
+                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                  EXECUTION
+                </p>
+                <div className="space-y-0.5">
+                  {conversations
+                    .filter((c) => c.segment === "execution")
+                    .map((conv) => (
+                      <ConversationItem key={conv.id} conv={conv} />
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Education Section */}
             {conversations.filter((c) => c.segment === "education").length > 0 && (
               <div className="mb-4">
@@ -688,7 +713,7 @@ export function Sidebar({
 
             {/* Other Section */}
             {conversations.filter(
-              (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
+              (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
             ).length > 0 && (
               <div className="mb-4">
                 <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
@@ -697,7 +722,7 @@ export function Sidebar({
                 <div className="space-y-0.5">
                   {conversations
                     .filter(
-                      (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
+                      (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
                     )
                     .map((conv) => (
                       <ConversationItem key={conv.id} conv={conv} />

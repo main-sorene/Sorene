@@ -280,6 +280,7 @@ export function SettingsModal() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [mounted, setMounted] = React.useState(false);
+  const [mobileView, setMobileView] = React.useState<"list" | "content">("list");
   React.useEffect(() => { setMounted(true); }, []);
 
   // Sync form state when user data changes
@@ -737,18 +738,106 @@ export function SettingsModal() {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full sm:w-[220px] shrink-0 flex flex-col py-3 sm:py-6 px-3 border-b sm:border-b-0 sm:border-r border-[#F0F0F0] overflow-x-auto sm:overflow-visible">
-          <div className="hidden sm:flex items-center justify-between px-2 mb-5">
+      {/* Modal — slides up from bottom on mobile, centered on desktop */}
+      <div className="relative z-10 w-full sm:w-[95vw] sm:max-w-[900px] h-[92dvh] sm:h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
+
+        {/* ── MOBILE: nav list view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "list" ? "flex" : "hidden")}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#F0F0F0] shrink-0">
+            <span className="text-base font-semibold text-[#151515]">Settings</span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* User card */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#F0F0F0] shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-11 h-11 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-purple-600 flex items-center justify-center text-white text-base font-semibold shrink-0">{initial}</div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#151515] truncate">{displayName}</p>
+              <p className="text-xs text-[#62646A] truncate">{email}</p>
+            </div>
+          </div>
+
+          {/* Nav list */}
+          <nav className="flex-1 overflow-y-auto px-3 py-3">
+            {filteredSidebarItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setMobileView("content"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-gray-50 transition-colors text-left mb-0.5"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center shrink-0">
+                    <Icon size={15} className="text-[#444]" />
+                  </div>
+                  <span className="text-[14px] font-medium text-[#151515] flex-1">{item.label}</span>
+                  <svg width="6" height="10" viewBox="0 0 6 10" fill="none" className="text-[#BCBCBC]">
+                    <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Logout button — always visible at bottom */}
+          <div className="px-3 pb-6 pt-2 border-t border-[#F0F0F0] shrink-0">
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-[#ECEDEE] hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-60"
+            >
+              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                <LogOut size={15} className="text-red-500" />
+              </div>
+              <span className="text-[14px] font-medium text-red-500 flex-1">
+                {isLoggingOut ? "Logging out…" : "Log out"}
+              </span>
+              {isLoggingOut && <Loader2 size={14} className="animate-spin text-red-400" />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── MOBILE: content view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "content" ? "flex" : "hidden")}>
+          {/* Back header */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-[#F0F0F0] shrink-0">
+            <button
+              onClick={() => { setMobileView("list"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B] mr-1"
+            >
+              <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                <path d="M7 1L1 7l6 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <span className="text-base font-semibold text-[#151515] flex-1">
+              {showClearConfirm || showDeleteConfirm ? "Confirm" : activeTab}
+            </span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            {renderContent()}
+          </div>
+        </div>
+
+        {/* ── DESKTOP: sidebar + content ── */}
+        <aside className="hidden sm:flex w-[220px] shrink-0 flex-col py-6 px-3 border-r border-[#F0F0F0]">
+          <div className="flex items-center justify-between px-2 mb-5">
             <span className="text-base font-semibold text-[#151515]">Settings</span>
           </div>
-          <nav className="flex sm:flex-col flex-row gap-1 sm:gap-0 sm:space-y-0.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 sm:flex-1">
+          <nav className="flex flex-col space-y-0.5 flex-1">
             {filteredSidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id && !showClearConfirm && !showDeleteConfirm;
@@ -757,10 +846,8 @@ export function SettingsModal() {
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
                   className={cn(
-                    "sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-[13px] sm:text-[14px] font-medium transition-all text-left whitespace-nowrap shrink-0 sm:shrink sm:whitespace-normal",
-                    isActive
-                      ? "bg-purple-50 text-purple-700"
-                      : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-all text-left",
+                    isActive ? "bg-purple-50 text-purple-700" : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
                   )}
                 >
                   <Icon size={16} className={isActive ? "text-purple-600" : "text-[#6B6B6B]"} />
@@ -772,16 +859,15 @@ export function SettingsModal() {
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="hidden sm:flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60 whitespace-nowrap shrink-0"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60"
           >
             <LogOut size={16} />
             {isLoggingOut ? "Logging out…" : "Log out"}
           </button>
         </aside>
 
-        {/* Content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Close button */}
+        {/* Desktop content */}
+        <main className="hidden sm:flex flex-1 flex-col overflow-hidden">
           <div className="flex justify-end px-5 pt-4 pb-2 shrink-0">
             <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
               <X size={18} />

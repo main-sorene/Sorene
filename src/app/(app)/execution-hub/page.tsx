@@ -4335,12 +4335,13 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
   const [collapsed, setCollapsed] = useState(() => {
     try { return !!localStorage.getItem(storageKey); } catch { return false; }
   });
-  const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string }[]>([]);
+  const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string; available?: boolean | null }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   useEffect(() => {
     if (!title) return;
@@ -4349,9 +4350,10 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
       if (cached) {
         const parsed = JSON.parse(cached);
         // Migrate old data: if items have "name" but no "text", rename to "text"
-        const migrated = Array.isArray(parsed) ? parsed.map((s: { name?: string; text?: string; reason?: string }) => ({
+        const migrated = Array.isArray(parsed) ? parsed.map((s: { name?: string; text?: string; reason?: string; available?: boolean | null }) => ({
           text: s.text || s.name || "",
           reason: s.reason || "",
+          ...(s.available !== undefined ? { available: s.available } : {}),
         })) : parsed;
         setSuggestions(migrated);
         setStage("done");
@@ -4379,6 +4381,23 @@ Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${proj
 Remember: "text" = the actual copy itself (short). "reason" = why it works (explanation). Return only the JSON array.`;
   };
 
+  const checkAndAnnotateDomains = async (list: { text: string; reason: string }[]) => {
+    if (type !== "domain") return list;
+    setCheckingAvailability(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/check-domain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains: list.map((s) => s.text) }) });
+      if (res.ok) {
+        const data = await res.json();
+        const availMap: Record<string, boolean> = {};
+        for (const r of (data.results ?? [])) availMap[r.domain] = r.available;
+        return list.map((s) => ({ ...s, available: availMap[s.text.toLowerCase().trim()] ?? null }));
+      }
+    } catch { /* ignore */ }
+    setCheckingAvailability(false);
+    return list;
+  };
+
   const generateSuggestions = async () => {
     if (!title) return;
     setStage("loading");
@@ -4391,8 +4410,14 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
         const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
         if (match) {
           const raw = JSON.parse(match[0]);
-          const parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
-          setSuggestions(parsed); setStage("done");
+          let parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
+          setStage("done");
+          if (type === "domain") {
+            setSuggestions(parsed);
+            parsed = await checkAndAnnotateDomains(parsed);
+            setCheckingAvailability(false);
+          }
+          setSuggestions(parsed);
           try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
         } else { setStage("idle"); }
       } else { setStage("idle"); }
@@ -4418,9 +4443,18 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
         const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
         if (match) {
           const raw = JSON.parse(match[0]);
-          const parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
+          let parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
           setSuggestions([]);
-          setTimeout(() => { setSuggestions(parsed); setSuggestionKey((k) => k + 1); }, 120);
+          setTimeout(async () => {
+            setSuggestions(parsed);
+            setSuggestionKey((k) => k + 1);
+            if (type === "domain") {
+              parsed = await checkAndAnnotateDomains(parsed);
+              setCheckingAvailability(false);
+              setSuggestions(parsed);
+              setSuggestionKey((k) => k + 1);
+            }
+          }, 120);
           try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
           setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
         } else {
@@ -4466,27 +4500,43 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
               <Loader2 size={11} className="animate-spin" /> Generating options…
             </div>
           )}
+          {stage === "done" && checkingAvailability && type === "domain" && (
+            <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
+              <Loader2 size={11} className="animate-spin" /> Checking availability…
+            </div>
+          )}
           {stage === "done" && suggestions.length > 0 && (
             <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
               {suggestions.map((s, i) => {
                 const displayText = s.text || s.name || "";
+                const unavailable = type === "domain" && s.available === false;
                 return (
                 <div key={i} className={cn(
                   "rounded-xl border p-3 transition-all",
-                  chosen === displayText ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+                  unavailable ? "opacity-40 border-gray-100 bg-[#FAFAFA]"
+                  : chosen === displayText ? "border-[#32C382] bg-[#F5FFD9]"
+                  : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
                 )}>
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-[13px] font-semibold text-[#151515] leading-snug flex-1">{displayText}</span>
-                    {chosen !== displayText ? (
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className={cn("text-[13px] font-semibold leading-snug", unavailable ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{displayText}</span>
+                      {type === "domain" && s.available === true && !checkingAvailability && (
+                        <span className="text-[10px] font-medium text-[#32C382] bg-[#F5FFD9] border border-[#32C382]/30 px-1.5 py-0.5 rounded-full shrink-0">Available</span>
+                      )}
+                      {type === "domain" && s.available === false && (
+                        <span className="text-[10px] font-medium text-[#9A9A9A] bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded-full shrink-0">Taken</span>
+                      )}
+                    </div>
+                    {!unavailable && chosen !== displayText ? (
                       <button onClick={() => choose(displayText)}
                         className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
                         Choose
                       </button>
-                    ) : (
+                    ) : !unavailable ? (
                       <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
-                    )}
+                    ) : null}
                   </div>
-                  {s.reason && <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>}
+                  {s.reason && !unavailable && <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>}
                 </div>
                 );
               })}

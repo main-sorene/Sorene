@@ -27,6 +27,9 @@ import {
   FileText,
   Trash2,
   ChevronUp,
+  Settings,
+  Archive,
+  AlertTriangle,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom } from "jotai";
@@ -5939,7 +5942,12 @@ function ProjectPicker({
                     {(i + 1)}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-body-small-medium text-[#151515] truncate">{displayName(p)}</p>
+                    <p className="text-body-small-medium text-[#151515] truncate flex items-center gap-1.5">
+                      {displayName(p)}
+                      {(p as DirectionCardData & { archived?: boolean }).archived && (
+                        <span className="text-[9px] font-semibold uppercase tracking-wide text-[#9A9A9A] bg-gray-100 px-1.5 py-0.5 rounded-full">Archived</span>
+                      )}
+                    </p>
                     {p.oneliner && <p className="text-[11px] text-[#9A9A9A] truncate">{p.oneliner}</p>}
                   </div>
                   {selected?.title === p.title && <CheckCircle2 size={14} className="text-[#151515] ml-auto shrink-0" />}
@@ -5973,6 +5981,142 @@ function ProjectPicker({
                 </>
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ProjectSettings — archive / delete the current project
+// ─────────────────────────────────────────────
+
+function ProjectSettings({
+  project,
+  onArchived,
+  onDeleted,
+}: {
+  project: DirectionCardData;
+  onArchived: (archived: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const archived = !!(project as DirectionCardData & { archived?: boolean }).archived;
+
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setConfirmDelete(false); }
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  const manage = async (action: "archive" | "unarchive" | "delete") => {
+    setBusy(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-projects/manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, projectTitle: project.title }),
+      });
+      if (res.ok) {
+        if (action === "delete") onDeleted();
+        else onArchived(action === "archive");
+        setOpen(false);
+        setConfirmDelete(false);
+      }
+    } catch { /* ignore */ }
+    setBusy(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[#62646A] text-sm font-medium hover:bg-gray-50 transition-all shadow-sm"
+        title="Project settings"
+      >
+        <Settings size={15} className="shrink-0" />
+        <span className="hidden sm:inline">Project Settings</span>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.08)] z-50 overflow-hidden"
+          >
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Project Settings</p>
+              <p className="text-[13px] font-semibold text-[#151515] truncate mt-0.5">{project.title}</p>
+            </div>
+
+            {!confirmDelete ? (
+              <div className="p-1.5">
+                <button
+                  onClick={() => manage(archived ? "unarchive" : "archive")}
+                  disabled={busy}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#F8F9FA] transition-colors disabled:opacity-40"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                    <Archive size={13} className="text-[#62646A]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-body-small-medium text-[#151515]">{archived ? "Unarchive project" : "Archive project"}</p>
+                    <p className="text-[11px] text-[#9A9A9A]">{archived ? "Restore to active projects" : "Hide without deleting data"}</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={busy}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#FEF2F2] transition-colors disabled:opacity-40"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-[#FEF2F2] flex items-center justify-center shrink-0">
+                    <Trash2 size={13} className="text-[#EF4444]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-body-small-medium text-[#EF4444]">Delete project</p>
+                    <p className="text-[11px] text-[#9A9A9A]">Permanently remove all data</p>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className="p-4">
+                <div className="flex items-start gap-2.5 mb-3">
+                  <AlertTriangle size={16} className="text-[#EF4444] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#151515]">Delete &ldquo;{project.title}&rdquo;?</p>
+                    <p className="text-[12px] text-[#62646A] leading-relaxed mt-1">
+                      This permanently removes the project and all its progress, conversations, and settings from your account. This cannot be undone.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={busy}
+                    className="flex-1 text-[13px] font-medium text-[#151515] border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-40"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => manage("delete")}
+                    disabled={busy}
+                    className="flex-1 text-[13px] font-medium text-white bg-[#EF4444] px-3 py-2 rounded-xl hover:bg-[#DC2626] transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5"
+                  >
+                    {busy ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -6131,7 +6275,7 @@ export default function Page() {
         <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F9FAFB]">
           <div className="max-w-6xl mx-auto">
             {/* Top bar */}
-            <div className="flex items-center px-4 pt-6 pb-2 lg:px-6">
+            <div className="flex items-center justify-between gap-2 px-4 pt-6 pb-2 lg:px-6">
               <ProjectPicker
                 projects={projects}
                 selected={selectedProject}
@@ -6139,6 +6283,20 @@ export default function Page() {
                 onCreateProject={() => setCreateOpen(true)}
                 customNames={customNames}
               />
+              {selectedProject && (
+                <ProjectSettings
+                  project={selectedProject}
+                  onArchived={(archived) => {
+                    setProjects((prev) => prev.map((p) => p.title === selectedProject.title ? { ...p, archived } : p));
+                    setSelectedProject((prev) => prev ? { ...prev, archived } as DirectionCardData : prev);
+                  }}
+                  onDeleted={() => {
+                    setProjects((prev) => prev.filter((p) => p.title !== selectedProject.title));
+                    setSelectedProject(null);
+                    setActiveTab("validation");
+                  }}
+                />
+              )}
             </div>
 
             {/* Tabs + inline accordion content */}

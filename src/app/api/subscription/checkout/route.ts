@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, getPriceId } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
+import { getAdminAuth, verifyAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
@@ -18,6 +18,14 @@ export async function POST(req: NextRequest) {
 
     if (plan === "free") {
       return NextResponse.json({ error: "Cannot checkout free plan" }, { status: 400 });
+    }
+
+    const authedUser = await verifyAuth(req);
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (email !== authedUser.uid && email !== authedUser.email) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     getAdminAuth(); // ensures firebase admin is initialised

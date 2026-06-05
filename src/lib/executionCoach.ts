@@ -14,7 +14,6 @@ At the end of your reply, if anything the user said warrants updating their prog
 Only include fields that should change. Omit the block entirely if nothing needs updating.`;
 
 export async function processMessage(
-  uid: string,
   incomingText: string,
   progress: ExecutionProgress,
   recentHistory: { role: "user" | "assistant"; content: string }[],

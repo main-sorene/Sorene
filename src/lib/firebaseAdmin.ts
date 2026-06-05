@@ -1,28 +1,39 @@
 import { initializeApp, getApps, cert, App } from "firebase-admin/app";
 import { getAuth, Auth } from "firebase-admin/auth";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 import { NextRequest } from "next/server";
 
 let app: App | undefined;
 let adminAuth: Auth | undefined;
+let adminDb: Firestore | undefined;
+
+function initAdminApp(): App {
+  if (app) return app;
+  if (getApps().length) {
+    app = getApps()[0];
+    return app;
+  }
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (serviceAccount) {
+    app = initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+  } else {
+    app = initializeApp({ projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID });
+  }
+  return app;
+}
 
 export function getAdminAuth(): Auth | null {
   if (adminAuth) return adminAuth;
-
-  if (!getApps().length) {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (serviceAccount) {
-      app = initializeApp({
-        credential: cert(JSON.parse(serviceAccount)),
-      });
-    } else {
-      app = initializeApp({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      });
-    }
-  }
-
-  adminAuth = getAuth(app);
+  const a = initAdminApp();
+  adminAuth = getAuth(a);
   return adminAuth ?? null;
+}
+
+export function getAdminFirestore(): Firestore {
+  if (adminDb) return adminDb;
+  const a = initAdminApp();
+  adminDb = getFirestore(a);
+  return adminDb;
 }
 
 export async function verifyAuth(

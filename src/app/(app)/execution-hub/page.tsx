@@ -4012,31 +4012,446 @@ function BuildDemoStage3({
 // Launchpad
 // ─────────────────────────────────────────────
 
-function LaunchpadContent() {
-  const [pitch, setPitch] = useState("");
-  const tools = [{ label: "Business Plan", icon: "📋" }, { label: "Pitch Deck", icon: "📊" }, { label: "Brand Kit", icon: "🎨" }, { label: "Content Plan", icon: "✍️" }];
+// ─────────────────────────────────────────────
+// Launch Pillars data
+// ─────────────────────────────────────────────
+
+const LAUNCH_PILLARS = [
+  { id: "legal", label: "Legal & Structure", icon: FileText, items: [
+    { id: "incorporation", label: "Business incorporation" },
+    { id: "dba_name", label: "Register fictitious/DBA name" },
+    { id: "ein", label: "Get federal Tax ID (EIN)" },
+    { id: "lawyer", label: "Hire a business lawyer" },
+    { id: "permits", label: "Get business permits & licenses" },
+    { id: "contracts", label: "Draft contracts (partners & customers)" },
+  ]},
+  { id: "finance", label: "Financial Setup", icon: DollarSign, items: [
+    { id: "bank_account", label: "Open business bank account" },
+    { id: "credit_card", label: "Get business credit card" },
+    { id: "accounting_setup", label: "Set up accounting system" },
+    { id: "tax_pro", label: "Hire tax professional + tax planning" },
+    { id: "insurance", label: "Get business insurance" },
+    { id: "funding_plan", label: "Finalize funding plan" },
+  ]},
+  { id: "brand_digital", label: "Brand & Digital Presence", icon: Rocket, items: [
+    { id: "biz_name", label: "Finalise business name" },
+    { id: "domain", label: "Register domain" },
+    { id: "hosting", label: "Get web hosting" },
+    { id: "website", label: "Build website" },
+    { id: "social", label: "Set up social media profiles" },
+  ]},
+  { id: "operations", label: "Operations", icon: Users, items: [
+    { id: "processes", label: "Identify core business processes" },
+    { id: "office", label: "Get office space / set up remote" },
+    { id: "it", label: "IT capabilities (hardware, cloud, security)" },
+    { id: "ops_docs", label: "Document operational processes" },
+  ]},
+  { id: "tools", label: "Tools Stack", icon: BarChart3, items: [
+    { id: "crm", label: "CRM (customer relationship management)" },
+    { id: "accounting_tool", label: "Accounting software" },
+    { id: "payments", label: "Payment service (Stripe, etc.)" },
+    { id: "collab", label: "Collaboration & project management" },
+    { id: "esign", label: "Electronic signature tool" },
+    { id: "social_tool", label: "Social media scheduler" },
+    { id: "expense", label: "Expense tracking" },
+  ]},
+  { id: "growth", label: "Growth", icon: BarChart3, items: [
+    { id: "marketing", label: "Build marketing strategy" },
+    { id: "first_hire", label: "Plan first hire" },
+    { id: "partner_contracts", label: "Sign partner & customer contracts" },
+    { id: "funding_pitch", label: "Prepare funding pitch (if applicable)" },
+  ]},
+];
+
+type PillarDef = typeof LAUNCH_PILLARS[number];
+type ChecklistStatus = "todo" | "progress" | "done";
+
+function LaunchPillar({ pillar, project }: { pillar: PillarDef; project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+
+  const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
+  const [tips, setTips] = useState<Record<string, string>>({});
+  const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
+
+  useEffect(() => {
+    if (!title) return;
+    const loaded: Record<string, ChecklistStatus> = {};
+    for (const item of pillar.items) {
+      try {
+        const v = localStorage.getItem(`launchpad-status-${item.id}-${title}`) as ChecklistStatus | null;
+        loaded[item.id] = v ?? "todo";
+      } catch { loaded[item.id] = "todo"; }
+    }
+    setStatuses(loaded);
+
+    try {
+      const raw = localStorage.getItem(`launchpad-tips-${pillar.id}-${title}`);
+      if (raw) { setTips(JSON.parse(raw)); setTipsStage("done"); }
+      else { setTips({}); setTipsStage("idle"); }
+    } catch { setTips({}); setTipsStage("idle"); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, pillar.id]);
+
+  const cycleStatus = (itemId: string) => {
+    setStatuses((prev) => {
+      const cur = prev[itemId] ?? "todo";
+      const next: ChecklistStatus = cur === "todo" ? "progress" : cur === "progress" ? "done" : "todo";
+      const updated = { ...prev, [itemId]: next };
+      try { localStorage.setItem(`launchpad-status-${itemId}-${title}`, next); } catch { /* ignore */ }
+      return updated;
+    });
+  };
+
+  const generateTips = async () => {
+    if (!title) return;
+    setTipsStage("loading");
+
+    const painkiller      = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer           = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const patternSummary  = localStorage.getItem(`pattern-summary-${title}`) ?? "";
+    const confidence      = localStorage.getItem(`confidence-level-${title}`) ?? "";
+    const validationScore = localStorage.getItem(`experiment-validation-score-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    const runway        = localStorage.getItem(`finance-runway-${title}`) ?? "";
+    const startupCost   = localStorage.getItem(`finance-startup_cost-${title}`) ?? "";
+    const revenueTarget = localStorage.getItem(`finance-revenue_target-${title}`) ?? "";
+    const fundingPath   = localStorage.getItem(`finance-funding_path-${title}`) ?? "";
+
+    const itemList = pillar.items.map((i) => `"${i.id}": "${i.label}"`).join(", ");
+
+    const system = `You are Sorene, a startup coach. Respond ONLY with valid JSON — a single object. No markdown, no preamble, no explanation outside the JSON.`;
+    const prompt = `Give a short, specific tip (1 sentence, max 20 words) for each checklist item for this founder.
+
+Project: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}${confidence ? `\nConfidence: "${confidence}"` : ""}${validationScore ? `\nValidation: "${validationScore}"` : ""}${runway ? `\nRunway: "${runway}"` : ""}${startupCost ? `\nStartup cost: "${startupCost}"` : ""}${revenueTarget ? `\nRevenue target: "${revenueTarget}"` : ""}${fundingPath ? `\nFunding: "${fundingPath}"` : ""}
+
+Pillar: "${pillar.label}"
+Items: { ${itemList} }
+
+Return JSON: { [itemId]: "tip string" } — one key per item above, specific to this business.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        const match = reply.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setTips(parsed);
+          setTipsStage("done");
+          try { localStorage.setItem(`launchpad-tips-${pillar.id}-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+        } else { setTipsStage("idle"); }
+      } else { setTipsStage("idle"); }
+    } catch { setTipsStage("idle"); }
+  };
+
+  const doneCount = pillar.items.filter((i) => (statuses[i.id] ?? "todo") === "done").length;
+  const Icon = pillar.icon;
+
   return (
-    <div className="p-6 space-y-8">
+    <CollapseSection title={pillar.label} defaultOpen={false}>
+      <div className="flex items-center justify-between mb-3 -mt-1">
+        <div className="flex items-center gap-1.5">
+          <Icon size={13} className="text-[#62646A]" />
+          <span className="text-[11px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
+        </div>
+        {tipsStage === "idle" && (
+          <button
+            onClick={generateTips}
+            disabled={!title}
+            className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2 py-0.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30"
+          >
+            Get tips
+          </button>
+        )}
+        {tipsStage === "loading" && (
+          <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
+            <Loader2 size={11} className="animate-spin" /> Getting tips…
+          </div>
+        )}
+      </div>
+      <div className="space-y-2.5">
+        {pillar.items.map((item) => {
+          const status = statuses[item.id] ?? "todo";
+          const tip = tips[item.id];
+          return (
+            <div key={item.id}>
+              <button
+                onClick={() => cycleStatus(item.id)}
+                className="w-full flex items-center gap-2.5 text-left group"
+              >
+                <div className={cn(
+                  "w-3 h-3 rounded-full shrink-0 transition-colors border",
+                  status === "done"       ? "bg-[#32C382] border-[#32C382]"
+                  : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
+                  : "bg-white border-gray-300 group-hover:border-[#151515]"
+                )} />
+                <span className={cn(
+                  "text-[13px] transition-colors flex-1",
+                  status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]"
+                )}>
+                  {item.label}
+                </span>
+              </button>
+              {tip && (
+                <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[22px] mt-0.5">
+                  <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </CollapseSection>
+  );
+}
+
+// ─────────────────────────────────────────────
+// GenerateOutputCard
+// ─────────────────────────────────────────────
+
+type GenerateCardType = "business_plan" | "pitch_deck" | "brand_identity" | "content_copy";
+
+const GENERATE_CARD_META: Record<GenerateCardType, { icon: React.ElementType; title: string; description: string }> = {
+  business_plan:  { icon: FileText,      title: "Business Plan",  description: "Full plan with all key sections ready to share with partners or investors." },
+  pitch_deck:     { icon: BarChart3,     title: "Pitch Deck",     description: "10-slide outline structured to tell your story and land meetings." },
+  brand_identity: { icon: Lightbulb,     title: "Brand Identity", description: "Name suggestions, taglines, voice guide, and hero copy." },
+  content_copy:   { icon: MessageCircle, title: "Content & Copy", description: "Elevator pitch, website hero copy, bio, and first outreach email." },
+};
+
+const GENERATE_PROMPTS: Record<GenerateCardType, string> = {
+  business_plan:  "Write a complete business plan with all sections: Executive Summary, Problem, Solution, Target Market, Business Model, Go-to-Market Strategy, Founder Fit, Financial Outlook, and Next Steps. Use **bold** for section headers. Be specific to this business, not generic.",
+  pitch_deck:     "Write a 10-slide pitch deck outline. Each slide: title + 2-3 bullet points of content. Slides: Company Overview, Problem, Solution, Target Market, Traction & Validation, Business Model, Go-to-Market, Team/Founder Fit, Financial Ask, Next Steps. Use **Slide X: Title** format.",
+  brand_identity: "Generate a brand identity package with: (1) 3 business name suggestions with rationale, (2) 3 tagline options, (3) brand voice guide (tone, language style, what to avoid), (4) target message for hero section of website. Use **bold** for labels.",
+  content_copy:   "Generate a content & copy package: (1) 3-sentence elevator pitch, (2) website hero headline + subheadline, (3) 50-word founder bio, (4) first outreach email template (subject + body). Use **bold** for labels.",
+};
+
+function GenerateOutputCard({ type, project }: { type: GenerateCardType; project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `launchpad-${type}-${title}`;
+  const meta = GENERATE_CARD_META[type];
+  const Icon = meta.icon;
+
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [output, setOutput] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) { setOutput(cached); setStage("done"); }
+      else { setOutput(""); setStage("idle"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, type]);
+
+  const generate = async () => {
+    if (!title) return;
+    setStage("loading");
+
+    const painkiller      = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer           = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const patternSummary  = localStorage.getItem(`pattern-summary-${title}`) ?? "";
+    const confidence      = localStorage.getItem(`confidence-level-${title}`) ?? "";
+    const validationScore = localStorage.getItem(`experiment-validation-score-${title}`) ?? "";
+    let targetCustomer = ""; let targetWho = "";
+    try {
+      const tc = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}");
+      targetCustomer = tc?.main?.label ?? "";
+      targetWho = tc?.main?.who ?? "";
+    } catch { /* ignore */ }
+    let experimentSummary = "";
+    try {
+      const customers: { response: string; note?: string }[] = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+      if (customers.length > 0) {
+        const yes = customers.filter((c) => c.response === "yes").length;
+        experimentSummary = `${customers.length} conversations, ${yes} paying customers`;
+      }
+    } catch { /* ignore */ }
+    const runway        = localStorage.getItem(`finance-runway-${title}`) ?? "";
+    const startupCost   = localStorage.getItem(`finance-startup_cost-${title}`) ?? "";
+    const revenueTarget = localStorage.getItem(`finance-revenue_target-${title}`) ?? "";
+    const fundingPath   = localStorage.getItem(`finance-funding_path-${title}`) ?? "";
+
+    const system = `You are Sorene, a startup coach. Generate output that is specific to this founder's business — not generic templates. Incorporate their actual data. Use plain prose with **bold** for key terms. No JSON, no code blocks.`;
+
+    const prompt = `${GENERATE_PROMPTS[type]}
+
+Project: "${title}"${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"${targetWho ? ` — ${targetWho}` : ""}` : ""}${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nMinimum viable offer: "${offer}"` : ""}${experimentSummary ? `\nCustomer traction: ${experimentSummary}` : ""}${validationScore ? `\nValidation score: "${validationScore}"` : ""}${confidence ? `\nConfidence level: "${confidence}"` : ""}${patternSummary ? `\nPattern summary: "${patternSummary.slice(0, 300)}"` : ""}${runway ? `\nRunway: "${runway}"` : ""}${startupCost ? `\nStartup cost: "${startupCost}"` : ""}${revenueTarget ? `\nRevenue target: "${revenueTarget}"` : ""}${fundingPath ? `\nFunding path: "${fundingPath}"` : ""}`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = (data?.reply ?? "").trim();
+        if (reply) {
+          setOutput(reply);
+          setStage("done");
+          try { localStorage.setItem(storageKey, reply); } catch { /* ignore */ }
+        } else { setStage("idle"); }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  };
+
+  const regenerate = () => {
+    try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+    setOutput("");
+    generate();
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden flex flex-col">
+      <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+          <Icon size={14} className="text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-[#151515]">{meta.title}</p>
+          <p className="text-[11px] text-[#9A9A9A] leading-snug">{meta.description}</p>
+        </div>
+      </div>
+      <div className="px-5 py-4 flex-1 flex flex-col gap-3">
+        {stage === "idle" && (
+          <button
+            onClick={generate}
+            disabled={!title}
+            className="w-full py-2.5 rounded-xl border border-dashed border-[#32C382]/50 text-[12px] text-[#32C382] hover:border-[#32C382] hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center justify-center gap-1.5"
+          >
+            <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
+            Generate
+          </button>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]">
+            <Loader2 size={12} className="animate-spin" /> Generating…
+          </div>
+        )}
+        {stage === "done" && output && (
+          <>
+            <div className="text-[13px] text-[#151515] leading-[1.75] [&_strong]:font-semibold [&_strong]:text-[#151515]">
+              <MarkdownText text={output} />
+            </div>
+            <div className="flex items-center gap-2 pt-1 border-t border-[#ECEDEE]">
+              <button
+                onClick={regenerate}
+                className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium"
+              >
+                Regenerate
+              </button>
+              <button
+                onClick={copyToClipboard}
+                className="ml-auto flex items-center gap-1 text-[11px] font-medium text-[#62646A] hover:text-[#151515] transition-colors"
+              >
+                {copied ? <CheckCircle2 size={11} className="text-[#32C382]" /> : null}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// LaunchPadContent — main component
+// ─────────────────────────────────────────────
+
+function LaunchPadContent({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+
+  const totalItems = LAUNCH_PILLARS.reduce((acc, p) => acc + p.items.length, 0);
+  const [totalDone, setTotalDone] = useState(0);
+
+  useEffect(() => {
+    if (!title) { setTotalDone(0); return; }
+    const count = () => {
+      let done = 0;
+      for (const pillar of LAUNCH_PILLARS) {
+        for (const item of pillar.items) {
+          try { if (localStorage.getItem(`launchpad-status-${item.id}-${title}`) === "done") done++; } catch { /* ignore */ }
+        }
+      }
+      setTotalDone(done);
+    };
+    count();
+    const interval = setInterval(count, 1500);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const progressPct = totalItems > 0 ? Math.round((totalDone / totalItems) * 100) : 0;
+  const progressColor = progressPct >= 80 ? "#32C382" : progressPct >= 40 ? "#FFA94D" : "#FFD43B";
+
+  return (
+    <div className="p-6 space-y-10">
+
+      {/* What is this? */}
       <section>
-        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">Elevator Pitch</h4>
-        <Separator className="bg-gray-100 mb-5" />
-        <p className="text-label-medium text-[#62646A] mb-3 leading-relaxed">Describe your business in 3 sentences — what it is, who it's for, and the key benefit.</p>
-        <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} placeholder="We help [who] to [do what] so that [key outcome]…" rows={4}
-          className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-body-small text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
-        <div className="flex justify-end mt-1">
-          <span className={cn("text-[11px]", pitch.length > 400 ? "text-[#DF2E16]" : "text-[#9A9A9A]")}>{pitch.length} / 400</span>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <p className="text-[15px] font-medium text-[#151515] leading-relaxed">
+          You&apos;ve validated your idea — now it&apos;s time to build the business. Generate investor-ready documents from your journey data and work through every step you need to take before launch.
+        </p>
+      </section>
+
+      {/* Generate Assets */}
+      <section>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">Generate Your Assets</h4>
+        <Separator className="bg-[#D8D9DB] mb-5" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {(["business_plan", "pitch_deck", "brand_identity", "content_copy"] as GenerateCardType[]).map((type) => (
+            <GenerateOutputCard key={type} type={type} project={project} />
+          ))}
         </div>
       </section>
+
+      {/* Launch Checklist */}
       <section>
-        <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">Instantly Generate</h4>
-        <Separator className="bg-gray-100 mb-5" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {tools.map((t) => (
-            <div key={t.label} className="flex flex-col items-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 p-5 opacity-50 cursor-not-allowed">
-              <span className="text-2xl">{t.icon}</span>
-              <span className="text-body-small-medium text-[#151515]">{t.label}</span>
-              <span className="text-[10px] text-[#9A9A9A]">Coming soon</span>
-            </div>
+        <h4 className="text-base font-semibold text-[#151515] mb-3">Launch Checklist</h4>
+        <Separator className="bg-[#D8D9DB] mb-5" />
+
+        {/* Overall progress bar */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] text-[#62646A] font-medium">Overall progress</span>
+            <span className="text-[13px] font-semibold" style={{ color: progressColor }}>{progressPct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ backgroundColor: progressColor }}
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.5 }}
+            />
+          </div>
+          <p className="text-[11px] text-[#9A9A9A] mt-1.5">{totalDone} of {totalItems} tasks complete</p>
+        </div>
+
+        <div className="space-y-4">
+          {LAUNCH_PILLARS.map((pillar) => (
+            <LaunchPillar key={pillar.id} pillar={pillar} project={project} />
           ))}
         </div>
       </section>
@@ -4703,6 +5118,8 @@ export default function Page() {
                     >
                       {activeTab === "validation"
                         ? <ValidationProgress project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
+                        : activeTab === "launchpad"
+                        ? <LaunchPadContent project={selectedProject ?? null} />
                         : isDirectSync
                         ? SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

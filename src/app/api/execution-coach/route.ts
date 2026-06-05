@@ -18,16 +18,25 @@ const RECIPES: Record<string, string> = {
   validate: `The user clicked "Help me validate my idea". Using their project, DNA and current validation status, give them a focused validation plan: who exactly to talk to, what to ask, and the signal that means "keep going". If they've already logged conversations or a pattern summary, build on it rather than restarting. 3-5 sentences, end with the next validation action.`,
   next: `The user clicked "What's my next step?". From the status below, find the next incomplete, highest-leverage task and tell them exactly what to do and where in the Hub to do it (Validation / Launchpad / Growth / Connect tab). One clear step, 2-4 sentences.`,
   update_status: `The user clicked "Update business status". Invite them, in a warm and specific way, to tell you what's changed since last time — new conversations, a launched asset, revenue, a blocker. Reference where they currently are (from the status below) so the ask feels informed. Then say you'll fold it into their plan and next steps. Keep it to 2-3 sentences ending with a clear, friendly question.`,
-  onboard: `The user clicked "Create My Project" — they want to start a new project from scratch and you're onboarding them. There is NO project selected yet.
+  onboard: `The user clicked "Create My Project". The chat UI is handling questions step-by-step — do not ask any questions. This recipe is not used anymore; use onboard_evaluate instead.`,
+  onboard_evaluate: `You've collected the user's project info through a structured onboarding flow. Here's what was captured:
+- Project name
+- Description
+- Status they self-selected (just_an_idea / validating / ready_to_launch / launched_growing)
+- Traction details (users, waitlist, customers, revenue)
 
-Turn 1 (now): warmly greet them by name in ONE sentence, then ask TWO things in a short, friendly way: (1) what they're building — a name or a one-line description, and (2) where they're at today. Offer these stages so they can self-identify: "just an idea", "talking to customers / validating", "built something / ready to launch", or "already launched and growing". Keep it to 2-3 short sentences. Do not lecture.
+Your job: evaluate their ACTUAL stage based on the traction evidence, not just what they self-reported. Apply smart correction:
+- If they said "ready_to_launch" or "launched_growing" but reported 0 users, 0 customers, 0 revenue, no waitlist → gently correct them. Explain that without validation evidence, they're likely at the idea or validation stage, and pushing ahead risks building the wrong thing. Route them to Validation tab.
+- If they said "validating" and have some conversations but no clear pattern → keep them in Validation, focus on finding the pattern and Go/No-Go check.
+- If traction evidence matches their claim → confirm it and route accordingly.
 
-On their reply: acknowledge the project in one line, then ROUTE them to the right place based on the stage they described, using this map:
-- Just an idea or unsure → Validation tab: start from the beginning with customer interviews (VIBE framework) to confirm the problem is real before building.
-- Validating / mid-conversations → Validation tab: keep going and run the Go / No-Go readiness check to decide if they're ready to move on.
-- Built / ready to launch → Launchpad tab: lock the brand & digital presence (business name, tagline, pricing, logo, domain, website, social).
-- Launched / growing → Growth tab: work through the strategic deliverables (business plan, marketing plan, GTM, sales playbook, financial model, metrics, pitch deck).
-Tell them the single first action to take in that tab. Be specific to what they told you. End by noting they can create the project from the project picker (top-left) to start tracking progress there.`,
+Routing map:
+- Idea / no evidence → Validation tab: VIBE framework customer interviews, log conversations, find the pattern.
+- Validating with some evidence → Validation tab: Go / No-Go readiness check.
+- Validated + evidence of demand → Launchpad tab: business name, tagline, pricing, logo, domain, website, social.
+- Launched with real traction → Growth tab: business plan, marketing plan, GTM, sales playbook, financial model, metrics, pitch deck.
+
+Format: 3-4 short sentences. Acknowledge the project by name in the first line. If correcting, be warm but honest — explain the WHY in one sentence. End with the single first action and which tab to open. Then note they can create the project from the project picker (top-left) to start tracking progress.`,
 };
 
 // Where each kind of work lives — used so the coach routes users accurately.

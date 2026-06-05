@@ -17,7 +17,17 @@ const SUGGESTIONS: { label: string; recipeId: string }[] = [
   { label: "Update business status", recipeId: "update_status" },
 ];
 
-interface ChatMsg { id: string; role: "user" | "assistant"; content: string }
+interface ChatMsg { id: string; role: "user" | "assistant"; content: string; isStatusButtons?: boolean }
+
+type OnboardStep = "idle" | "name" | "description" | "status" | "traction" | "done";
+interface OnboardData { name: string; description: string; status: string; traction: string }
+
+const STATUS_OPTIONS = [
+  { label: "Just an idea", value: "just_an_idea" },
+  { label: "Talking to customers / validating", value: "validating" },
+  { label: "Built something / ready to launch", value: "ready_to_launch" },
+  { label: "Already launched and growing", value: "launched_growing" },
+];
 
 // Shared across chat instances (desktop + mobile both mount) so an onboarding
 // trigger only fires once.
@@ -91,6 +101,8 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const awaitingStatusRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [onboardStep, setOnboardStep] = useState<OnboardStep>("idle");
+  const onboardDataRef = useRef<OnboardData>({ name: "", description: "", status: "", traction: "" });
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
 
@@ -98,8 +110,96 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
+    setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content, ...extra }]);
+
+  const addUser = (content: string) =>
+    setMessages((prev) => [...prev, { id: Date.now().toString(), role: "user", content }]);
+
+  // Final evaluation — calls API with all collected onboarding data.
+  const evaluateOnboarding = async (data: OnboardData) => {
+    setLoading(true);
+    try {
+      const profile = authUser?.profile;
+      const res = await authFetch("/api/execution-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Project name: ${data.name}\nDescription: ${data.description}\nStatus they selected: ${data.status}\nTraction details: ${data.traction}`,
+          recipeId: "onboard_evaluate",
+          history: [],
+          userProfile: profile ? {
+            firstName: profile.firstName,
+            occupation: profile.occupation,
+            cvSummary: profile.cvSummary,
+            dnaScores: profile.dnaScores,
+            dnaNarrative: profile.dna_narrative,
+            assessmentAnswers: profile.assessmentAnswers,
+          } : undefined,
+          project: null,
+          projectStatus: null,
+        }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        addAssistant(d?.reply ?? "Thanks! Let's get started.");
+      } else {
+        addAssistant("Thanks! Head to the Validation tab to get started — that's the best first move.");
+      }
+    } catch {
+      addAssistant("Thanks! Head to the Validation tab to get started.");
+    } finally {
+      setLoading(false);
+      setOnboardStep("done");
+    }
+  };
+
+  // Handle onboarding step transitions when the user submits text.
+  const handleOnboardInput = (text: string) => {
+    const d = onboardDataRef.current;
+    if (onboardStep === "name") {
+      d.name = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("description");
+      setTimeout(() => addAssistant("Got it! Describe your project in a sentence or two — what problem does it solve and for whom?"), 300);
+    } else if (onboardStep === "description") {
+      d.description = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("status");
+      setTimeout(() => addAssistant("Where are you at right now?", { isStatusButtons: true }), 300);
+    } else if (onboardStep === "traction") {
+      d.traction = text;
+      addUser(text);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      setOnboardStep("done");
+      evaluateOnboarding({ ...d });
+    }
+  };
+
+  const handleStatusSelect = (option: { label: string; value: string }) => {
+    const d = onboardDataRef.current;
+    d.status = option.value;
+    addUser(option.label);
+    setOnboardStep("traction");
+    setTimeout(() => addAssistant(
+      "Great. A couple of quick questions to help me give you accurate guidance:\n\nHow many real users, waitlist signups, paying customers, or revenue (even $1) do you have? If none yet, just say 0."
+    ), 300);
+  };
+
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
+
+    // Intercept onboarding steps
+    if (onboardStep === "name" || onboardStep === "description" || onboardStep === "traction") {
+      handleOnboardInput(text);
+      return;
+    }
+
     const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -159,40 +259,15 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     }
   };
 
-  // Onboarding kickoff — Sorene opens the conversation (no user bubble) to
-  // collect the project name + status and route the user to the right tab.
-  const kickoffOnboarding = async () => {
-    setMessages([]);
-    setLoading(true);
-    try {
-      const profile = authUser?.profile;
-      const res = await authFetch("/api/execution-coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "[start onboarding]",
-          recipeId: "onboard",
-          history: [],
-          userProfile: profile ? {
-            firstName: profile.firstName,
-            occupation: profile.occupation,
-            cvSummary: profile.cvSummary,
-            dnaScores: profile.dnaScores,
-            dnaNarrative: profile.dna_narrative,
-            assessmentAnswers: profile.assessmentAnswers,
-          } : undefined,
-          project: null,
-          projectStatus: null,
-        }),
-      });
-      const id = Date.now().toString();
-      if (res.ok) {
-        const data = await res.json();
-        setMessages([{ id, role: "assistant", content: data?.reply ?? "Let's set up your project. What are you working on?" }]);
-      }
-    } catch { /* silent */ } finally {
-      setLoading(false);
-    }
+  // Onboarding kickoff — client-driven, no API call needed for the first question.
+  const kickoffOnboarding = () => {
+    onboardDataRef.current = { name: "", description: "", status: "", traction: "" };
+    setOnboardStep("name");
+    setMessages([{
+      id: Date.now().toString(),
+      role: "assistant",
+      content: `Hey${userName !== "there" ? ` ${userName}` : ""}! Let's set up your project. What's it called?`,
+    }]);
   };
 
   const onboardTrigger = useAtomValue(executionOnboardTriggerAtom);
@@ -244,8 +319,18 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
                   <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                     <div className={m.role === "user"
                       ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
-                      : "max-w-[80%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
+                      : "max-w-[85%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
                       <FormattedMessage content={m.content} />
+                      {m.isStatusButtons && onboardStep === "status" && (
+                        <div className="flex flex-col gap-2 mt-3">
+                          {STATUS_OPTIONS.map((opt) => (
+                            <button key={opt.value} onClick={() => handleStatusSelect(opt)}
+                              className="text-left px-3 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#111111] font-medium hover:bg-[#F1F3F5] hover:border-[#D1D5DB] transition-all">
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

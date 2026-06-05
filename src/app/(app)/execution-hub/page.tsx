@@ -409,10 +409,21 @@ function OpeningScriptCard({ project }: { project: DirectionCardData | null }) {
     if (ranFor.current === runKey) return;
     ranFor.current = runKey;
 
-    // Check cache first
+    // Check cache first — migrate any old value that was saved as raw JSON
     try {
       const cached = localStorage.getItem(`opening-script-${projectArg.title}`);
-      if (cached) { setScript(cached); return; }
+      if (cached) {
+        const clean = cached.trim().startsWith("{") ? (() => {
+          try { return JSON.parse(cached).reply ?? cached; } catch { return cached; }
+        })() : cached;
+        if (clean.trim().startsWith("{")) {
+          // Still looks like junk — drop it and regenerate
+          localStorage.removeItem(`opening-script-${projectArg.title}`);
+        } else {
+          setScript(clean);
+          return;
+        }
+      }
     } catch { /* ignore */ }
 
     setLoading(true);
@@ -448,24 +459,18 @@ Output only the script text, in quotes. No explanation, no preamble.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/direction-chat", {
+      const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, context: "script_generation", history: [] }),
+        body: JSON.stringify({ prompt }),
       });
       if (!res.ok) { setLoading(false); return; }
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let full = "";
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          full += decoder.decode(value, { stream: true });
-          setScript(full);
-        }
+      const data = await res.json();
+      const full: string = (data?.reply ?? "").trim();
+      if (full) {
+        setScript(full);
+        try { localStorage.setItem(`opening-script-${projectArg.title}`, full); } catch { /* ignore */ }
       }
-      try { localStorage.setItem(`opening-script-${projectArg.title}`, full); } catch { /* ignore */ }
     } catch { /* ignore */ }
     setLoading(false);
   };
@@ -549,9 +554,14 @@ function useTargetCustomers(project: DirectionCardData | null) {
       const cached = localStorage.getItem(`target-customers-${projectArg.title}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        setMain(parsed.main ?? null);
-        setSecondary(parsed.secondary ?? null);
-        return;
+        // Only trust cache if it has a valid main profile (old buggy cache stored
+        // the raw {reply:...} object which has no .main — discard and regenerate)
+        if (parsed?.main?.label) {
+          setMain(parsed.main ?? null);
+          setSecondary(parsed.secondary ?? null);
+          return;
+        }
+        localStorage.removeItem(`target-customers-${projectArg.title}`);
       }
     } catch { /* ignore */ }
 
@@ -579,24 +589,16 @@ Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/direction-chat", {
+      const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, context: "target_customers", history: [] }),
+        body: JSON.stringify({ prompt }),
       });
       if (!res.ok) { setLoading(false); return; }
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let full = "";
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          full += decoder.decode(value, { stream: true });
-        }
-      }
-      // Parse the JSON out of the streamed text
-      const jsonMatch = full.match(/\{[\s\S]*\}/);
+      const data = await res.json();
+      const reply: string = data?.reply ?? "";
+      // Parse the JSON object out of the reply text
+      const jsonMatch = reply.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         setMain(parsed.main ?? null);
@@ -724,25 +726,20 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
   };
 
   const stream = async (messages: { role: "user" | "assistant"; content: string }[]) => {
-    const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
-    if (!token) return "";
-    const res = await fetch("/api/direction-chat", {
+    const { authFetch } = await import("@/lib/authFetch");
+    const res = await authFetch("/api/execution-assist", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ message: messages[messages.length - 1].content, context: "pattern_analysis", history: messages.slice(0, -1) }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: messages[messages.length - 1].content,
+        history: messages.slice(0, -1),
+        system: "You are Sorene, an execution coach helping an entrepreneur validate their idea. Be direct, specific, and practical. Surface real patterns and ask sharp clarifying questions.",
+      }),
     });
     if (!res.ok) return "";
-    const reader = res.body?.getReader();
-    const decoder = new TextDecoder();
-    let full = "";
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        full += decoder.decode(value, { stream: true });
-        setOutput(full);
-      }
-    }
+    const data = await res.json();
+    const full: string = (data?.reply ?? "").trim();
+    setOutput(full);
     return full;
   };
 

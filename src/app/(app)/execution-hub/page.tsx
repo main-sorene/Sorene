@@ -4289,37 +4289,37 @@ type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "
 const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
   tagline: {
     hint: "A great tagline is short (under 8 words), benefit-focused, and instantly tells people what is in it for them.",
-    promptInstruction: `Generate 3 tagline options for this business. Each tagline must be under 8 words, benefit-focused, and speak directly to what the customer gains. No clever slogans — plain language that sells the result.\n\nReturn JSON where "text" is the actual tagline copy and "reason" explains why it works: [{"text": "the tagline itself", "reason": "why it works"}, ...]`,
+    promptInstruction: `Generate 3 tagline options for this business. Each tagline must be under 8 words, benefit-focused, plain language. IMPORTANT: return a JSON array. The "text" field must contain ONLY the short tagline itself (under 8 words). The "reason" field explains why it works. Example: [{"text": "Launch fast, grow with confidence", "reason": "Direct and benefit-focused"}, ...]`,
     placeholder: 'e.g. "Launch your business without the guesswork"',
   },
   benefit: {
     hint: "A benefit description explains the single biggest positive outcome customers get. Keep it to 1-2 sentences, positive, and jargon-free.",
-    promptInstruction: `Generate 3 benefit description options for this business. Each must be 1-2 sentences describing the single biggest positive outcome the customer gets — specific, positive, and jargon-free. No feature lists.\n\nReturn JSON where "text" is the actual benefit copy and "reason" explains why it works: [{"text": "the benefit description", "reason": "why it works"}, ...]`,
+    promptInstruction: `Generate 3 benefit description options for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY the 1-2 sentence benefit copy itself. The "reason" field explains why it works. Example: [{"text": "We help you go from idea to paying clients in 90 days.", "reason": "Specific and outcome-focused"}, ...]`,
     placeholder: 'e.g. "We help you go from employee to founder in 6 months — without the guesswork."',
   },
   offerings: {
     hint: "A service description tells customers exactly what they get. Keep it to 1 clear sentence per offering, starting with a verb.",
-    promptInstruction: `Generate 3 service/offering description options for this business. Each must be 1 sentence, start with a verb, and clearly state what the customer receives. Short, specific, benefit-focused — no jargon.\n\nReturn JSON where "text" is the actual offering copy and "reason" explains why it works: [{"text": "the offering description", "reason": "why it works"}, ...]`,
+    promptInstruction: `Generate 3 service/offering description options for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY the 1-sentence offering copy (start with a verb). The "reason" field explains why it works. Example: [{"text": "Validate your idea with real customers in 30 days.", "reason": "Action-oriented and specific"}, ...]`,
     placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
   },
   logo: {
     hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling. Take this to a designer or tool like Looka or Canva.",
-    promptInstruction: `Generate 3 logo concept directions for this business. Each describes: (1) typography style, (2) any symbol or icon element, (3) the visual mood. 2-3 sentences per concept.\n\nReturn JSON where "text" is a short concept title and "reason" is the full visual description: [{"text": "concept title", "reason": "full description"}, ...]`,
+    promptInstruction: `Generate 3 logo concept directions for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY a short concept title (3-5 words). The "reason" field contains the full 2-3 sentence visual description. Example: [{"text": "Minimal wordmark, deep teal", "reason": "Clean sans-serif type, no icon, conveys trust"}, ...]`,
     placeholder: 'e.g. "Something more minimal and modern"',
   },
   domain: {
     hint: "Your domain should match your business name closely. Check availability at namecheap.com or porkbun.com before registering.",
-    promptInstruction: `Suggest 5 domain name options for this business. Mix .com, .co, and .io. Short, easy to spell, close to the business name.\n\nReturn JSON where "text" is the full domain (e.g. "mybiz.co") and "reason" is a 1-sentence note: [{"text": "domain.com", "reason": "note"}, ...]`,
+    promptInstruction: `Suggest 5 domain name options for this business. Mix .com, .co, and .io. IMPORTANT: return a JSON array. The "text" field must contain ONLY the full domain name (e.g. "mybiz.co"). The "reason" field is a 1-sentence note. Example: [{"text": "sorene.co", "reason": "Short, matches brand name exactly"}, ...]`,
     placeholder: 'e.g. "Something with .ai or shorter"',
   },
   website: {
     hint: "At launch you need just 3 pages: Home, Services/Pricing, and Contact or Booking. Pick a platform you can launch in a weekend.",
-    promptInstruction: `Recommend 3 website platform options for this business type (e.g. Squarespace, Webflow, Carrd). For each, include the recommended pages to build first.\n\nReturn JSON where "text" is "Platform — Page1, Page2, Page3" and "reason" is why it fits: [{"text": "Squarespace — Home, Services, Contact", "reason": "why it fits"}, ...]`,
+    promptInstruction: `Recommend 3 website platform options for this business type. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — Page1, Page2, Page3". The "reason" field explains why it fits. Example: [{"text": "Squarespace — Home, Services, Contact", "reason": "Easy to use, great templates"}, ...]`,
     placeholder: 'e.g. "Something with booking built in"',
   },
   hosting: {
     hint: "Most simple sites have hosting built in. Only set up separate hosting if you are building a custom coded site.",
-    promptInstruction: `Recommend 3 hosting or all-in-one website platform options for this business. Include typical price and the key feature that makes it right for this type of business.\n\nReturn JSON where "text" is "Platform — price/plan" and "reason" is why it fits: [{"text": "Squarespace Basic — ~$16/mo", "reason": "why it fits"}, ...]`,
+    promptInstruction: `Recommend 3 hosting or all-in-one website platform options for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — price/plan". The "reason" field explains why it fits. Example: [{"text": "Squarespace Basic — ~$16/mo", "reason": "Hosting included, easy to manage"}, ...]`,
     placeholder: 'e.g. "What is the cheapest reliable option?"',
   },
 };
@@ -4346,7 +4346,16 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
     if (!title) return;
     try {
       const cached = localStorage.getItem(`brand-${type}-suggestions-${title}`);
-      if (cached) { setSuggestions(JSON.parse(cached)); setStage("done"); }
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Migrate old data: if items have "name" but no "text", rename to "text"
+        const migrated = Array.isArray(parsed) ? parsed.map((s: { name?: string; text?: string; reason?: string }) => ({
+          text: s.text || s.name || "",
+          reason: s.reason || "",
+        })) : parsed;
+        setSuggestions(migrated);
+        setStage("done");
+      }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, type]);
@@ -4367,7 +4376,7 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
 
 Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}
 
-Return JSON: [{"name": "...", "reason": "1 sentence why this works for this business"}, ...]`;
+Remember: "text" = the actual copy itself (short). "reason" = why it works (explanation). Return only the JSON array.`;
   };
 
   const generateSuggestions = async () => {
@@ -4381,7 +4390,8 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
         const data = await res.json();
         const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
         if (match) {
-          const parsed = JSON.parse(match[0]);
+          const raw = JSON.parse(match[0]);
+          const parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
           setSuggestions(parsed); setStage("done");
           try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
         } else { setStage("idle"); }
@@ -4397,7 +4407,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
     setChatHistory(newHistory);
     setChatLoading(true);
     const ctx = buildContext();
-    const system = `You are Sorene, a startup brand coach. Return a JSON array: [{"name": "...", "reason": "..."}]. No markdown outside the JSON.`;
+    const system = `You are Sorene, a startup brand coach. Return a JSON array where "text" is the actual copy and "reason" explains why it works: [{"text": "...", "reason": "..."}]. No markdown outside the JSON.`;
     const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
     const prompt = `${buildPrompt(ctx)}\n\nUser feedback: "${msg}". Generate 3 new options based on the feedback.`;
     try {
@@ -4407,7 +4417,8 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
         const data = await res.json();
         const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
         if (match) {
-          const parsed = JSON.parse(match[0]);
+          const raw = JSON.parse(match[0]);
+          const parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
           setSuggestions([]);
           setTimeout(() => { setSuggestions(parsed); setSuggestionKey((k) => k + 1); }, 120);
           try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }

@@ -289,7 +289,7 @@ export function AssessmentChatPage() {
                   key={`${i}-${choice}`}
                   onClick={() => handleSend(choice, canonicalChoices?.[i])}
                   disabled={isDisabled}
-                  className="px-3.5 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
+                  className="px-3.5 py-1.5 text-sm leading-snug border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
                 >
                   {choice}
                 </button>

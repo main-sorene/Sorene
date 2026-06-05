@@ -34,7 +34,7 @@ import type { DirectionCardData } from "@/lib/directionTypes";
 
 const VIBE_STEPS = [
   {
-    id: 1, vibe: "V + I", title: "Talk to 10 potential customers", icon: Users, duration: "~1–2 weeks",
+    id: 1, vibe: "V + I", title: "Talk to as many potential customers as you can", icon: Users, duration: "~1–2 weeks",
     soreneDoes: [
       "3 tailored interview questions (generated from DNA + idea)",
       "Script for opening the conversation",
@@ -322,7 +322,7 @@ function ValidationProgress() {
           transition={{ duration: 0.2 }}
         >
           {activeStage <= 4 ? (
-            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} />
+            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} stageLabel={VALIDATION_STAGES[activeStage - 1].label} />
           ) : (
             <GoNoGoContent />
           )}
@@ -351,7 +351,7 @@ function ValidationProgress() {
   );
 }
 
-function VibeStageContent({ step }: { step: typeof VIBE_STEPS[number] }) {
+function VibeStageContent({ step, stageLabel }: { step: typeof VIBE_STEPS[number]; stageLabel: string }) {
   const Icon = step.icon;
   return (
     <div className="space-y-4">
@@ -360,10 +360,11 @@ function VibeStageContent({ step }: { step: typeof VIBE_STEPS[number] }) {
           <Icon size={16} className="text-white" />
         </div>
         <div>
-          <p className="text-[11px] text-[#9A9A9A] uppercase tracking-wide">Step {step.id} · {step.vibe} · {step.duration}</p>
-          <h4 className="text-body-medium-medium text-[#151515]">{step.title}</h4>
+          <p className="text-[11px] text-[#9A9A9A] uppercase tracking-wide font-semibold">{stageLabel}</p>
+          <h4 className="text-body-medium-medium text-[#151515]">Objective</h4>
         </div>
       </div>
+      <p className="text-label-medium text-[#62646A] leading-relaxed">{step.title}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene provides</p>

@@ -843,10 +843,12 @@ function ProjectPicker({
   projects,
   selected,
   onSelect,
+  onCreateProject,
 }: {
   projects: DirectionCardData[];
   selected: DirectionCardData | null;
   onSelect: (p: DirectionCardData | null) => void;
+  onCreateProject: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -922,11 +924,31 @@ function ProjectPicker({
                 </button>
               ))}
 
+              {projects.length === 0 && <div className="h-px bg-gray-100 my-1" />}
+
               {projects.length === 0 && (
-                <div className="px-3 py-4 text-center">
-                  <p className="text-label-medium text-[#9A9A9A]">No directions generated yet.</p>
-                  <p className="text-[11px] text-[#9A9A9A] mt-0.5">Complete your DNA assessment to unlock projects.</p>
-                </div>
+                <>
+                  <a href="/direction" onClick={() => setOpen(false)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#F8F9FA] transition-colors">
+                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <ArrowRight size={13} className="text-[#62646A]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-body-small-medium text-[#151515]">Choose a Direction</p>
+                      <p className="text-[11px] text-[#9A9A9A]">Pick from AI-generated directions</p>
+                    </div>
+                  </a>
+                  <button onClick={() => { onCreateProject(); setOpen(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-[#F8F9FA] transition-colors">
+                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <Lightbulb size={13} className="text-[#62646A]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-body-small-medium text-[#151515]">Create My Project</p>
+                      <p className="text-[11px] text-[#9A9A9A]">Describe your own idea</p>
+                    </div>
+                  </button>
+                </>
               )}
             </div>
           </motion.div>
@@ -1071,6 +1093,7 @@ export default function Page() {
                 projects={projects}
                 selected={selectedProject}
                 onSelect={(p) => { setSelectedProject(p); setActiveTab("validation"); }}
+                onCreateProject={() => setCreateOpen(true)}
               />
             </div>
 

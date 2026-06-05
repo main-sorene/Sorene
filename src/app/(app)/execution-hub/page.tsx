@@ -34,6 +34,7 @@ import { userAtom, selectedExecutionProjectAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
+import { hydrateExecutionState, installExecutionStateAutosave } from "@/lib/executionStateSync";
 import type { DirectionCardData } from "@/lib/directionTypes";
 
 // ─────────────────────────────────────────────
@@ -5793,6 +5794,7 @@ export default function Page() {
   const [createTitle, setCreateTitle] = useState("");
   const [createDesc, setCreateDesc] = useState("");
   const [createSaving, setCreateSaving] = useState(false);
+  const [hydratedTick, setHydratedTick] = useState(0);
 
   // Consume atom set by DirectionCard "Start Validate", persist to Firestore, then clear
   useEffect(() => {
@@ -5826,6 +5828,31 @@ export default function Page() {
           .catch(() => {});
       })
     );
+  }, [authUser?.uid]);
+
+  // Sync Execution Hub progress (localStorage) with Firestore so it survives
+  // logout, device changes, and cleared browser storage. Hydrate on login,
+  // then auto-push any future changes (debounced).
+  useEffect(() => {
+    if (!authUser?.uid) return;
+    installExecutionStateAutosave();
+    hydrateExecutionState().then(() => {
+      // Refresh custom project names from the (possibly) hydrated storage.
+      try {
+        const raw = localStorage.getItem("custom-project-names");
+        if (raw) setCustomNames(JSON.parse(raw));
+      } catch { /* ignore */ }
+    });
+    const onHydrated = () => {
+      try {
+        const raw = localStorage.getItem("custom-project-names");
+        if (raw) setCustomNames(JSON.parse(raw));
+      } catch { /* ignore */ }
+      // Force content remount so card components re-read hydrated localStorage.
+      setHydratedTick((t) => t + 1);
+    };
+    window.addEventListener("execution-state-hydrated", onHydrated);
+    return () => window.removeEventListener("execution-state-hydrated", onHydrated);
   }, [authUser?.uid]);
 
   const handleCreateProject = async () => {
@@ -5952,9 +5979,9 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
+                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={() => setCreateOpen(true)} />
                         : activeTab === "launchpad"
-                        ? <LaunchPadContent project={selectedProject ?? null} onNameChosen={(name) => {
+                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} onNameChosen={(name) => {
                             const key = selectedProject?.title ?? "";
                             if (!key) return;
                             const updated = { ...customNames, [key]: name };

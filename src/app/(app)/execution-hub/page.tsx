@@ -1490,8 +1490,8 @@ function ValidateStage1({
         </div>
       </CollapseSection>
 
-      {/* ── Sorene generates for you (collapsible) ── */}
-      <CollapseSection title="Sorene Generates For You">
+      {/* ── Questions & Script (collapsible) ── */}
+      <CollapseSection title="Questions & Script">
         <div className="space-y-4">
 
           {/* Interview questions */}
@@ -1522,13 +1522,13 @@ function ValidateStage1({
 
           {/* Opening Script */}
           <OpeningScriptCard project={project} />
+        </div>
+      </CollapseSection>
 
-          {/* Conversation Logger (collapsible handled internally by its own header) */}
-          <CollapseSection title="Customer conversations" defaultOpen={true}>
-            <ConversationLogger projectTitle={project?.title ?? ""} />
-          </CollapseSection>
-
-          {/* Pattern Summary */}
+      {/* ── Customer conversations (collapsible, separate section) ── */}
+      <CollapseSection title="Customer conversations">
+        <ConversationLogger projectTitle={project?.title ?? ""} />
+        <div className="mt-4">
           <PatternSummaryCard projectTitle={project?.title ?? ""} />
         </div>
       </CollapseSection>

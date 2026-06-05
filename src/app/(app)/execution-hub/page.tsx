@@ -4398,7 +4398,7 @@ Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${proj
 Remember: "text" = the actual copy itself (short). "reason" = why it works (explanation). Return only the JSON array.`;
   };
 
-  const checkAndAnnotateDomains = async (list: { text: string; reason: string }[]) => {
+  const checkAndAnnotateDomains = async (list: { text: string; reason: string }[]): Promise<{ text: string; reason: string; available?: boolean | null }[]> => {
     if (type !== "domain") return list;
     setCheckingAvailability(true);
     try {
@@ -4419,9 +4419,54 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     return list;
   };
 
+  // For domains: keep generating + checking until we collect enough AVAILABLE
+  // ones, telling the model which domains were already taken so it avoids them.
+  const generateAvailableDomains = async () => {
+    const TARGET = 4;       // how many available domains we want to show
+    const MAX_ROUNDS = 5;   // safety cap on generation rounds
+    const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
+    const { authFetch } = await import("@/lib/authFetch");
+    const available: { text: string; reason: string; available?: boolean | null }[] = [];
+    const tried = new Set<string>();
+
+    setStage("done");
+    setCheckingAvailability(true);
+    for (let round = 0; round < MAX_ROUNDS && available.length < TARGET; round++) {
+      const takenNote = tried.size > 0
+        ? `\n\nThese are already taken — do NOT suggest them or close variants: ${[...tried].join(", ")}.`
+        : "";
+      let parsed: { text: string; reason: string }[] = [];
+      try {
+        const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: buildPrompt(buildContext()) + takenNote, system }) });
+        if (!res.ok) break;
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (!match) break;
+        const raw = JSON.parse(match[0]);
+        parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : [];
+      } catch { break; }
+
+      const fresh = parsed.filter((s) => s.text && !tried.has(s.text.toLowerCase().trim()));
+      fresh.forEach((s) => tried.add(s.text.toLowerCase().trim()));
+      if (fresh.length === 0) continue;
+
+      const checked = await checkAndAnnotateDomains(fresh);
+      for (const c of checked) {
+        if (c.available === true && available.length < TARGET) available.push(c);
+      }
+      // Show progress as we accumulate available ones
+      setSuggestions([...available]);
+    }
+    setCheckingAvailability(false);
+    setStage("done");
+    setSuggestions(available);
+    try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(available)); } catch { /* ignore */ }
+  };
+
   const generateSuggestions = async () => {
     if (!title) return;
     setStage("loading");
+    if (type === "domain") { await generateAvailableDomains(); return; }
     const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -4431,13 +4476,8 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
         const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
         if (match) {
           const raw = JSON.parse(match[0]);
-          let parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
+          const parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
           setStage("done");
-          if (type === "domain") {
-            setSuggestions(parsed);
-            parsed = await checkAndAnnotateDomains(parsed);
-            setCheckingAvailability(false);
-          }
           setSuggestions(parsed);
           try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
         } else { setStage("idle"); }
@@ -4543,8 +4583,13 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
           )}
           {stage === "done" && checkingAvailability && type === "domain" && (
             <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
-              <Loader2 size={11} className="animate-spin" /> Checking availability…
+              <Loader2 size={11} className="animate-spin" /> Finding available domains{suggestions.length > 0 ? ` (${suggestions.length} found)` : ""}…
             </div>
+          )}
+          {stage === "done" && type === "domain" && !checkingAvailability && suggestions.length === 0 && (
+            <p className="text-[11px] text-[#62646A] leading-relaxed">
+              Could not find an available domain close to your name. Try the custom check below, or tweak your business name.
+            </p>
           )}
           {stage === "done" && suggestions.length > 0 && (
             <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">

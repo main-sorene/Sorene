@@ -804,16 +804,27 @@ export default function Page() {
             </div>
 
             {/* Tabs */}
-            <div className="px-4 lg:px-6 pt-2 pb-2">
-              <div className="flex items-center gap-1 border-b border-gray-100">
+            <div className="px-4 lg:px-6 pt-3 pb-2">
+              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-[#F3F4F6] border border-gray-100 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
                 {TABS.map((tab) => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                    className={cn("px-4 py-2.5 text-body-small-medium transition-colors relative",
-                      activeTab === tab.id ? "text-[#151515]" : "text-[#9A9A9A] hover:text-[#62646A]")}>
-                    {tab.label}
-                    {activeTab === tab.id && (
-                      <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#151515] rounded-full" />
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "relative px-4 py-2 rounded-xl text-body-small-medium transition-all duration-200 whitespace-nowrap",
+                      activeTab === tab.id
+                        ? "text-[#151515]"
+                        : "text-[#9A9A9A] hover:text-[#62646A]"
                     )}
+                  >
+                    {activeTab === tab.id && (
+                      <motion.div
+                        layoutId="tab-pill"
+                        className="absolute inset-0 rounded-xl bg-white shadow-sm border border-gray-100"
+                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                      />
+                    )}
+                    <span className="relative z-10">{tab.label}</span>
                   </button>
                 ))}
               </div>

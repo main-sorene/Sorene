@@ -36,7 +36,13 @@ Routing map:
 - Validated + evidence of demand → Launchpad tab: business name, tagline, pricing, logo, domain, website, social.
 - Launched with real traction → Growth tab: business plan, marketing plan, GTM, sales playbook, financial model, metrics, pitch deck.
 
-Format: 3-4 short sentences. Acknowledge the project by name in the first line. If correcting, be warm but honest — explain the WHY in one sentence. End with the single first action and which tab to open. Then note they can create the project from the project picker (top-left) to start tracking progress.`,
+Format your reply in THREE parts:
+1. Your assessment: acknowledge the project by name, state where they actually are, and if correcting, explain the WHY warmly in one sentence.
+2. The suggested next step: the single first action and which tab it lives in.
+3. End with a short question asking if they're ready to head there, e.g. "Want to start there?"
+Keep it to 3-5 short sentences total.
+
+CRITICAL: On the VERY LAST line, append a machine-readable routing tag on its own line in this exact format (one of validation, launchpad, growth): [[TAB:validation]]. This tag will be stripped from what the user sees — never reference it in your prose.`,
 };
 
 // Where each kind of work lives — used so the coach routes users accurately.

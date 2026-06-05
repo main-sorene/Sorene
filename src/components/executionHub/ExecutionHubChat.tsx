@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,7 +17,13 @@ const SUGGESTIONS: { label: string; recipeId: string }[] = [
   { label: "Update business status", recipeId: "update_status" },
 ];
 
-interface ChatMsg { id: string; role: "user" | "assistant"; content: string; isStatusButtons?: boolean }
+interface ChatMsg { id: string; role: "user" | "assistant"; content: string; isStatusButtons?: boolean; confirmTab?: string }
+
+const TAB_LABELS: Record<string, string> = {
+  validation: "Validation",
+  launchpad: "Launchpad",
+  growth: "Growth",
+};
 
 type OnboardStep = "idle" | "name" | "description" | "status" | "traction" | "done";
 interface OnboardData { name: string; description: string; status: string; traction: string }
@@ -95,6 +101,7 @@ function FormattedMessage({ content }: { content: string }) {
 export function ExecutionHubChat({ project, onClose }: { project?: DirectionCardData | null; onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setNavigateTab = useSetAtom(executionNavigateTabAtom);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -142,12 +149,16 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       });
       if (res.ok) {
         const d = await res.json();
-        addAssistant(d?.reply ?? "Thanks! Let's get started.");
+        const raw = d?.reply ?? "Thanks! Let's get started.";
+        const match = raw.match(/\[\[TAB:(validation|launchpad|growth)\]\]/i);
+        const tab = match ? match[1].toLowerCase() : "validation";
+        const clean = raw.replace(/\[\[TAB:[^\]]*\]\]/gi, "").trim();
+        addAssistant(clean, { confirmTab: tab });
       } else {
-        addAssistant("Thanks! Head to the Validation tab to get started — that's the best first move.");
+        addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
       }
     } catch {
-      addAssistant("Thanks! Head to the Validation tab to get started.");
+      addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
     } finally {
       setLoading(false);
       setOnboardStep("done");
@@ -179,6 +190,13 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       setOnboardStep("done");
       evaluateOnboarding({ ...d });
     }
+  };
+
+  const handleConfirmTab = (tab: string) => {
+    addUser("Yes, let's go");
+    setNavigateTab(tab);
+    onClose?.();
+    setTimeout(() => addAssistant(`Opening the ${TAB_LABELS[tab] ?? tab} tab now — let's get to work.`), 200);
   };
 
   const handleStatusSelect = (option: { label: string; value: string }) => {
@@ -329,6 +347,18 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
                               {opt.label}
                             </button>
                           ))}
+                        </div>
+                      )}
+                      {m.confirmTab && onboardStep === "done" && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <button onClick={() => handleConfirmTab(m.confirmTab!)}
+                            className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+                            Yes, take me to {TAB_LABELS[m.confirmTab] ?? m.confirmTab}
+                          </button>
+                          <button onClick={() => addAssistant("No problem — ask me anything, or pick a different tab whenever you're ready.")}
+                            className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
+                            Not yet
+                          </button>
                         </div>
                       )}
                     </div>

@@ -17,6 +17,10 @@ export const authLoadingAtom = atom<boolean>(true);
 // Execution Hub chat (assess name + status, then route the user to the right tab).
 export const executionOnboardTriggerAtom = atom<number>(0);
 
+// Set by the onboarding chat to navigate the Execution Hub to a specific tab
+// (e.g. after evaluation the user clicks "Yes" to go to Validation/Launchpad/Growth).
+export const executionNavigateTabAtom = atom<string | null>(null);
+
 export const activeNavAtom = atom<string>("Home");
 
 export const billingYearlyAtom = atom<boolean>(true);

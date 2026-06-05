@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
-import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom } from "@/store/atoms";
+import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom, executionNavigateTabAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -6597,6 +6597,15 @@ export default function Page() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const bumpOnboard = useSetAtom(executionOnboardTriggerAtom);
+  const [navigateTab, setNavigateTab] = useAtom(executionNavigateTabAtom);
+
+  // After onboarding evaluation, the chat sets a target tab; switch to it here.
+  useEffect(() => {
+    if (navigateTab === "validation" || navigateTab === "launchpad" || navigateTab === "growth") {
+      setActiveTab(navigateTab);
+      setNavigateTab(null);
+    }
+  }, [navigateTab, setNavigateTab]);
 
   // "Create My Project" from the empty state → open the chat and start the
   // onboarding conversation (assess name + status, route to the right tab).

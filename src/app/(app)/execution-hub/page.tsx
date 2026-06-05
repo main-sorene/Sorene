@@ -2640,14 +2640,24 @@ function MVODefinitionCard({ project }: { project: DirectionCardData | null }) {
 
 function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardData | null; onAdvance: () => void }) {
   const title = project?.title ?? "";
-  const [hasOffer, setHasOffer] = useState(false);
+  const [hasOfferings, setHasOfferings] = useState(false);
   const [hasMvo, setHasMvo] = useState(false);
-  const [hasPitched, setHasPitched] = useState(false);
+  const [hasPitch, setHasPitch] = useState(false);
 
   const refresh = () => {
-    try { setHasOffer(!!localStorage.getItem(`mvo-offer-${title}`)); } catch { /* ignore */ }
+    // Initial offerings generated (any offering field filled)
+    try {
+      const anyOffering = ["one_sentence_offer","price_range","best_format","offer_clarity","first_pitch"]
+        .some((k) => !!(localStorage.getItem(`mvo-offering-${k}-${title}`) ?? "").trim());
+      setHasOfferings(anyOffering);
+    } catch { /* ignore */ }
+    // MVO defined by user
     try { setHasMvo(!!(localStorage.getItem(`mvo-defined-${title}`) ?? "").trim()); } catch { /* ignore */ }
-    try { setHasPitched(!!localStorage.getItem(`mvo-pitched-${title}`)); } catch { /* ignore */ }
+    // First pitch written (from Initial Offerings or MVO)
+    try {
+      const pitch = localStorage.getItem(`mvo-offering-first_pitch-${title}`) ?? "";
+      setHasPitch(pitch.trim().length > 20);
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -2658,19 +2668,19 @@ function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardD
   }, [title]);
 
   const checkItems = [
-    { done: hasOffer,   text: "Offer built with Sorene" },
-    { done: hasMvo,     text: "Your MVO defined" },
-    { done: hasPitched, text: "Pitched to at least 3 people" },
+    { done: hasOfferings, text: "Initial offerings generated" },
+    { done: hasMvo,       text: "Your MVO defined" },
+    { done: hasPitch,     text: "First pitch written and ready" },
   ];
 
   const score = Math.round((checkItems.filter((c) => c.done).length / checkItems.length) * 100);
   const canAdvance = checkItems.every((c) => c.done);
 
   const { label, color, textColor } =
-    score === 0  ? { label: "Not started",      color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]"  } :
-    score <= 33  ? { label: "Just started",     color: "bg-[#FFA94D]", textColor: "text-[#C85B00]"  } :
-    score <= 66  ? { label: "In progress",      color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]"  } :
-                   { label: "Ready to launch",  color: "bg-[#32C382]", textColor: "text-[#0B5E35]"  };
+    score === 0  ? { label: "Not started",       color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]"  } :
+    score <= 33  ? { label: "Just started",      color: "bg-[#FFA94D]", textColor: "text-[#C85B00]"  } :
+    score <= 66  ? { label: "In progress",       color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]"  } :
+                   { label: "Offer is ready",    color: "bg-[#32C382]", textColor: "text-[#0B5E35]"  };
 
   return (
     <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
@@ -2695,13 +2705,6 @@ function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardD
               <p className={cn("text-[12px]", item.done ? "text-[#151515] font-medium" : "text-[#9A9A9A]")}>{item.text}</p>
             </div>
           ))}
-          {/* Pitched toggle */}
-          {!hasPitched && (
-            <button onClick={() => { try { localStorage.setItem(`mvo-pitched-${title}`, "1"); } catch { /* ignore */ } refresh(); }}
-              className="ml-6 text-[11px] text-[#9A9A9A] hover:text-[#151515] underline underline-offset-2 transition-colors">
-              Mark as done — I have pitched to 3 people
-            </button>
-          )}
         </div>
       </div>
       <div className="px-5 pb-4">

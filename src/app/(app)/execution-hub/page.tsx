@@ -843,6 +843,7 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
     const reply = await stream(msgs);
     setHistory([...msgs, { role: "assistant", content: reply }]);
     setStage("done");
+    try { localStorage.setItem(`pattern-done-${projectTitle}`, "1"); } catch { /* ignore */ }
   };
 
   const handleClarify = async () => {
@@ -1169,6 +1170,106 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
   );
 }
 
+// ─────────────────────────────────────────────
+// Validate → Interview Readiness Bar
+// ─────────────────────────────────────────────
+
+function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
+  const [convCount, setConvCount] = useState(0);
+  const [hasNotes, setHasNotes] = useState(false);
+  const [patternDone, setPatternDone] = useState(false);
+
+  const refresh = () => {
+    try {
+      const raw = localStorage.getItem(`convlog-${projectTitle}`);
+      const entries: { notes?: string }[] = raw ? JSON.parse(raw) : [];
+      setConvCount(entries.length);
+      setHasNotes(entries.some((e) => e.notes && e.notes.trim().length > 20));
+    } catch { /* ignore */ }
+    // Pattern summary done = history was saved (PatternSummaryCard doesn't persist,
+    // so we track a flag in localStorage when summarise is clicked)
+    try {
+      setPatternDone(!!localStorage.getItem(`pattern-done-${projectTitle}`));
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    refresh();
+    const handler = () => refresh();
+    window.addEventListener("storage", handler);
+    // Also poll every 3s so updates from ConversationLogger (same tab) are caught
+    const timer = setInterval(refresh, 3000);
+    return () => { window.removeEventListener("storage", handler); clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  // Score breakdown (out of 100):
+  // Conversations: 0→0, 1-2→20, 3-4→35, 5-7→50, 8-10→65, 10+→75
+  // Notes quality: +10 if at least one has substantial notes
+  // Pattern summary: +15
+  const convScore =
+    convCount === 0 ? 0 :
+    convCount <= 2 ? 20 :
+    convCount <= 4 ? 35 :
+    convCount <= 7 ? 50 :
+    convCount <= 10 ? 65 : 75;
+  const score = Math.min(100, convScore + (hasNotes ? 10 : 0) + (patternDone ? 15 : 0));
+
+  const { label, sublabel, color, textColor } =
+    score === 0   ? { label: "Not started", sublabel: "Log your first customer conversation to begin", color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]" } :
+    score <= 25   ? { label: "Just starting", sublabel: "Keep going — aim for at least 5 conversations", color: "bg-[#FFA94D]", textColor: "text-[#C85B00]" } :
+    score <= 50   ? { label: "Building signals", sublabel: "Good momentum — add notes and keep talking to customers", color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]" } :
+    score <= 75   ? { label: "Strong signals", sublabel: "Run the Pattern Summary to sharpen your insights", color: "bg-[#74C0FC]", textColor: "text-[#1864AB]" } :
+    score < 100   ? { label: "Almost ready", sublabel: "Summarise patterns to confirm your signal before Interview", color: "bg-[#63E6BE]", textColor: "text-[#0B7A52]" } :
+                    { label: "Ready for Interview", sublabel: "You have the signal. Move to Interview stage.", color: "bg-[#32C382]", textColor: "text-[#0B5E35]" };
+
+  const checkItems = [
+    { done: convCount >= 5, text: `${convCount} conversation${convCount !== 1 ? "s" : ""} logged (target: 5+)` },
+    { done: hasNotes, text: "Detailed notes captured" },
+    { done: patternDone, text: "Pattern summary completed" },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[13px] font-semibold text-[#151515]">Readiness to advance to Interview</p>
+          <span className={cn("text-[13px] font-bold", textColor)}>{score}%</span>
+        </div>
+
+        {/* Bar */}
+        <div className="w-full h-2.5 rounded-full bg-[#F0F1F2] overflow-hidden mb-3">
+          <div
+            className={cn("h-full rounded-full transition-all duration-700", color)}
+            style={{ width: `${score}%` }}
+          />
+        </div>
+
+        {/* Label */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className={cn("text-[12px] font-semibold", textColor)}>{label}</span>
+          <span className="text-[11px] text-[#9A9A9A]">— {sublabel}</span>
+        </div>
+
+        {/* Checklist */}
+        <div className="space-y-2">
+          {checkItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2.5">
+              <div className={cn(
+                "w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[9px]",
+                item.done ? "bg-[#32C382] text-white" : "border border-[#ECEDEE] bg-[#FAFAFA]"
+              )}>
+                {item.done && "✓"}
+              </div>
+              <p className={cn("text-[12px]", item.done ? "text-[#151515]" : "text-[#9A9A9A]")}>{item.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null }) {
   const Icon = step.icon;
   const customers = useTargetCustomers(project);
@@ -1295,6 +1396,10 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
             <PatternSummaryCard projectTitle={project?.title ?? ""} />
           </div>
         </section>
+
+        {/* ── Readiness score ── */}
+        <ValidateReadinessBar projectTitle={project?.title ?? ""} />
+
       </div>
     );
   }

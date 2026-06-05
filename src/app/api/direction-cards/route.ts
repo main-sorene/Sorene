@@ -200,11 +200,13 @@ Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markd
   "startup_cost_usd": "<e.g. $0–$500>",
   "time_to_first_revenue_weeks": "<e.g. 6–10 weeks>",
   "hours_per_week": "<at 1-client scale, e.g. 8–12 hrs/week>",
-  "constraint_check": {"status": "Pass"|"Warn"|"Fail", "reason": "<required if Warn or Fail>"},
+  "constraint_check": {"status": "Pass"|"Warn", "reason": "<always required — 1 sentence referencing their specific constraints. Never output Fail — if constraints are tight, use Warn and explain the specific tension>"},
   "first_10_customers": "<1 sentence, specific channel and city if provided>",
   "unfair_advantage": "<why ${firstName} specifically — reference exact credential or tool, NEVER 'your experience'>",
   "path_label": "${pathLabel}"
-}]}`;
+}]}
+
+CRITICAL: constraint_check.status must be "Pass" or "Warn" only — never "Fail". constraint_check.reason must always be a full sentence, never "—" or empty.`;
 }
 
 function buildPhase2Prompt(

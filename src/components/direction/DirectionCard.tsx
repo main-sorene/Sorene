@@ -177,7 +177,10 @@ export function DirectionCard({
     s >= 70 ? "text-[#32C382]" : s >= 40 ? "text-[#F5B100]" : "text-[#DF2E16]";
 
   const constraintColor = (status: string) =>
-    status === "Pass" ? "#32C382" : status === "Warn" ? "#F5B100" : "#DF2E16";
+    status === "Pass" ? "#32C382" : "#F5B100";
+
+  const constraintLabel = (status: string) =>
+    status === "Pass" ? "Pass" : "Warn";
 
   const oceanColor = (type: string) =>
     type === "Blue" ? "#3B82F6" : type === "Purple" ? "#8B5CF6" : "#EF4444";
@@ -577,7 +580,7 @@ export function DirectionCard({
               {cardData && (
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
                   style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                  {cardData.constraint_check.status}
+                  {constraintLabel(cardData.constraint_check.status)}
                 </div>
               )}
             </div>
@@ -824,9 +827,9 @@ export function DirectionCard({
                                       style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
                                       <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
                                         style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                                        {cardData.constraint_check.status}
+                                        {constraintLabel(cardData.constraint_check.status)}
                                       </span>
-                                      {cardData.constraint_check.reason && (
+                                      {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—" && (
                                         <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
                                       )}
                                     </div>
@@ -1092,7 +1095,7 @@ export function DirectionCard({
                           style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
                           <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
                             style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                            {cardData.constraint_check.status}
+                            {constraintLabel(cardData.constraint_check.status)}
                           </span>
                           {cardData.constraint_check.reason && (
                             <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
@@ -1195,7 +1198,7 @@ export function DirectionCard({
                 {cardData && (
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
                     style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                    {cardData.constraint_check.status}
+                    {constraintLabel(cardData.constraint_check.status)}
                   </div>
                 )}
               </div>

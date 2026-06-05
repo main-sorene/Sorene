@@ -259,6 +259,47 @@ export function Sidebar({
     }
   }, [isAssessmentComplete, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // GUARANTEE the assessment conversation is always shown for anyone who has
+  // completed it — independent of the backend history API (which never stores
+  // these local-only chats and may be empty/slow). This is the single source
+  // of truth for assessment history and must NOT be coupled to convoData; that
+  // coupling is what kept regressing whenever the chat query changed.
+  useEffect(() => {
+    if (!authUser?.uid) return;
+    const uid = authUser.uid;
+
+    let conv: Conversation | null = null;
+    try {
+      const stored = localStorage.getItem(`assessment_conv_${uid}`);
+      if (stored) conv = JSON.parse(stored);
+    } catch {}
+
+    // Existing users who finished the assessment before it was persisted
+    // locally (or on another device) still get a clickable history entry.
+    if (!conv && authUser.profile?.dnaAssessmentComplete) {
+      conv = {
+        id: `assessment-${uid}`,
+        title: "User Assessment Phase",
+        messages: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        model: "sorene-1",
+        done: true,
+        segment: "assessment",
+        isCreatedOnBackend: false,
+      };
+    }
+
+    if (!conv) return;
+    const assessmentConv = conv;
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === assessmentConv.id || c.segment === "assessment")) {
+        return prev;
+      }
+      return sortConvos([...prev, assessmentConv]);
+    });
+  }, [authUser?.uid, authUser?.profile?.dnaAssessmentComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Persist conversations to localStorage whenever they change
   useEffect(() => {
     if (!convoStorageKey || conversations.length === 0) return;

@@ -477,13 +477,16 @@ Output only the script text, in quotes. No explanation, no preamble.`;
   }, [project?.title, authUser?.uid]);
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-            <MessageCircle size={12} className="text-white" />
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <MessageCircle size={14} className="text-white" />
           </div>
-          <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Script for opening the conversation</p>
+            <p className="text-[11px] text-[#9A9A9A]">Tailored to your project and personality</p>
+          </div>
         </div>
         {script && !loading && project && authUser?.uid && (
           <button onClick={() => {
@@ -491,24 +494,26 @@ Output only the script text, in quotes. No explanation, no preamble.`;
             ranFor.current = "";
             generate(project, authUser.uid!);
           }}
-            className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline">
+            className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline shrink-0">
             Regenerate
           </button>
         )}
       </div>
+      <div className="px-5 py-4">
       {loading && !script && (
-        <div className="flex items-center gap-2 text-[#9A9A9A] text-sm py-2">
+        <div className="flex items-center gap-2 text-[#9A9A9A] text-[13px]">
           <Loader2 size={13} className="animate-spin" /> Generating your script…
         </div>
       )}
       {script && (
-        <p className="text-label-medium text-[#62646A] leading-relaxed italic whitespace-pre-wrap">{script}</p>
+        <p className="text-[13px] text-[#62646A] leading-relaxed italic whitespace-pre-wrap">{script}</p>
       )}
       {!loading && !script && (
-        <p className="text-label-medium text-[#62646A] leading-relaxed italic">
+        <p className="text-[13px] text-[#62646A] leading-relaxed italic">
           "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
         </p>
       )}
+      </div>
     </div>
   );
 }
@@ -768,20 +773,23 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+    <div className="rounded-2xl border border-[#ECEDEE] bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-            <Users size={12} className="text-white" />
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Users size={14} className="text-white" />
           </div>
-          <p className="text-body-small-medium text-[#151515]">
-            Customer conversations
-            {entries.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-semibold text-[#62646A]">{entries.length}</span>}
-          </p>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">
+              Customer conversations
+              {entries.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-200 text-[10px] font-semibold text-[#62646A]">{entries.length} logged</span>}
+            </p>
+            <p className="text-[11px] text-[#9A9A9A]">Log each conversation after it happens</p>
+          </div>
         </div>
         <button onClick={() => setAddOpen((v) => !v)}
-          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all",
+          className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",
             addOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
           <Plus size={13} />{addOpen ? "Cancel" : "Add"}
         </button>
@@ -908,123 +916,141 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
     const q3 = "What would you pay to solve this completely?";
 
     return (
-      <div className="space-y-5">
-        {/* Project card */}
+      <div className="space-y-8">
+
+        {/* ── Project context ── */}
         {project && (
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A]">Your project</p>
-            <p className="text-body-small-medium text-[#151515]">{project.title}</p>
-            {project.oneliner && <p className="text-label-medium text-[#62646A] leading-relaxed">{project.oneliner}</p>}
-            {(project.first_10_customers || project.simple_positioning) && (
-              <div className="flex flex-wrap gap-3 pt-1">
-                {project.first_10_customers && (
-                  <span className="text-[11px] text-[#62646A]">
-                    <span className="font-semibold text-[#151515]">Target customer: </span>{project.first_10_customers}
-                  </span>
-                )}
-                {project.simple_positioning && (
-                  <span className="text-[11px] text-[#62646A]">
-                    <span className="font-semibold text-[#151515]">Positioning: </span>{project.simple_positioning}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          <section>
+            <h4 className="text-base font-medium text-[#151515] mb-4">Your Project</h4>
+            <Separator className="bg-[#ECEDEE] mb-5" />
+            <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
+            {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {project.first_10_customers && (
+                <div className="flex-1 rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Target Customer</p>
+                  <p className="text-[13px] text-[#151515] leading-relaxed">{project.first_10_customers}</p>
+                </div>
+              )}
+              {project.simple_positioning && (
+                <div className="flex-1 rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-1">Positioning</p>
+                  <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
-        {/* Guide text */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">Your mission for this stage</p>
-          <p className="text-label-medium text-[#62646A] leading-relaxed mb-3">
-            Have <strong className="text-[#151515]">10 to 50 conversations</strong> (30 minutes each) with {targetCustomer}. The goal is not to pitch — it is to listen.
+        {/* ── Mission ── */}
+        <section>
+          <h4 className="text-base font-medium text-[#151515] mb-4">Your Mission</h4>
+          <Separator className="bg-[#ECEDEE] mb-5" />
+          <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
+            Have <strong className="text-[#151515] font-semibold">10 to 50 conversations</strong> (30 minutes each) with {targetCustomer}. The goal is not to pitch — it is to listen deeply.
           </p>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[
               "Focus on their problems, not your solution",
               "Listen more than you talk",
               "Record real quotes and exact language used",
-              "Log responses back into the platform — we will analyze the pattern together",
+              "Log responses here — we will analyze the pattern together",
             ].map((rule, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <div className="w-5 h-5 rounded-full bg-[#151515] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
-                <p className="text-label-medium text-[#151515] leading-snug">{rule}</p>
+              <div key={i} className="flex gap-3 items-start">
+                <div className="w-6 h-6 rounded-full bg-[#151515] text-white text-[11px] font-semibold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
+                <p className="text-[13px] text-[#151515] leading-relaxed">{rule}</p>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <Separator className="bg-gray-100" />
+        {/* ── Sorene generates for you ── */}
+        <section>
+          <h4 className="text-base font-medium text-[#151515] mb-4">Sorene Generates For You</h4>
+          <Separator className="bg-[#ECEDEE] mb-5" />
+          <div className="space-y-4">
 
-        {/* Auto-generated toolkit */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene generates for you</p>
-          <div className="space-y-3">
             {/* Interview questions */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
-                  <Search size={12} className="text-white" />
+            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+                  <Search size={14} className="text-white" />
                 </div>
-                <p className="text-body-small-medium text-[#151515]">3 tailored interview questions</p>
+                <div>
+                  <p className="text-[13px] font-semibold text-[#151515]">3 tailored interview questions</p>
+                  <p className="text-[11px] text-[#9A9A9A]">Based on your project's problem area</p>
+                </div>
               </div>
-              <ol className="space-y-2">
+              <div className="px-5 py-4 space-y-3">
                 {[q1, q2, q3].map((q, i) => (
-                  <li key={i} className="flex items-start gap-2 text-label-medium text-[#62646A]">
-                    <span className="text-[11px] font-bold text-[#9A9A9A] shrink-0 mt-0.5">{i + 1}.</span>{q}
-                  </li>
+                  <div key={i} className="flex gap-3 items-start">
+                    <span className="text-[11px] font-bold text-[#9A9A9A] w-4 shrink-0 mt-0.5">{i + 1}.</span>
+                    <p className="text-[13px] text-[#62646A] leading-relaxed">{q}</p>
+                  </div>
                 ))}
-              </ol>
+              </div>
             </div>
-            {/* Script */}
+
+            {/* Opening Script */}
             <OpeningScriptCard project={project} />
+
             {/* Conversation Logger */}
             <ConversationLogger projectTitle={project?.title ?? ""} />
-            {/* Pattern summary */}
+
+            {/* Pattern Summary */}
             <PatternSummaryCard projectTitle={project?.title ?? ""} />
           </div>
-        </div>
+        </section>
       </div>
     );
   }
 
-  // Stages 2–4 keep the existing layout
+  // Stages 2–4
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-1.5">What is this step</p>
-        <p className="text-label-medium text-[#62646A] leading-relaxed">{step.whatIs}</p>
-      </div>
-      <div className="flex items-start gap-3 rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3.5">
-        <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0 mt-0.5">
-          <Icon size={15} className="text-white" />
+    <div className="space-y-8">
+      <section>
+        <h4 className="text-base font-medium text-[#151515] mb-4">What Is This Step</h4>
+        <Separator className="bg-[#ECEDEE] mb-5" />
+        <p className="text-[13px] text-[#62646A] leading-relaxed">{step.whatIs}</p>
+      </section>
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Icon size={16} className="text-white" />
+          </div>
+          <h4 className="text-base font-medium text-[#151515]">Objective</h4>
         </div>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-1">Objective</p>
-          <p className="text-body-small-medium text-[#151515] leading-snug">{step.title}</p>
+        <Separator className="bg-[#ECEDEE] mb-5" />
+        <p className="text-[13px] text-[#151515] font-medium leading-relaxed">{step.title}</p>
+      </section>
+      <section>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <h4 className="text-base font-medium text-[#151515] mb-4">Sorene Provides</h4>
+            <Separator className="bg-[#ECEDEE] mb-4" />
+            <div className="space-y-3">
+              {step.soreneDoes.map((s, i) => (
+                <div key={i} className="flex gap-3 items-start">
+                  <CheckCircle2 size={16} className="text-[#32C382] shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1">
+            <h4 className="text-base font-medium text-[#151515] mb-4">You Must Do</h4>
+            <Separator className="bg-[#ECEDEE] mb-4" />
+            <div className="space-y-3">
+              {step.userDoes.map((s, i) => (
+                <div key={i} className="flex gap-3 items-start">
+                  <span className="mt-2 shrink-0 w-1.5 h-1.5 rounded-full bg-[#9CA3AF]" />
+                  <p className="text-[13px] text-[#62646A] leading-relaxed">{s}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene provides</p>
-          <ul className="space-y-2.5">
-            {step.soreneDoes.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-label-medium text-[#151515]">
-                <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />{s}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">You must do</p>
-          <ul className="space-y-2.5">
-            {step.userDoes.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-label-medium text-[#62646A]">
-                <Circle size={13} className="text-gray-300 shrink-0 mt-0.5" />{s}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      </section>
       {step.insight && (
         <div className="rounded-2xl bg-[#F5FFD9] border border-[#32C382]/30 px-4 py-3">
           <p className="text-label-medium text-[#151515] leading-relaxed">{step.insight}</p>

@@ -531,14 +531,14 @@ type CustomerProfile = {
   where: string;
 };
 
-function TargetCustomerCard({ project }: { project: DirectionCardData | null }) {
+// Shared hook: generates + caches main/secondary customer profiles so both
+// the Mission wording and the TargetCustomerCard stay in sync reactively.
+function useTargetCustomers(project: DirectionCardData | null) {
   const authUser = useAtomValue(userAtom);
   const [main, setMain] = useState<CustomerProfile | null>(null);
   const [secondary, setSecondary] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const ranFor = useRef("");
-
-  const cacheKey = `target-customers-${project?.title ?? ""}`;
 
   const generate = async (projectArg: DirectionCardData, uid: string) => {
     const runKey = `${uid}::${projectArg.title}`;
@@ -614,6 +614,31 @@ Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.title, authUser?.uid]);
 
+  const regenerate = () => {
+    if (!project?.title || !authUser?.uid) return;
+    try { localStorage.removeItem(`target-customers-${project.title}`); } catch { /* ignore */ }
+    ranFor.current = "";
+    generate(project, authUser.uid);
+  };
+
+  return { main, secondary, loading, regenerate, canRegenerate: !!(project && authUser?.uid) };
+}
+
+function TargetCustomerCard({
+  project,
+  main,
+  secondary,
+  loading,
+  regenerate,
+  canRegenerate,
+}: {
+  project: DirectionCardData | null;
+  main: CustomerProfile | null;
+  secondary: CustomerProfile | null;
+  loading: boolean;
+  regenerate: () => void;
+  canRegenerate: boolean;
+}) {
   const ProfileBlock = ({ profile, tone }: { profile: CustomerProfile; tone: "main" | "secondary" }) => (
     <div className={cn(
       "flex-1 rounded-2xl border px-4 py-4",
@@ -648,12 +673,8 @@ Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
             <p className="text-[11px] text-[#9A9A9A]">Who to interview first — and who's next</p>
           </div>
         </div>
-        {(main || secondary) && !loading && project && authUser?.uid && (
-          <button onClick={() => {
-            try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
-            ranFor.current = "";
-            generate(project, authUser.uid!);
-          }}
+        {(main || secondary) && !loading && canRegenerate && (
+          <button onClick={regenerate}
             className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline shrink-0">
             Regenerate
           </button>
@@ -1067,6 +1088,7 @@ function ConversationLogger({ projectTitle }: { projectTitle: string }) {
 
 function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null }) {
   const Icon = step.icon;
+  const customers = useTargetCustomers(project);
 
   // Stage 1 gets the full guided experience
   if (step.id === 1) {
@@ -1075,21 +1097,15 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
     const q2 = "What have you already tried to fix it?";
     const q3 = "What would you pay to solve this completely?";
 
-    // Read AI-generated main customer profile from TargetCustomerCard cache for beautiful mission wording
+    // Beautiful mission wording built from the AI-identified main customer profile
+    const main = customers.main;
     let missionWho = "real people who live this problem every day";
-    try {
-      const cached = project?.title ? localStorage.getItem(`target-customers-${project.title}`) : null;
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const main = parsed?.main;
-        if (main?.label && main?.who) {
-          const who = main.who.replace(/\.$/, "");
-          missionWho = `${main.label} — ${who.charAt(0).toLowerCase()}${who.slice(1)}`;
-        } else if (main?.label) {
-          missionWho = main.label;
-        }
-      }
-    } catch { /* ignore */ }
+    if (main?.label && main?.who) {
+      const who = main.who.replace(/\.$/, "");
+      missionWho = `${main.label} — ${who.charAt(0).toLowerCase()}${who.slice(1)}`;
+    } else if (main?.label) {
+      missionWho = main.label;
+    }
 
     return (
       <div className="space-y-8">
@@ -1114,7 +1130,14 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
                 <p className="text-[13px] text-[#151515] leading-relaxed">{project.simple_positioning}</p>
               </div>
             )}
-            <TargetCustomerCard project={project} />
+            <TargetCustomerCard
+              project={project}
+              main={customers.main}
+              secondary={customers.secondary}
+              loading={customers.loading}
+              regenerate={customers.regenerate}
+              canRegenerate={customers.canRegenerate}
+            />
           </section>
         )}
 

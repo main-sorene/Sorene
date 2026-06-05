@@ -2668,8 +2668,8 @@ function BuildDemoReadinessBar({ project, onAdvance }: { project: DirectionCardD
   }, [title]);
 
   const checkItems = [
-    { done: hasOfferings, text: "Initial offerings generated" },
-    { done: hasMvo,       text: "Your MVO defined" },
+    { done: hasOfferings, text: "Initial Offerings Package generated" },
+    { done: hasMvo,       text: "Your Minimum Viable Offer defined" },
     { done: hasPitch,     text: "First pitch written and ready" },
   ];
 

@@ -352,7 +352,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
           transition={{ duration: 0.2 }}
         >
           {activeStage <= 4 ? (
-            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} />
+            <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} />
           ) : (
             <GoNoGoContent />
           )}
@@ -381,8 +381,128 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
   );
 }
 
-function VibeStageContent({ step }: { step: typeof VIBE_STEPS[number] }) {
+function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; project: DirectionCardData | null }) {
   const Icon = step.icon;
+
+  // Stage 1 gets the full guided experience
+  if (step.id === 1) {
+    const problemArea = project?.oneliner || project?.title || "your problem area";
+    const targetCustomer = project?.first_10_customers || project?.simple_positioning || "your target customers";
+    const q1 = `What is your biggest challenge with ${problemArea}?`;
+    const q2 = "What have you already tried to fix it?";
+    const q3 = "What would you pay to solve this completely?";
+
+    return (
+      <div className="space-y-5">
+        {/* Project card */}
+        {project && (
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A]">Your project</p>
+            <p className="text-body-small-medium text-[#151515]">{project.title}</p>
+            {project.oneliner && <p className="text-label-medium text-[#62646A] leading-relaxed">{project.oneliner}</p>}
+            {(project.first_10_customers || project.simple_positioning) && (
+              <div className="flex flex-wrap gap-3 pt-1">
+                {project.first_10_customers && (
+                  <span className="text-[11px] text-[#62646A]">
+                    <span className="font-semibold text-[#151515]">Target customer: </span>{project.first_10_customers}
+                  </span>
+                )}
+                {project.simple_positioning && (
+                  <span className="text-[11px] text-[#62646A]">
+                    <span className="font-semibold text-[#151515]">Positioning: </span>{project.simple_positioning}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Guide text */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-2">Your mission for this stage</p>
+          <p className="text-label-medium text-[#62646A] leading-relaxed mb-3">
+            Have <strong className="text-[#151515]">10 to 50 conversations</strong> (30 minutes each) with {targetCustomer}. The goal is not to pitch — it is to listen.
+          </p>
+          <div className="space-y-2">
+            {[
+              "Focus on their problems, not your solution",
+              "Listen more than you talk",
+              "Record real quotes and exact language used",
+              "Log responses back into the platform — we will analyze the pattern together",
+            ].map((rule, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-[#151515] text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
+                <p className="text-label-medium text-[#151515] leading-snug">{rule}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Separator className="bg-gray-100" />
+
+        {/* Auto-generated toolkit */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9A9A9A] mb-3">Sorene generates for you</p>
+          <div className="space-y-3">
+            {/* Interview questions */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+                  <Search size={12} className="text-white" />
+                </div>
+                <p className="text-body-small-medium text-[#151515]">3 tailored interview questions</p>
+              </div>
+              <ol className="space-y-2">
+                {[q1, q2, q3].map((q, i) => (
+                  <li key={i} className="flex items-start gap-2 text-label-medium text-[#62646A]">
+                    <span className="text-[11px] font-bold text-[#9A9A9A] shrink-0 mt-0.5">{i + 1}.</span>{q}
+                  </li>
+                ))}
+              </ol>
+            </div>
+            {/* Script */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+                  <MessageCircle size={12} className="text-white" />
+                </div>
+                <p className="text-body-small-medium text-[#151515]">Script for opening the conversation</p>
+              </div>
+              <p className="text-label-medium text-[#62646A] leading-relaxed italic">
+                "Hi [name], I'm working on something and trying to understand [problem area] better — not selling anything. Would you be open to a 30-minute chat? I want to hear about your experience."
+              </p>
+            </div>
+            {/* Debrief */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-lg bg-[#151515] flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={12} className="text-white" />
+                </div>
+                <p className="text-body-small-medium text-[#151515]">Debrief form after each conversation</p>
+              </div>
+              <div className="space-y-1.5">
+                {["What was their #1 problem?", "What exact words did they use?", "Are they already paying for a solution?", "Pain level (1–10)", "Would they pay for a fix?"].map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-label-medium text-[#62646A]">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />{f}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Pattern summary */}
+            <div className="rounded-2xl border border-[#32C382]/30 bg-[#F5FFD9] p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+                <p className="text-body-small-medium text-[#151515]">Pattern summary as responses are logged</p>
+              </div>
+              <p className="text-label-medium text-[#62646A] leading-relaxed">Log your conversations and Sorene will surface recurring themes, pain frequency, and the strongest signal to build on.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Stages 2–4 keep the existing layout
   return (
     <div className="space-y-5">
       <div>

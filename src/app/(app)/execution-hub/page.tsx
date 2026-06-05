@@ -447,39 +447,77 @@ function GoNoGoContent() {
   const generateAnalysis = async () => {
     if (!project?.title) return;
     setAnalysisStage("loading");
-    const title = project.title;
-    const painkiller = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
-    const offer = localStorage.getItem(`mvo-defined-${title}`) ?? "";
-    const validationScore = localStorage.getItem(`experiment-validation-score-${title}`) ?? "";
-    let customerSummary = "No responses logged.";
+    const t = project.title;
+
+    // ── Stage 1: Validate ──
+    let convSummary = "No conversations logged.";
     try {
-      const customers = JSON.parse(localStorage.getItem(`experiment-customers-${title}`) ?? "[]");
+      const convs = JSON.parse(localStorage.getItem(`convlog-${t}`) ?? "[]");
+      if (convs.length > 0) convSummary = `${convs.length} conversations logged.`;
+    } catch { /* ignore */ }
+    const patternSummary = localStorage.getItem(`pattern-summary-${t}`) ?? "";
+    const targetCustomersRaw = localStorage.getItem(`target-customers-${t}`) ?? "";
+    let targetCustomer = "";
+    try { const tc = JSON.parse(targetCustomersRaw); targetCustomer = tc?.main?.label ?? ""; } catch { /* ignore */ }
+
+    // ── Stage 2: Interview ──
+    const painkillerAnalysis = localStorage.getItem(`painkiller-analysis-${t}`) ?? "";
+    const painkillerVerdict  = localStorage.getItem(`painkiller-verdict-${t}`) ?? "";
+    const confidenceLevel    = localStorage.getItem(`confidence-level-${t}`) ?? "";
+
+    // ── Stage 3: Build Demo ──
+    const offer = localStorage.getItem(`mvo-defined-${t}`) ?? "";
+    const offerOfferings = ["one_sentence_offer","price_range","best_format","offer_clarity","first_pitch"]
+      .map((k) => localStorage.getItem(`mvo-offering-${k}-${t}`) ?? "").filter(Boolean).join(" | ");
+
+    // ── Stage 4: Experiment ──
+    let experimentSummary = "No customer responses.";
+    try {
+      const customers = JSON.parse(localStorage.getItem(`experiment-customers-${t}`) ?? "[]");
       if (customers.length > 0) {
         const yes = customers.filter((c: { response: string }) => c.response === "yes").length;
-        const no = customers.filter((c: { response: string }) => c.response === "no").length;
-        const maybe = customers.filter((c: { response: string }) => c.response === "maybe").length;
-        customerSummary = `${customers.length} conversations: ${yes} paid, ${no} declined, ${maybe} maybe`;
+        const no  = customers.filter((c: { response: string }) => c.response === "no").length;
+        const mb  = customers.filter((c: { response: string }) => c.response === "maybe").length;
+        experimentSummary = `${customers.length} conversations: ${yes} paid, ${no} declined, ${mb} maybe`;
       }
     } catch { /* ignore */ }
+    const validationScore = localStorage.getItem(`experiment-validation-score-${t}`) ?? "";
 
-    const checkedItems = allItems.filter((i) => isChecked(i.key)).map((i) => i.label);
+    // ── Stage 5: Finance ──
+    const runway        = localStorage.getItem(`finance-runway-${t}`) ?? "";
+    const startupCost   = localStorage.getItem(`finance-startup_cost-${t}`) ?? "";
+    const revenueTarget = localStorage.getItem(`finance-revenue_target-${t}`) ?? "";
+    const fundingPath   = localStorage.getItem(`finance-funding_path-${t}`) ?? "";
+
+    const checkedItems   = allItems.filter((i) => isChecked(i.key)).map((i) => i.label);
     const uncheckedItems = allItems.filter((i) => !isChecked(i.key)).map((i) => i.label);
 
-    const runway         = localStorage.getItem(`finance-runway-${title}`) ?? "";
-    const startupCost    = localStorage.getItem(`finance-startup_cost-${title}`) ?? "";
-    const revenueTarget  = localStorage.getItem(`finance-revenue_target-${title}`) ?? "";
-    const fundingPath    = localStorage.getItem(`finance-funding_path-${title}`) ?? "";
-
     const system = `You are Sorene, a direct startup coach assessing whether a founder is ready to launch. Respond in plain prose only — no JSON, no code blocks. Be honest, specific, and direct.`;
-    const prompt = `Give an honest launch readiness assessment for this founder.
+    const prompt = `Give an honest, comprehensive launch readiness verdict for this founder based on their full journey across all 5 VIBE stages.
 
-Project: "${title}"${painkiller ? `\nPainkiller problem: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}
-Customer responses: ${customerSummary}${validationScore ? `\nValidation score: "${validationScore}"` : ""}${runway ? `\nPersonal runway: "${runway}"` : ""}${startupCost ? `\nStartup cost estimate: "${startupCost}"` : ""}${revenueTarget ? `\nFirst revenue target: "${revenueTarget}"` : ""}${fundingPath ? `\nFunding path: "${fundingPath}"` : ""}
+PROJECT: "${t}"
+${targetCustomer ? `Target customer: "${targetCustomer}"` : ""}
+
+STAGE 1 — Validate:
+${convSummary}${patternSummary ? `\nPattern summary: "${patternSummary}"` : ""}
+
+STAGE 2 — Interview:
+${painkillerVerdict ? `Painkiller problem: "${painkillerVerdict}"` : "No painkiller identified yet."}${painkillerAnalysis ? `\nAnalysis: "${painkillerAnalysis.slice(0, 300)}…"` : ""}${confidenceLevel ? `\nConfidence level: "${confidenceLevel}"` : ""}
+
+STAGE 3 — Build Demo:
+${offer ? `MVO defined: "${offer}"` : "No offer defined yet."}${offerOfferings ? `\nOfferings: "${offerOfferings.slice(0, 200)}"` : ""}
+
+STAGE 4 — Experiment:
+${experimentSummary}${validationScore ? `\nValidation score: "${validationScore}"` : ""}
+
+STAGE 5 — Finance:
+${runway ? `Runway: "${runway}"` : "Runway not assessed."}${startupCost ? `\nStartup cost: "${startupCost}"` : ""}${revenueTarget ? `\nRevenue target: "${revenueTarget}"` : ""}${fundingPath ? `\nFunding path: "${fundingPath}"` : ""}
+
 Readiness score: ${pct}% (${checked}/${total} criteria met)
 Completed: ${checkedItems.length > 0 ? checkedItems.join(", ") : "none"}
 Not yet done: ${uncheckedItems.length > 0 ? uncheckedItems.join(", ") : "none"}
 
-Write 3-4 sentences: (1) overall verdict — are they ready, close, or not ready; (2) the single biggest strength; (3) the single biggest gap; (4) one specific action to take this week. Be direct. No fluff.`;
+Write 4-5 sentences: (1) overall verdict — ready, close, or not ready and why; (2) the single biggest strength from their journey; (3) the single most critical gap; (4) one specific action to take this week to move forward. Be direct. No fluff.`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -553,29 +591,8 @@ Write 3-4 sentences: (1) overall verdict — are they ready, close, or not ready
               </div>
             )}
 
-            {/* Finance Readiness — input cards */}
-            {isFinance && (
-              <div className="space-y-3">
-                <FinanceInputCard project={project} />
-                {/* auto-check items based on filled inputs */}
-                <div className="space-y-2 pt-1">
-                  {check.items.map((item) => {
-                    const on = isChecked(item.key);
-                    const autoDetected = isAuto(item.key);
-                    return (
-                      <button key={item.key} onClick={() => toggle(item.key)} className="w-full flex items-center gap-3 text-left group">
-                        <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
-                          on ? "bg-[#151515] border-[#151515]" : "border-gray-200 group-hover:border-[#151515]")}>
-                          {on && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                        <span className={cn("text-label-medium transition-colors flex-1", on ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>{item.label}</span>
-                        {autoDetected && <span className="text-[10px] font-medium text-[#32C382] shrink-0">auto-detected</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Finance Readiness — input cards only, no checkboxes */}
+            {isFinance && <FinanceInputCard project={project} />}
 
             {/* Problem / Market — normal checklist */}
             {!isLearning && !isFinance && (

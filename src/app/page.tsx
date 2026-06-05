@@ -74,7 +74,11 @@ function PageInner() {
     }
   }, [authLoading, authUser, router, signingIn]);
 
-  if (authLoading || signingIn) {
+  // Show the spinner — never the landing page — whenever we're loading, signing
+  // in, OR already authenticated. If authUser exists the redirect effect is about
+  // to navigate to /onBoarding (or /chat); rendering the landing page in that
+  // gap is the "flash of homepage before onboarding" users were seeing.
+  if (authLoading || signingIn || authUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-white">
         <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />

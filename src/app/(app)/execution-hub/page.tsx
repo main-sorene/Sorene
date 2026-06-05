@@ -5063,6 +5063,8 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
   const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
   const [tips, setTips] = useState<Record<string, string>>({});
   const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
+  const [openItems, setOpenItems] = useState<Record<string, boolean>>({});
+  const toggleItem = (itemId: string) => setOpenItems((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
 
   useEffect(() => {
     if (!title) return;
@@ -5222,40 +5224,69 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                 {pillar.items.map((item) => {
                   const status = statuses[item.id] ?? "todo";
                   const tip = tips[item.id];
+                  const hasContent = pillar.id === "brand_digital" && [
+                    "biz_name", "tagline", "benefit", "offerings", "pricing",
+                    "logo", "domain", "website", "hosting", "brand_color", "social",
+                  ].includes(item.id);
+                  const open = !!openItems[item.id];
                   return (
                     <div key={item.id}>
-                      <button onClick={() => cycleStatus(item.id)} className="w-full flex items-center gap-3 text-left group">
-                        <div className={cn(
-                          "w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
-                          status === "done"       ? "bg-[#32C382] border-[#32C382]"
-                          : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
-                          : "bg-white border-gray-300 group-hover:border-[#151515]"
-                        )} />
-                        <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
-                          {item.label}
-                        </span>
-                      </button>
-                      {item.id === "biz_name" && pillar.id === "brand_digital" && (
-                        <BusinessNameSection project={project} onNameChosen={(name) => {
-                          cycleStatus("biz_name");
-                          onNameChosen?.(name);
-                        }} />
+                      {hasContent ? (
+                        <button onClick={() => toggleItem(item.id)} className="w-full flex items-center gap-3 text-left group">
+                          <ChevronDown size={15} className={cn(
+                            "shrink-0 transition-transform text-[#9A9A9A] group-hover:text-[#151515]",
+                            !open && "-rotate-90",
+                            status === "done" && "text-[#32C382]"
+                          )} />
+                          <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A]" : "text-[#151515]")}>
+                            {item.label}
+                          </span>
+                          {status === "done" && <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />}
+                        </button>
+                      ) : (
+                        <button onClick={() => cycleStatus(item.id)} className="w-full flex items-center gap-3 text-left group">
+                          <div className={cn(
+                            "w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
+                            status === "done"       ? "bg-[#32C382] border-[#32C382]"
+                            : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
+                            : "bg-white border-gray-300 group-hover:border-[#151515]"
+                          )} />
+                          <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
+                            {item.label}
+                          </span>
+                        </button>
                       )}
-                      {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && pillar.id === "brand_digital" && (
-                        <BrandTextSection type={item.id as BrandTextType} project={project} />
-                      )}
-                      {item.id === "pricing" && pillar.id === "brand_digital" && (
-                        <PricingPackageSection project={project} />
-                      )}
-                      {(item.id === "logo" || item.id === "domain" || item.id === "website" || item.id === "hosting") && pillar.id === "brand_digital" && (
-                        <BrandTextSection type={item.id as BrandTextType} project={project} />
-                      )}
-                      {item.id === "brand_color" && pillar.id === "brand_digital" && (
-                        <BrandColorSection project={project} />
-                      )}
-                      {item.id === "social" && pillar.id === "brand_digital" && (
-                        <SocialMediaSection project={project} />
-                      )}
+                      <AnimatePresence initial={false}>
+                        {hasContent && open && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                            transition={{ height: { duration: 0.25 }, opacity: { duration: 0.2 } }}
+                            className="overflow-hidden"
+                          >
+                            {item.id === "biz_name" && (
+                              <BusinessNameSection project={project} onNameChosen={(name) => {
+                                cycleStatus("biz_name");
+                                onNameChosen?.(name);
+                              }} />
+                            )}
+                            {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && (
+                              <BrandTextSection type={item.id as BrandTextType} project={project} />
+                            )}
+                            {item.id === "pricing" && (
+                              <PricingPackageSection project={project} />
+                            )}
+                            {(item.id === "logo" || item.id === "domain" || item.id === "website" || item.id === "hosting") && (
+                              <BrandTextSection type={item.id as BrandTextType} project={project} />
+                            )}
+                            {item.id === "brand_color" && (
+                              <BrandColorSection project={project} />
+                            )}
+                            {item.id === "social" && (
+                              <SocialMediaSection project={project} />
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "hosting" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}

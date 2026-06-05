@@ -4152,9 +4152,9 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
     setChatHistory(newHistory);
     setChatLoading(true);
     const { painkiller, offer, patternSummary, targetCustomer } = buildContext();
-    const system = `You are Sorene, a startup brand coach. Suggest business names that are clear, simple, and communicate the offer directly. Return a JSON array: [{"name": "...", "reason": "..."}]. No markdown outside the JSON.`;
+    const system = `You are Sorene, a startup brand coach. Suggest business names that are clear, simple, and communicate the offer directly. IMPORTANT: If the user is proposing a specific name they want (e.g. they typed a brand name), put THAT exact name as the FIRST item with a short reason evaluating it, then add 2 alternatives. If the user is giving feedback or direction (e.g. "shorter", "more playful"), return 3 fresh suggestions. Return a JSON array: [{"name": "...", "reason": "..."}]. No markdown outside the JSON.`;
     const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
-    const prompt = `Context — Project: "${title}"${targetCustomer ? `, target customer: "${targetCustomer}"` : ""}${painkiller ? `, painkiller: "${painkiller}"` : ""}${offer ? `, offer: "${offer}"` : ""}${patternSummary ? `, pattern: "${patternSummary.slice(0, 150)}"` : ""}. User says: "${msg}". Return a JSON array of 3 name suggestions.`;
+    const prompt = `Context — Project: "${title}"${targetCustomer ? `, target customer: "${targetCustomer}"` : ""}${painkiller ? `, painkiller: "${painkiller}"` : ""}${offer ? `, offer: "${offer}"` : ""}${patternSummary ? `, pattern: "${patternSummary.slice(0, 150)}"` : ""}. User typed: "${msg}". If this looks like a specific business name they want to use, return it as the first option (with a one-line evaluation) followed by 2 alternatives. Otherwise treat it as feedback and return 3 new suggestions. Return a JSON array of 3 items.`;
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system, history }) });
@@ -4170,7 +4170,9 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
             setSuggestionKey((k) => k + 1);
           }, 120);
           try { localStorage.setItem(`business-name-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
+          const firstName = (parsed[0]?.name ?? "").toLowerCase();
+          const usedTheirName = firstName === msg.toLowerCase().trim();
+          setChatHistory([...newHistory, { role: "ai", text: usedTheirName ? `Got it — I put "${parsed[0].name}" at the top with alternatives:` : "Here are 3 new options:" }]);
         } else {
           setChatHistory([...newHistory, { role: "ai", text: reply }]);
         }

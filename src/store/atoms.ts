@@ -101,6 +101,7 @@ export const settingsTabAtom = atom<string>("General");
 export const isLogoutConfirmOpenAtom = atom<boolean>(false);
 export const isCancelSubscriptionOpenAtom = atom<boolean>(false);
 export const isManagePaymentOpenAtom = atom<boolean>(false);
+export const isCreditsExhaustedOpenAtom = atom<boolean>(false);
 export const isHistoryLoadingAtom = atom<boolean>(false);
 export const isAddMoreInfoModeAtom = atom<boolean>(false);
 export const isAssessmentCompleteAtom = atom<boolean>(false);
@@ -140,6 +141,7 @@ export interface SubscriptionStatus {
   duration: number;
   plan: string;
   status: string;
+  credits?: { used: number; limit: number };
 }
 
 export const subscriptionStatusAtom = atom<SubscriptionStatus | null>(null);

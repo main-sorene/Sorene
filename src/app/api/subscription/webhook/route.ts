@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { setCreditsLimit } from "@/lib/credits";
 import Stripe from "stripe";
 
 function getDb() {
@@ -30,12 +31,13 @@ async function upsertSubscription(
   const plan = subscription.metadata?.plan || "starter";
   const duration = Number(subscription.metadata?.duration || 1);
   const active = subscription.status === "active" || subscription.status === "trialing";
+  const effectivePlan = active ? plan : "free";
 
   await db.collection("users").doc(email).set(
     {
       subscription: {
         active,
-        plan: active ? plan : "free",
+        plan: effectivePlan,
         status: subscription.status,
         duration,
         stripeSubscriptionId: subscription.id,
@@ -43,6 +45,9 @@ async function upsertSubscription(
     },
     { merge: true },
   );
+
+  // Update credit limit to match new plan
+  await setCreditsLimit(email, effectivePlan);
 }
 
 export async function POST(req: NextRequest) {

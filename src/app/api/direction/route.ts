@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -119,6 +120,11 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
+  const creditCheck = await checkCredits(authedUser.uid);
+  if (!creditCheck.ok) {
+    return new Response(JSON.stringify({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }), { status: 402 });
+  }
+
   try {
     const body = await req.json() as {
       eligibility: DirectionEligibility;
@@ -149,6 +155,9 @@ export async function POST(req: NextRequest) {
           }
         }
         controller.close();
+        // Deduct after stream completes
+        const final = await stream.finalMessage();
+        void deductCredits(authedUser.uid, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
       },
     });
 

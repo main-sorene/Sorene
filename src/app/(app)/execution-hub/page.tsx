@@ -1257,6 +1257,7 @@ function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
   const [convCount, setConvCount] = useState(0);
   const [hasNotes, setHasNotes] = useState(false);
   const [patternDone, setPatternDone] = useState(false);
+  const [hasClarity, setHasClarity] = useState(false);
 
   const refresh = () => {
     try {
@@ -1265,10 +1266,20 @@ function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
       setConvCount(entries.length);
       setHasNotes(entries.some((e) => e.notes && e.notes.trim().length > 20));
     } catch { /* ignore */ }
-    // Pattern summary done = history was saved (PatternSummaryCard doesn't persist,
-    // so we track a flag in localStorage when summarise is clicked)
     try {
       setPatternDone(!!localStorage.getItem(`pattern-done-${projectTitle}`));
+    } catch { /* ignore */ }
+    // Clarity = user has replied to at least one clarifying question in the pattern summary
+    try {
+      const raw = localStorage.getItem(`pattern-summary-${projectTitle}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const saved: { role: string }[] = parsed?.history ?? parsed ?? [];
+        // Summary starts with an assistant message; clarity requires a user follow-up
+        setHasClarity(saved.filter((m) => m.role === "user").length >= 1);
+      } else {
+        setHasClarity(false);
+      }
     } catch { /* ignore */ }
   };
 
@@ -1276,36 +1287,37 @@ function ValidateReadinessBar({ projectTitle }: { projectTitle: string }) {
     refresh();
     const handler = () => refresh();
     window.addEventListener("storage", handler);
-    // Also poll every 3s so updates from ConversationLogger (same tab) are caught
     const timer = setInterval(refresh, 3000);
     return () => { window.removeEventListener("storage", handler); clearInterval(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle]);
 
-  // Score breakdown (out of 100):
-  // Conversations: 0→0, 1-2→20, 3-4→35, 5-7→50, 8-10→65, 10+→75
-  // Notes quality: +10 if at least one has substantial notes
-  // Pattern summary: +15
+  // Score (out of 100):
+  // Conversations: 0→0, 1-4→15, 5-9→30, 10-19→50, 20-29→60, 30+→70
+  // Detailed notes: +10
+  // Clear signal (pattern done): +10
+  // Clarified sharp questions: +10
   const convScore =
-    convCount === 0 ? 0 :
-    convCount <= 2 ? 20 :
-    convCount <= 4 ? 35 :
-    convCount <= 7 ? 50 :
-    convCount <= 10 ? 65 : 75;
-  const score = Math.min(100, convScore + (hasNotes ? 10 : 0) + (patternDone ? 15 : 0));
+    convCount === 0  ? 0  :
+    convCount <= 4   ? 15 :
+    convCount <= 9   ? 30 :
+    convCount <= 19  ? 50 :
+    convCount <= 29  ? 60 : 70;
+  const score = Math.min(100, convScore + (hasNotes ? 10 : 0) + (patternDone ? 10 : 0) + (hasClarity ? 10 : 0));
 
   const { label, sublabel, color, textColor } =
-    score === 0   ? { label: "Not started", sublabel: "Log your first customer conversation to begin", color: "bg-[#ECEDEE]", textColor: "text-[#9A9A9A]" } :
-    score <= 25   ? { label: "Just starting", sublabel: "Keep going — aim for at least 5 conversations", color: "bg-[#FFA94D]", textColor: "text-[#C85B00]" } :
-    score <= 50   ? { label: "Building signals", sublabel: "Good momentum — add notes and keep talking to customers", color: "bg-[#FFD43B]", textColor: "text-[#7B5D00]" } :
-    score <= 75   ? { label: "Strong signals", sublabel: "Run the Pattern Summary to sharpen your insights", color: "bg-[#74C0FC]", textColor: "text-[#1864AB]" } :
-    score < 100   ? { label: "Almost ready", sublabel: "Summarise patterns to confirm your signal before Interview", color: "bg-[#63E6BE]", textColor: "text-[#0B7A52]" } :
-                    { label: "Ready for Interview", sublabel: "You have the signal. Move to Interview stage.", color: "bg-[#32C382]", textColor: "text-[#0B5E35]" };
+    score === 0  ? { label: "Not started",      sublabel: "Log your first customer conversation to begin",                  color: "bg-[#ECEDEE]",  textColor: "text-[#9A9A9A]"  } :
+    score <= 20  ? { label: "Just starting",    sublabel: "Keep going — aim for at least 10 conversations",                 color: "bg-[#FFA94D]",  textColor: "text-[#C85B00]"  } :
+    score <= 40  ? { label: "Building signals", sublabel: "Good momentum — add notes and keep talking to customers",         color: "bg-[#FFD43B]",  textColor: "text-[#7B5D00]"  } :
+    score <= 60  ? { label: "Strong signals",   sublabel: "Run the Pattern Summary to identify your clearest signal",       color: "bg-[#74C0FC]",  textColor: "text-[#1864AB]"  } :
+    score <= 80  ? { label: "Almost ready",     sublabel: "Answer the clarifying questions to sharpen your signal",         color: "bg-[#63E6BE]",  textColor: "text-[#0B7A52]"  } :
+                   { label: "Ready for Interview", sublabel: "You have a clear signal. Move to Interview stage.",            color: "bg-[#32C382]",  textColor: "text-[#0B5E35]"  };
 
   const checkItems = [
-    { done: convCount >= 5, text: `${convCount} conversation${convCount !== 1 ? "s" : ""} logged (target: 5+)` },
-    { done: hasNotes, text: "Detailed notes captured" },
-    { done: patternDone, text: "Pattern summary completed" },
+    { done: convCount >= 10, text: `${convCount} conversation${convCount !== 1 ? "s" : ""} logged (target: 10–50)` },
+    { done: hasNotes,        text: "Detailed notes captured" },
+    { done: patternDone,     text: "Have clear signal of problem to solve" },
+    { done: hasClarity,      text: "Answered clarifying questions sharply" },
   ];
 
   return (

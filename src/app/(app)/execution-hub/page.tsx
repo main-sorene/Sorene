@@ -777,63 +777,67 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
   const [clarifyLoading, setClarifyLoading] = useState(false);
   const [history, setHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const loadedFor = useRef("");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [output, history]);
 
-  // Load persisted summary on mount (localStorage first, then Firestore)
+  // Load persisted summary — localStorage first (instant), then Firestore (cross-device)
   useEffect(() => {
-    if (!projectTitle || !authUser?.uid) return;
-    const key = `${authUser.uid}::${projectTitle}`;
-    if (loadedFor.current === key) return;
-    loadedFor.current = key;
+    if (!projectTitle || !authUser?.uid || loaded) return;
 
     const cacheKey = `pattern-summary-${projectTitle}`;
-    const fromCache = (() => {
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        return raw ? JSON.parse(raw) : null;
-      } catch { return null; }
-    })();
 
-    if (fromCache?.history?.length > 0) {
-      setHistory(fromCache.history);
-      // Last assistant message becomes the displayed output
-      const lastAssistant = [...fromCache.history].reverse().find((m: { role: string }) => m.role === "assistant");
-      if (lastAssistant) setOutput((lastAssistant as { content: string }).content);
+    // Helper: restore state from a saved history array (only assistant messages stored)
+    const restore = (saved: { role: string; content: string }[]) => {
+      if (!saved?.length) return false;
+      const display = saved.filter((m) => m.role === "assistant");
+      if (!display.length) return false;
+      setHistory(saved as { role: "user" | "assistant"; content: string }[]);
+      setOutput(display[display.length - 1].content);
       setStage("done");
-      return;
-    }
+      setLoaded(true);
+      return true;
+    };
 
-    // Fall back to Firestore
+    // 1. Try localStorage (same device, survives refresh)
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (restore(parsed?.history ?? parsed)) return;
+      }
+    } catch { /* ignore */ }
+
+    // 2. Fall back to Firestore (cross-device / after logout)
     import("@/lib/authFetch").then(({ authFetch }) =>
       authFetch(`/api/execution-projects/pattern-summary?project=${encodeURIComponent(projectTitle)}`)
         .then((r) => r.ok ? r.json() : null)
         .then((data) => {
-          if (data?.history?.length > 0) {
-            setHistory(data.history);
-            const lastAssistant = [...data.history].reverse().find((m: { role: string }) => m.role === "assistant");
-            if (lastAssistant) setOutput((lastAssistant as { content: string }).content);
-            setStage("done");
-            try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* ignore */ }
+          const saved = data?.history ?? data;
+          if (restore(saved)) {
+            try { localStorage.setItem(cacheKey, JSON.stringify({ history: saved })); } catch { /* ignore */ }
+          } else {
+            setLoaded(true); // nothing saved yet — mark as checked so we don't retry
           }
         })
-        .catch(() => {})
+        .catch(() => { setLoaded(true); })
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle, authUser?.uid]);
 
   const persist = (newHistory: { role: "user" | "assistant"; content: string }[]) => {
+    // Save only assistant turns — skip the giant system prompt (index 0) to keep storage lean
+    const toSave = newHistory.filter((m, i) => m.role === "assistant" || i > 0);
     const cacheKey = `pattern-summary-${projectTitle}`;
-    try { localStorage.setItem(cacheKey, JSON.stringify({ history: newHistory })); } catch { /* ignore */ }
+    try { localStorage.setItem(cacheKey, JSON.stringify({ history: toSave })); } catch { /* ignore */ }
     try { localStorage.setItem(`pattern-done-${projectTitle}`, "1"); } catch { /* ignore */ }
     import("@/lib/authFetch").then(({ authFetch }) =>
       authFetch("/api/execution-projects/pattern-summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectTitle, history: newHistory }),
+        body: JSON.stringify({ projectTitle, history: toSave }),
       }).catch(() => {})
     );
   };
@@ -841,6 +845,7 @@ function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
   const clearPersisted = () => {
     const cacheKey = `pattern-summary-${projectTitle}`;
     try { localStorage.removeItem(cacheKey); localStorage.removeItem(`pattern-done-${projectTitle}`); } catch { /* ignore */ }
+    setLoaded(false);
     import("@/lib/authFetch").then(({ authFetch }) =>
       authFetch("/api/execution-projects/pattern-summary", {
         method: "DELETE",
@@ -910,10 +915,12 @@ One sentence: the single most actionable insight from these conversations.
 Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Write like a sharp co-founder, not a consultant.`;
     const msgs = [{ role: "user" as const, content: prompt }];
     const reply = await stream(msgs);
-    const finalHistory = [...msgs, { role: "assistant" as const, content: reply }];
-    setHistory(finalHistory);
+    // Store only the assistant reply in history (not the giant system prompt)
+    const displayHistory = [{ role: "assistant" as const, content: reply }];
+    setHistory(displayHistory);
     setStage("done");
-    persist(finalHistory);
+    setLoaded(true);
+    persist(displayHistory);
   };
 
   const handleClarify = async () => {
@@ -973,13 +980,13 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
                 <div key={i}>
                   <MarkdownText text={msg.content} />
                 </div>
-              ) : i > 0 ? (
+              ) : (
                 <div key={i} className="flex justify-end">
                   <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[#151515] text-white text-sm leading-relaxed">
                     {msg.content}
                   </div>
                 </div>
-              ) : null
+              )
             ))}
             {stage === "loading" && (
               output

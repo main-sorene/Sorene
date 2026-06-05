@@ -4077,6 +4077,9 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
   const [chosen, setChosen] = useState(() => {
     try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
   });
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return !!localStorage.getItem(storageKey); } catch { return false; }
+  });
   const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
@@ -4099,19 +4102,26 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
     const patternSummary = localStorage.getItem(`pattern-summary-${title}`) ?? "";
     let targetCustomer = "";
     try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
-    return { painkiller, offer, patternSummary, targetCustomer };
+    const competitors = (project?.key_competitors ?? []).map((c) => c.name).filter(Boolean);
+    return { painkiller, offer, patternSummary, targetCustomer, competitors };
   };
 
   const generateSuggestions = async () => {
     if (!title) return;
     setStage("loading");
-    const { painkiller, offer, patternSummary, targetCustomer } = buildContext();
+    const { painkiller, offer, patternSummary, targetCustomer, competitors } = buildContext();
+    const competitorLine = competitors.length > 0
+      ? `\nKnown competitors (do NOT use names similar to these): ${competitors.join(", ")}`
+      : "";
     const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
-    const prompt = `Suggest 3 business name options for this founder. Names must be clear, simple, and immediately communicate what the offer is — no abstract or clever wordplay.
+    const prompt = `Suggest 3 business name options for this founder. Names must be:
+- Clear, simple, and immediately communicate what the offer is
+- Distinct from any known competitors — do not suggest names that are similar to competitor brands
+- Original enough that they are unlikely to already be in use by similar businesses${competitorLine}
 
 Project: "${title}"${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}
 
-Return JSON: [{"name": "...", "reason": "1 sentence why this works for this business"}, ...]`;
+Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why it stands out from competitors"}, ...]`;
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
@@ -4164,6 +4174,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
 
   const chooseName = (name: string) => {
     setChosen(name);
+    setCollapsed(true);
     try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
     onNameChosen(name);
   };
@@ -4171,85 +4182,93 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
   return (
     <div className="mt-2 ml-[26px] space-y-3">
       {/* Description hint */}
-      <p className="text-[12px] text-[#62646A] leading-relaxed">
-        A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
-      </p>
+      {!collapsed && (
+        <p className="text-[12px] text-[#62646A] leading-relaxed">
+          A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
+        </p>
+      )}
 
       {/* Chosen name badge */}
       {chosen && (
         <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
           <span className="text-[13px] font-semibold text-[#151515]">{chosen}</span>
-          <span className="text-[11px] text-[#32C382] ml-auto">Current choice</span>
+          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] ml-auto hover:underline">
+            {collapsed ? "Change" : "Collapse"}
+          </button>
         </div>
       )}
 
       {/* Generate / suggestions */}
-      {stage === "idle" && (
-        <button onClick={generateSuggestions} disabled={!title}
-          className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
-          <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest 3 name options
-        </button>
-      )}
-      {stage === "loading" && (
-        <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
-          <Loader2 size={11} className="animate-spin" /> Generating name ideas…
-        </div>
-      )}
-      {stage === "done" && suggestions.length > 0 && (
-        <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
-          {suggestions.map((s, i) => (
-            <div key={i} className={cn(
-              "rounded-xl border p-3 transition-all",
-              chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
-            )}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[13px] font-semibold text-[#151515]">{s.name}</span>
-                {chosen !== s.name ? (
-                  <button onClick={() => chooseName(s.name)}
-                    className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
-                    Choose
-                  </button>
-                ) : (
-                  <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
-                )}
-              </div>
-              <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
-            </div>
-          ))}
-          <button onClick={generateSuggestions}
-            className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-            Regenerate
-          </button>
-        </motion.div>
-      )}
-
-      {/* Chat for more options */}
-      {stage === "done" && (
-        <div className="border border-gray-100 rounded-xl overflow-hidden">
-          {chatHistory.length > 0 && (
-            <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
-              {chatHistory.map((m, i) => (
-                <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
-                  {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
-                </p>
-              ))}
+      {!collapsed && (
+        <>
+          {stage === "idle" && (
+            <button onClick={generateSuggestions} disabled={!title}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+              <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest 3 name options
+            </button>
+          )}
+          {stage === "loading" && (
+            <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
+              <Loader2 size={11} className="animate-spin" /> Generating name ideas…
             </div>
           )}
-          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="Ask for more ideas, e.g. something shorter…"
-              className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
-            />
-            <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading}
-              className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
-              {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-            </button>
-          </div>
-        </div>
+          {stage === "done" && suggestions.length > 0 && (
+            <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
+              {suggestions.map((s, i) => (
+                <div key={i} className={cn(
+                  "rounded-xl border p-3 transition-all",
+                  chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+                )}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold text-[#151515]">{s.name}</span>
+                    {chosen !== s.name ? (
+                      <button onClick={() => chooseName(s.name)}
+                        className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                        Choose
+                      </button>
+                    ) : (
+                      <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
+                </div>
+              ))}
+              <button onClick={generateSuggestions}
+                className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                Regenerate
+              </button>
+            </motion.div>
+          )}
+
+          {/* Chat for more options */}
+          {stage === "done" && (
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              {chatHistory.length > 0 && (
+                <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
+                  {chatHistory.map((m, i) => (
+                    <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
+                      {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                  placeholder="Ask for more ideas, e.g. something shorter…"
+                  className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+                />
+                <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading}
+                  className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
+                  {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -4312,7 +4312,7 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
   },
   domain: {
     hint: "Your domain should match your business name closely. Check availability at namecheap.com or porkbun.com before registering.",
-    promptInstruction: `Suggest 5 domain name options for this business. Mix .com, .co, and .io. IMPORTANT: return a JSON array. The "text" field must contain ONLY the full domain name (e.g. "mybiz.co"). The "reason" field is a 1-sentence note. Example: [{"text": "sorene.co", "reason": "Short, matches brand name exactly"}, ...]`,
+    promptInstruction: `Suggest 8 domain name options built around the chosen business name. Stay close to the brand name but vary the approach so some are likely still available: try the exact name, then common prefixes (get, try, use, join, hey, my) and suffixes (app, hq, io, hub) and a mix of TLDs (.com, .co, .io, .ai). IMPORTANT: return a JSON array. The "text" field must contain ONLY the full domain name (e.g. "getmybiz.com"). The "reason" field is a 1-sentence note. Example: [{"text": "getsorene.com", "reason": "Adds 'get' prefix, keeps brand clear"}, ...]`,
     placeholder: 'e.g. "Something with .ai or shorter"',
   },
   website: {
@@ -4408,7 +4408,11 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
         const data = await res.json();
         const availMap: Record<string, boolean> = {};
         for (const r of (data.results ?? [])) availMap[r.domain] = r.available;
-        return list.map((s) => ({ ...s, available: availMap[s.text.toLowerCase().trim()] ?? null }));
+        const annotated = list.map((s) => ({ ...s, available: availMap[s.text.toLowerCase().trim()] ?? null }));
+        // Surface available domains first, then unknown, then taken.
+        const rank = (a: boolean | null | undefined) => (a === true ? 0 : a === false ? 2 : 1);
+        annotated.sort((x, y) => rank(x.available) - rank(y.available));
+        return annotated;
       }
     } catch { /* ignore */ }
     setCheckingAvailability(false);

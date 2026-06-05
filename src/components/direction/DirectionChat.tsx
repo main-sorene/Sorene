@@ -405,7 +405,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         </div>
-        <p className="text-center text-[10px] text-[#9CA3AF] mt-2">
+        <p className="text-center text-[10px] text-[#9CA3AF] mt-2 truncate whitespace-nowrap">
           <a
             href="https://sorene.ai/responsible-ai"
             target="_blank"

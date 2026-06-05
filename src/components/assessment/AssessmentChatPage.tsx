@@ -373,7 +373,7 @@ export function AssessmentChatPage() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-[#62646A] mt-3 whitespace-nowrap overflow-hidden text-ellipsis">
+          <p className="text-center text-[10px] text-[#62646A] mt-3 whitespace-nowrap">
             <a
               href="/responsible"
               className="underline underline-offset-2 hover:text-[#101010] transition-colors"

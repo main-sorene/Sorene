@@ -400,49 +400,30 @@ Sorene Direction Engine v1.1`;
     const selectedModel = isRecipeTurn ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
     const maxTokens = isRecipeTurn ? 1024 : 4096;
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const response = getClient().messages.stream({
-            model: selectedModel,
-            max_tokens: maxTokens,
-            system: systemPrompt,
-            messages,
-          });
-          for await (const event of response) {
-            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`));
-            }
-          }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        } catch (err) {
-          console.error("[direction-chat] stream error:", err);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: "Sorry, I had trouble with that. Please try again." })}\n\n`));
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-        } finally {
-          controller.close();
-        }
-      },
+    const anthropicStream = await getClient().messages.stream({
+      model: selectedModel,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages,
     });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
-  } catch (error) {
-    console.error("[direction-chat] error:", error);
-    const encoder = new TextEncoder();
-    const errStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: "Sorry, I had trouble with that. Please try again." })}\n\n`));
-        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    const readable = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        for await (const chunk of anthropicStream) {
+          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+            controller.enqueue(encoder.encode(chunk.delta.text));
+          }
+        }
         controller.close();
       },
     });
-    return new Response(errStream, { headers: { "Content-Type": "text/event-stream" } });
+
+    return new Response(readable, {
+      headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" },
+    });
+  } catch (error) {
+    console.error("[direction-chat] error:", error);
+    return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

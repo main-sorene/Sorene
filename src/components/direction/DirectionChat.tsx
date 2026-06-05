@@ -193,6 +193,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         }),
       });
 
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.body) throw new Error("No response body");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -201,15 +202,9 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        for (const line of chunk.split("\n")) {
-          if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
-          try {
-            const { text } = JSON.parse(line.slice(6)) as { text: string };
-            reply += text;
-            setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: reply } : m));
-          } catch {}
-        }
+        const text = decoder.decode(value, { stream: true });
+        reply += text;
+        setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: reply } : m));
       }
 
       // If the AI signalled it's ready, strip the marker and show a Generate button.

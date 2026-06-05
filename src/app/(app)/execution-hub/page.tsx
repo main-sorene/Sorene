@@ -233,7 +233,7 @@ function GoNoGoContent() {
           <h4 className="text-base font-medium text-[#151515]">Readiness Score</h4>
           <span className="text-[28px] font-medium leading-none" style={{ color: scoreColor }}>{pct}%</span>
         </div>
-        <Separator className="bg-[#ECEDEE] mb-5" />
+        <Separator className="bg-[#D8D9DB] mb-4" />
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-4">
           <motion.div className="h-full rounded-full" style={{ backgroundColor: scoreColor }} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.5 }} />
         </div>
@@ -925,8 +925,8 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
         {/* ── Project context ── */}
         {project && (
           <section>
-            <h4 className="text-base font-medium text-[#151515] mb-4">Your Project</h4>
-            <Separator className="bg-[#ECEDEE] mb-5" />
+            <h4 className="text-base font-semibold text-[#151515] mb-3">Your Project</h4>
+            <Separator className="bg-[#D8D9DB] mb-4" />
             <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
             {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
             <div className="flex flex-col sm:flex-row gap-3">
@@ -948,15 +948,15 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
 
         {/* ── What is this? ── */}
         <section>
-          <h4 className="text-base font-medium text-[#151515] mb-4">What is this?</h4>
-          <Separator className="bg-[#ECEDEE] mb-5" />
+          <h4 className="text-base font-semibold text-[#151515] mb-3">What is this?</h4>
+          <Separator className="bg-[#D8D9DB] mb-4" />
           <p className="text-[15px] font-medium text-[#151515] leading-relaxed">{step.whatIs}</p>
         </section>
 
         {/* ── Mission ── */}
         <section>
-          <h4 className="text-base font-medium text-[#151515] mb-4">Your Mission</h4>
-          <Separator className="bg-[#ECEDEE] mb-5" />
+          <h4 className="text-base font-semibold text-[#151515] mb-3">Your Mission</h4>
+          <Separator className="bg-[#D8D9DB] mb-4" />
           <p className="text-[13px] text-[#62646A] leading-relaxed mb-5">
             Have <strong className="text-[#151515] font-semibold">10 to 50 conversations</strong> (30 minutes each) with {targetCustomer}. The goal is not to pitch — it is to listen deeply.
           </p>
@@ -977,8 +977,8 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
 
         {/* ── Sorene generates for you ── */}
         <section>
-          <h4 className="text-base font-medium text-[#151515] mb-4">Sorene Generates For You</h4>
-          <Separator className="bg-[#ECEDEE] mb-5" />
+          <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Generates For You</h4>
+          <Separator className="bg-[#D8D9DB] mb-4" />
           <div className="space-y-4">
 
             {/* Interview questions */}
@@ -1029,13 +1029,13 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
           </div>
           <h4 className="text-base font-medium text-[#151515]">Objective</h4>
         </div>
-        <Separator className="bg-[#ECEDEE] mb-5" />
+        <Separator className="bg-[#D8D9DB] mb-4" />
         <p className="text-[13px] text-[#151515] font-medium leading-relaxed">{step.title}</p>
       </section>
       <section>
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
-            <h4 className="text-base font-medium text-[#151515] mb-4">Sorene Provides</h4>
+            <h4 className="text-base font-semibold text-[#151515] mb-3">Sorene Provides</h4>
             <Separator className="bg-[#ECEDEE] mb-4" />
             <div className="space-y-3">
               {step.soreneDoes.map((s, i) => (
@@ -1047,7 +1047,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
             </div>
           </div>
           <div className="flex-1">
-            <h4 className="text-base font-medium text-[#151515] mb-4">You Must Do</h4>
+            <h4 className="text-base font-semibold text-[#151515] mb-3">You Must Do</h4>
             <Separator className="bg-[#ECEDEE] mb-4" />
             <div className="space-y-3">
               {step.userDoes.map((s, i) => (

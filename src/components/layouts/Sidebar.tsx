@@ -576,18 +576,34 @@ export function Sidebar({
               </div>
             )}
 
+            {/* Education Section */}
+            {conversations.filter((c) => c.segment === "education").length > 0 && (
+              <div className="mb-4">
+                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                  EDUCATION
+                </p>
+                <div className="space-y-0.5">
+                  {conversations
+                    .filter((c) => c.segment === "education")
+                    .map((conv) => (
+                      <ConversationItem key={conv.id} conv={conv} />
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Other Section */}
             {conversations.filter(
-              (c) => !["dna", "ideation"].includes(c.segment || ""),
+              (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
             ).length > 0 && (
               <div className="mb-4">
                 <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  Others
+                  Other
                 </p>
                 <div className="space-y-0.5">
                   {conversations
                     .filter(
-                      (c) => !["dna", "ideation"].includes(c.segment || ""),
+                      (c) => !["dna", "ideation", "education"].includes(c.segment || ""),
                     )
                     .map((conv) => (
                       <ConversationItem key={conv.id} conv={conv} />

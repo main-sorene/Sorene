@@ -125,6 +125,7 @@ export function DirectionCard({
   const [checkedSteps, setCheckedSteps] = useState<string[]>(
     recommendedFirstStep.steps.filter((s) => s.completed).map((s) => s.id),
   );
+  const [section1Open, setSection1Open] = useState(true);
   const [section3Open, setSection3Open] = useState(false);
   const [section4Open, setSection4Open] = useState(false);
   const constraintFetchedRef = useRef(false);
@@ -157,6 +158,7 @@ export function DirectionCard({
       onLoadDetail?.();
     }
     if (!expanding) {
+      setSection1Open(true);
       setSection3Open(false);
       setSection4Open(false);
     }
@@ -633,69 +635,94 @@ export function DirectionCard({
               ) : cardData ? (
                 <div className="divide-y divide-[#ECEDEE]">
 
-                  {/* Section 1: Why This Fits You */}
-                  <div className="p-4 pb-6 space-y-4">
-                    {isLoadingDetail && !cardData?.ikigai_filters ? (
-                      <div className="flex items-center gap-2 py-8 justify-center">
+                  {/* Section 1: Why This Fits You accordion */}
+                  <div>
+                    <button
+                      onClick={() => setSection1Open(!section1Open)}
+                      className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+                    >
+                      <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
+                      {isLoadingDetail && !cardData?.ikigai_filters ? (
                         <Spinner />
-                        <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
-                      </div>
-                    ) : (cardData.ikigai_filters || cardData.four_filters) ? (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-                          {cardData.composite_score != null && (
-                            <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                              {cardData.composite_score}
-                            </span>
-                          )}
-                        </div>
-                        <Separator className="bg-[#ECEDEE]" />
-                        <div className="space-y-3">
-                          {(cardData.ikigai_filters
-                            ? [
-                                ["What You Love", cardData.ikigai_filters.what_you_love],
-                                ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
-                                ["What The World Needs", cardData.ikigai_filters.what_world_needs],
-                                ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
-                                ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
-                              ]
-                            : [
-                                ["What You Love", cardData.four_filters?.alignment],
-                                ["What You're Good At", cardData.four_filters?.skills_match],
-                                ["What The World Needs", cardData.four_filters?.market_potential],
-                                ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
-                                ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
-                              ]
-                          ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
-                          .map(([label, item], idx) => (
-                            <div key={label} className="flex gap-3">
-                              <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
-                              <div>
-                                <span className="text-[13px] font-medium text-[#151515]">{label}</span>
-                                <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                      ) : section1Open ? (
+                        <ChevronUp size={16} className="text-[#9CA3AF]" />
+                      ) : (
+                        <ChevronDown size={16} className="text-[#9CA3AF]" />
+                      )}
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {section1Open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-5 space-y-4">
+                            {isLoadingDetail && !cardData?.ikigai_filters ? (
+                              <div className="flex items-center gap-2 py-6 justify-center">
+                                <Spinner />
+                                <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                        {(cardData.high_risk_flags?.length ?? 0) > 0 && (
-                          <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
-                            {cardData.high_risk_flags!.map((flag, i) => (
-                              <div key={i} className="flex items-start gap-2">
-                                <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
-                                <p className="text-[12px] text-[#DF2E16]">{flag}</p>
-                              </div>
-                            ))}
+                            ) : (cardData.ikigai_filters || cardData.four_filters) ? (
+                              <>
+                                {cardData.composite_score != null && (
+                                  <div className="flex justify-end">
+                                    <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
+                                      {cardData.composite_score}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="space-y-3">
+                                  {(cardData.ikigai_filters
+                                    ? [
+                                        ["What You Love", cardData.ikigai_filters.what_you_love],
+                                        ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                                        ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                                        ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                                        ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+                                      ]
+                                    : [
+                                        ["What You Love", cardData.four_filters?.alignment],
+                                        ["What You're Good At", cardData.four_filters?.skills_match],
+                                        ["What The World Needs", cardData.four_filters?.market_potential],
+                                        ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                                        ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+                                      ]
+                                  ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+                                  .map(([label, item], idx) => (
+                                    <div key={label} className="flex gap-3">
+                                      <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
+                                      <div>
+                                        <span className="text-[13px] font-medium text-[#151515]">{label}</span>
+                                        <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {(cardData.high_risk_flags?.length ?? 0) > 0 && (
+                                  <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+                                    {cardData.high_risk_flags!.map((flag, i) => (
+                                      <div key={i} className="flex items-start gap-2">
+                                        <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                                        <p className="text-[12px] text-[#DF2E16]">{flag}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {cardData.unfair_advantage && (
+                                  <div>
+                                    <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+                                    <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
+                                  </div>
+                                )}
+                              </>
+                            ) : null}
                           </div>
-                        )}
-                        {cardData.unfair_advantage && (
-                          <div>
-                            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-                            <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-                          </div>
-                        )}
-                      </>
-                    ) : null}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Section 3: Market Reality accordion */}
@@ -910,69 +937,94 @@ export function DirectionCard({
   const expandedDetailContent = rawContent_rendered ?? (cardData ? (
     <div className="divide-y divide-[#ECEDEE]">
 
-      {/* Section 1: Why This Fits You */}
-      <div className="p-4 pb-6 space-y-4">
-        {isLoadingDetail && !cardData?.ikigai_filters ? (
-          <div className="flex items-center gap-2 py-8 justify-center">
+      {/* Section 1: Why This Fits You accordion */}
+      <div>
+        <button
+          onClick={() => setSection1Open(!section1Open)}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
+          {isLoadingDetail && !cardData?.ikigai_filters ? (
             <Spinner />
-            <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
-          </div>
-        ) : (cardData.ikigai_filters || cardData.four_filters) ? (
-          <>
-            <div className="flex justify-between items-center">
-              <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-              {cardData.composite_score != null && (
-                <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                  {cardData.composite_score}
-                </span>
-              )}
-            </div>
-            <Separator className="bg-[#ECEDEE]" />
-            <div className="space-y-3">
-              {(cardData.ikigai_filters
-                ? [
-                    ["What You Love", cardData.ikigai_filters.what_you_love],
-                    ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
-                    ["What The World Needs", cardData.ikigai_filters.what_world_needs],
-                    ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
-                    ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
-                  ]
-                : [
-                    ["What You Love", cardData.four_filters?.alignment],
-                    ["What You're Good At", cardData.four_filters?.skills_match],
-                    ["What The World Needs", cardData.four_filters?.market_potential],
-                    ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
-                    ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
-                  ]
-              ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
-              .map(([label, item]) => (
-                <div key={label} className="flex gap-3">
-                  <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
-                  <div>
-                    <span className="text-[13px] font-medium text-[#151515]">{label}</span>
-                    <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+          ) : section1Open ? (
+            <ChevronUp size={16} className="text-[#9CA3AF]" />
+          ) : (
+            <ChevronDown size={16} className="text-[#9CA3AF]" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {section1Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-5 space-y-4">
+                {isLoadingDetail && !cardData?.ikigai_filters ? (
+                  <div className="flex items-center gap-2 py-6 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
                   </div>
-                </div>
-              ))}
-            </div>
-            {(cardData.high_risk_flags?.length ?? 0) > 0 && (
-              <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
-                {cardData.high_risk_flags!.map((flag, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
-                    <p className="text-[12px] text-[#DF2E16]">{flag}</p>
-                  </div>
-                ))}
+                ) : (cardData.ikigai_filters || cardData.four_filters) ? (
+                  <>
+                    {cardData.composite_score != null && (
+                      <div className="flex justify-end">
+                        <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
+                          {cardData.composite_score}
+                        </span>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {(cardData.ikigai_filters
+                        ? [
+                            ["What You Love", cardData.ikigai_filters.what_you_love],
+                            ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                            ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                            ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                            ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+                          ]
+                        : [
+                            ["What You Love", cardData.four_filters?.alignment],
+                            ["What You're Good At", cardData.four_filters?.skills_match],
+                            ["What The World Needs", cardData.four_filters?.market_potential],
+                            ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                            ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+                          ]
+                      ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+                      .map(([label, item]) => (
+                        <div key={label} className="flex gap-3">
+                          <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
+                          <div>
+                            <span className="text-[13px] font-medium text-[#151515]">{label}</span>
+                            <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {(cardData.high_risk_flags?.length ?? 0) > 0 && (
+                      <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+                        {cardData.high_risk_flags!.map((flag, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                            <p className="text-[12px] text-[#DF2E16]">{flag}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cardData.unfair_advantage && (
+                      <div>
+                        <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+                        <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
+                      </div>
+                    )}
+                  </>
+                ) : null}
               </div>
-            )}
-            {cardData.unfair_advantage && (
-              <div>
-                <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-                <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-              </div>
-            )}
-          </>
-        ) : null}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Section 2: Market Reality accordion */}

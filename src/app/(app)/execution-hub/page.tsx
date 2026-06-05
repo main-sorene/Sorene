@@ -2085,14 +2085,26 @@ function InterviewReadinessBar({ projectTitle, onAdvance }: { projectTitle: stri
           ))}
         </div>
       </div>
-      {canAdvance && (
-        <div className="px-5 pb-4">
+      <div className="px-5 pb-4">
+        {canAdvance ? (
           <button onClick={onAdvance}
             className="w-full py-3 rounded-xl bg-[#32C382] text-white text-[13px] font-semibold hover:bg-[#28a870] transition-colors flex items-center justify-center gap-2">
             <ArrowRight size={15} /> Start Build Demo
           </button>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-xl bg-[#F5F5F5] border border-[#ECEDEE] px-4 py-3 flex items-center gap-2.5">
+            <Lock size={13} className="text-[#9A9A9A] shrink-0" />
+            <p className="text-[12px] text-[#9A9A9A] leading-relaxed">
+              {(() => {
+                const failing = checkItems.find((c) => !c.done);
+                if (!failing) return "Complete all items above to unlock Build Demo.";
+                if (!highEnoughConfidence && hasAnalysis) return "Confidence must reach Medium-High or above — re-run the Confidence Level section after more conversations.";
+                return `Complete: ${failing.text.split(" —")[0].toLowerCase()}`;
+              })()}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

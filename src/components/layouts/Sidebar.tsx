@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, MoreHorizontal, Trash2, Rocket } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Trash2, Rocket, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   Conversation,
@@ -423,6 +423,12 @@ export function Sidebar({
       icon: "/figmaAssets/lightbulb.svg",
       label: "Education",
       path: "/education",
+    },
+    {
+      icon: null,
+      lucideIcon: <Layers size={20} className="text-[#151515] transition-all duration-200 group-hover:scale-110" />,
+      label: "Other",
+      path: "/other",
     },
   ];
 

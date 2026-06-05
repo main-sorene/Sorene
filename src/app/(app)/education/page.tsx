@@ -109,22 +109,6 @@ export default function Page() {
           ))}
         </div>
 
-        {/* Other section */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="mt-8"
-        >
-          <h2 className="text-[16px] font-semibold text-[#151515] mb-3 px-1">
-            Other
-          </h2>
-          <div className="bg-white rounded-3xl border border-[#ECEDEE] px-6 py-8 flex flex-col items-center justify-center text-center">
-            <p className="text-sm text-[#62646A] leading-relaxed">
-              Additional resources and content will appear here.
-            </p>
-          </div>
-        </motion.div>
       </div>
     </div>
   );

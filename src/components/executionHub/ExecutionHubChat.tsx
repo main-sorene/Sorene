@@ -219,6 +219,16 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     ), 300);
   };
 
+  // Read the committed value straight from the DOM (covers the last composed
+  // word the React state may not have caught yet), clear the box, then dispatch.
+  const submitInput = () => {
+    const text = (textareaRef.current?.value ?? input).trim();
+    if (!text || loading) return;
+    setInput("");
+    if (textareaRef.current) { textareaRef.current.value = ""; textareaRef.current.style.height = "auto"; }
+    send(text);
+  };
+
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
 
@@ -295,9 +305,10 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   // Onboarding kickoff — client-driven, no API call needed for the first question.
   const kickoffOnboarding = () => {
     onboardDataRef.current = { name: "", description: "", status: "", traction: "" };
+    onboardLockRef.current = false;
     setOnboardStep("name");
     setMessages([{
-      id: Date.now().toString(),
+      id: nextId(),
       role: "assistant",
       content: `Hey${userName !== "there" ? ` ${userName}` : ""} — exciting to be setting up something new with you!\n\nLet's start simple: what's your project called?`,
     }]);
@@ -406,14 +417,22 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
           </div>
           <textarea ref={textareaRef} value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+            onKeyDown={(e) => {
+              // Ignore Enter while the IME / mobile keyboard is still composing a
+              // word — otherwise the in-progress word is dropped from the sent
+              // text and then committed back, leaving/duplicating the last word.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                submitInput();
+              }
+            }}
             onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
             placeholder="Ask anything about your execution"
             rows={1} disabled={loading}
             className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
           />
           <div className="flex items-center justify-end">
-            <button onClick={() => send(input)} disabled={!input.trim() || loading}
+            <button onClick={() => submitInput()} disabled={!input.trim() || loading}
               className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <ArrowUp size={16} />
             </button>

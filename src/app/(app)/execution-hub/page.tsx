@@ -833,10 +833,10 @@ export default function Page() {
   const isDirectSync = activeTab === "direct-sync";
 
   return (
-    <div className="flex h-full w-full overflow-hidden relative">
+    <div className="flex h-full w-full overflow-hidden relative bg-[#F9FAFB]">
       {/* ── Main content ── */}
       <div className={cn("flex-1 flex flex-col h-full overflow-hidden", chatOpen ? "hidden xl:flex" : "flex")}>
-        <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F9FAFB]">
           <div className="max-w-6xl mx-auto">
             {/* Top bar */}
             <div className="flex items-center px-4 pt-6 pb-2 lg:px-6">

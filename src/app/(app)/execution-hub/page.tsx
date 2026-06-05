@@ -770,16 +770,85 @@ function renderInline(text: string): React.ReactNode {
 
 
 function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
+  const authUser = useAtomValue(userAtom);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [output, setOutput] = useState("");
   const [clarifyInput, setClarifyInput] = useState("");
   const [clarifyLoading, setClarifyLoading] = useState(false);
   const [history, setHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const loadedFor = useRef("");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [output, history]);
+
+  // Load persisted summary on mount (localStorage first, then Firestore)
+  useEffect(() => {
+    if (!projectTitle || !authUser?.uid) return;
+    const key = `${authUser.uid}::${projectTitle}`;
+    if (loadedFor.current === key) return;
+    loadedFor.current = key;
+
+    const cacheKey = `pattern-summary-${projectTitle}`;
+    const fromCache = (() => {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    })();
+
+    if (fromCache?.history?.length > 0) {
+      setHistory(fromCache.history);
+      // Last assistant message becomes the displayed output
+      const lastAssistant = [...fromCache.history].reverse().find((m: { role: string }) => m.role === "assistant");
+      if (lastAssistant) setOutput((lastAssistant as { content: string }).content);
+      setStage("done");
+      return;
+    }
+
+    // Fall back to Firestore
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch(`/api/execution-projects/pattern-summary?project=${encodeURIComponent(projectTitle)}`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.history?.length > 0) {
+            setHistory(data.history);
+            const lastAssistant = [...data.history].reverse().find((m: { role: string }) => m.role === "assistant");
+            if (lastAssistant) setOutput((lastAssistant as { content: string }).content);
+            setStage("done");
+            try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {})
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle, authUser?.uid]);
+
+  const persist = (newHistory: { role: "user" | "assistant"; content: string }[]) => {
+    const cacheKey = `pattern-summary-${projectTitle}`;
+    try { localStorage.setItem(cacheKey, JSON.stringify({ history: newHistory })); } catch { /* ignore */ }
+    try { localStorage.setItem(`pattern-done-${projectTitle}`, "1"); } catch { /* ignore */ }
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch("/api/execution-projects/pattern-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectTitle, history: newHistory }),
+      }).catch(() => {})
+    );
+  };
+
+  const clearPersisted = () => {
+    const cacheKey = `pattern-summary-${projectTitle}`;
+    try { localStorage.removeItem(cacheKey); localStorage.removeItem(`pattern-done-${projectTitle}`); } catch { /* ignore */ }
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch("/api/execution-projects/pattern-summary", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectTitle }),
+      }).catch(() => {})
+    );
+  };
 
   const getConversations = (): ConversationEntry[] => {
     try {
@@ -841,9 +910,10 @@ One sentence: the single most actionable insight from these conversations.
 Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Write like a sharp co-founder, not a consultant.`;
     const msgs = [{ role: "user" as const, content: prompt }];
     const reply = await stream(msgs);
-    setHistory([...msgs, { role: "assistant", content: reply }]);
+    const finalHistory = [...msgs, { role: "assistant" as const, content: reply }];
+    setHistory(finalHistory);
     setStage("done");
-    try { localStorage.setItem(`pattern-done-${projectTitle}`, "1"); } catch { /* ignore */ }
+    persist(finalHistory);
   };
 
   const handleClarify = async () => {
@@ -855,9 +925,11 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
     setClarifyInput("");
     setOutput("");
     const reply = await stream(newHistory);
-    setHistory([...newHistory, { role: "assistant", content: reply }]);
+    const finalHistory = [...newHistory, { role: "assistant" as const, content: reply }];
+    setHistory(finalHistory);
     setOutput("");
     setClarifyLoading(false);
+    persist(finalHistory);
   };
 
   return (
@@ -875,7 +947,7 @@ Then ask 2-3 sharp clarifying questions to go deeper. Be direct and specific. Wr
           </button>
         )}
         {stage === "done" && (
-          <button onClick={() => { setStage("idle"); setOutput(""); setHistory([]); }}
+          <button onClick={() => { setStage("idle"); setOutput(""); setHistory([]); clearPersisted(); }}
             className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline">
             Reset
           </button>

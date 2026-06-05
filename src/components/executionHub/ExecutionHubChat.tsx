@@ -108,8 +108,16 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const awaitingStatusRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [onboardStep, setOnboardStep] = useState<OnboardStep>("idle");
+  const [onboardStep, setOnboardStepState] = useState<OnboardStep>("idle");
+  const onboardStepRef = useRef<OnboardStep>("idle");
+  const onboardLockRef = useRef(false);
+  const idRef = useRef(0);
   const onboardDataRef = useRef<OnboardData>({ name: "", description: "", status: "", traction: "" });
+
+  // Keep a synchronous mirror of the step so rapid double-submits can't read a
+  // stale value and skip ahead a question.
+  const setOnboardStep = (s: OnboardStep) => { onboardStepRef.current = s; setOnboardStepState(s); };
+  const nextId = () => `${Date.now()}-${idRef.current++}`;
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
 
@@ -118,10 +126,10 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   }, [messages.length]);
 
   const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
-    setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content, ...extra }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, ...extra }]);
 
   const addUser = (content: string) =>
-    setMessages((prev) => [...prev, { id: Date.now().toString(), role: "user", content }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content }]);
 
   // Final evaluation — calls API with all collected onboarding data.
   const evaluateOnboarding = async (data: OnboardData) => {
@@ -166,23 +174,25 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   };
 
   // Handle onboarding step transitions when the user submits text.
+  // Reads the synchronous step ref so a fast double-submit can't skip a step.
   const handleOnboardInput = (text: string) => {
     const d = onboardDataRef.current;
-    if (onboardStep === "name") {
+    const step = onboardStepRef.current;
+    if (step === "name") {
       d.name = text;
       addUser(text);
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       setOnboardStep("description");
       setTimeout(() => addAssistant("Love it — that's a great start.\n\nNow tell me a bit more: what does it actually do, and who is it for?"), 300);
-    } else if (onboardStep === "description") {
+    } else if (step === "description") {
       d.description = text;
       addUser(text);
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       setOnboardStep("status");
       setTimeout(() => addAssistant("Got it, thanks for sharing that.\n\nWhere are you at with it right now? Pick whichever fits best:", { isStatusButtons: true }), 300);
-    } else if (onboardStep === "traction") {
+    } else if (step === "traction") {
       d.traction = text;
       addUser(text);
       setInput("");
@@ -212,9 +222,14 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
 
-    // Intercept onboarding steps
-    if (onboardStep === "name" || onboardStep === "description" || onboardStep === "traction") {
+    // Intercept onboarding steps. Use the synchronous step ref and a short lock
+    // so a rapid double-submit can't duplicate the answer or skip a question.
+    const step = onboardStepRef.current;
+    if (step === "name" || step === "description" || step === "traction") {
+      if (onboardLockRef.current) return;
+      onboardLockRef.current = true;
       handleOnboardInput(text);
+      setTimeout(() => { onboardLockRef.current = false; }, 400);
       return;
     }
 

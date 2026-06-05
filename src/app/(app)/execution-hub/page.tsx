@@ -542,6 +542,7 @@ function useTargetCustomers(project: DirectionCardData | null) {
   const authUser = useAtomValue(userAtom);
   const [main, setMain] = useState<CustomerProfile | null>(null);
   const [secondary, setSecondary] = useState<CustomerProfile | null>(null);
+  const [questions, setQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const ranFor = useRef("");
 
@@ -554,11 +555,12 @@ function useTargetCustomers(project: DirectionCardData | null) {
       const cached = localStorage.getItem(`target-customers-${projectArg.title}`);
       if (cached) {
         const parsed = JSON.parse(cached);
-        // Only trust cache if it has a valid main profile (old buggy cache stored
-        // the raw {reply:...} object which has no .main — discard and regenerate)
-        if (parsed?.main?.label) {
+        // Only trust cache if it has a valid main profile AND questions (older
+        // caches lacked questions / stored the raw {reply:...} object)
+        if (parsed?.main?.label && Array.isArray(parsed?.questions) && parsed.questions.length >= 3) {
           setMain(parsed.main ?? null);
           setSecondary(parsed.secondary ?? null);
+          setQuestions(parsed.questions);
           return;
         }
         localStorage.removeItem(`target-customers-${projectArg.title}`);
@@ -568,8 +570,9 @@ function useTargetCustomers(project: DirectionCardData | null) {
     setLoading(true);
     setMain(null);
     setSecondary(null);
+    setQuestions([]);
 
-    const prompt = `You are Sorene. Identify the target customer profiles for this validation project.
+    const prompt = `You are Sorene, an expert at customer discovery interviews. For this validation project, identify who to interview and craft the questions to ask them.
 
 Project: "${projectArg.title}"
 ${projectArg.oneliner ? `One-liner: ${projectArg.oneliner}` : ""}
@@ -577,14 +580,19 @@ ${projectArg.description ? `Description: ${projectArg.description}` : ""}
 ${projectArg.first_10_customers ? `Initial customer notes: ${projectArg.first_10_customers}` : ""}
 ${projectArg.simple_positioning ? `Positioning: ${projectArg.simple_positioning}` : ""}
 
-Define TWO customer profiles to interview during validation:
-1. MAIN — the primary, highest-priority customer most likely to feel this pain acutely and pay first.
-2. SECONDARY — an adjacent profile worth testing as a fallback or expansion.
+Provide:
+1. TWO customer profiles — MAIN (primary, feels the pain most acutely and pays first) and SECONDARY (adjacent fallback/expansion).
+2. THREE interview questions tailored to this specific project. They must:
+   - Read smoothly and naturally — like a real human asking, never a template with a pasted product description.
+   - Focus on the customer's problems, current behaviour, and willingness to pay — NOT pitch the solution.
+   - Be open-ended (no yes/no questions).
+   - Each be a single clean sentence under 20 words.
 
 Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
 {
   "main": { "label": "short profile name (3-5 words)", "who": "one sentence describing who they are", "pains": "one sentence on their core pain", "where": "one sentence on where to find/reach them" },
-  "secondary": { "label": "short profile name (3-5 words)", "who": "one sentence", "pains": "one sentence", "where": "one sentence" }
+  "secondary": { "label": "short profile name (3-5 words)", "who": "one sentence", "pains": "one sentence", "where": "one sentence" },
+  "questions": ["question 1", "question 2", "question 3"]
 }`;
 
     try {
@@ -603,6 +611,7 @@ Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
         const parsed = JSON.parse(jsonMatch[0]);
         setMain(parsed.main ?? null);
         setSecondary(parsed.secondary ?? null);
+        if (Array.isArray(parsed.questions)) setQuestions(parsed.questions);
         try { localStorage.setItem(`target-customers-${projectArg.title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
@@ -623,7 +632,7 @@ Return ONLY valid JSON, no markdown, no preamble, in exactly this shape:
     generate(project, authUser.uid);
   };
 
-  return { main, secondary, loading, regenerate, canRegenerate: !!(project && authUser?.uid) };
+  return { main, secondary, questions, loading, regenerate, canRegenerate: !!(project && authUser?.uid) };
 }
 
 function TargetCustomerCard({
@@ -1103,10 +1112,13 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
 
   // Stage 1 gets the full guided experience
   if (step.id === 1) {
-    const problemArea = project?.oneliner || project?.title || "your problem area";
-    const q1 = `What is your biggest challenge with ${problemArea}?`;
-    const q2 = "What have you already tried to fix it?";
-    const q3 = "What would you pay to solve this completely?";
+    // Smooth, AI-tailored interview questions — fall back to clean generic ones
+    const fallbackQuestions = [
+      "What's the most frustrating part of how you handle this today?",
+      "What have you already tried to fix it, and how did that go?",
+      "If a perfect solution existed, what would it be worth to you?",
+    ];
+    const interviewQuestions = customers.questions.length >= 3 ? customers.questions.slice(0, 3) : fallbackQuestions;
 
     return (
       <div className="space-y-8">
@@ -1182,7 +1194,12 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
                 </div>
               </div>
               <div className="px-5 py-4 space-y-3">
-                {[q1, q2, q3].map((q, i) => (
+                {customers.loading && customers.questions.length === 0 && (
+                  <div className="flex items-center gap-2 text-[#9A9A9A] text-[13px]">
+                    <Loader2 size={13} className="animate-spin" /> Tailoring your questions…
+                  </div>
+                )}
+                {(!customers.loading || customers.questions.length > 0) && interviewQuestions.map((q, i) => (
                   <div key={i} className="flex gap-3 items-start">
                     <span className="text-[11px] font-bold text-[#9A9A9A] w-4 shrink-0 mt-0.5">{i + 1}.</span>
                     <p className="text-[13px] text-[#62646A] leading-relaxed">{q}</p>

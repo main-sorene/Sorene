@@ -21,8 +21,8 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtomValue, useAtom } from "jotai";
+import { userAtom, selectedExecutionProjectAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -942,7 +942,16 @@ export default function Page() {
   const [chatOpen, setChatOpen] = useState(false); // mobile only
   const [chatCollapsed, setChatCollapsed] = useState(false); // desktop
   const [projects, setProjects] = useState<DirectionCardData[]>([]);
-  const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(null);
+  const [atomProject, setAtomProject] = useAtom(selectedExecutionProjectAtom);
+  const [selectedProject, setSelectedProject] = useState<DirectionCardData | null>(atomProject);
+
+  // Consume atom set by DirectionCard "Start Validate" then clear it
+  useEffect(() => {
+    if (atomProject) {
+      setSelectedProject(atomProject);
+      setAtomProject(null);
+    }
+  }, [atomProject, setAtomProject]);
 
   // Load direction cards as projects
   useEffect(() => {

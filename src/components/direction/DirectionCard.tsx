@@ -18,6 +18,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSetAtom } from "jotai";
+import { selectedExecutionProjectAtom } from "@/store/atoms";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "../ui/separator";
 import type { DirectionCardData } from "@/lib/directionTypes";
@@ -113,8 +115,10 @@ export function DirectionCard({
   isLoadingSection4 = false,
 }: DirectionCardProps) {
   const router = useRouter();
+  const setSelectedProject = useSetAtom(selectedExecutionProjectAtom);
   const goValidate = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (cardData) setSelectedProject(cardData);
     router.push("/execution-hub");
   };
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);

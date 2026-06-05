@@ -174,14 +174,14 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       setOnboardStep("description");
-      setTimeout(() => addAssistant("Got it! Describe your project in a sentence or two — what problem does it solve and for whom?"), 300);
+      setTimeout(() => addAssistant("Love it — that's a great start.\n\nNow tell me a bit more: what does it actually do, and who is it for?"), 300);
     } else if (onboardStep === "description") {
       d.description = text;
       addUser(text);
       setInput("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       setOnboardStep("status");
-      setTimeout(() => addAssistant("Where are you at right now?", { isStatusButtons: true }), 300);
+      setTimeout(() => addAssistant("Got it, thanks for sharing that.\n\nWhere are you at with it right now? Pick whichever fits best:", { isStatusButtons: true }), 300);
     } else if (onboardStep === "traction") {
       d.traction = text;
       addUser(text);
@@ -205,7 +205,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     addUser(option.label);
     setOnboardStep("traction");
     setTimeout(() => addAssistant(
-      "Great. A couple of quick questions to help me give you accurate guidance:\n\nHow many real users, waitlist signups, paying customers, or revenue (even $1) do you have? If none yet, just say 0."
+      "Perfect — that helps me place you accurately.\n\nOne last thing: any real traction yet — users, waitlist signups, paying customers or revenue? If it's none so far, just say 0."
     ), 300);
   };
 
@@ -284,7 +284,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     setMessages([{
       id: Date.now().toString(),
       role: "assistant",
-      content: `Hey${userName !== "there" ? ` ${userName}` : ""}! Let's set up your project. What's it called?`,
+      content: `Hey${userName !== "there" ? ` ${userName}` : ""} — exciting to be setting up something new with you!\n\nLet's start simple: what's your project called?`,
     }]);
   };
 

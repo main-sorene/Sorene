@@ -4079,6 +4079,7 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
   });
   const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [suggestionKey, setSuggestionKey] = useState(0);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -4146,9 +4147,13 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
         const match = reply.match(/\[[\s\S]*\]/);
         if (match) {
           const parsed = JSON.parse(match[0]);
-          setSuggestions(parsed);
+          setSuggestions([]);
+          setTimeout(() => {
+            setSuggestions(parsed);
+            setSuggestionKey((k) => k + 1);
+          }, 120);
           try { localStorage.setItem(`business-name-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 more options:" }]);
+          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
         } else {
           setChatHistory([...newHistory, { role: "ai", text: reply }]);
         }
@@ -4192,7 +4197,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
         </div>
       )}
       {stage === "done" && suggestions.length > 0 && (
-        <div className="space-y-2">
+        <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
           {suggestions.map((s, i) => (
             <div key={i} className={cn(
               "rounded-xl border p-3 transition-all",
@@ -4216,7 +4221,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works for this busi
             className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
             Regenerate
           </button>
-        </div>
+        </motion.div>
       )}
 
       {/* Chat for more options */}

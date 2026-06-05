@@ -4285,12 +4285,10 @@ function PillarCard({ pillar, project }: { pillar: PillarDef; project: Direction
 
 function LaunchPadContent({ project }: { project: DirectionCardData | null }) {
   return (
-    <div className="p-6">
-      <div className="grid grid-cols-2 gap-4">
-        {LAUNCH_PILLARS.map((pillar) => (
-          <PillarCard key={pillar.id} pillar={pillar} project={project} />
-        ))}
-      </div>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      {LAUNCH_PILLARS.map((pillar) => (
+        <PillarCard key={pillar.id} pillar={pillar} project={project} />
+      ))}
     </div>
   );
 }
@@ -4949,7 +4947,7 @@ export default function Page() {
                     <div
                       key={`${selectedProject?.title ?? "all"}-${activeTab}`}
                       className={cn(
-                        activeTab === "validation" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+                        activeTab === "validation" || activeTab === "launchpad" ? "" : "p-6 grid grid-cols-1 md:grid-cols-2 gap-4"
                       )}
                     >
                       {activeTab === "validation"

@@ -390,6 +390,159 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
 }
 
 // ─────────────────────────────────────────────
+// Pattern Summary Card
+// ─────────────────────────────────────────────
+
+function PatternSummaryCard({ projectTitle }: { projectTitle: string }) {
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [output, setOutput] = useState("");
+  const [clarifyInput, setClarifyInput] = useState("");
+  const [clarifyLoading, setClarifyLoading] = useState(false);
+  const [history, setHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [output, history]);
+
+  const getConversations = (): ConversationEntry[] => {
+    try {
+      const raw = localStorage.getItem(`convlog-${projectTitle}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  };
+
+  const stream = async (messages: { role: "user" | "assistant"; content: string }[]) => {
+    const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
+    if (!token) return "";
+    const res = await fetch("/api/direction-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ message: messages[messages.length - 1].content, context: "pattern_analysis", history: messages.slice(0, -1) }),
+    });
+    if (!res.ok) return "";
+    const reader = res.body?.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        full += decoder.decode(value, { stream: true });
+        setOutput(full);
+      }
+    }
+    return full;
+  };
+
+  const handleAnalyze = async () => {
+    const entries = getConversations();
+    setStage("loading");
+    setOutput("");
+    const summary = entries.length === 0
+      ? "No conversations have been logged yet for this project."
+      : entries.map((e, i) =>
+          `Conversation ${i + 1} — ${e.name || "Anonymous"} (${e.createdAt})\nNotes: ${e.notes || "no notes"}`
+        ).join("\n\n");
+    const prompt = `You are Sorene, an execution coach helping an entrepreneur validate their idea: "${projectTitle}".\n\nHere are their customer conversation logs:\n\n${summary}\n\nAnalyze the patterns. Surface:\n1. The most common problems mentioned\n2. Exact language or phrases that repeat\n3. Pain frequency and intensity signals\n4. Whether people are already paying to solve this\n5. The strongest signal to build on\n\nThen ask 2-3 clarifying questions to deepen your understanding of the patterns. Be direct and specific.`;
+    const msgs = [{ role: "user" as const, content: prompt }];
+    const reply = await stream(msgs);
+    setHistory([...msgs, { role: "assistant", content: reply }]);
+    setStage("done");
+  };
+
+  const handleClarify = async () => {
+    if (!clarifyInput.trim() || clarifyLoading) return;
+    setClarifyLoading(true);
+    const userMsg = { role: "user" as const, content: clarifyInput.trim() };
+    const newHistory = [...history, userMsg];
+    setHistory(newHistory);
+    setClarifyInput("");
+    setOutput("");
+    const reply = await stream(newHistory);
+    setHistory([...newHistory, { role: "assistant", content: reply }]);
+    setOutput("");
+    setClarifyLoading(false);
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#32C382]/40 bg-[#F5FFD9] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3.5">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={14} className="text-[#32C382] shrink-0" />
+          <p className="text-body-small-medium text-[#151515]">Pattern summary</p>
+        </div>
+        {stage === "idle" && (
+          <button onClick={handleAnalyze}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+            <BarChart3 size={12} /> Summarise Patterns
+          </button>
+        )}
+        {stage === "done" && (
+          <button onClick={() => { setStage("idle"); setOutput(""); setHistory([]); }}
+            className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline">
+            Reset
+          </button>
+        )}
+      </div>
+
+      {/* Idle hint */}
+      {stage === "idle" && (
+        <div className="px-4 pb-4">
+          <p className="text-label-medium text-[#62646A] leading-relaxed">
+            Log your conversations and click <strong className="text-[#151515]">Summarise Patterns</strong> — Sorene will surface recurring themes, pain frequency, and the strongest signal to build on.
+          </p>
+        </div>
+      )}
+
+      {/* Loading / streaming output */}
+      {(stage === "loading" || (stage === "done" && history.length > 0)) && (
+        <div className="border-t border-[#32C382]/20 bg-white">
+          {/* Full conversation thread */}
+          <div className="px-4 py-4 space-y-4 max-h-[420px] overflow-y-auto">
+            {history.map((msg, i) => (
+              msg.role === "assistant" ? (
+                <div key={i} className="text-label-medium text-[#151515] leading-relaxed whitespace-pre-wrap">
+                  {msg.content}
+                </div>
+              ) : i > 0 ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[#151515] text-white text-sm leading-relaxed">
+                    {msg.content}
+                  </div>
+                </div>
+              ) : null
+            ))}
+            {stage === "loading" && (
+              output
+                ? <div className="text-label-medium text-[#151515] leading-relaxed whitespace-pre-wrap">{output}</div>
+                : <div className="flex items-center gap-2 text-[#9A9A9A] text-sm"><Loader2 size={14} className="animate-spin" /> Analysing patterns…</div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Clarify input */}
+          {stage === "done" && (
+            <div className="border-t border-gray-100 px-4 py-3 flex gap-2">
+              <input value={clarifyInput} onChange={(e) => setClarifyInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleClarify(); } }}
+                placeholder="Answer a question or ask for more detail…"
+                disabled={clarifyLoading}
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors disabled:opacity-50" />
+              <button onClick={handleClarify} disabled={!clarifyInput.trim() || clarifyLoading}
+                className="px-3 py-2 rounded-xl bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+                {clarifyLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Conversation Logger
 // ─────────────────────────────────────────────
 
@@ -675,13 +828,7 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
             {/* Conversation Logger */}
             <ConversationLogger projectTitle={project?.title ?? ""} />
             {/* Pattern summary */}
-            <div className="rounded-2xl border border-[#32C382]/30 bg-[#F5FFD9] p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
-                <p className="text-body-small-medium text-[#151515]">Pattern summary as responses are logged</p>
-              </div>
-              <p className="text-label-medium text-[#62646A] leading-relaxed">Log your conversations and Sorene will surface recurring themes, pain frequency, and the strongest signal to build on.</p>
-            </div>
+            <PatternSummaryCard projectTitle={project?.title ?? ""} />
           </div>
         </div>
       </div>

@@ -328,7 +328,7 @@ function useGoNoGoAutoDetect(project: DirectionCardData | null) {
   return auto;
 }
 
-function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue<typeof selectedExecutionProjectAtom>> }) {
+function FinanceInputCard({ project }: { project: DirectionCardData | null }) {
   const titleRef = useRef(project?.title ?? "");
   titleRef.current = project?.title ?? "";
   const title = project?.title ?? "";
@@ -387,8 +387,7 @@ function FinanceInputCard({ project }: { project: ReturnType<typeof useAtomValue
   );
 }
 
-function GoNoGoContent() {
-  const project = useAtomValue(selectedExecutionProjectAtom);
+function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
   const projectTitleRef = useRef(project?.title ?? "");
   projectTitleRef.current = project?.title ?? "";
   const auto = useGoNoGoAutoDetect(project);
@@ -767,7 +766,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
           {activeStage <= 4 ? (
             <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} onAdvance={() => setActiveStage((s) => Math.min(s + 1, 5))} />
           ) : (
-            <GoNoGoContent />
+            <GoNoGoContent project={project} />
           )}
         </motion.div>
       </AnimatePresence>
@@ -4502,7 +4501,7 @@ export default function Page() {
       title: "The Go / No-Go Check",
       tagline: "Launch readiness · Health check",
       description: `A crystal-clear assessment that tells you if you're ready to launch ${projectLabel} — measured across market validation, problem clarity, learning, and finance.`,
-      content: <GoNoGoContent />,
+      content: <GoNoGoContent project={selectedProject ?? null} />,
       strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
   ];

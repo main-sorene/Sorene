@@ -1,64 +1,48 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExecutionProgress } from "./messagingAdmin";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const client = new Anthropic();
+
+const SYSTEM = `You are Sorene, an AI execution coach helping entrepreneurs validate and launch their business ideas using the VIBE framework (Validate, Interview, Build demo, Experiment).
+
+You are speaking to an entrepreneur via WhatsApp or Telegram. Keep replies concise (2-4 sentences) and practical — no fluff. Use the VIBE framework when relevant.
+
+At the end of your reply, if anything the user said warrants updating their progress, output a JSON block like:
+\`\`\`json
+{"conversationsLogged": 5, "problemIdentified": true}
+\`\`\`
+Only include fields that should change. Omit the block entirely if nothing needs updating.`;
 
 export async function processMessage(
   uid: string,
   incomingText: string,
   progress: ExecutionProgress,
-  recentHistory: Array<{ role: "user" | "assistant"; text: string }>,
+  recentHistory: { role: "user" | "assistant"; content: string }[],
 ): Promise<{ reply: string; progressPatch: Partial<ExecutionProgress> }> {
-  const systemPrompt = `You are Sorene — a direct, warm entrepreneurship coach. You know the VIBE framework (Validate → Interview → Build → Experiment) and guide founders through their execution journey.
-
-The user's current progress:
-${JSON.stringify(progress, null, 2)}
-
-Steps in the Execution Hub:
-1. Conversations Logged (target: 10 customer interviews)
-2. Problem Identified — painkiller problem locked in
-3. MVO Created — minimum viable offer built
-4. Paying Customers (gate: 3 paying customers)
-
-Guide the user through their next step based on their progress. Be direct, warm, and actionable.
-
-After your conversational reply, append a fenced JSON block with ONLY the progress keys that changed based on what the user shared. Format:
-\`\`\`json
-{ "conversationsLogged": 5 }
-\`\`\`
-Only include keys that actually changed. If nothing changed, output an empty object: \`\`\`json\n{}\n\`\`\``;
+  const contextNote = `User progress: ${JSON.stringify(progress)}`;
 
   const messages: Anthropic.MessageParam[] = [
-    ...recentHistory.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.text,
-    })),
-    { role: "user", content: incomingText },
+    ...recentHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+    { role: "user", content: `${contextNote}\n\n${incomingText}` },
   ];
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 600,
-    system: systemPrompt,
+    max_tokens: 512,
+    system: SYSTEM,
     messages,
   });
 
-  const block = response.content[0];
-  const raw = block && block.type === "text" ? block.text.trim() : "";
+  const raw = response.content[0].type === "text" ? response.content[0].text : "";
 
-  // Extract JSON patch block
+  // Extract optional JSON patch
   const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/);
   let progressPatch: Partial<ExecutionProgress> = {};
   if (jsonMatch) {
-    try {
-      progressPatch = JSON.parse(jsonMatch[1].trim());
-    } catch {
-      progressPatch = {};
-    }
+    try { progressPatch = JSON.parse(jsonMatch[1]); } catch { /* ignore */ }
   }
 
-  // Remove the JSON block from the reply
-  const reply = raw.replace(/```json[\s\S]*?```/, "").trim();
+  const reply = raw.replace(/```json[\s\S]*?```/g, "").trim();
 
   return { reply, progressPatch };
 }

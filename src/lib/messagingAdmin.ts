@@ -1,21 +1,6 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore, Firestore } from "firebase-admin/firestore";
+// Server-side messaging helpers using Firestore REST API (no firebase-admin dependency)
 
-function ensureAdminApp() {
-  if (!getApps().length) {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (serviceAccount) {
-      initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
-    } else {
-      initializeApp({ projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID });
-    }
-  }
-}
-
-export function getAdminFirestore(): Firestore {
-  ensureAdminApp();
-  return getFirestore();
-}
+export type MessagingPlatform = "telegram" | "whatsapp";
 
 export interface ExecutionProgress {
   conversationsLogged: number;
@@ -27,140 +12,59 @@ export interface ExecutionProgress {
   weeklyStreakDays: number;
 }
 
-const defaultProgress: ExecutionProgress = {
-  conversationsLogged: 0,
-  problemIdentified: false,
-  mvoCreated: false,
-  payingCustomers: 0,
-  elevatorPitch: "",
-  lastCheckIn: null,
-  weeklyStreakDays: 0,
-};
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "";
 
-function randomToken(length: number): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+function firestoreBase() {
+  return `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 }
 
-export async function createLinkToken(
-  uid: string,
-  platform: "telegram" | "whatsapp",
-): Promise<string> {
-  const db = getAdminFirestore();
-  const token = randomToken(12);
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  await db.collection("messagingLinkTokens").doc(token).set({
-    uid,
-    platform,
-    createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    used: false,
-  });
-  return token;
+function parseField(field: any): any {
+  if (!field) return null;
+  if ("stringValue" in field) return field.stringValue;
+  if ("booleanValue" in field) return field.booleanValue;
+  if ("integerValue" in field) return Number(field.integerValue);
+  if ("timestampValue" in field) return field.timestampValue;
+  return null;
 }
 
-export async function consumeLinkToken(
-  token: string,
-): Promise<{ uid: string; platform: string } | null> {
-  const db = getAdminFirestore();
-  const ref = db.collection("messagingLinkTokens").doc(token);
-  const snap = await ref.get();
-  if (!snap.exists) return null;
-  const data = snap.data()!;
-  if (data.used) return null;
-  if (new Date(data.expiresAt) < new Date()) return null;
-  await ref.update({ used: true });
-  return { uid: data.uid, platform: data.platform };
+async function firestoreGet(path: string): Promise<any | null> {
+  const res = await fetch(`${firestoreBase()}/${path}`);
+  if (!res.ok) return null;
+  return res.json();
 }
 
-export async function linkPlatformToUser(
-  uid: string,
-  platform: "telegram" | "whatsapp",
-  platformId: string,
-): Promise<void> {
-  const db = getAdminFirestore();
-  await db
-    .collection("users")
-    .doc(uid)
-    .set(
-      {
-        linkedMessaging: {
-          [platform]: { platformId, linkedAt: new Date().toISOString() },
-        },
-      },
-      { merge: true },
-    );
-}
-
-export async function getUidByPlatformId(
-  platform: "telegram" | "whatsapp",
-  platformId: string,
-): Promise<string | null> {
-  const db = getAdminFirestore();
-  const snap = await db
-    .collection("users")
-    .where(`linkedMessaging.${platform}.platformId`, "==", platformId)
-    .limit(1)
-    .get();
-  if (snap.empty) return null;
-  return snap.docs[0].id;
-}
-
-export async function saveMessagingMessage(
-  uid: string,
-  platform: string,
-  role: "user" | "assistant",
-  text: string,
-): Promise<void> {
-  const db = getAdminFirestore();
-  await db.collection("messagingChats").doc(uid).collection("messages").add({
-    platform,
-    role,
-    text,
-    createdAt: new Date().toISOString(),
+async function firestorePatch(path: string, fields: Record<string, any>): Promise<void> {
+  await fetch(`${firestoreBase()}/${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields }),
   });
 }
 
-export async function getRecentMessages(
-  uid: string,
-  limit = 10,
-): Promise<Array<{ role: "user" | "assistant"; text: string }>> {
-  const db = getAdminFirestore();
-  const snap = await db
-    .collection("messagingChats")
-    .doc(uid)
-    .collection("messages")
-    .orderBy("createdAt", "desc")
-    .limit(limit)
-    .get();
-  const docs = snap.docs.map((d) => d.data() as { role: "user" | "assistant"; text: string });
-  return docs.reverse();
-}
-
-export async function updateExecutionProgress(
-  uid: string,
-  patch: Partial<ExecutionProgress>,
-): Promise<void> {
-  const db = getAdminFirestore();
-  const mapped: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(patch)) {
-    mapped[`executionProgress.${k}`] = v;
-  }
-  await db.collection("users").doc(uid).set(
-    { executionProgress: patch },
-    { merge: true },
-  );
+export async function consumeLinkToken(token: string): Promise<{ uid: string; platform: MessagingPlatform } | null> {
+  const doc = await firestoreGet(`messagingLinkTokens/${token}`);
+  if (!doc?.fields) return null;
+  const used = parseField(doc.fields.used);
+  const expiresAt = parseField(doc.fields.expiresAt);
+  if (used) return null;
+  if (expiresAt && new Date(expiresAt) < new Date()) return null;
+  const uid = parseField(doc.fields.uid);
+  const platform = parseField(doc.fields.platform) as MessagingPlatform;
+  await firestorePatch(`messagingLinkTokens/${token}`, { used: { booleanValue: true } });
+  return { uid, platform };
 }
 
 export async function getExecutionProgress(uid: string): Promise<ExecutionProgress> {
-  const db = getAdminFirestore();
-  const snap = await db.collection("users").doc(uid).get();
-  if (!snap.exists) return { ...defaultProgress };
-  const data = snap.data()!;
-  return { ...defaultProgress, ...(data.executionProgress ?? {}) };
+  const doc = await firestoreGet(`users/${uid}`);
+  const data = doc?.fields;
+  const ep = data?.executionProgress?.mapValue?.fields;
+  return {
+    conversationsLogged: ep?.conversationsLogged ? Number(ep.conversationsLogged.integerValue ?? 0) : 0,
+    problemIdentified: ep?.problemIdentified?.booleanValue ?? false,
+    mvoCreated: ep?.mvoCreated?.booleanValue ?? false,
+    payingCustomers: ep?.payingCustomers ? Number(ep.payingCustomers.integerValue ?? 0) : 0,
+    elevatorPitch: ep?.elevatorPitch?.stringValue ?? "",
+    lastCheckIn: ep?.lastCheckIn?.stringValue ?? null,
+    weeklyStreakDays: ep?.weeklyStreakDays ? Number(ep.weeklyStreakDays.integerValue ?? 0) : 0,
+  };
 }

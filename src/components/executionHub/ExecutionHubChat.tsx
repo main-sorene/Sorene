@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { ArrowUp, Loader2, MessageCircle, X } from "lucide-react";
+import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const SUGGESTIONS = [

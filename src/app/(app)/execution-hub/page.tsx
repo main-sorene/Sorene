@@ -329,82 +329,191 @@ function AgentsSystemContent() {
 }
 
 // ─────────────────────────────────────────────
-// Direct Sync (Other section)
+// Direct Sync — card-based tab content
 // ─────────────────────────────────────────────
 
-function DirectSyncContent() {
-  const authUser = useAtomValue(userAtom);
-  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ telegram: "idle", whatsapp: "idle" });
+const WA_ICON = (
+  <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+    <circle cx="16" cy="16" r="16" fill="#25D366" />
+    <path d="M22.5 9.5A9 9 0 0 0 7.1 20.4L6 26l5.7-1.5A9 9 0 1 0 22.5 9.5zm-6.5 13.8a7.5 7.5 0 0 1-3.8-1l-.3-.2-3.4.9.9-3.3-.2-.3a7.5 7.5 0 1 1 6.8 3.9zm4.1-5.6c-.2-.1-1.3-.6-1.5-.7-.2-.1-.3-.1-.5.1l-.6.8c-.1.2-.2.2-.4.1a6 6 0 0 1-1.7-1 6.3 6.3 0 0 1-1.2-1.4c-.1-.2 0-.3.1-.4l.3-.4c.1-.1.1-.2.2-.4 0-.1 0-.3-.1-.4l-.7-1.6c-.2-.4-.4-.3-.5-.3h-.4c-.2 0-.4.1-.6.3a2.6 2.6 0 0 0-.8 1.9 4.5 4.5 0 0 0 .9 2.4 10.3 10.3 0 0 0 3.9 3.4c.5.2.9.4 1.3.5a3.2 3.2 0 0 0 1.4.1 2.4 2.4 0 0 0 1.6-1.1c.2-.4.2-.7.1-.9z" fill="white" />
+  </svg>
+);
 
-  const handleChannelClick = async (platform: "telegram" | "whatsapp") => {
-    setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
+const TG_ICON = (
+  <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+    <circle cx="16" cy="16" r="16" fill="#229ED9" />
+    <path d="M22.8 9.6l-2.9 13.7c-.2 1-.8 1.2-1.7.8l-4.6-3.4-2.2 2.1c-.2.2-.5.3-.9.3l.3-4.8 8.1-7.3c.4-.3-.1-.5-.5-.2L8.7 17.8l-4.5-1.4c-1-.3-1-.9.2-1.4l17.6-6.8c.8-.3 1.5.2 1.3 1.4z" fill="white" />
+  </svg>
+);
+
+interface SyncChannel {
+  platform: "whatsapp" | "telegram";
+  name: string;
+  tagline: string;
+  description: string;
+  gradient: string;
+  icon: React.ReactNode;
+  features: string[];
+  strengthTags: string[];
+}
+
+const SYNC_CHANNELS: SyncChannel[] = [
+  {
+    platform: "whatsapp",
+    name: "WhatsApp",
+    tagline: "Weekly check-ins · Progress tracking",
+    description: "Link your WhatsApp to Sorene for structured weekly accountability check-ins. Every conversation is logged and synced back to your Execution Hub progress.",
+    gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)`,
+    icon: WA_ICON,
+    features: [
+      "Weekly accountability prompts from Sorene",
+      "Log customer conversations via chat",
+      "Progress synced to your Execution Hub",
+      "Tap to link — one-time setup",
+    ],
+    strengthTags: ["Weekly Check-ins", "Progress Sync", "Accountability"],
+  },
+  {
+    platform: "telegram",
+    name: "Telegram",
+    tagline: "Instant messaging · Real-time coaching",
+    description: "Link your Telegram for instant access to Sorene. Ask questions, log progress, and get coaching between sessions — all synced to your account.",
+    gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #38BDF8 34.62%, #0284C7 100%)`,
+    icon: TG_ICON,
+    features: [
+      "Real-time coaching between sessions",
+      "Log progress and milestones instantly",
+      "Ask Sorene anything on the go",
+      "Tap to link — one-time setup",
+    ],
+    strengthTags: ["Real-time", "On the go", "Instant coaching"],
+  },
+];
+
+function DirectSyncCard({ channel }: { channel: SyncChannel }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [linkState, setLinkState] = useState<"idle" | "loading" | "linked">("idle");
+
+  const handleToggle = (e: React.MouseEvent) => { e.stopPropagation(); setIsExpanded((v) => !v); };
+
+  const handleLink = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (linkState !== "idle") return;
+    setLinkState("loading");
     try {
       const token = await auth?.currentUser?.getIdToken();
       if (!token) throw new Error("Not authenticated");
       const res = await fetch("/api/messaging/generate-link", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ platform }),
+        body: JSON.stringify({ platform: channel.platform }),
       });
       if (!res.ok) throw new Error("Failed");
       const { deepLink } = await res.json();
       window.open(deepLink, "_blank");
-      setLinkState((prev) => ({ ...prev, [platform]: "linked" }));
+      setLinkState("linked");
     } catch {
-      setLinkState((prev) => ({ ...prev, [platform]: "idle" }));
+      setLinkState("idle");
     }
   };
 
-  const channels = [
-    {
-      name: "WhatsApp" as const,
-      platform: "whatsapp" as const,
-      description: "Weekly check-ins with Sorene",
-      icon: (
-        <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
-          <circle cx="16" cy="16" r="16" fill="#25D366" />
-          <path d="M22.5 9.5A9 9 0 0 0 7.1 20.4L6 26l5.7-1.5A9 9 0 1 0 22.5 9.5zm-6.5 13.8a7.5 7.5 0 0 1-3.8-1l-.3-.2-3.4.9.9-3.3-.2-.3a7.5 7.5 0 1 1 6.8 3.9zm4.1-5.6c-.2-.1-1.3-.6-1.5-.7-.2-.1-.3-.1-.5.1l-.6.8c-.1.2-.2.2-.4.1a6 6 0 0 1-1.7-1 6.3 6.3 0 0 1-1.2-1.4c-.1-.2 0-.3.1-.4l.3-.4c.1-.1.1-.2.2-.4 0-.1 0-.3-.1-.4l-.7-1.6c-.2-.4-.4-.3-.5-.3h-.4c-.2 0-.4.1-.6.3a2.6 2.6 0 0 0-.8 1.9 4.5 4.5 0 0 0 .9 2.4 10.3 10.3 0 0 0 3.9 3.4c.5.2.9.4 1.3.5a3.2 3.2 0 0 0 1.4.1 2.4 2.4 0 0 0 1.6-1.1c.2-.4.2-.7.1-.9z" fill="white" />
-        </svg>
-      ),
-    },
-    {
-      name: "Telegram" as const,
-      platform: "telegram" as const,
-      description: "Instant messaging with Sorene",
-      icon: (
-        <svg viewBox="0 0 32 32" className="w-7 h-7" fill="none">
-          <circle cx="16" cy="16" r="16" fill="#229ED9" />
-          <path d="M22.8 9.6l-2.9 13.7c-.2 1-.8 1.2-1.7.8l-4.6-3.4-2.2 2.1c-.2.2-.5.3-.9.3l.3-4.8 8.1-7.3c.4-.3-.1-.5-.5-.2L8.7 17.8l-4.5-1.4c-1-.3-1-.9.2-1.4l17.6-6.8c.8-.3 1.5.2 1.3 1.4z" fill="white" />
-        </svg>
-      ),
-    },
-  ];
-
   return (
-    <div className="space-y-3">
-      <p className="text-label-medium text-[#62646A] leading-relaxed">Tap to link your account and start weekly accountability check-ins with Sorene on your preferred messaging app.</p>
-      <div className="divide-y divide-gray-100 border-t border-gray-100">
-        {channels.map((ch) => {
-          const state = linkState[ch.platform];
-          return (
-            <button key={ch.name} onClick={() => state === "idle" && handleChannelClick(ch.platform)}
-              disabled={state === "loading"}
-              className="w-full flex items-center gap-4 py-4 text-left group hover:opacity-80 transition-opacity disabled:opacity-60">
-              <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                {ch.icon}
-              </div>
-              <div className="flex-1">
-                <p className="text-body-small-medium text-[#151515]">Chat on {ch.name}</p>
-                <p className="text-label-medium text-[#62646A]">{ch.description}</p>
-              </div>
-              {state === "loading" && <Loader2 size={15} className="text-[#9A9A9A] animate-spin" />}
-              {state === "linked" && <span className="text-[12px] text-[#32C382] font-medium">Link sent ✓</span>}
-              {state === "idle" && <ArrowRight size={15} className="text-gray-300 group-hover:text-[#151515] transition-colors" />}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col">
+      {/* Header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col", isExpanded ? "p-6 pb-8" : "p-6")}
+        style={{ background: isExpanded ? channel.gradient : "transparent" }}>
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={handleToggle}
+              className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-body-small-medium mb-8 w-fit">
+              <ChevronLeft size={20} />Back to summary
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden",
+              isExpanded ? "bg-white/20" : "bg-gray-50")}>
+              {channel.icon}
+            </div>
+            <div>
+              <h3 className={cn("text-heading-xsmall font-medium leading-tight tracking-tight",
+                isExpanded ? "text-white" : "text-[#151515]")}>
+                {channel.name}
+              </h3>
+              {!isExpanded && <p className="text-[11px] text-[#9A9A9A] font-medium uppercase tracking-wide mt-0.5">{channel.tagline}</p>}
+            </div>
+          </div>
+          {!isExpanded && (
+            <motion.button layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              onClick={handleToggle}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-gray-100 hover:bg-gray-50 transition-all shadow-sm shrink-0">
+              Open <ArrowRight size={14} />
+            </motion.button>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Collapsed body */}
+      <AnimatePresence>
+        {!isExpanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
+            className="px-6 pb-6 flex flex-col flex-1">
+            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4">{channel.description}</p>
+            <div className="mt-auto flex flex-wrap gap-2 pt-2">
+              {channel.strengthTags.map((tag) => (
+                <span key={tag} className="px-3 py-1 rounded-full border border-[#32C382] bg-[#F5FFD9] text-[#151515] text-body-xsmall-medium shadow-sm">{tag}</span>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white">
+            <div className="p-6 space-y-6">
+              <section>
+                <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">What you get</h4>
+                <Separator className="bg-gray-100 mb-5" />
+                <div className="divide-y divide-gray-100 border-t border-gray-100">
+                  {channel.features.map((f, i) => (
+                    <div key={i} className="flex items-center gap-3 py-3.5">
+                      <CheckCircle2 size={14} className="text-[#32C382] shrink-0" />
+                      <p className="text-label-medium text-[#151515]">{f}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h4 className="text-body-medium-medium text-[#151515] mb-4 tracking-widest uppercase">Connect</h4>
+                <Separator className="bg-gray-100 mb-5" />
+                <p className="text-label-medium text-[#62646A] leading-relaxed mb-5">
+                  Click below to open {channel.name}. Sorene will send you a link — tap it to complete the one-time setup. All conversations will sync back to your Execution Hub.
+                </p>
+                <button onClick={handleLink} disabled={linkState === "loading"}
+                  className={cn("flex items-center gap-3 px-5 py-3 rounded-2xl text-body-small-medium transition-all",
+                    linkState === "linked"
+                      ? "bg-[#CEF2E2] text-[#196141]"
+                      : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+                    linkState === "loading" && "opacity-60 cursor-not-allowed")}>
+                  {linkState === "loading" && <Loader2 size={16} className="animate-spin" />}
+                  {linkState === "linked" && <CheckCircle2 size={16} />}
+                  {linkState === "idle" && <span className="text-lg leading-none">{channel.platform === "whatsapp" ? "💬" : "✈️"}</span>}
+                  {linkState === "linked" ? `Linked to ${channel.name} ✓` : `Open ${channel.name}`}
+                </button>
+              </section>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -489,12 +598,13 @@ function FolderCard({ folder }: { folder: FolderDef }) {
 // Tabs
 // ─────────────────────────────────────────────
 
-type Tab = "validation" | "launchpad" | "agents";
+type Tab = "validation" | "launchpad" | "agents" | "direct-sync";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "validation", label: "Validation" },
   { id: "launchpad", label: "Launchpad" },
   { id: "agents", label: "Agents System" },
+  { id: "direct-sync", label: "Direct Sync" },
 ];
 
 // ─────────────────────────────────────────────
@@ -565,6 +675,7 @@ export default function Page() {
   ];
 
   const currentFolders = activeTab === "validation" ? validationFolders : activeTab === "launchpad" ? launchpadFolders : agentsFolders;
+  const isDirectSync = activeTab === "direct-sync";
 
   return (
     <div className="flex h-full w-full overflow-hidden relative">
@@ -572,9 +683,8 @@ export default function Page() {
       <div className={cn("flex-1 flex flex-col h-full overflow-hidden", chatOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="max-w-6xl mx-auto">
-            {/* Page header */}
-            <div className="flex items-center justify-between px-4 pt-6 pb-2 lg:px-6">
-              <h1 className="text-heading-small text-[#151515] tracking-tight">Execution Hub</h1>
+            {/* Top bar — avatar only, no title */}
+            <div className="flex items-center justify-end px-4 pt-6 pb-2 lg:px-6">
               <div className="flex items-center gap-2">
                 <a href="https://discord.gg/2YtvCm2SWp" target="_blank" rel="noopener noreferrer"
                   className="hidden sm:flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all">
@@ -590,7 +700,7 @@ export default function Page() {
             </div>
 
             {/* Tabs */}
-            <div className="px-4 lg:px-6 pt-4 pb-2">
+            <div className="px-4 lg:px-6 pt-2 pb-2">
               <div className="flex items-center gap-1 border-b border-gray-100">
                 {TABS.map((tab) => (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -605,32 +715,17 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Folder grid */}
-            <div className="px-4 lg:px-6 pt-4 pb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
-              </div>
-            </div>
-
-            {/* Other — Direct Sync */}
-            <div className="px-4 lg:px-6 pb-24">
-              <div className="border-t border-gray-100 pt-6">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9A9A9A] mb-4">Other</p>
-                <div className="rounded-[32px] border border-gray-100 bg-white shadow-sm overflow-hidden">
-                  <div className="p-6">
-                    <div className="flex items-center gap-3 mb-1">
-                      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-                        <MessageCircle size={18} className="text-[#151515]" />
-                      </div>
-                      <h3 className="text-heading-xsmall font-medium text-[#151515] tracking-tight">Direct Sync</h3>
-                    </div>
-                    <p className="text-[11px] text-[#9A9A9A] font-medium mb-1 uppercase tracking-wide ml-12">WhatsApp · Telegram</p>
-                  </div>
-                  <div className="px-6 pb-6">
-                    <DirectSyncContent />
-                  </div>
+            {/* Content */}
+            <div className="px-4 lg:px-6 pt-4 pb-24">
+              {isDirectSync ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {SYNC_CHANNELS.map((ch) => <DirectSyncCard key={ch.platform} channel={ch} />)}
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}
+                </div>
+              )}
             </div>
           </div>
         </div>

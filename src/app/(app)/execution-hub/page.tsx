@@ -4019,6 +4019,9 @@ function BuildDemoStage3({
 const LAUNCH_PILLARS = [
   { id: "brand_digital", label: "Brand & Digital Presence", icon: Rocket, items: [
     { id: "biz_name", label: "Finalise business name" },
+    { id: "tagline", label: "Tagline" },
+    { id: "benefit", label: "Benefit description" },
+    { id: "offerings", label: "Offerings" },
     { id: "domain", label: "Register domain" },
     { id: "hosting", label: "Get web hosting" },
     { id: "website", label: "Build website" },
@@ -4274,6 +4277,215 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
   );
 }
 
+// ─────────────────────────────────────────────
+// BrandTextSection — generic for tagline / benefit / offerings
+// ─────────────────────────────────────────────
+
+type BrandTextType = "tagline" | "benefit" | "offerings";
+
+const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
+  tagline: {
+    hint: "A great tagline is short (under 8 words), benefit-focused, and instantly tells people what is in it for them.",
+    promptInstruction: `Generate 3 tagline options. Each must be under 8 words, benefit-focused, and speak directly to the target customer's desired outcome. No clever slogans — plain language that sells the result.`,
+    placeholder: 'e.g. "Launch your business without the guesswork"',
+  },
+  benefit: {
+    hint: "A benefit description explains the single biggest positive outcome customers get. Keep it to 1-2 sentences, positive, and jargon-free.",
+    promptInstruction: `Generate 3 benefit description options (1-2 sentences each). Each must describe the single biggest positive outcome the customer gets — specific, positive, and jargon-free. No feature lists.`,
+    placeholder: 'e.g. "We help you go from employee to founder in 6 months — without the guesswork."',
+  },
+  offerings: {
+    hint: "A service description tells customers exactly what they get. Keep it to 1 clear sentence per offering, starting with a verb.",
+    promptInstruction: `Generate 3 service/offering description options (1 sentence each). Each must start with a verb and clearly state what the customer receives. Short, specific, benefit-focused — no jargon.`,
+    placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
+  },
+};
+
+function BrandTextSection({ type, project }: { type: BrandTextType; project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `brand-${type}-${title}`;
+  const meta = BRAND_TEXT_META[type];
+
+  const [chosen, setChosen] = useState(() => {
+    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+  });
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return !!localStorage.getItem(storageKey); } catch { return false; }
+  });
+  const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
+  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
+  const [suggestionKey, setSuggestionKey] = useState(0);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const cached = localStorage.getItem(`brand-${type}-suggestions-${title}`);
+      if (cached) { setSuggestions(JSON.parse(cached)); setStage("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, type]);
+
+  const buildContext = () => {
+    const painkiller     = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const offer          = localStorage.getItem(`mvo-defined-${title}`) ?? "";
+    const patternSummary = localStorage.getItem(`pattern-summary-${title}`) ?? "";
+    const chosenName     = localStorage.getItem(`business-name-${title}`) ?? "";
+    let targetCustomer = "";
+    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+    return { painkiller, offer, patternSummary, targetCustomer, chosenName };
+  };
+
+  const buildPrompt = (ctx: ReturnType<typeof buildContext>) => {
+    const { painkiller, offer, patternSummary, targetCustomer, chosenName } = ctx;
+    return `${meta.promptInstruction}
+
+Project: "${title}"${chosenName ? `\nBusiness name: "${chosenName}"` : ""}${project?.oneliner ? `\nOne-liner: "${project.oneliner}"` : ""}${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}
+
+Return JSON: [{"name": "...", "reason": "1 sentence why this works for this business"}, ...]`;
+  };
+
+  const generateSuggestions = async () => {
+    if (!title) return;
+    setStage("loading");
+    const system = `You are Sorene, a startup brand coach. Return ONLY valid JSON — no markdown, no preamble.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: buildPrompt(buildContext()), system }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setSuggestions(parsed); setStage("done");
+          try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+        } else { setStage("idle"); }
+      } else { setStage("idle"); }
+    } catch { setStage("idle"); }
+  };
+
+  const sendChat = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput("");
+    const newHistory = [...chatHistory, { role: "user" as const, text: msg }];
+    setChatHistory(newHistory);
+    setChatLoading(true);
+    const ctx = buildContext();
+    const system = `You are Sorene, a startup brand coach. Return a JSON array: [{"name": "...", "reason": "..."}]. No markdown outside the JSON.`;
+    const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
+    const prompt = `${buildPrompt(ctx)}\n\nUser feedback: "${msg}". Generate 3 new options based on the feedback.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system, history }) });
+      if (res.ok) {
+        const data = await res.json();
+        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          setSuggestions([]);
+          setTimeout(() => { setSuggestions(parsed); setSuggestionKey((k) => k + 1); }, 120);
+          try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
+          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
+        } else {
+          setChatHistory([...newHistory, { role: "ai", text: (data?.reply ?? "").trim() }]);
+        }
+      }
+    } catch { /* ignore */ }
+    setChatLoading(false);
+  };
+
+  const choose = (name: string) => {
+    setChosen(name);
+    setCollapsed(true);
+    try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {!collapsed && (
+        <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
+      )}
+
+      {chosen && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
+          <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
+          <span className="text-[13px] font-medium text-[#151515] flex-1 leading-snug">{chosen}</span>
+          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] shrink-0 hover:underline">
+            {collapsed ? "Change" : "Collapse"}
+          </button>
+        </div>
+      )}
+
+      {!collapsed && (
+        <>
+          {stage === "idle" && (
+            <button onClick={generateSuggestions} disabled={!title}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+              <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Suggest 3 options
+            </button>
+          )}
+          {stage === "loading" && (
+            <div className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A]">
+              <Loader2 size={11} className="animate-spin" /> Generating options…
+            </div>
+          )}
+          {stage === "done" && suggestions.length > 0 && (
+            <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
+              {suggestions.map((s, i) => (
+                <div key={i} className={cn(
+                  "rounded-xl border p-3 transition-all",
+                  chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
+                )}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[13px] font-semibold text-[#151515] leading-snug flex-1">{s.name}</span>
+                    {chosen !== s.name ? (
+                      <button onClick={() => choose(s.name)}
+                        className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                        Choose
+                      </button>
+                    ) : (
+                      <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
+                </div>
+              ))}
+              <button onClick={generateSuggestions}
+                className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                Regenerate
+              </button>
+            </motion.div>
+          )}
+          {stage === "done" && (
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              {chatHistory.length > 0 && (
+                <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
+                  {chatHistory.map((m, i) => (
+                    <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
+                      {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                  placeholder={meta.placeholder}
+                  className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none" />
+                <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading} className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
+                  {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 const PILLAR_GRADIENTS: Record<string, string> = {
   legal:       "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)",
   finance:     "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)",
@@ -4476,7 +4688,10 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                           onNameChosen?.(name);
                         }} />
                       )}
-                      {tip && item.id !== "biz_name" && (
+                      {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && pillar.id === "brand_digital" && (
+                        <BrandTextSection type={item.id as BrandTextType} project={project} />
+                      )}
+                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           <span className="text-[#32C382] font-semibold not-italic">Sorene:</span> {tip}
                         </p>

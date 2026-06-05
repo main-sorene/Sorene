@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { verifyAuth } from "@/lib/firebaseAdmin";
-import { getAdminFirestore } from "@/lib/messagingAdmin";
+import { verifyAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
 import { getApps } from "firebase-admin/app";
 
@@ -17,13 +16,13 @@ export async function POST(req: NextRequest) {
     // Delete messagingChats subcollection
     const messagesRef = db.collection("messagingChats").doc(uid).collection("messages");
     const messages = await messagesRef.get();
-    const msgDeletes = messages.docs.map((d) => d.ref.delete());
+    const msgDeletes = messages.docs.map((d: { ref: { delete: () => Promise<unknown> } }) => d.ref.delete());
     await Promise.all(msgDeletes);
     await db.collection("messagingChats").doc(uid).delete();
 
     // Delete messagingLinkTokens for this user
     const tokensSnap = await db.collection("messagingLinkTokens").where("uid", "==", uid).get();
-    const tokenDeletes = tokensSnap.docs.map((d) => d.ref.delete());
+    const tokenDeletes = tokensSnap.docs.map((d: { ref: { delete: () => Promise<unknown> } }) => d.ref.delete());
     await Promise.all(tokenDeletes);
 
     // Delete Firebase Auth user (server-side, more reliable than client deleteUser)

@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
     const tokenDeletes = tokensSnap.docs.map((d: { ref: { delete: () => Promise<unknown> } }) => d.ref.delete());
     await Promise.all(tokenDeletes);
 
+    // Delete the cross-device conversations subcollection (Firestore does not
+    // cascade subcollection deletes with the parent user doc).
+    const convosSnap = await db.collection("users").doc(uid).collection("conversations").get();
+    await Promise.all(convosSnap.docs.map((d: { ref: { delete: () => Promise<unknown> } }) => d.ref.delete()));
+
     // Delete Firebase Auth user (server-side, more reliable than client deleteUser)
     if (getApps().length) {
       await getAuth().deleteUser(uid).catch(() => {});

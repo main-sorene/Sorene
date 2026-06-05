@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
+import { saveUserProfile, deleteUserProfile, clearCloudConversations } from "@/lib/firestore";
 import { authFetch } from "@/lib/authFetch";
 
 const SIDEBAR_ITEMS = [
@@ -330,6 +330,8 @@ export function SettingsModal() {
     setIsClearing(true);
     const uid = authUser?.uid;
     try {
+      // Clear cross-device cloud history first, while still authenticated.
+      if (uid) await clearCloudConversations(uid).catch(() => {});
       if (auth) await signOut(auth);
       setUser(null);
       setConversations([]);

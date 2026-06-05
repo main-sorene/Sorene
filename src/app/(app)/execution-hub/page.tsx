@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Circle,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Users,
   Search,
@@ -628,32 +627,28 @@ function FolderCard({ folder }: { folder: FolderDef }) {
 
 type Tab = "validation" | "launchpad" | "agents" | "direct-sync";
 
-const TABS: { id: Tab; label: string; sub: string; icon: React.ReactNode; gradient: string }[] = [
+const TABS: { id: Tab; label: string; icon: React.ReactNode; gradient: string }[] = [
   {
     id: "validation",
     label: "Validation",
-    sub: "VIBE · Go/No-Go",
     icon: <Search size={14} />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #16B364 0%, #A3E635 100%)`,
   },
   {
     id: "launchpad",
     label: "Launchpad",
-    sub: "Pitch · Tools",
     icon: <Rocket size={14} />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #EF6820 0%, #FAC515 100%)`,
   },
   {
     id: "agents",
     label: "Agents",
-    sub: "AI · Automation",
     icon: <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5 invert brightness-0" alt="" />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)`,
   },
   {
     id: "direct-sync",
     label: "Direct Sync",
-    sub: "WhatsApp · Telegram",
     icon: <MessageCircle size={14} />,
     gradient: `radial-gradient(140% 200% at 0% 0%, #0A0A0A 20%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #0891B2 0%, #2DD4BF 100%)`,
   },
@@ -852,34 +847,26 @@ export default function Page() {
               />
             </div>
 
-            {/* Tabs — DNA/Direction card style mini tiles */}
+            {/* Tabs — connected card strip */}
             <div className="px-4 lg:px-6 pt-4 pb-4">
-              <div className="flex items-stretch gap-3 flex-wrap">
-                {TABS.map((tab) => {
+              <div className="inline-flex rounded-[20px] overflow-hidden shadow-sm border border-gray-100">
+                {TABS.map((tab, i) => {
                   const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={cn(
-                        "relative flex flex-col justify-between rounded-[20px] overflow-hidden transition-all duration-200 text-left shrink-0",
-                        "w-[120px] h-[72px] p-3.5",
-                        isActive
-                          ? "shadow-md scale-[1.02]"
-                          : "opacity-60 hover:opacity-90 hover:scale-[1.01] shadow-sm border border-gray-100"
+                        "relative flex items-center gap-2 px-5 py-3 text-[13px] font-semibold transition-all duration-300",
+                        i > 0 && "border-l border-white/20",
+                        isActive ? "text-white" : "text-[#9A9A9A] hover:text-[#62646A]"
                       )}
-                      style={{ background: tab.gradient }}
+                      style={isActive
+                        ? { background: tab.gradient }
+                        : { background: "#F3F4F6" }}
                     >
-                      {/* spotlight overlay — exact DNA card pattern */}
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.3)_0%,transparent_70%)] pointer-events-none" />
-                      <div className="relative z-10 flex items-center justify-between">
-                        <span className="text-white/80">{tab.icon}</span>
-                        {isActive && <ChevronRight size={12} className="text-white/60" />}
-                      </div>
-                      <div className="relative z-10">
-                        <p className="text-white text-[13px] font-semibold leading-tight tracking-tight">{tab.label}</p>
-                        <p className="text-white/50 text-[10px] font-medium leading-none mt-0.5 truncate">{tab.sub}</p>
-                      </div>
+                      <span className={isActive ? "text-white" : "text-[#BCBCBC]"}>{tab.icon}</span>
+                      {tab.label}
                     </button>
                   );
                 })}

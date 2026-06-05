@@ -2188,116 +2188,280 @@ function InterviewStage2({
 // Build Demo Stage 3
 // ─────────────────────────────────────────────
 
-function OfferBuilderCard({ project }: { project: DirectionCardData | null }) {
-  const cacheKey = `mvo-offer-${project?.title ?? ""}`;
-  const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
-  const [output, setOutput] = useState("");
+// ── Single editable offering card ──
+interface OfferingField {
+  key: string;
+  label: string;
+  sublabel: string;
+  placeholder: string;
+  rows: number;
+}
+
+const OFFERING_FIELDS: OfferingField[] = [
+  { key: "one_sentence_offer", label: "One-Sentence Offer",    sublabel: "Who you help, what they achieve, and how",                rows: 2, placeholder: "We help [who] [achieve X] without [friction]…" },
+  { key: "price_range",        label: "Suggested Price Range", sublabel: "Specific range + 1-sentence rationale",                   rows: 2, placeholder: "$X–$Y because…" },
+  { key: "best_format",        label: "Best MVO Format",       sublabel: "Workshop / PDF / session / service — and why this fits",  rows: 2, placeholder: "1-on-1 session because…" },
+  { key: "offer_clarity",      label: "Offer Clarity",         sublabel: "Who, what they get, key outcome, price",                  rows: 4, placeholder: "Who: …\nWhat: …\nOutcome: …\nPrice: …" },
+  { key: "first_pitch",        label: "First Pitch",           sublabel: "One paragraph to say or send to 3 customers right now",   rows: 4, placeholder: "Hi [name], I'm working on something for people like you…" },
+];
+
+function SingleOfferingCard({
+  field, value, onSave, onRegenerate, project,
+}: {
+  field: OfferingField;
+  value: string;
+  onSave: (val: string) => void;
+  onRegenerate: (instruction: string) => Promise<string>;
+  project: DirectionCardData | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [refineInput, setRefineInput] = useState("");
+  const [refining, setRefining] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setDraft(value); }, [value]);
+
+  const handleSave = () => {
+    onSave(draft);
+    setEditing(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
+  const handleRefine = async () => {
+    if (!refineInput.trim() || refining) return;
+    setRefining(true);
+    const instruction = refineInput.trim();
+    setRefineInput("");
+    const updated = await onRegenerate(instruction);
+    if (updated) { setDraft(updated); onSave(updated); }
+    setRefining(false);
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div>
+          <p className="text-[13px] font-semibold text-[#151515]">{field.label}</p>
+          <p className="text-[11px] text-[#9A9A9A]">{field.sublabel}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saved && <span className="text-[11px] text-[#32C382] font-medium flex items-center gap-1"><CheckCircle2 size={11} /> Saved</span>}
+          {!editing && value && (
+            <button onClick={() => setEditing(true)}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#9A9A9A] hover:text-[#151515] border border-[#ECEDEE] hover:border-[#151515] transition-all">
+              Edit
+            </button>
+          )}
+          {editing && (
+            <>
+              <button onClick={() => { setDraft(value); setEditing(false); }}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#9A9A9A] border border-[#ECEDEE] hover:border-[#151515] transition-all">
+                Cancel
+              </button>
+              <button onClick={handleSave}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-all">
+                Save
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 py-3">
+        {editing ? (
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={field.rows}
+            className="w-full rounded-xl border border-[#151515] bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none transition-colors"
+          />
+        ) : value ? (
+          <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{value}</p>
+        ) : (
+          <p className="text-[13px] text-[#9A9A9A] italic">{field.placeholder}</p>
+        )}
+      </div>
+
+      {/* Refine with prompt */}
+      <div className="flex items-center gap-2 px-4 py-3 border-t border-[#ECEDEE] bg-[#FAFAFA]">
+        <input
+          value={refineInput}
+          onChange={(e) => setRefineInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleRefine(); }}
+          placeholder={`Refine this — e.g. "make it shorter" or "price higher"`}
+          className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none"
+        />
+        <button onClick={handleRefine} disabled={!refineInput.trim() || refining}
+          className="w-7 h-7 rounded-lg bg-[#151515] flex items-center justify-center shrink-0 hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+          {refining ? <Loader2 size={11} className="animate-spin text-white" /> : <ArrowRight size={11} className="text-white" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InitialOfferingsSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const [generating, setGenerating] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
 
+  const storageKey = (key: string) => `mvo-offering-${key}-${title}`;
+  // legacy key kept for readiness bar compatibility
+  const legacyKey = `mvo-offer-${title}`;
+
   useEffect(() => {
-    if (!project?.title || loaded) return;
-    try {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) { setOutput(raw); setStage("done"); }
-    } catch { /* ignore */ }
+    if (!title || loaded) return;
+    const loaded_vals: Record<string, string> = {};
+    for (const f of OFFERING_FIELDS) {
+      try { loaded_vals[f.key] = localStorage.getItem(storageKey(f.key)) ?? ""; } catch { /* ignore */ }
+    }
+    setValues(loaded_vals);
     setLoaded(true);
+    // mark legacy key so readiness bar still works
+    if (Object.values(loaded_vals).some((v) => v.trim())) {
+      try { localStorage.setItem(legacyKey, "1"); } catch { /* ignore */ }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project?.title]);
+  }, [title]);
 
-  const handleBuild = async () => {
-    setStage("loading");
-    setOutput("");
-    const painkiller = localStorage.getItem(`painkiller-verdict-${project?.title ?? ""}`) ?? "";
-    const convRaw = localStorage.getItem(`convlog-${project?.title ?? ""}`);
+  const hasAny = OFFERING_FIELDS.some((f) => values[f.key]?.trim());
+
+  const buildContext = () => {
+    const painkiller = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
+    const convRaw = localStorage.getItem(`convlog-${title}`);
     const convs: { name?: string; notes?: string }[] = convRaw ? JSON.parse(convRaw) : [];
-    const convSample = convs.slice(0, 8).map((e, i) => `${i + 1}. ${e.name || "Anonymous"}: ${e.notes || "no notes"}`).join("\n");
+    const convSample = convs.slice(0, 6).map((e, i) => `${i + 1}. ${e.name || "Anonymous"}: ${e.notes || "no notes"}`).join("\n");
+    return { painkiller, convSample, convCount: convs.length };
+  };
 
-    const prompt = `You are Sorene, a sharp startup coach helping an entrepreneur build their Minimum Viable Offer (MVO).
+  const handleGenerateAll = async () => {
+    setGenerating(true);
+    const { painkiller, convSample, convCount } = buildContext();
 
-Project: "${project?.title}"
+    const prompt = `You are Sorene, a sharp startup coach building a Minimum Viable Offer.
+
+Project: "${title}"
 ${project?.oneliner ? `One-liner: ${project.oneliner}` : ""}
-${project?.simple_positioning ? `Positioning: ${project.simple_positioning}` : ""}
 Painkiller problem: "${painkiller || "not yet defined"}"
-${convs.length > 0 ? `Sample customer conversations:\n${convSample}` : ""}
+${convCount > 0 ? `Sample customer conversations:\n${convSample}` : ""}
 
-Build their MVO with these sections:
-
-**One-Sentence Offer** — "We help [who] [do/achieve X] [in Y time / without Z friction]"
-
-**Suggested Price Range** — give a specific range (e.g. $X–$Y) based on the pain level and what people are likely to pay, with 1-sentence rationale
-
-**Best MVO Format** — pick the single best format for this problem: workshop / PDF guide / 1-on-1 session / manual service / group program — explain why this one fits
-
-**Offer Clarity Checklist** — 4 bullets: Who it's for, What they get, The key outcome, The price
-
-**First Pitch** — one short paragraph they can say or send to 3 potential customers right now
-
-Be specific to this project. Bold key phrases. No fluff.`;
+Return ONLY valid JSON (no markdown, no preamble) in this exact shape:
+{
+  "one_sentence_offer": "We help [specific who] [achieve X] [without Y / in Z time]",
+  "price_range": "$X–$Y. [1-sentence rationale tied to pain severity and willingness to pay]",
+  "best_format": "[Format name]. [2 sentences: why this format fits this specific problem]",
+  "offer_clarity": "Who: [specific customer]\\nWhat: [deliverable]\\nOutcome: [clear result]\\nPrice: [$X]",
+  "first_pitch": "[2-3 sentence paragraph they can say or send right now to 3 potential customers]"
+}`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, system: "You are Sorene, a sharp startup coach. Be specific, direct, and practical. Give real numbers and real formats." }),
+        body: JSON.stringify({ prompt, system: "Return only valid JSON. No markdown fences. No preamble. Be specific to this project." }),
       });
-      if (!res.ok) { setStage("idle"); return; }
-      const data = await res.json();
-      const full: string = (data?.reply ?? "").trim();
-      setOutput(full);
-      setStage("done");
-      try { localStorage.setItem(cacheKey, full); } catch { /* ignore */ }
-    } catch { setStage("idle"); }
+      if (res.ok) {
+        const data = await res.json();
+        const reply: string = (data?.reply ?? "").trim();
+        const match = reply.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          const newVals: Record<string, string> = {};
+          for (const f of OFFERING_FIELDS) {
+            newVals[f.key] = parsed[f.key] ?? "";
+            try { localStorage.setItem(storageKey(f.key), newVals[f.key]); } catch { /* ignore */ }
+          }
+          setValues(newVals);
+          try { localStorage.setItem(legacyKey, "1"); } catch { /* ignore */ }
+        }
+      }
+    } catch { /* ignore */ }
+    setGenerating(false);
   };
 
-  const handleReset = () => {
-    try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
-    setOutput("");
-    setStage("idle");
+  const handleSave = (key: string, val: string) => {
+    setValues((prev) => ({ ...prev, [key]: val }));
+    try { localStorage.setItem(storageKey(key), val); } catch { /* ignore */ }
+    try { localStorage.setItem(legacyKey, "1"); } catch { /* ignore */ }
+  };
+
+  const handleRegenerate = async (key: string, instruction: string): Promise<string> => {
+    const { painkiller, convSample } = buildContext();
+    const current = values[key] ?? "";
+    const field = OFFERING_FIELDS.find((f) => f.key === key)!;
+
+    const prompt = `You are Sorene, a sharp startup coach.
+
+Project: "${title}"
+Painkiller problem: "${painkiller}"
+${convSample ? `Conversations:\n${convSample}` : ""}
+
+Current "${field.label}":
+"${current}"
+
+User instruction: "${instruction}"
+
+Rewrite only the "${field.label}" field based on the instruction. Return only the updated text — no labels, no JSON, no preamble.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system: "You are Sorene. Return only the updated field text. No labels, no JSON, no preamble." }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return (data?.reply ?? "").trim();
+      }
+    } catch { /* ignore */ }
+    return "";
+  };
+
+  const handleResetAll = () => {
+    for (const f of OFFERING_FIELDS) {
+      try { localStorage.removeItem(storageKey(f.key)); } catch { /* ignore */ }
+    }
+    try { localStorage.removeItem(legacyKey); } catch { /* ignore */ }
+    setValues({});
   };
 
   return (
-    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-            <Lightbulb size={14} className="text-white" />
-          </div>
-          <div>
-            <p className="text-[13px] font-semibold text-[#151515]">Sorene's Offer Builder</p>
-            <p className="text-[11px] text-[#9A9A9A]">One-sentence offer · price range · format · first pitch</p>
-          </div>
-        </div>
-        {stage === "done" && (
-          <button onClick={handleReset}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#9A9A9A] hover:text-[#151515] border border-[#ECEDEE] hover:border-[#151515] transition-all">
-            Regenerate
-          </button>
-        )}
+    <div className="space-y-4">
+      {/* Generate / Regenerate all */}
+      <div className="flex items-center justify-between">
+        <p className="text-[12px] text-[#9A9A9A]">
+          {hasAny ? "Each section is editable. Use the chat input to refine." : "Sorene generates your initial offerings — then you edit each one."}
+        </p>
+        <button onClick={hasAny ? handleResetAll : handleGenerateAll} disabled={generating}
+          className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all",
+            hasAny
+              ? "border border-[#ECEDEE] text-[#9A9A9A] hover:text-[#151515] hover:border-[#151515]"
+              : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+            generating && "opacity-50 cursor-not-allowed")}>
+          {generating
+            ? <><Loader2 size={12} className="animate-spin" /> Generating…</>
+            : hasAny
+            ? "Regenerate all"
+            : <><Lightbulb size={12} /> Generate initial offerings</>}
+        </button>
       </div>
-      <div className="px-5 py-4">
-        {stage === "idle" && (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <p className="text-[13px] text-[#9A9A9A] leading-relaxed max-w-sm">
-              Sorene will craft your offer, suggest a price range, pick the best format, and write your first pitch — based on your painkiller problem and conversations.
-            </p>
-            <button onClick={handleBuild}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors">
-              <Lightbulb size={14} /> Build my offer
-            </button>
-          </div>
-        )}
-        {stage === "loading" && (
-          <div className="flex items-center gap-2 py-6 justify-center text-[#9A9A9A] text-[13px]">
-            <Loader2 size={14} className="animate-spin" /> Building your offer…
-          </div>
-        )}
-        {stage === "done" && output && (
-          <div className="text-[13px] text-[#151515] leading-relaxed">
-            <MarkdownText text={output} />
-          </div>
-        )}
-      </div>
+
+      {/* Individual cards */}
+      {OFFERING_FIELDS.map((field) => (
+        <SingleOfferingCard
+          key={field.key}
+          field={field}
+          value={values[field.key] ?? ""}
+          onSave={(val) => handleSave(field.key, val)}
+          onRegenerate={(instruction) => handleRegenerate(field.key, instruction)}
+          project={project}
+        />
+      ))}
     </div>
   );
 }
@@ -2585,9 +2749,9 @@ function BuildDemoStage3({
         <BuildDemoGuidanceChat project={project} />
       </CollapseSection>
 
-      {/* ── Sorene's Offer (collapsible) ── */}
-      <CollapseSection title="Sorene's Offer">
-        <OfferBuilderCard project={project} />
+      {/* ── Initial Offerings (collapsible) ── */}
+      <CollapseSection title="Initial Offerings">
+        <InitialOfferingsSection project={project} />
       </CollapseSection>
 
       {/* ── Your MVO (collapsible) ── */}

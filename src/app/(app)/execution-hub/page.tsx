@@ -304,11 +304,6 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
 
   return (
     <div className="p-6 space-y-6">
-      {/* Project label */}
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5FFD9] border border-[#32C382]/30 w-fit">
-        <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
-        <span className="text-[12px] font-semibold text-[#151515] truncate max-w-[240px]">{project.title}</span>
-      </div>
       {/* Progress Bar */}
       <div className="relative">
         {/* Connector line */}

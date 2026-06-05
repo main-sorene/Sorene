@@ -921,8 +921,6 @@ function VibeStageContent({ step, project }: { step: typeof VIBE_STEPS[number]; 
         {/* ── Project context ── */}
         {project && (
           <section>
-            <h4 className="text-base font-medium text-[#151515] mb-4">Your Project</h4>
-            <Separator className="bg-[#ECEDEE] mb-5" />
             <p className="text-[15px] font-semibold text-[#151515] mb-1">{project.title}</p>
             {project.oneliner && <p className="text-[13px] text-[#62646A] leading-relaxed mb-4">{project.oneliner}</p>}
             <div className="flex flex-col sm:flex-row gap-3">

@@ -1369,8 +1369,8 @@ function ValidateReadinessBar({ projectTitle, onAdvance }: { projectTitle: strin
           ))}
         </div>
 
-        {/* Start Interview CTA — only at 100% */}
-        {score >= 100 && (
+        {/* Start Interview CTA — unlocks at 60%, gets more prominent as score rises */}
+        {score >= 60 && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1379,10 +1379,22 @@ function ValidateReadinessBar({ projectTitle, onAdvance }: { projectTitle: strin
           >
             <button
               onClick={onAdvance}
-              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors"
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-[13px] font-semibold transition-all",
+                score >= 100
+                  ? "bg-[#32C382] text-white hover:bg-[#27a36d]"
+                  : score >= 80
+                  ? "bg-[#151515] text-white hover:bg-[#2a2a2a]"
+                  : "bg-[#F0F1F2] text-[#62646A] hover:bg-[#E5E6E8]"
+              )}
             >
               Start Interview <ArrowRight size={15} />
             </button>
+            {score < 80 && (
+              <p className="text-center text-[11px] text-[#9A9A9A] mt-2">
+                You have enough signal to start — more conversations will sharpen it
+              </p>
+            )}
           </motion.div>
         )}
       </div>

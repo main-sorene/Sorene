@@ -54,9 +54,19 @@ export async function checkCredits(email: string): Promise<CreditStatus> {
     let used: number = data.credits?.used ?? 0;
 
     if (needsReset) {
+      if (resetAt === 0) {
+        // First-time initialization — all plans get a window set so reset_at is never 0 again
+        const nextReset = now + 30 * 24 * 60 * 60 * 1000;
+        tx.set(ref, { credits: { used: 0, limit, reset_at: nextReset } }, { merge: true });
+        return { ok: true, used: 0, limit, plan, resetAt: nextReset };
+      }
+      if (plan === "free") {
+        // Free budget is one-time — no monthly reset, credits stay exhausted until upgrade
+        return { ok: used < limit, used, limit, plan, resetAt };
+      }
+      // Paid plans reset monthly
       const nextReset = now + 30 * 24 * 60 * 60 * 1000;
       tx.set(ref, { credits: { used: 0, limit, reset_at: nextReset } }, { merge: true });
-      used = 0;
       return { ok: true, used: 0, limit, plan, resetAt: nextReset };
     }
 

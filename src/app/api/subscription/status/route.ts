@@ -31,11 +31,11 @@ export async function GET(req: NextRequest) {
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
     const creditsLimit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
 
-    // Mirror checkCredits(): if the 30-day window has elapsed, the counter is
-    // effectively 0 even though the next API call hasn't physically reset it yet.
-    // Without this, the UI shows a stale (often "exhausted") count after rollover.
     const resetAt: number = credits?.reset_at ?? 0;
-    const creditsUsed = Date.now() > resetAt ? 0 : (credits?.used ?? 0);
+    // Paid plans reset monthly — show 0 once the window has passed (mirrors checkCredits).
+    // Free users have a one-time budget: never reset, always show actual used count.
+    const windowExpired = resetAt > 0 && Date.now() > resetAt;
+    const creditsUsed = (windowExpired && plan !== "free") ? 0 : (credits?.used ?? 0);
 
     if (!sub || !sub.active) {
       return NextResponse.json({

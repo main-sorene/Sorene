@@ -19,6 +19,7 @@ import {
   Loader2,
   Plug,
   CreditCard,
+  BarChart2,
   Database,
   Lock,
   LogOut,
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
@@ -40,10 +42,11 @@ import { authFetch } from "@/lib/authFetch";
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
   { id: "Account", icon: User, label: "Account" },
+  { id: "Billing", icon: CreditCard, label: "Billing" },
+  { id: "Usage", icon: BarChart2, label: "Usage" },
   { id: "Preferences", icon: Wrench, label: "Preferences" },
   { id: "Notifications", icon: Bell, label: "Notifications" },
   { id: "Integrations", icon: Plug, label: "Integrations" },
-  { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
   { id: "Data control", icon: Database, label: "Data control" },
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
@@ -457,10 +460,7 @@ export function SettingsModal() {
     }
   };
 
-  const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
-    if (item.id === "Manage Subscription") return !!subscription?.active;
-    return true;
-  });
+  const filteredSidebarItems = SIDEBAR_ITEMS;
 
   const emailForDisplay = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
   const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || emailForDisplay.split("@")[0] || "User";
@@ -723,8 +723,80 @@ export function SettingsModal() {
           </div>
         );
 
-      case "Manage Subscription":
+      case "Billing":
         return <SubscriptionContent />;
+
+      case "Usage": {
+        const used = subscription?.credits?.used ?? 0;
+        const limit = subscription?.credits?.limit ?? 250;
+        const resetAt = subscription?.credits?.resetAt;
+        const plan = subscription?.plan ?? "free";
+        const isFree = plan === "free";
+        const pct = Math.min(100, Math.round((used / limit) * 100));
+        const daysUntilReset = resetAt
+          ? Math.max(0, Math.ceil((resetAt - Date.now()) / (1000 * 60 * 60 * 24)))
+          : null;
+        const barColor =
+          pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-[#111111]";
+
+        return (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold text-[#151515]">Usage</h2>
+
+            <div className="rounded-2xl border border-[#ECEDEE] p-5 space-y-4">
+              {/* Plan label */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#151515] capitalize">
+                  {isFree ? "Free credits" : `${plan} plan`}
+                </p>
+                <span className="text-sm font-semibold text-[#151515]">{pct}%</span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-2.5 rounded-full bg-[#F0F0F0] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              {/* Subtext */}
+              {isFree ? (
+                <div className="flex items-start gap-2 pt-1">
+                  <Zap className="w-4 h-4 text-[#FDC24C] mt-0.5 shrink-0" />
+                  <p className="text-sm text-[#62646A]">
+                    One-time free credits — upgrade anytime to get a monthly allowance.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-[#9B9B9B]">
+                  {daysUntilReset !== null
+                    ? `Resets in ${daysUntilReset} day${daysUntilReset !== 1 ? "s" : ""}`
+                    : "Monthly reset"}
+                </p>
+              )}
+            </div>
+
+            {/* Upgrade nudge — always shown for free, shown when exhausted for paid */}
+            {(isFree || pct >= 100) && (
+              <div
+                className="rounded-2xl border border-[#FDC24C] bg-[#FFFBF0] p-4 flex items-center justify-between gap-4 cursor-pointer"
+                onClick={() => { setIsOpen(false); window.location.href = "/upgrade"; }}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-[#151515]">Upgrade for more</p>
+                  <p className="text-xs text-[#62646A] mt-0.5">
+                    Starter — 1,500 credits/mo · Pro — 5,000 credits/mo
+                  </p>
+                </div>
+                <div className="shrink-0 w-8 h-8 rounded-full bg-[#FDC24C] flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
 
       case "Security":
         return (

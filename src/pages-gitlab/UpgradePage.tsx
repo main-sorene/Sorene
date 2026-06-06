@@ -110,17 +110,14 @@ export function UpgradePage() {
       </button>
 
       {/* Header */}
-      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12 px-6 md:px-0">
-        <h1 className="text-xl sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug">
+      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12 px-2 md:px-0">
+        <h1 className="text-[17px] sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
           Upgrade your plan for more features
         </h1>
         <p className="text-[#62646A] text-base md:text-base mb-8">
           Choose the perfect plan to create, innovate,{" "}
-          <br className="hidden md:block" />
-          and accelerate your workflow or{" "}
-          <span className="font-medium text-[#151515] cursor-pointer">
-            custom plan
-          </span>
+          <br />
+          and accelerate your workflow.
         </p>
 
         {/* Billing toggle */}

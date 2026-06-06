@@ -19,6 +19,7 @@ import {
   Loader2,
   Plug,
   CreditCard,
+  BarChart2,
   Database,
   Lock,
   LogOut,
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
@@ -40,10 +42,11 @@ import { authFetch } from "@/lib/authFetch";
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
   { id: "Account", icon: User, label: "Account" },
+  { id: "Billing", icon: CreditCard, label: "Billing" },
+  { id: "Usage", icon: BarChart2, label: "Usage" },
   { id: "Preferences", icon: Wrench, label: "Preferences" },
   { id: "Notifications", icon: Bell, label: "Notifications" },
   { id: "Integrations", icon: Plug, label: "Integrations" },
-  { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
   { id: "Data control", icon: Database, label: "Data control" },
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
@@ -254,7 +257,7 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
-  const { data: subscription } = useSubscriptionStatus();
+  const { data: subscription, refetch: refetchSubscription } = useSubscriptionStatus();
   const setConversations = useSetAtom(conversationsAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [, setUser] = useAtom(userAtom);
@@ -294,6 +297,13 @@ export function SettingsModal() {
       setNickname(authUser.profile?.nickname || "");
     }
   }, [authUser]);
+
+  // Refetch fresh subscription/credit data whenever the Usage or Billing tab is opened
+  React.useEffect(() => {
+    if (activeTab === "Usage" || activeTab === "Billing") {
+      refetchSubscription();
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close gender dropdown on outside click
   React.useEffect(() => {
@@ -457,10 +467,7 @@ export function SettingsModal() {
     }
   };
 
-  const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
-    if (item.id === "Manage Subscription") return !!subscription?.active;
-    return true;
-  });
+  const filteredSidebarItems = SIDEBAR_ITEMS;
 
   const emailForDisplay = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
   const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || emailForDisplay.split("@")[0] || "User";
@@ -723,8 +730,51 @@ export function SettingsModal() {
           </div>
         );
 
-      case "Manage Subscription":
+      case "Billing":
         return <SubscriptionContent />;
+
+      case "Usage": {
+        const used = subscription?.credits?.used ?? 0;
+        const limit = subscription?.credits?.limit ?? 250;
+        const extra = subscription?.credits?.extra ?? 0;
+        const resetAt = subscription?.credits?.resetAt;
+        const plan = subscription?.plan ?? "free";
+        const isFree = plan === "free";
+        const effectiveLimit = limit + extra;
+        const pct = effectiveLimit > 0 ? Math.min(100, Math.round((used / effectiveLimit) * 100)) : 0;
+        const daysUntilReset = (!isFree && resetAt)
+          ? Math.max(0, Math.ceil((resetAt - Date.now()) / (1000 * 60 * 60 * 24)))
+          : null;
+        const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-[#111111]";
+        const planLabel = isFree ? "Free" : plan === "pro" ? "Professional" : "Starter";
+
+        return (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider">
+              Usage
+            </p>
+            <div className="rounded-2xl border border-[#ECEDEE] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#151515]">{planLabel} plan</p>
+                <span className="text-sm font-semibold text-[#151515]">{pct}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-[#F0F0F0] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {daysUntilReset !== null ? (
+                <p className="text-xs text-[#9B9B9B]">
+                  Resets in {daysUntilReset} day{daysUntilReset !== 1 ? "s" : ""}
+                </p>
+              ) : isFree ? (
+                <p className="text-xs text-[#9B9B9B]">One-time budget · <button onClick={() => { setActiveTab("Billing"); }} className="underline hover:text-[#151515]">Upgrade for more</button></p>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
 
       case "Security":
         return (

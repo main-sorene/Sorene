@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, verifyAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { PLAN_CREDITS } from "@/lib/credits";
+import { PLAN_CREDITS, checkCredits } from "@/lib/credits";
 
 function getDb() {
   return getFirestore(getApps().length ? getApp() : undefined!);
@@ -27,20 +27,29 @@ export async function GET(req: NextRequest) {
     const data = userDoc.data() || {};
 
     const sub = data.subscription;
-    const credits = data.credits;
+    let credits = data.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
-    const creditsLimit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
 
-    // Mirror checkCredits(): if the 30-day window has elapsed, the counter is
-    // effectively 0 even though the next API call hasn't physically reset it yet.
-    // Without this, the UI shows a stale (often "exhausted") count after rollover.
+    // Auto-initialize credits for users who haven't made an AI call yet
+    if (!credits?.reset_at) {
+      const status = await checkCredits(email);
+      credits = { used: status.used, limit: status.limit, extra: status.extra, reset_at: status.resetAt };
+    }
+
+    // Use stored limit (may include purchased pack adjustments); fall back to plan default
+    const creditsLimit: number = credits?.limit ?? (PLAN_CREDITS[plan] ?? PLAN_CREDITS.free);
+    const extra: number = credits?.extra ?? 0;
     const resetAt: number = credits?.reset_at ?? 0;
-    const creditsUsed = Date.now() > resetAt ? 0 : (credits?.used ?? 0);
+
+    // Paid plans reset monthly — show 0 once window has passed (mirrors checkCredits).
+    // Free users have a one-time budget: show actual used count, never reset to 0.
+    const windowExpired = resetAt > 0 && Date.now() > resetAt;
+    const creditsUsed = (windowExpired && plan !== "free") ? 0 : (credits?.used ?? 0);
 
     if (!sub || !sub.active) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
-        credits: { used: creditsUsed, limit: creditsLimit, resetAt },
+        credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
       });
     }
 
@@ -49,7 +58,7 @@ export async function GET(req: NextRequest) {
       plan: sub.plan,
       status: sub.status,
       duration: sub.duration,
-      credits: { used: creditsUsed, limit: creditsLimit, resetAt },
+      credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
     });
   } catch (err: unknown) {
     console.error("[status]", err);

@@ -33,8 +33,6 @@ function PageInner() {
     }
 
     if (customToken && auth) {
-      // Gate rendering on the sign-in so the landing page never shows in the
-      // window between "token received" and "auth state populated".
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)

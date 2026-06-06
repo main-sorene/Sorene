@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 let _client: Anthropic | null = null;
 function getClient() {
@@ -59,6 +60,9 @@ export async function POST(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
     if (!user) return NextResponse.json({ reply: "Please sign in to use the coach." }, { status: 401 });
+
+    const creditCheck = await checkCredits(user.uid);
+    if (!creditCheck.ok) return NextResponse.json({ error: "Credit limit reached" }, { status: 402 });
 
     const { message, recipeId, history, userProfile, project, projectStatus } = (await req.json()) as {
       message: string;
@@ -154,6 +158,7 @@ ${statusBlock}`;
       messages,
     });
 
+    void deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
     return NextResponse.json({ reply });

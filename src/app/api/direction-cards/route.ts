@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores, StructuralModel } from "@/lib/dnaEngine";
 import type { DirectionCardData } from "@/lib/directionTypes";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -383,9 +384,10 @@ function parseCard(text: string): DirectionCardData | null {
 
 export async function POST(req: NextRequest) {
   const authedUser = await verifyAuth(req);
-  if (!authedUser) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!authedUser) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const creditCheck = await checkCredits(authedUser.uid);
+  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
 
   try {
     const body = (await req.json()) as {
@@ -435,6 +437,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -456,6 +459,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      void deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -472,6 +476,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -488,6 +493,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -503,6 +509,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_PROMPT_CACHED,
       messages: [{ role: "user", content: prompt }],
     });
+    void deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const raw = block?.type === "text" ? block.text : "";
     const card = parseCard(raw);

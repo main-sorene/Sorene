@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 export const maxDuration = 30;
 
@@ -31,9 +32,10 @@ Output only the summary text, nothing else.`;
 
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
-  if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const creditCheck = await checkCredits(user.uid);
+  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
 
   try {
     const { answers } = (await req.json()) as { answers?: Record<string, string> };
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: PROMPT(answers) }],
     });
 
+    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const block = message.content[0];
     const summary = block && block.type === "text" ? block.text.trim() : "";
 

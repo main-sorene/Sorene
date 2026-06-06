@@ -1,12 +1,16 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const creditCheck = await checkCredits(user.uid);
+  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
 
   try {
     const { answers, mode } = (await req.json()) as { answers: Record<string, string>; mode?: string };
@@ -35,6 +39,7 @@ No explanation. No extra lines. Just the three labeled outputs.`;
         messages: [{ role: "user", content: prompt }],
       });
 
+      void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
       const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
       const sourceMatch = raw.match(/ENERGY_SOURCE:\s*(.+)/i);
       const drainMatch = raw.match(/ENERGY_DRAIN:\s*(.+)/i);
@@ -73,6 +78,7 @@ No explanation. No extra lines. Just the one labeled output.`;
         messages: [{ role: "user", content: prompt }],
       });
 
+      void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
       const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
       const match = raw.match(/STRENGTHS_EDGES:\s*(.+)/i);
       return Response.json({ strengths_edges_strengths: match?.[1]?.trim() || null });
@@ -103,6 +109,7 @@ No explanation. No extra lines. Just the two labeled outputs.`;
       messages: [{ role: "user", content: prompt }],
     });
 
+    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
     const successMatch = raw.match(/SUCCESS_VISION:\s*(.+)/i);
     const nonNegMatch = raw.match(/NON_NEGOTIABLE:\s*(.+)/i);

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import type { ProblemScanReport, ProblemOpportunity } from "@/types/problemScan";
 
 export const maxDuration = 300;
@@ -174,9 +175,10 @@ function parseReport(text: string): ProblemScanReport {
 
 export async function POST(req: NextRequest) {
   const authedUser = await verifyAuth(req);
-  if (!authedUser) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-  }
+  if (!authedUser) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+
+  const creditCheck = await checkCredits(authedUser.uid);
+  if (!creditCheck.ok) return new Response(JSON.stringify({ error: "Credit limit reached" }), { status: 402 });
 
   try {
     const body = await req.json() as {
@@ -205,6 +207,8 @@ export async function POST(req: NextRequest) {
       report = parseReport(text);
     }
 
+    // Deduct a flat cost for this agentic Sonnet call (multi-turn web search)
+    void deductCredits(authedUser.uid, 150);
     return new Response(JSON.stringify({ report }), {
       headers: { "Content-Type": "application/json" },
     });

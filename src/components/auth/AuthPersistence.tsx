@@ -25,16 +25,34 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
       }
 
       const appUid = firebaseUser.email || firebaseUser.uid;
-      const profile = await getUserProfile(appUid);
+      let profile = await getUserProfile(appUid);
 
-      // No profile means data was wiped — sign out so the user lands on the
-      // homepage instead of being auto-routed to onboarding with a ghost session.
       if (!profile) {
-        await signOut(auth!).catch(() => {});
-        setUser(null);
-        clearTimeout(fallbackTimer);
-        setLoading(false);
-        return;
+        // Check if this is a fresh OAuth sign-in. The OAuth callback writes the
+        // profile server-side (Admin SDK) and there can be a brief Firestore
+        // replication lag before the client SDK can read it. In that case we
+        // retry once rather than treating it as a wiped account.
+        let isFreshSignIn = false;
+        try {
+          isFreshSignIn = sessionStorage.getItem("sorene_fresh_signin") === "1";
+          sessionStorage.removeItem("sorene_fresh_signin");
+        } catch {}
+
+        if (isFreshSignIn) {
+          // Wait for profile to replicate then retry
+          await new Promise((r) => setTimeout(r, 1200));
+          profile = await getUserProfile(appUid);
+        }
+
+        // Still no profile after retry → this is a session from before the
+        // data wipe. Sign out silently so they land on the homepage.
+        if (!profile) {
+          await signOut(auth!).catch(() => {});
+          setUser(null);
+          clearTimeout(fallbackTimer);
+          setLoading(false);
+          return;
+        }
       }
 
       // Clear any Google-sourced photo URL. Background-only.

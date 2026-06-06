@@ -9,32 +9,20 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB base64 limit
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const PROMPT = `You're Sorene, a personalized entrepreneurship coach.
-
-The attached file is the user's CV, portfolio, or resume.
-
-First, extract the person's full name from the CV. Then write a narrative summary of their background.
+const PROMPT = `Extract the person's full name and write a brief background summary from the attached CV/resume.
 
 Output in this exact format (no other text before or after):
 FIRST_NAME: <first name only>
 LAST_NAME: <last name(s) only, or empty if not found>
 SUMMARY:
-<narrative summary here>
+<summary here>
 
-For the summary: write in second person, speaking warmly and directly ("I can see you've...", "You moved from...").
-
-Focus on:
-- Concrete years and domains of experience (use real numbers)
-- Notable role transitions or pivots
-- 2-3 distinct skills or focus areas worth naming
-
-Style rules:
-- Break the summary into 3-4 SHORT paragraphs separated by double newlines. Each paragraph should be 2-3 sentences max.
-- Use **bold** markdown to highlight key information: job titles, company names, years, skills, and important transitions
-- Specific, not generic — name fields, sectors, years, transitions
-- Warm and observational, like a coach noticing patterns
-- Never use the words "candidate" or "applicant"
-- No bullet points, no headings in the summary`;
+Summary rules:
+- 2-3 short paragraphs separated by double newlines, 2 sentences each max
+- Second person, warm and direct ("You moved from...", "Your background spans...")
+- Use **bold** for key titles, companies, skills, and transitions
+- Specific: name real roles, sectors, years
+- Never use "candidate" or "applicant", no bullet points`;
 
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
@@ -93,8 +81,8 @@ export async function POST(req: NextRequest) {
         };
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 700,
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
       messages: [
         {
           role: "user",
@@ -103,7 +91,7 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    await deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens));
+    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";

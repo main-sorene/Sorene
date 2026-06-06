@@ -283,13 +283,18 @@ export function AssessmentChatPage() {
               </button>
             </div>
           ) : currentChoices && currentChoices.length > 0 && !isWaiting ? (
-            <div className="flex flex-col gap-1.5 mb-3">
+            <div className={cn("mb-3", currentChoices.length === 1 ? "flex" : "flex flex-col gap-1.5")}>
               {currentChoices.map((choice, i) => (
                 <button
                   key={`${i}-${choice}`}
                   onClick={() => handleSend(choice, canonicalChoices?.[i])}
                   disabled={isDisabled}
-                  className="w-full px-3 py-1 text-[13px] leading-tight border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 disabled:opacity-40 text-left"
+                  className={cn(
+                    "transition-colors disabled:opacity-40",
+                    currentChoices.length === 1
+                      ? "px-5 py-2 text-[14px] font-medium rounded-lg bg-[#111111] text-white hover:bg-black shadow-sm active:scale-95"
+                      : "w-full px-3 py-1 text-[13px] leading-tight border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-left"
+                  )}
                 >
                   {choice}
                 </button>

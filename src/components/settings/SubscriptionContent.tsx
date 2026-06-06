@@ -149,15 +149,19 @@ export function SubscriptionContent() {
             : "Buy extra credits to keep using Sorene if you hit your monthly limit."}
         </p>
 
-        {/* Balance row */}
+        {/* Balance row — only show number if user has purchased extra credits */}
         <div className="flex items-end justify-between gap-4 mb-4">
-          <div>
-            <p className="text-2xl font-semibold text-[#151515]">
-              {balance.toLocaleString()}
-              <span className="text-base font-normal text-[#9B9B9B] ml-1.5">credits</span>
-            </p>
-            <p className="text-xs text-[#9B9B9B] mt-0.5">Current balance</p>
-          </div>
+          {extra > 0 ? (
+            <div>
+              <p className="text-2xl font-semibold text-[#151515]">
+                {balance.toLocaleString()}
+                <span className="text-base font-normal text-[#9B9B9B] ml-1.5">credits</span>
+              </p>
+              <p className="text-xs text-[#9B9B9B] mt-0.5">Current balance</p>
+            </div>
+          ) : (
+            <div />
+          )}
 
           {isFree ? (
             <Button

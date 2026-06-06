@@ -82,10 +82,7 @@ export async function deductCredits(email: string, amount: number): Promise<void
     await db
       .collection("users")
       .doc(email)
-      .set(
-        { credits: { used: FieldValue.increment(amount) } },
-        { merge: true },
-      );
+      .update({ "credits.used": FieldValue.increment(amount) });
   } catch (err) {
     console.error("[deductCredits] failed to deduct", amount, "for", email, err);
   }
@@ -95,13 +92,15 @@ export async function deductCredits(email: string, amount: number): Promise<void
 export async function addExtraCredits(email: string, amount: number): Promise<void> {
   if (amount <= 0) return;
   const db = getDb();
-  await db
-    .collection("users")
-    .doc(email)
-    .set(
-      { credits: { extra: FieldValue.increment(amount) } },
+  try {
+    await db.collection("users").doc(email).update({ "credits.extra": FieldValue.increment(amount) });
+  } catch {
+    // Document or credits field doesn't exist yet — initialize and set extra
+    await db.collection("users").doc(email).set(
+      { credits: { extra: amount } },
       { merge: true },
     );
+  }
 }
 
 export async function setCreditsLimit(email: string, plan: string, resetUsage = false): Promise<void> {

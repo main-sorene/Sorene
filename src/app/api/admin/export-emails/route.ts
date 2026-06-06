@@ -5,8 +5,9 @@ import { getAdminAuth } from "@/lib/firebaseAdmin";
 // Protected by ADMIN_SECRET env var — must pass as Bearer token.
 export async function GET(req: NextRequest) {
   const secret = process.env.ADMIN_SECRET;
-  const auth = req.headers.get("authorization");
-  if (!secret || auth !== `Bearer ${secret}`) {
+  const provided = req.headers.get("authorization")?.replace("Bearer ", "") ||
+    req.nextUrl.searchParams.get("secret");
+  if (!secret || provided !== secret) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 

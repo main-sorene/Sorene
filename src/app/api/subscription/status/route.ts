@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, verifyAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { PLAN_CREDITS } from "@/lib/credits";
+import { PLAN_CREDITS, checkCredits } from "@/lib/credits";
 
 function getDb() {
   return getFirestore(getApps().length ? getApp() : undefined!);
@@ -27,8 +27,14 @@ export async function GET(req: NextRequest) {
     const data = userDoc.data() || {};
 
     const sub = data.subscription;
-    const credits = data.credits;
+    let credits = data.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
+
+    // Auto-initialize credits for users who haven't made an AI call yet
+    if (!credits?.reset_at) {
+      const status = await checkCredits(email);
+      credits = { used: status.used, limit: status.limit, extra: status.extra, reset_at: status.resetAt };
+    }
 
     // Use stored limit (may include purchased pack adjustments); fall back to plan default
     const creditsLimit: number = credits?.limit ?? (PLAN_CREDITS[plan] ?? PLAN_CREDITS.free);

@@ -298,7 +298,11 @@ export function SettingsModal() {
     }
   }, [authUser]);
 
-  // Refetch fresh subscription/credit data whenever the Usage or Billing tab is opened
+  // Refetch fresh subscription/credit data whenever the modal opens or tab changes
+  React.useEffect(() => {
+    if (isOpen) refetchSubscription();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   React.useEffect(() => {
     if (activeTab === "Usage" || activeTab === "Billing") {
       refetchSubscription();

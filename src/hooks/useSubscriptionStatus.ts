@@ -13,7 +13,7 @@ export function useSubscriptionStatus() {
     queryKey: subscriptionQueryKey(email ?? ""),
     queryFn: () => getSubscriptionStatus(email!),
     enabled: !!email,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     retry: 1,
   });
 }

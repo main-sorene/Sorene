@@ -56,10 +56,11 @@ export async function checkCredits(email: string): Promise<CreditStatus> {
 
     if (needsReset) {
       if (resetAt === 0) {
-        // First-time initialization for all plans
+        // First-time initialization — preserve any usage already accumulated
+        const preservedUsed = data.credits?.used ?? 0;
         const nextReset = now + 30 * 24 * 60 * 60 * 1000;
-        tx.set(ref, { credits: { used: 0, limit: basePlanLimit, extra: 0, reset_at: nextReset } }, { merge: true });
-        return { ok: true, used: 0, limit: basePlanLimit, extra: 0, plan, resetAt: nextReset };
+        tx.set(ref, { credits: { used: preservedUsed, limit: basePlanLimit, extra: 0, reset_at: nextReset } }, { merge: true });
+        return { ok: preservedUsed < basePlanLimit, used: preservedUsed, limit: basePlanLimit, extra: 0, plan, resetAt: nextReset };
       }
       if (plan === "free") {
         // Free: one-time budget — no monthly reset

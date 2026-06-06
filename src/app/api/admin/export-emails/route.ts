@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 
-// Returns a plain-text newline-separated list of all user emails from Firebase Auth.
-// Protected by ADMIN_SECRET env var — must pass as Bearer token.
+// Returns all user emails as a downloadable .txt file.
+// Access: ?secret=YOUR_ADMIN_SECRET or Authorization: Bearer YOUR_ADMIN_SECRET
 export async function GET(req: NextRequest) {
   const secret = process.env.ADMIN_SECRET;
   const provided = req.headers.get("authorization")?.replace("Bearer ", "") ||

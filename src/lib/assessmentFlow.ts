@@ -174,7 +174,13 @@ export const QUESTION_NODES: QuestionNode[] = [
         answer.includes("All the time") || answer.includes("Pretty often"),
       message:
         "So this was a real pattern, not just a one-off. When it happened, did it feel exciting and natural — or more like extra effort you had to push through?",
-      inputType: "freetext",
+      inputType: "choice",
+      choices: [
+        "Exciting and natural — it felt like what I was meant to do",
+        "A mix — energizing but still required real effort",
+        "More like extra effort — I pushed through but it didn't come easily",
+      ],
+      allowCustom: true,
     },
   },
   {

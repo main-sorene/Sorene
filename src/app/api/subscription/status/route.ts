@@ -29,18 +29,21 @@ export async function GET(req: NextRequest) {
     const sub = data.subscription;
     const credits = data.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
-    const creditsLimit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
 
+    // Use stored limit (may include purchased pack adjustments); fall back to plan default
+    const creditsLimit: number = credits?.limit ?? (PLAN_CREDITS[plan] ?? PLAN_CREDITS.free);
+    const extra: number = credits?.extra ?? 0;
     const resetAt: number = credits?.reset_at ?? 0;
-    // Paid plans reset monthly — show 0 once the window has passed (mirrors checkCredits).
-    // Free users have a one-time budget: never reset, always show actual used count.
+
+    // Paid plans reset monthly — show 0 once window has passed (mirrors checkCredits).
+    // Free users have a one-time budget: show actual used count, never reset to 0.
     const windowExpired = resetAt > 0 && Date.now() > resetAt;
     const creditsUsed = (windowExpired && plan !== "free") ? 0 : (credits?.used ?? 0);
 
     if (!sub || !sub.active) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
-        credits: { used: creditsUsed, limit: creditsLimit, resetAt },
+        credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
       });
     }
 
@@ -49,7 +52,7 @@ export async function GET(req: NextRequest) {
       plan: sub.plan,
       status: sub.status,
       duration: sub.duration,
-      credits: { used: creditsUsed, limit: creditsLimit, resetAt },
+      credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
     });
   } catch (err: unknown) {
     console.error("[status]", err);

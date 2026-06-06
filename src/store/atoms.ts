@@ -141,7 +141,7 @@ export interface SubscriptionStatus {
   duration: number;
   plan: string;
   status: string;
-  credits?: { used: number; limit: number; resetAt?: number };
+  credits?: { used: number; limit: number; extra?: number; resetAt?: number };
 }
 
 export const subscriptionStatusAtom = atom<SubscriptionStatus | null>(null);

@@ -3,7 +3,7 @@ import { getStripe } from "@/lib/stripe";
 import { getAdminAuth } from "@/lib/firebaseAdmin";
 import { getApp, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { setCreditsLimit } from "@/lib/credits";
+import { setCreditsLimit, addExtraCredits } from "@/lib/credits";
 import Stripe from "stripe";
 
 function getDb() {
@@ -76,9 +76,20 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Credit pack one-time purchase
+        if (session.mode === "payment" && session.metadata?.type === "credits") {
+          const email = session.metadata.email;
+          const amount = parseInt(session.metadata.amount || "1000", 10);
+          if (email && amount > 0) {
+            await addExtraCredits(email, amount);
+          }
+          break;
+        }
+
+        // New subscription
         if (session.mode === "subscription" && session.subscription) {
           const sub = await getStripe().subscriptions.retrieve(session.subscription as string);
-          // Ensure metadata is set from session
           if (session.metadata?.email && !sub.metadata?.email) {
             await getStripe().subscriptions.update(sub.id, { metadata: session.metadata });
             sub.metadata = session.metadata;

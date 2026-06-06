@@ -144,6 +144,19 @@ interface UpgradeResponse {
   status: string;
 }
 
+export async function buyCreditPack(payload: {
+  email: string;
+  success_url: string;
+  cancel_url: string;
+}): Promise<{ url: string }> {
+  const res = await authRequest(
+    "POST",
+    `${API_BASE_URL}/subscription/credits`,
+    payload,
+  );
+  return res.json();
+}
+
 export async function upgradeSubscription(
   payload: UpgradePayload,
 ): Promise<UpgradeResponse> {

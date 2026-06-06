@@ -29,7 +29,8 @@ export function calculateCredits(
 export interface CreditStatus {
   ok: boolean;
   used: number;
-  limit: number;
+  limit: number;   // base plan limit
+  extra: number;   // purchased add-ons (persists across monthly resets)
   plan: string;
   resetAt: number;
 }
@@ -38,39 +39,39 @@ export async function checkCredits(email: string): Promise<CreditStatus> {
   const db = getDb();
   const ref = db.collection("users").doc(email);
 
-  // Use a transaction to atomically read + conditionally reset, preventing
-  // concurrent requests from triggering multiple resets in the same window.
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const data = snap.data() || {};
 
     const plan: string = data.subscription?.active ? (data.subscription.plan ?? "free") : "free";
-    const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
+    const basePlanLimit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
+    const storedLimit: number = data.credits?.limit ?? basePlanLimit;
+    const extra: number = data.credits?.extra ?? 0;
+    const effectiveLimit = storedLimit + extra;
 
     const now = Date.now();
     const resetAt: number = data.credits?.reset_at ?? 0;
     const needsReset = now > resetAt;
-
-    let used: number = data.credits?.used ?? 0;
+    const used: number = data.credits?.used ?? 0;
 
     if (needsReset) {
       if (resetAt === 0) {
-        // First-time initialization — all plans get a window set so reset_at is never 0 again
+        // First-time initialization for all plans
         const nextReset = now + 30 * 24 * 60 * 60 * 1000;
-        tx.set(ref, { credits: { used: 0, limit, reset_at: nextReset } }, { merge: true });
-        return { ok: true, used: 0, limit, plan, resetAt: nextReset };
+        tx.set(ref, { credits: { used: 0, limit: basePlanLimit, extra: 0, reset_at: nextReset } }, { merge: true });
+        return { ok: true, used: 0, limit: basePlanLimit, extra: 0, plan, resetAt: nextReset };
       }
       if (plan === "free") {
-        // Free budget is one-time — no monthly reset, credits stay exhausted until upgrade
-        return { ok: used < limit, used, limit, plan, resetAt };
+        // Free: one-time budget — no monthly reset
+        return { ok: used < effectiveLimit, used, limit: storedLimit, extra, plan, resetAt };
       }
-      // Paid plans reset monthly
+      // Paid plans: reset used only; preserve limit (base) and extra (purchased) across resets
       const nextReset = now + 30 * 24 * 60 * 60 * 1000;
-      tx.set(ref, { credits: { used: 0, limit, reset_at: nextReset } }, { merge: true });
-      return { ok: true, used: 0, limit, plan, resetAt: nextReset };
+      tx.set(ref, { credits: { used: 0, reset_at: nextReset } }, { merge: true });
+      return { ok: true, used: 0, limit: storedLimit, extra, plan, resetAt: nextReset };
     }
 
-    return { ok: used < limit, used, limit, plan, resetAt };
+    return { ok: used < effectiveLimit, used, limit: storedLimit, extra, plan, resetAt };
   });
 }
 
@@ -90,6 +91,19 @@ export async function deductCredits(email: string, amount: number): Promise<void
   }
 }
 
+// Adds purchased credits that persist across monthly resets
+export async function addExtraCredits(email: string, amount: number): Promise<void> {
+  if (amount <= 0) return;
+  const db = getDb();
+  await db
+    .collection("users")
+    .doc(email)
+    .set(
+      { credits: { extra: FieldValue.increment(amount) } },
+      { merge: true },
+    );
+}
+
 export async function setCreditsLimit(email: string, plan: string, resetUsage = false): Promise<void> {
   const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
   const db = getDb();
@@ -97,11 +111,10 @@ export async function setCreditsLimit(email: string, plan: string, resetUsage = 
   const existing = snap.data()?.credits;
   const nextReset = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
-  // On plan change: keep existing usage unless resetUsage=true or user is downgrading
-  // and their current usage already exceeds the new limit (avoid permanently locked-out users).
   const currentUsed = existing?.used ?? 0;
   const usedAfterChange = resetUsage || currentUsed > limit ? 0 : currentUsed;
 
+  // Note: extra (purchased credits) is intentionally NOT overwritten here
   await db
     .collection("users")
     .doc(email)

@@ -437,7 +437,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -459,7 +459,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      void deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -476,7 +476,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -493,7 +493,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      void deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -509,7 +509,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_PROMPT_CACHED,
       messages: [{ role: "user", content: prompt }],
     });
-    void deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
+    await deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const raw = block?.type === "text" ? block.text : "";
     const card = parseCard(raw);

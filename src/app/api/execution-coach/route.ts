@@ -158,7 +158,7 @@ ${statusBlock}`;
       messages,
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
     return NextResponse.json({ reply });

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: PROMPT(answers) }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const block = message.content[0];
     const summary = block && block.type === "text" ? block.text.trim() : "";
 

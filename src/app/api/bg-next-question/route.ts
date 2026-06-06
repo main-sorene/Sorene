@@ -80,7 +80,7 @@ Output format: [reflection sentence]---[question or DONE]`;
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = (message.content[0]?.type === "text" ? message.content[0].text : "").trim();
 
     const [reflectionPart, questionPart] = raw.split("---").map((s) => s.trim());

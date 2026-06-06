@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       messages: [...prior, { role: "user", content: prompt }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const reply = block && block.type === "text" ? block.text.trim() : "";
 

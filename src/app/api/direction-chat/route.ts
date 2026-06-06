@@ -422,9 +422,9 @@ Sorene Direction Engine v1.1`;
             controller.enqueue(encoder.encode(chunk.delta.text));
           }
         }
-        controller.close();
         const final = await anthropicStream.finalMessage();
-        void deductCredits(user.uid, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
+        await deductCredits(user.uid, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
+        controller.close();
       },
     });
 

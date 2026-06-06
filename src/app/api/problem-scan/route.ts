@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Deduct a flat cost for this agentic Sonnet call (multi-turn web search)
-    void deductCredits(authedUser.uid, 150);
+    await deductCredits(authedUser.uid, 150);
     return new Response(JSON.stringify({ report }), {
       headers: { "Content-Type": "application/json" },
     });

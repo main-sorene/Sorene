@@ -31,7 +31,7 @@ async function coach(text: string, to: string, uid: string): Promise<void> {
     system: "You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical.",
     messages: [{ role: "user", content: text }],
   });
-  void deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
+  await deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
   const reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
   await sendWhatsApp(to, reply);
 }

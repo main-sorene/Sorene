@@ -63,7 +63,7 @@ The array must contain exactly ${models.length} strings, in the same order as th
       messages: [{ role: "user", content: prompt }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";

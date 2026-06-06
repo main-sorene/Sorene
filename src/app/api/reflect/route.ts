@@ -68,7 +68,7 @@ Output only the translated question, then the separator line "---CHOICES---", th
         max_tokens: 600,
         messages: [{ role: "user", content: prompt }],
       });
-      void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block && block.type === "text" ? block.text.trim() : "";
       if (hasChoices) {
@@ -148,7 +148,7 @@ Output only that one sentence. Nothing else.`;
       max_tokens: hasNextQuestion ? (hasChoices ? 700 : 400) : 80,
       messages: [{ role: "user", content: prompt }],
     });
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";

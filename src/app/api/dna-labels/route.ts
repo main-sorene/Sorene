@@ -39,7 +39,7 @@ No explanation. No extra lines. Just the three labeled outputs.`;
         messages: [{ role: "user", content: prompt }],
       });
 
-      void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+      await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
       const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
       const sourceMatch = raw.match(/ENERGY_SOURCE:\s*(.+)/i);
       const drainMatch = raw.match(/ENERGY_DRAIN:\s*(.+)/i);
@@ -78,7 +78,7 @@ No explanation. No extra lines. Just the one labeled output.`;
         messages: [{ role: "user", content: prompt }],
       });
 
-      void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+      await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
       const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
       const match = raw.match(/STRENGTHS_EDGES:\s*(.+)/i);
       return Response.json({ strengths_edges_strengths: match?.[1]?.trim() || null });
@@ -109,7 +109,7 @@ No explanation. No extra lines. Just the two labeled outputs.`;
       messages: [{ role: "user", content: prompt }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
     const successMatch = raw.match(/SUCCESS_VISION:\s*(.+)/i);
     const nonNegMatch = raw.match(/NON_NEGOTIABLE:\s*(.+)/i);

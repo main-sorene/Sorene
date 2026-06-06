@@ -154,10 +154,11 @@ export async function POST(req: NextRequest) {
             controller.enqueue(new TextEncoder().encode(chunk.delta.text));
           }
         }
-        controller.close();
-        // Deduct after stream completes
+        // Deduct after stream completes, before closing so the write finishes
+        // while the serverless function is still alive
         const final = await stream.finalMessage();
-        void deductCredits(authedUser.uid, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
+        await deductCredits(authedUser.uid, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
+        controller.close();
       },
     });
 

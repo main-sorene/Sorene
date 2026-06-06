@@ -111,7 +111,7 @@ export function UpgradePage() {
 
       {/* Header */}
       <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12 px-2 md:px-0">
-        <h1 className="text-[17px] sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
+        <h1 className="text-[4.8vw] sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
           Upgrade your plan for more features
         </h1>
         <p className="text-[#62646A] text-base md:text-base mb-8">

@@ -98,8 +98,8 @@ export function UpgradePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white relative overflow-y-auto px-4 py-8 md:py-10">
-      {/* Close button */}
+    <div className="min-h-screen bg-white relative overflow-y-auto px-4 pt-14 pb-8 md:pt-10 md:pb-10">
+      {/* Close button — offset so it never overlaps the heading */}
       <button
         type="button"
         onClick={() => router.back()}
@@ -110,9 +110,9 @@ export function UpgradePage() {
       </button>
 
       {/* Header */}
-      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12">
-        <h1 className="text-2xl sm:text-3xl md:text-5xl font-medium text-[#1A1A1A] mb-4">
-          Upgrade your plan for <br className="hidden md:block" /> more features
+      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12 px-6 md:px-0">
+        <h1 className="text-xl sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug">
+          Upgrade your plan for more features
         </h1>
         <p className="text-[#62646A] text-base md:text-base mb-8">
           Choose the perfect plan to create, innovate,{" "}

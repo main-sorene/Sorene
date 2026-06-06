@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { consumeLinkToken, linkPlatformToUser, getUidByPlatformId } from "@/lib/messagingAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
@@ -14,13 +15,14 @@ async function sendTelegram(chatId: number | string, text: string) {
   });
 }
 
-async function coach(text: string, chatId: number | string): Promise<void> {
+async function coach(text: string, chatId: number | string, uid: string): Promise<void> {
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
     system: "You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical.",
     messages: [{ role: "user", content: text }],
   });
+  void deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
   const reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
   await sendTelegram(chatId, reply);
 }
@@ -62,7 +64,13 @@ export async function POST(req: NextRequest) {
       return new Response("OK", { status: 200 });
     }
 
-    await coach(text, chatId);
+    const credits = await checkCredits(uid);
+    if (!credits.ok) {
+      await sendTelegram(chatId, "You've used up your Sorene credits. Upgrade at sorene.ai to keep coaching.");
+      return new Response("OK", { status: 200 });
+    }
+
+    await coach(text, chatId, uid);
   } catch (err) {
     console.error("[telegram webhook]", err);
   }

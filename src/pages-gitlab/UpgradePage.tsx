@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { Check, X } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAtomValue } from "jotai";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import { plans, PLAN_WEIGHTS, type Plan } from "@/lib/plans";
 
 export function UpgradePage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "semiAnnual">(
     "monthly",
   );
@@ -46,7 +47,8 @@ export function UpgradePage() {
 
   async function handleUpgrade(plan: Plan, isCurrent: boolean) {
     if (isCurrent || loadingPlan) return;
-    const email = user?.email ?? user?.profile?.email;
+    // uid === email in this app's Firebase custom token setup
+    const email = user?.email ?? user?.uid ?? user?.profile?.email;
     if (!email) {
       toast({
         title: "Error",
@@ -97,6 +99,16 @@ export function UpgradePage() {
 
   return (
     <div className="min-h-screen bg-white relative overflow-y-auto px-4 py-8 md:py-10">
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#F0F0F0] transition-colors z-10"
+        aria-label="Close"
+      >
+        <X className="w-5 h-5 text-[#62646A]" />
+      </button>
+
       {/* Header */}
       <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12">
         <h1 className="text-2xl sm:text-3xl md:text-5xl font-medium text-[#1A1A1A] mb-4">
@@ -111,7 +123,7 @@ export function UpgradePage() {
           </span>
         </p>
 
-        {/* Toggle */}
+        {/* Billing toggle */}
         <div className="inline-flex items-center bg-[#F7F7F7] p-1 rounded-lg border border-gray-100">
           <button
             onClick={() => setBillingCycle("monthly")}
@@ -127,14 +139,13 @@ export function UpgradePage() {
           <button
             onClick={() => setBillingCycle("semiAnnual")}
             className={cn(
-              "px-6 py-2 rounded-lg text-sm transition-all flex items-center gap-2",
+              "px-6 py-2 rounded-lg text-sm transition-all text-center",
               billingCycle === "semiAnnual"
                 ? "bg-white shadow-sm text-black"
-                : "text-gray-500 hover:text-black",
+                : "text-[#62646A] hover:text-black",
             )}
           >
-            6 Months
-            <span className="text-[#00C070] text-[12px]">Save upto 30%</span>
+            6 months (30% off)
           </button>
         </div>
       </div>
@@ -152,17 +163,17 @@ export function UpgradePage() {
           const currentWeight = PLAN_WEIGHTS[currentPlanId] ?? 0;
           const cardWeight = PLAN_WEIGHTS[plan.id] ?? 0;
 
-          let buttonText = "Upgrade plan";
+          let buttonText = "Upgrade";
           if (isCurrent) {
-            buttonText = "Current Plan";
+            buttonText = "Current plan";
+          } else if (plan.id === "free") {
+            buttonText = "Downgrade";
           } else if (cardWeight < currentWeight) {
-            buttonText = "Downgrade plan";
+            buttonText = "Downgrade";
           } else if (cardWeight > currentWeight) {
-            buttonText = "Upgrade plan";
+            buttonText = "Upgrade";
           } else {
-            // Same tier, different duration
-            buttonText =
-              uiDuration > currentDuration ? "Upgrade plan" : "Downgrade plan";
+            buttonText = uiDuration > currentDuration ? "Switch to 6 months" : "Switch to monthly";
           }
 
           return (

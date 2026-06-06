@@ -33,9 +33,6 @@ function PageInner() {
     }
 
     if (customToken && auth) {
-      // Mark this as a fresh OAuth sign-in so AuthPersistence doesn't mistake
-      // the replication lag (profile not yet readable) for a wiped account.
-      try { sessionStorage.setItem("sorene_fresh_signin", "1"); } catch {}
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)

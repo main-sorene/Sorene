@@ -102,7 +102,7 @@ export function UpgradePage() {
       {/* Close button — offset so it never overlaps the heading */}
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => router.push("/chat")}
         className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#F0F0F0] transition-colors z-10"
         aria-label="Close"
       >

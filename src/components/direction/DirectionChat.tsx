@@ -93,8 +93,10 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const convIdRef = useRef(`direction-chat-${Date.now()}`);
+  const restoredRef = useRef(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeRecipePrompt, setActiveRecipePrompt] = useState<string | null>(null);
@@ -106,6 +108,32 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, hasMessages]);
+
+  // Restore the most recent direction chat from localStorage once uid is available
+  useEffect(() => {
+    if (!authUser?.uid || restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const uid = authUser.uid;
+      const keys = Object.keys(localStorage)
+        .filter((k) => k.startsWith(`direction_chat_${uid}_`));
+      let best: { conv: Conversation; updatedAt: number } | null = null;
+      for (const k of keys) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const c = JSON.parse(raw) as Conversation;
+        const t = new Date(c.updatedAt).getTime();
+        if (!best || t > best.updatedAt) best = { conv: c, updatedAt: t };
+      }
+      if (!best) return;
+      convIdRef.current = best.conv.id;
+      setMessages(best.conv.messages.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })));
+    } catch {}
+  }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistToSidebar = (msgs: ChatMessage[]) => {
     const uid = authUser?.uid || "local";

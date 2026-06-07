@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 import { setCreditsLimit, addExtraCredits } from "@/lib/credits";
 import Stripe from "stripe";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 // Stripe requires the raw body for signature verification — disable body parsing

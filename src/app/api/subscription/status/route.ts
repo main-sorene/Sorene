@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth, verifyAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 import { PLAN_CREDITS, checkCredits } from "@/lib/credits";
-
-function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,7 +16,7 @@ export async function GET(req: NextRequest) {
     }
 
     getAdminAuth();
-    const db = getDb();
+    const db = getAdminFirestore();
     const userDoc = await db.collection("users").doc(email).get();
     const data = userDoc.data() || {};
 

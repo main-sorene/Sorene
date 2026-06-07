@@ -240,9 +240,10 @@ export async function POST(req: NextRequest) {
     const from: string = message.from;
     const text: string = message.text?.body ?? "";
 
-    // Account linking flow
-    if (text.startsWith("LINK-")) {
-      const token = text.slice(5).trim();
+    // Account linking flow — supports both plain "LINK-xxx" and friendly prefixed message
+    const linkMatch = text.match(/LINK-([a-f0-9]+)/i);
+    if (linkMatch) {
+      const token = linkMatch[1].trim();
       const result = await consumeLinkToken(token);
       if (result && result.platform === "whatsapp") {
         await linkPlatformToUser(result.uid, "whatsapp", from);

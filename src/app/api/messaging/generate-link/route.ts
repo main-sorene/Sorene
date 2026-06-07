@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
   // format without + or spaces, e.g. "15556651234". The Phone Number ID is
   // different — it's used for the Graph API, not wa.me links.
   const waPhone = process.env.WHATSAPP_DISPLAY_PHONE ?? "";
-  const deepLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(`LINK-${token}`)}`;
+  const prefilledText = `Hi Sorene! Please connect my account: LINK-${token}`;
+  const deepLink = `https://wa.me/${waPhone}?text=${encodeURIComponent(prefilledText)}`;
 
   return Response.json({ token, deepLink, expiresAt });
 }

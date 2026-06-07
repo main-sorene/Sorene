@@ -11,10 +11,8 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PROMPT = `Extract the person's full name and write a brief background summary from the attached CV/resume.
 
-Output in this exact format (no other text before or after):
-FIRST_NAME: <first name only>
-LAST_NAME: <last name(s) only, or empty if not found>
-SUMMARY:
+Output in this exact format — the first line must be exactly as shown, then the summary:
+NAMES:<first name>|<last name or empty>
 <summary here>
 
 Summary rules:
@@ -52,65 +50,45 @@ export async function POST(req: NextRequest) {
     const isPdf = mimeType === "application/pdf";
     const isImage = mimeType.startsWith("image/");
     if (!isPdf && !isImage) {
-      return Response.json(
-        { error: "Only PDF and image files are supported" },
-        { status: 400 },
-      );
+      return Response.json({ error: "Only PDF and image files are supported" }, { status: 400 });
     }
 
     const docContent = isPdf
       ? {
           type: "document" as const,
-          source: {
-            type: "base64" as const,
-            media_type: "application/pdf" as const,
-            data: fileBase64,
-          },
+          source: { type: "base64" as const, media_type: "application/pdf" as const, data: fileBase64 },
         }
       : {
           type: "image" as const,
           source: {
             type: "base64" as const,
-            media_type: mimeType as
-              | "image/jpeg"
-              | "image/png"
-              | "image/gif"
-              | "image/webp",
+            media_type: mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
             data: fileBase64,
           },
         };
 
-    const message = await client.messages.create({
+    const stream = await client.messages.stream({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 400,
-      messages: [
-        {
-          role: "user",
-          content: [docContent, { type: "text", text: PROMPT }],
-        },
-      ],
+      messages: [{ role: "user", content: [docContent, { type: "text", text: PROMPT }] }],
     });
 
-    void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+            controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+          }
+        }
+        const final = await stream.finalMessage();
+        void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", final.usage.input_tokens, final.usage.output_tokens));
+        controller.close();
+      },
+    });
 
-    const block = message.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "";
-
-    // Parse structured output
-    const firstNameMatch = raw.match(/^FIRST_NAME:\s*(.+)$/m);
-    const lastNameMatch = raw.match(/^LAST_NAME:\s*(.*)$/m);
-    const summaryMatch = raw.match(/^SUMMARY:\s*\n([\s\S]+)$/m);
-
-    const extractedFirstName = firstNameMatch?.[1]?.trim() || "";
-    const extractedLastName = lastNameMatch?.[1]?.trim() || "";
-    const summary = summaryMatch?.[1]?.trim() || raw;
-
-    return Response.json({ summary, firstName: extractedFirstName, lastName: extractedLastName });
+    return new Response(readable, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   } catch (error) {
     console.error("[cv-summary] error:", error);
-    return Response.json(
-      { error: "Failed to process file" },
-      { status: 500 },
-    );
+    return Response.json({ error: "Failed to process file" }, { status: 500 });
   }
 }

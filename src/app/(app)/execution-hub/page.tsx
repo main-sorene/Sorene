@@ -6550,6 +6550,10 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [approvingAll, setApprovingAll] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // Custom slot overrides: draftId → timestamp (ms). When set, overrides scheduleSlots[i].
+  const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
+  // Which draft has the slot editor open
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
 
   // Best posting times (local HH:MM strings)
   const bestTimes: string[] = dna?.bestHours?.slice(0, 2).map((utcH) => {
@@ -6783,7 +6787,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       const newScheduled: ScheduledPost[] = [];
       for (let i = 0; i < weekDrafts.length; i++) {
         const draft = weekDrafts[i];
-        const scheduledAt = scheduleSlots[i] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+        const scheduledAt = slotOverrides[draft.id] ?? scheduleSlots[i] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
         const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
         const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
         const res = await authFetch("/api/threads/schedule", {
@@ -6955,19 +6959,37 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
           </div>
 
           {weekDrafts.map((draft, i) => {
-            const slot = scheduleSlots[i];
-            const slotLabel = slot ? new Date(slot).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+            const effectiveSlot = slotOverrides[draft.id] ?? scheduleSlots[i];
+            const effectiveDate = effectiveSlot ? new Date(effectiveSlot) : null;
+            const slotDateVal = effectiveDate ? effectiveDate.toLocaleDateString("en-CA") : ""; // YYYY-MM-DD
+            const slotTimeVal = effectiveDate ? effectiveDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+            const slotLabel = effectiveDate ? effectiveDate.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
             const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
             const displayText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+            const isEditingSlot = editingSlot === draft.id;
+
+            const applySlotEdit = (dateStr: string, timeStr: string) => {
+              if (!dateStr || !timeStr) return;
+              const ts = new Date(`${dateStr}T${timeStr}`).getTime();
+              if (!isNaN(ts) && ts > Date.now()) {
+                setSlotOverrides((prev) => ({ ...prev, [draft.id]: ts }));
+              }
+            };
+
             return (
               <div key={draft.id} className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Day {Math.floor(i / cadence) + 1}{cadence === 2 ? ` · ${i % 2 === 0 ? "AM" : "PM"}` : ""}</p>
-                    {slotLabel && <p className="text-[11px] text-[#9A9A9A]">· {slotLabel}</p>}
+                    {slotLabel && (
+                      <button onClick={() => setEditingSlot(isEditingSlot ? null : draft.id)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline underline-offset-2 decoration-dotted">
+                        {slotLabel}
+                      </button>
+                    )}
                     {hasCta && ctaLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">link in comment</span>}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className={cn("text-[11px]", displayText.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{displayText.length}/500</span>
                     <button onClick={() => toggleEdit(draft.id)}
                       className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
@@ -6978,6 +7000,31 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                     </button>
                   </div>
                 </div>
+
+                {/* Inline slot editor */}
+                <AnimatePresence initial={false}>
+                  {isEditingSlot && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                      transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                      className="overflow-hidden border-b border-[#ECEDEE]">
+                      <div className="px-4 py-3 bg-white flex items-center gap-2 flex-wrap">
+                        <p className="text-[11px] text-[#9A9A9A] font-medium">Change schedule:</p>
+                        <input type="date" defaultValue={slotDateVal}
+                          min={new Date().toLocaleDateString("en-CA")}
+                          onChange={(e) => applySlotEdit(e.target.value, slotTimeVal)}
+                          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
+                        <input type="time" defaultValue={slotTimeVal}
+                          onChange={(e) => applySlotEdit(slotDateVal, e.target.value)}
+                          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
+                        <button onClick={() => setEditingSlot(null)}
+                          className="text-[11px] px-3 py-1.5 rounded-lg bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
+                          Done
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="p-4 space-y-3">
                   {draft.editing ? (
                     <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
@@ -6992,7 +7039,12 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                     </p>
                   )}
                   {accountStatus === "connected" && (
-                    <button onClick={() => publishNow(draft)} disabled={!!publishing || displayText.length > 500}
+                    <button onClick={async () => {
+                      // Update slot label to now before publishing
+                      setSlotOverrides((prev) => ({ ...prev, [draft.id]: Date.now() }));
+                      await publishNow(draft);
+                      setSlotOverrides((prev) => { const n = { ...prev }; delete n[draft.id]; return n; });
+                    }} disabled={!!publishing || displayText.length > 500}
                       className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
                       {publishing === draft.id ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
                       Post now instead →

@@ -8,6 +8,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { saveUserProfile, clearDownstreamProfile } from "@/lib/firestore";
 import { useDnaData } from "./useDnaData";
 
+const DNA_RECIPE_SUGGESTIONS = new Set([
+  "Explain My Core",
+  "What Drives Me",
+  "How I Work",
+  "My Risk & Change Style",
+  "My Energy",
+  "My Strength",
+]);
+
 export interface DnaEditMessage {
   id: string;
   role: "user" | "assistant";
@@ -98,9 +107,43 @@ export function useDnaEdit() {
       appendMessage({ role: "user", content: text });
       setIsProcessing(true);
 
-      try {
-        const dnaProfile = dnaData?.dnaScores ?? {};
+      const dnaProfile = dnaData?.dnaScores ?? {};
 
+      // Recipe suggestions are always chat-only — use the streaming endpoint
+      // so text appears token-by-token (~300-500ms to first word).
+      if (DNA_RECIPE_SUGGESTIONS.has(text)) {
+        const placeholderId = `msg-${Date.now()}`;
+        setMessages((prev) => [...prev, { id: placeholderId, role: "assistant", content: "" }]);
+        try {
+          const res = await authFetch("/api/dna-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text, dnaProfile }),
+          });
+          if (!res.ok || !res.body) throw new Error(`Request failed: ${res.status}`);
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let accumulated = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            accumulated += decoder.decode(value, { stream: true });
+            setMessages((prev) =>
+              prev.map((m) => m.id === placeholderId ? { ...m, content: accumulated } : m)
+            );
+          }
+        } catch (error) {
+          console.error("[useDnaEdit] streaming error:", error);
+          setMessages((prev) =>
+            prev.map((m) => m.id === placeholderId ? { ...m, content: "Sorry, I had trouble with that. Please try again." } : m)
+          );
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
+      try {
         const res = await authFetch("/api/dna-edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

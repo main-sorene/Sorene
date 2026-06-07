@@ -5881,8 +5881,7 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
 ];
 
 // ── Customer Research Agent UI ─────────────────────────────────────────────
-function CustomerResearchAgentUI() {
-  const project = useAtomValue(selectedExecutionProjectAtom);
+function CustomerResearchAgentUI({ project }: { project: DirectionCardData | null }) {
   const title = project?.title ?? "";
 
   type Stage = "idle" | "loading" | "done";
@@ -6091,8 +6090,7 @@ interface OutreachProspect {
   createdAt: string;
 }
 
-function OutreachAgentUI() {
-  const project = useAtomValue(selectedExecutionProjectAtom);
+function OutreachAgentUI({ project }: { project: DirectionCardData | null }) {
   const title = project?.title ?? "";
   const pipelineKey = `outreach-pipeline-${title}`;
 
@@ -6334,9 +6332,9 @@ The message should: reference something specific about the prospect, connect the
 }
 
 // ── Agent detail panel ─────────────────────────────────────────────────────
-function AgentDetail({ agent }: { agent: AgentDef }) {
-  if (agent.id === "customer_research") return <CustomerResearchAgentUI />;
-  if (agent.id === "outreach") return <OutreachAgentUI />;
+function AgentDetail({ agent, project }: { agent: AgentDef; project: DirectionCardData | null }) {
+  if (agent.id === "customer_research") return <CustomerResearchAgentUI project={project} />;
+  if (agent.id === "outreach") return <OutreachAgentUI project={project} />;
 
   return (
     <div className="p-6 space-y-6">
@@ -6367,7 +6365,7 @@ function AgentDetail({ agent }: { agent: AgentDef }) {
   );
 }
 
-function AgentsContent() {
+function AgentsContent({ project }: { project: DirectionCardData | null }) {
   return (
     <div className="p-6 space-y-8">
       <div>
@@ -6394,7 +6392,7 @@ function AgentsContent() {
                   title: agent.name,
                   tagline: agent.tagline,
                   description: agent.description,
-                  content: <AgentDetail agent={agent} />,
+                  content: <AgentDetail agent={agent} project={project} />,
                   strengthTags: agent.tags,
                 }}
               />
@@ -7631,7 +7629,7 @@ export default function Page() {
                         : activeTab === "growth"
                         ? <GrowthContent key={`gr-${hydratedTick}`} project={selectedProject ?? null} />
                         : activeTab === "agents"
-                        ? <AgentsContent />
+                        ? <AgentsContent project={selectedProject ?? null} />
                         : isDirectSync
                         ? <ConnectContent />
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

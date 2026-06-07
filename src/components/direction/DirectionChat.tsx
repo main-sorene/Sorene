@@ -357,14 +357,14 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
 
       {/* Input Section */}
       <div className="px-3 pb-3 pt-0 shrink-0">
-        <div className="flex flex-col gap-2 p-3 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+        <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
           {hasDirections && (
             <div className="grid grid-cols-2 gap-1.5">
               {DIRECTION_RECIPES.map((recipe) => (
                 <button
                   key={recipe.label}
                   onClick={() => sendMessage(recipe.label, recipe.id)}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all truncate"
+                  className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[13px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
                 >
                   <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
                   <span className="truncate">{recipe.label}</span>
@@ -405,7 +405,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         </div>
-        <p className="text-center text-[10px] text-[#9CA3AF] mt-2 truncate whitespace-nowrap">
+        <p className="text-center text-[12px] text-[#9CA3AF] mt-2 truncate whitespace-nowrap">
           <a
             href="https://sorene.ai/responsible-ai"
             target="_blank"

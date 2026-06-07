@@ -326,7 +326,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   return (
     <div className="flex flex-col h-full xl:h-[97vh] w-full bg-white xl:border-l xl:border-gray-100 xl:rounded-4xl xl:my-6 overflow-hidden shrink-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 gap-3 shrink-0">
+      <div className="flex items-center justify-between p-6 gap-3 shrink-0">
         {onClose
           ? <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"><X size={20} /></button>
           : <div />}
@@ -406,12 +406,12 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       {/* Input */}
       <div className="p-6 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {SUGGESTIONS.map((s) => (
               <button key={s.recipeId} onClick={() => send(s.label, s.recipeId)} disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
-                <img src="/figmaAssets/starfour.svg" className="w-3 h-3 shrink-0" alt="" />
-                {s.label}
+                className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[13px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{s.label}</span>
               </button>
             ))}
           </div>
@@ -438,7 +438,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
             </button>
           </div>
         </div>
-        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+        <p className="text-center text-[12px] text-[#9CA3AF] mt-2 truncate whitespace-nowrap">
           <a href="https://sorene.ai/responsible-ai" target="_blank" rel="noopener noreferrer"
             className="underline hover:text-[#6B7280] transition-colors">
             Sorene can make mistakes. Consider checking important information.

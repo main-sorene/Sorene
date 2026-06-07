@@ -60,7 +60,7 @@ function SCHEMA_BLOCK() {
 {
   "rising_signals": [/* exactly 3 */],
   "falling_signals": [/* exactly 3 */],
-  "opportunities": [/* exactly 5, sorted by dna_fit_score descending */],
+  "opportunities": [/* exactly 3, sorted by dna_fit_score descending */],
   "horizon_signals": [/* exactly 2 */]
 }
 
@@ -76,7 +76,7 @@ Each rising/falling signal:
   "why_underserved": string
 }
 
-Each opportunity:
+Each opportunity (all text fields: max 3 sentences, use **bold** on the most important 2–4 words per field to help users scan):
 {
   "id": string,
   "title": string,
@@ -119,8 +119,8 @@ function buildUserMessage(
     .join("\n");
 
   const task = withSearch
-    ? "Search for live market trends and signals relevant to this person's domain and skills. Prioritise niches with strong demand but low or medium supply. Then generate a personalised Market Intelligence Report. Output only the JSON."
-    : "Generate a personalised Market Intelligence Report for this specific user. Prioritise niches with strong demand but low or medium supply. Return only the JSON.";
+    ? "Search for live market trends and signals relevant to this person's domain and skills. Prioritise niches with strong demand but low or medium supply. Then generate a personalised Market Intelligence Report with exactly 3 opportunities. Output only the JSON."
+    : "Generate a personalised Market Intelligence Report for this specific user with exactly 3 opportunities. Prioritise niches with strong demand but low or medium supply. Return only the JSON.";
 
   return `User: ${firstName}
 

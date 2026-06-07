@@ -59,10 +59,10 @@ RULES:
 function SCHEMA_BLOCK() {
   return `SCHEMA:
 {
-  "opportunities": [/* exactly 5, ranked by confidence descending */]
+  "opportunities": [/* exactly 3, ranked by confidence descending */]
 }
 
-Each opportunity:
+Each opportunity (all text fields: max 3 sentences, use **bold** on the most important 2–4 words per field to help users scan):
 {
   "id": string,
   "title": string,
@@ -95,8 +95,8 @@ function buildUserMessage(
     .join("\n");
 
   const task = withSearch
-    ? "Search for real pain signals online that this person is uniquely positioned to solve. Use web_search to scan Reddit, Quora, X, and Product Hunt. For each candidate problem also check supply (existing solutions). Then output the top 5 business opportunities as JSON only."
-    : "Identify the top 5 business problems this person is uniquely positioned to solve, where demand is real but existing solutions are weak or absent. Output only the JSON.";
+    ? "Search for real pain signals online that this person is uniquely positioned to solve. Use web_search to scan Reddit, Quora, X, and Product Hunt. For each candidate problem also check supply (existing solutions). Then output exactly 3 business opportunities as JSON only."
+    : "Identify the top 3 business problems this person is uniquely positioned to solve, where demand is real but existing solutions are weak or absent. Output only the JSON.";
 
   return `User: ${firstName}
 

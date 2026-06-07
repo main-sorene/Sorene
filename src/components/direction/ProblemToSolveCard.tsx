@@ -183,7 +183,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
                 <RefreshCw size={12} /> Regenerate
               </button>
               <button onClick={() => setIsExpanded(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-all shadow-sm shrink-0">
-                See All 5 <ArrowRight size={14} />
+                See All 3 <ArrowRight size={14} />
               </button>
             </div>
           </motion.div>
@@ -305,11 +305,20 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
   );
 }
 
+function renderBold(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
 function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className={cn("rounded-lg p-3", highlight ? "bg-[#f0fdfa]" : "bg-gray-50")}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
-      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#0f766e]" : "text-[#62646A]")}>{value}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#0f766e]" : "text-[#62646A]")}>{renderBold(value)}</p>
     </div>
   );
 }

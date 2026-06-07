@@ -122,7 +122,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-5 mt-5">
               <div className="flex items-center gap-1.5"><TrendingUp size={14} className="text-emerald-300" /><span className="text-white text-[13px] font-semibold">{report.rising_signals.length} Rising</span></div>
               <div className="flex items-center gap-1.5"><TrendingDown size={14} className="text-red-300" /><span className="text-white text-[13px] font-semibold">{report.falling_signals.length} Falling</span></div>
-              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunities</span></div>
+              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunit{report.opportunities.length === 1 ? "y" : "ies"}</span></div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -359,7 +359,7 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
         {isExpanded && (
           <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ type: "spring", stiffness: 400, damping: 40 }} className="overflow-hidden">
             <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-3">
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{opportunity.description}</p>
+              <p className="text-[12px] text-[#62646A] leading-relaxed">{renderBold(opportunity.description)}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <DetailItem label="Why it fits you" value={opportunity.fit_explanation} highlight />
                 <DetailItem label="First 10 customers" value={opportunity.first_10_customers} />
@@ -378,11 +378,20 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
   );
 }
 
+function renderBold(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
 function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className={cn("rounded-lg p-3", highlight ? "bg-[#f5f3ff]" : "bg-gray-50")}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
-      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#4338ca]" : "text-[#62646A]")}>{value}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#4338ca]" : "text-[#62646A]")}>{renderBold(value)}</p>
     </div>
   );
 }

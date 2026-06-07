@@ -24,7 +24,7 @@ export const paymentMethodQueryKey = (email: string) => ["payment-method", email
 
 export function usePaymentMethod(enabled: boolean = true) {
   const user = useAtomValue(userAtom);
-  const email = user?.email ?? user?.profile?.email ?? null;
+  const email = user?.email ?? user?.profile?.email ?? user?.uid ?? null;
 
   return useQuery({
     queryKey: paymentMethodQueryKey(email ?? ""),
@@ -39,7 +39,7 @@ export const invoicesQueryKey = (email: string) => ["invoices", email];
 
 export function useInvoices(page: number = 1, limit: number = 10, enabled: boolean = true) {
   const user = useAtomValue(userAtom);
-  const email = user?.email ?? user?.profile?.email ?? null;
+  const email = user?.email ?? user?.profile?.email ?? user?.uid ?? null;
 
   return useQuery({
     queryKey: [...invoicesQueryKey(email ?? ""), page, limit],

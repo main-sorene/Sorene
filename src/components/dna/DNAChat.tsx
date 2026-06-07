@@ -246,7 +246,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                 key={label}
                 onClick={() => sendMessage(label)}
                 disabled={isProcessing}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all truncate disabled:opacity-50"
+                className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50"
               >
                 <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
                 <span className="truncate">{label}</span>

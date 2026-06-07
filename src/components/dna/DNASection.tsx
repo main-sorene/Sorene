@@ -699,10 +699,10 @@ export const DNASection = () => {
         </div>
 
         {/* See My Direction CTA */}
-        <div className="flex justify-center px-4 py-10 pb-20">
+        <div className="flex justify-center px-4 pt-4 pb-10">
           <button
             onClick={handleSeeDirection}
-            className="bg-black text-white text-sm font-semibold px-8 py-3.5 rounded-full hover:bg-gray-900 transition-colors"
+            className="bg-black text-white text-sm font-semibold px-16 py-3.5 rounded-full hover:bg-gray-900 transition-colors w-full max-w-sm"
           >
             See My Direction
           </button>

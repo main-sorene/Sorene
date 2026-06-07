@@ -80,10 +80,15 @@ export async function deductCredits(email: string, amount: number): Promise<void
   if (amount <= 0) return;
   const db = getDb();
   try {
+    // mergeFields ensures only credits.used is touched — creates the field if
+    // it doesn't exist yet (update() would throw on a fresh user document).
     await db
       .collection("users")
       .doc(email)
-      .update({ "credits.used": FieldValue.increment(amount) });
+      .set(
+        { credits: { used: FieldValue.increment(amount) } },
+        { mergeFields: ["credits.used"] },
+      );
   } catch (err) {
     console.error("[deductCredits] failed to deduct", amount, "for", email, err);
   }

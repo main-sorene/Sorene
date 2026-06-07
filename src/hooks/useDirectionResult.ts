@@ -71,12 +71,9 @@ export function useDirectionResult() {
     // New path: structured direction cards
     // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
     const cachedCards = profile.directionCards;
-    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 &&
-      ((cachedCards[0].title && cachedCards[0].constraint_check) ||
-       (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
-    if (cardsAreUpToDate) {
-      // User already has generated cards — show them directly without requiring R&C check.
-      // (R&C gate only applies before the first generation.)
+    // Any non-empty cards array = show them. Old format cards (missing constraint_check
+    // or ikigai_filters) are still valid — no need to force regeneration.
+    if (cachedCards && cachedCards.length > 0 && cachedCards[0].title) {
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;

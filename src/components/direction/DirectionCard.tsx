@@ -595,12 +595,12 @@ export function DirectionCard({
             <div className="flex items-center gap-2">
               {onHide && (
                 <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                   Hide
                 </button>
               )}
               {cardData && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                   style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                   {constraintLabel(cardData.constraint_check.status)}
                 </div>
@@ -611,12 +611,12 @@ export function DirectionCard({
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                   className="flex items-center gap-2">
                   <button onClick={goValidate}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
                     Start Validate
                   </button>
                   <button onClick={(e) => handleToggle(e)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                    {actionText}<ArrowRight size={16} />
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                    {actionText}<ArrowRight size={14} />
                   </button>
                 </motion.div>
               )}
@@ -1281,12 +1281,12 @@ export function DirectionCard({
               <div className="flex items-center gap-2">
                 {onHide && (
                   <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                     Hide
                   </button>
                 )}
                 {cardData && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                     style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                     {constraintLabel(cardData.constraint_check.status)}
                   </div>
@@ -1295,12 +1295,12 @@ export function DirectionCard({
               {/* Right: Start Validate + View detail */}
               <div className="flex items-center gap-2">
                 <button onClick={(e) => { e.stopPropagation(); goValidate(e); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
                   Start Validate
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                  {actionText}<ArrowRight size={14} />
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                  {actionText}<ArrowRight size={13} />
                 </button>
               </div>
             </div>

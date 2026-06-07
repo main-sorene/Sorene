@@ -6,9 +6,9 @@ function getDb() {
 }
 
 export const PLAN_CREDITS: Record<string, number> = {
-  free: 250,
-  starter: 1500,
-  pro: 5000,
+  free: 750,
+  starter: 4500,
+  pro: 15000,
 };
 
 // Credits per token by model (1 credit = $0.001)

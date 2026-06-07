@@ -172,12 +172,34 @@ function buildConceptPhase1Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
 ): string {
-  const context = buildUserContext([], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, 0);
-  return `Generate 1 direction card for ${firstName} based on this specific opportunity concept: "${concept}".
+  const or = (v: unknown, fallback = "Not provided") => v && String(v).trim() ? String(v) : fallback;
+  const nar = dnaNarrative ?? {};
+  const res = resources ?? {};
+  const bgBlock = cvSummary?.trim() || [
+    rawAnswers["bg1_history"] ? `- Most recent role: ${rawAnswers["bg1_history"]}` : "",
+    rawAnswers["bg2_skills"] ? `- Experience: ${rawAnswers["bg2_skills"]}` : "",
+    rawAnswers["bg4_direction"] ? `- Key skills: ${rawAnswers["bg4_direction"]}` : "",
+  ].filter(Boolean).join("\n");
 
-${context}
+  return `Generate 1 direction card for ${firstName} based on this opportunity concept: "${concept}".
 
-Adapt the concept to fit the user's DNA, skills, and constraints. Make the direction concrete and specific to them.
+━━━ DNA PROFILE ━━━
+Name: ${firstName}
+Core Pattern: ${or(nar["core_dna_label"] ?? scores.strength_patterns?.join(", "))}
+Value Signature: ${or(nar["your_core"] ?? scores.strengths_summary)}
+Risk score: ${scores.risk_score}/10
+Constraint level: ${scores.constraint_score}/10
+Readiness: ${scores.readiness_score}/10
+
+━━━ RESOURCES ━━━
+Networks: ${or(res.networks)}
+Capital: $${or(res.startingCapital)}
+Runway (months): ${or(res.financialRunway)}
+Hours/week: ${or(res.hoursPerWeek)}
+Income floor: $${or(res.incomeFloor)}/month
+
+${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}
+Adapt the concept to fit this user's DNA, skills, and constraints. Make it concrete and specific to them.
 
 Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markdown):
 {"cards": [{

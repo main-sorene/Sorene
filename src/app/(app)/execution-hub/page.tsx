@@ -6144,7 +6144,7 @@ function MessengerConnectCard() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
-              <p className="text-[13px] text-white/80 mt-0.5 leading-relaxed">Your coach is now in your pocket. Get sharp, personalised coaching on the go, log customer conversations instantly, and stay on track with daily check-ins and reminders — all through WhatsApp.</p>
+              <p className="text-[12px] sm:text-[13px] text-white/80 mt-0.5 leading-relaxed">Your coach is now in your pocket. Get sharp, personalised coaching on the go, log customer conversations instantly, and stay on track with daily check-ins and reminders — all through WhatsApp.</p>
             </div>
           </div>
           <button onClick={() => setIsExpanded((v) => !v)}
@@ -6164,22 +6164,22 @@ function MessengerConnectCard() {
             <div className="px-6 py-5 space-y-3">
               {/* WhatsApp row */}
               <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: "#25D36620" }}>
                     {WA_ICON}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-[#151515]">WhatsApp</p>
-                    <p className="text-[11px] text-[#9A9A9A]">Real-time coaching · Weekly check-ins · Progress tracking</p>
+                    <p className="text-[11px] text-[#9A9A9A] hidden sm:block">Real-time coaching · Weekly check-ins · Progress tracking</p>
                   </div>
                   <button onClick={() => setSettingsOpen(settingsOpen === "whatsapp" ? null : "whatsapp")}
-                    className={cn("p-2 rounded-lg transition-colors", settingsOpen === "whatsapp" ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
+                    className={cn("p-2 rounded-lg transition-colors shrink-0", settingsOpen === "whatsapp" ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
                     title="Settings">
                     <Settings size={14} />
                   </button>
                   <button onClick={() => handleLink("whatsapp")} disabled={linkState.whatsapp === "loading"}
                     className={cn(
-                      "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
+                      "flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
                       linkState.whatsapp === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30" : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
                       linkState.whatsapp === "loading" && "opacity-60 cursor-not-allowed"
                     )}>
@@ -6212,13 +6212,13 @@ function MessengerConnectCard() {
 
                         {/* Business update reminders */}
                         <div className="space-y-1.5">
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
                             <div className="min-w-0 flex-1">
                               <p className="text-[12px] font-medium text-[#151515]">Business update reminders</p>
                               <p className="text-[11px] text-[#9A9A9A] leading-snug">Push a daily or weekly prompt to share your business status.</p>
                             </div>
                             <select value={waSettings.reminder_freq ?? "Off"} onChange={(e) => updateSetting("reminder_freq", e.target.value)}
-                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none w-full sm:w-auto shrink-0">
                               {["Off", "Daily", "Weekly"].map((o) => <option key={o}>{o}</option>)}
                             </select>
                           </div>
@@ -6238,13 +6238,13 @@ function MessengerConnectCard() {
 
                         {/* Business knowledge snippets */}
                         <div className="space-y-1.5">
-                          <div className="flex items-start justify-between gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
                             <div className="min-w-0 flex-1">
                               <p className="text-[12px] font-medium text-[#151515]">Business knowledge snippets</p>
                               <p className="text-[11px] text-[#9A9A9A] leading-snug">Receive a curated business tip via WhatsApp each day.</p>
                             </div>
                             <select value={waSettings.knowledge ?? "Off"} onChange={(e) => updateSetting("knowledge", e.target.value)}
-                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none w-full sm:w-auto shrink-0">
                               {["Off", "Daily"].map((o) => <option key={o}>{o}</option>)}
                             </select>
                           </div>
@@ -6328,16 +6328,16 @@ function CommunityCard() {
           >
             <div className="px-6 py-5 space-y-3">
               {COMMUNITY_CHANNELS.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
+                <div key={c.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
                     {c.icon}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
-                    <p className="text-[11px] text-[#9A9A9A] leading-snug">{c.description}</p>
+                    <p className="text-[11px] text-[#9A9A9A] leading-snug hidden sm:block">{c.description}</p>
                   </div>
                   <a href={c.link} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0">
+                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0">
                     Join <ArrowRight size={12} />
                   </a>
                 </div>
@@ -6352,7 +6352,7 @@ function CommunityCard() {
 
 function ConnectContent() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-4">
       <MessengerConnectCard />
       <CommunityCard />
     </div>

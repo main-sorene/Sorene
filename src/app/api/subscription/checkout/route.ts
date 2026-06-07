@@ -22,14 +22,15 @@ export async function POST(req: NextRequest) {
     if (!authedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (email !== authedUser.uid && email !== authedUser.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
-    getAdminAuth(); // ensures firebase admin is initialised
+    // Use the verified token identity as the canonical key — email param may
+    // not match if the token's email claim is empty for some auth providers.
+    const userKey = authedUser.uid;
+
+    getAdminAuth();
 
     const db = getDb();
-    const userDoc = await db.collection("users").doc(email).get();
+    const userDoc = await db.collection("users").doc(userKey).get();
     const userData = userDoc.data() || {};
 
     // Reuse existing Stripe customer if available
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (!customerId) {
       const customer = await getStripe().customers.create({ email });
       customerId = customer.id;
-      await db.collection("users").doc(email).set({ stripeCustomerId: customerId }, { merge: true });
+      await db.collection("users").doc(userKey).set({ stripeCustomerId: customerId }, { merge: true });
     }
 
     const priceId = getPriceId(plan, duration);
@@ -49,8 +50,8 @@ export async function POST(req: NextRequest) {
       allow_promotion_codes: true,
       success_url,
       cancel_url,
-      metadata: { email, plan, duration: String(duration) },
-      subscription_data: { metadata: { email, plan, duration: String(duration) } },
+      metadata: { email: userKey, plan, duration: String(duration) },
+      subscription_data: { metadata: { email: userKey, plan, duration: String(duration) } },
     });
 
     return NextResponse.json({ session_id: session.id, url: session.url });

@@ -16,14 +16,16 @@ async function upsertSubscription(
   subscription: Stripe.Subscription,
   resetUsage = false,
 ) {
-  const email =
+  // The metadata.email field is actually the user's canonical Firestore doc key
+  // (uid or email depending on how they signed up — set at checkout time).
+  const userKey =
     subscription.metadata?.email ||
     (typeof subscription.customer === "object"
       ? (subscription.customer as Stripe.Customer).email
       : null);
 
-  if (!email) {
-    console.warn("[webhook] No email on subscription", subscription.id);
+  if (!userKey) {
+    console.warn("[webhook] No user key on subscription", subscription.id);
     return;
   }
 
@@ -32,7 +34,7 @@ async function upsertSubscription(
   const active = subscription.status === "active" || subscription.status === "trialing";
   const effectivePlan = active ? plan : "free";
 
-  await db.collection("users").doc(email).set(
+  await db.collection("users").doc(userKey).set(
     {
       subscription: {
         active,
@@ -46,7 +48,7 @@ async function upsertSubscription(
   );
 
   // Update credit limit to match new plan; reset usage on new subscriptions
-  await setCreditsLimit(email, effectivePlan, resetUsage);
+  await setCreditsLimit(userKey, effectivePlan, resetUsage);
 }
 
 export async function POST(req: NextRequest) {

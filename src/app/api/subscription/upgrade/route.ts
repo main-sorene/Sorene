@@ -17,13 +17,11 @@ export async function POST(req: NextRequest) {
     if (!authedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (email !== authedUser.uid && email !== authedUser.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     getAdminAuth();
     const db = getDb();
-    const userDoc = await db.collection("users").doc(email).get();
+    const userKey = authedUser.uid;
+    const userDoc = await db.collection("users").doc(userKey).get();
     const data = userDoc.data() || {};
 
     const stripeSubscriptionId: string = data.subscription?.stripeSubscriptionId;
@@ -38,10 +36,10 @@ export async function POST(req: NextRequest) {
     const updated = await getStripe().subscriptions.update(stripeSubscriptionId, {
       proration_behavior: prorate ? "create_prorations" : "none",
       items: [{ id: itemId, price: priceId }],
-      metadata: { email, plan, duration: String(duration) },
+      metadata: { email: userKey, plan, duration: String(duration) },
     });
 
-    await db.collection("users").doc(email).set(
+    await db.collection("users").doc(userKey).set(
       { subscription: { plan, duration, status: updated.status, active: updated.status === "active" } },
       { merge: true },
     );

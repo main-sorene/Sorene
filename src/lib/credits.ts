@@ -109,10 +109,10 @@ export async function addExtraCredits(email: string, amount: number): Promise<vo
   }
 }
 
-export async function setCreditsLimit(email: string, plan: string, resetUsage = false): Promise<void> {
+export async function setCreditsLimit(userKey: string, plan: string, resetUsage = false): Promise<void> {
   const limit = PLAN_CREDITS[plan] ?? PLAN_CREDITS.free;
   const db = getDb();
-  const snap = await db.collection("users").doc(email).get();
+  const snap = await db.collection("users").doc(userKey).get();
   const existing = snap.data()?.credits;
   const nextReset = Date.now() + 30 * 24 * 60 * 60 * 1000;
 
@@ -122,7 +122,7 @@ export async function setCreditsLimit(email: string, plan: string, resetUsage = 
   // Note: extra (purchased credits) is intentionally NOT overwritten here
   await db
     .collection("users")
-    .doc(email)
+    .doc(userKey)
     .set(
       {
         credits: {

@@ -61,8 +61,9 @@ export function useDirectionResult() {
       ((cachedCards[0].title && cachedCards[0].constraint_check) ||
        (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
     if (cardsAreUpToDate) {
-      // Show existing direction cards regardless of R&C status.
-      // The R&C card appears below direction cards in the layout, so users can fill it any time.
+      // Only show cached cards if R&C has been filled — otherwise gate on R&C first
+      const hasRC = !!localStorage.getItem("resourcesConstraints");
+      if (!hasRC) { setNeedsRC(true); return; }
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;

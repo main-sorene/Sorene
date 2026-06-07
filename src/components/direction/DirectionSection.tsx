@@ -96,10 +96,11 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
   },
 };
 
-function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
+function HiddenCardsPills({ hiddenIds, allCards, onShow, onRemove }: {
   hiddenIds: string[];
   allCards: { id: string; title: string }[];
   onShow: (id: string) => void;
+  onRemove: (id: string) => void;
 }) {
   const hidden = allCards.filter((c) => hiddenIds.includes(c.id));
   if (hidden.length === 0) return null;
@@ -108,13 +109,21 @@ function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
       <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
       <div className="grid grid-cols-2 gap-2">
         {hidden.map((card) => (
-          <button
-            key={card.id}
-            onClick={() => onShow(card.id)}
-            className="px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#62646A] hover:bg-[#F1F3F5] transition-all text-left truncate"
-          >
-            {card.title}
-          </button>
+          <div key={card.id} className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] hover:bg-[#F1F3F5] transition-all min-w-0">
+            <button
+              onClick={() => onShow(card.id)}
+              className="flex-1 text-xs font-medium text-[#62646A] text-left truncate"
+            >
+              {card.title}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(card.id); }}
+              className="shrink-0 text-[#9CA3AF] hover:text-[#374151] transition-colors ml-1"
+              aria-label="Remove"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9 3L3 9M3 3l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -226,6 +235,14 @@ export const DirectionSection = () => {
   };
 
   const showCard = (id: string) => {
+    setHiddenIds((prev) => {
+      const updated = prev.filter((h) => h !== id);
+      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  const removeCard = (id: string) => {
     setHiddenIds((prev) => {
       const updated = prev.filter((h) => h !== id);
       try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
@@ -510,7 +527,7 @@ export const DirectionSection = () => {
           );
         })()}
 
-        {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
+        {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} onRemove={removeCard} />}
 
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
@@ -657,7 +674,7 @@ export const DirectionSection = () => {
               { id: "__hero__", title: model || "Your Direction" },
               ...otherDirections.map((a) => ({ id: a.model, title: a.model })),
               ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
-            ]} onShow={showCard} />
+            ]} onShow={showCard} onRemove={removeCard} />
           </section>
         )}
 
@@ -841,7 +858,7 @@ export const DirectionSection = () => {
           ...(bestPickIdea ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
           ...otherIdeas.map((i) => ({ id: i.name, title: i.name })),
           ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
-        ]} onShow={showCard} />
+        ]} onShow={showCard} onRemove={removeCard} />
       </section>
 
       <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />

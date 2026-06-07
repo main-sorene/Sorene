@@ -172,6 +172,21 @@ export const DirectionSection = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [heroRecipeId, setHeroRecipeId] = useState<string | null>(null);
   const [heroDirectionTitle, setHeroDirectionTitle] = useState<string | null>(null);
+  // Track cards currently doing the reveal animation (just finished loading)
+  const [revealingIds, setRevealingIds] = useState<Set<string>>(new Set());
+  const prevLoadingIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const currentlyLoading = new Set(recipeDirections.filter((r) => r.loading).map((r) => r.id));
+    const justFinished = [...prevLoadingIds.current].filter((id) => !currentlyLoading.has(id));
+    if (justFinished.length > 0) {
+      setRevealingIds((prev) => { const next = new Set(prev); justFinished.forEach((id) => next.add(id)); return next; });
+      // Remove from revealing set after reveal animation completes (~2.5s)
+      setTimeout(() => {
+        setRevealingIds((prev) => { const next = new Set(prev); justFinished.forEach((id) => next.delete(id)); return next; });
+      }, 2500);
+    }
+    prevLoadingIds.current = currentlyLoading;
+  }, [recipeDirections]);
 
   // When the user arrives from the Execution Hub onboarding ("Check Founder &
   // Market Fit"), auto-generate a direction card once the profile is eligible.
@@ -498,8 +513,18 @@ export const DirectionSection = () => {
                       isLoadingSection4={loadingSection4For === card.title}
                     />
                   ))}
-                  {gridOnlyRecipes.map((rd) => rd.loading ? (
-                    <RecipeSkeletonCard key={rd.id} concept={rd.concept} />
+                  {gridOnlyRecipes.map((rd) => (rd.loading || revealingIds.has(rd.id)) ? (
+                    <RecipeSkeletonCard
+                      key={rd.id}
+                      concept={rd.concept}
+                      revealData={revealingIds.has(rd.id) ? {
+                        title: rd.title,
+                        description: rd.description,
+                        whyFitsYou: rd.whyFitsYou,
+                        keyRisks: rd.keyRisks,
+                        score: rd.score,
+                      } : undefined}
+                    />
                   ) : (
                     <DirectionCard
                       key={rd.id}

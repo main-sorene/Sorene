@@ -1319,8 +1319,70 @@ export function DirectionCard({
 }
 
 
-export function RecipeSkeletonCard({ concept }: { concept?: string }) {
-  const title = concept?.split(":")[0]?.trim() ?? "Building your direction…";
+// A shimmer bar placeholder that fades out and reveals real text when loading ends.
+function ShimmerLine({ width = "75%", height = "h-3", delay = 0, loading }: {
+  width?: string; height?: string; delay?: number; loading: boolean;
+}) {
+  return (
+    <div className="relative overflow-hidden" style={{ width }}>
+      <AnimatePresence initial={false}>
+        {loading ? (
+          <motion.div
+            key="shimmer"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, delay }}
+            className={cn(height, "rounded bg-gray-100 animate-pulse w-full")}
+          />
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+interface RecipeSkeletonCardProps {
+  concept?: string;
+  // When provided, loading is done and we reveal real content piece-by-piece.
+  revealData?: {
+    title: string;
+    description: string;
+    whyFitsYou: string[];
+    keyRisks: string[];
+    score: number;
+  };
+}
+
+export function RecipeSkeletonCard({ concept, revealData }: RecipeSkeletonCardProps) {
+  const displayTitle = revealData?.title ?? concept?.split(":")[0]?.trim() ?? "Building your direction…";
+  const loading = !revealData;
+
+  // Once revealData arrives, stagger-reveal each item by tracking a counter.
+  const [revealCount, setRevealCount] = useState(0);
+  useEffect(() => {
+    if (!revealData) { setRevealCount(0); return; }
+    const allItems = [
+      revealData.description,
+      ...revealData.whyFitsYou,
+      ...revealData.keyRisks,
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setRevealCount(i);
+      if (i >= allItems.length) clearInterval(interval);
+    }, 120);
+    return () => clearInterval(interval);
+  }, [revealData]);
+
+  const revealed = (idx: number) => !loading && revealCount > idx;
+
+  const whyItems = revealData?.whyFitsYou ?? ["", "", ""];
+  const riskItems = revealData?.keyRisks ?? ["", ""];
+  // stagger offsets: description=0, whyFitsYou starts at 1, keyRisks after
+  const descIdx = 0;
+  const whyStartIdx = 1;
+  const riskStartIdx = 1 + whyItems.length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -1329,32 +1391,110 @@ export function RecipeSkeletonCard({ concept }: { concept?: string }) {
     >
       {/* Header */}
       <div className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] p-5 overflow-hidden">
-        <div className="relative z-10 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-1">Generating direction</p>
-            <h3 className="text-base font-semibold text-white">{title}</h3>
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-1">
+              {loading ? "Generating direction…" : "Your direction"}
+            </p>
+            <h3 className="text-base font-semibold text-white leading-snug">{displayTitle}</h3>
           </div>
-          <div className="text-2xl font-bold text-white/20 animate-pulse">—%</div>
+          <AnimatePresence>
+            {!loading && revealData && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-xl font-bold text-white shrink-0"
+              >
+                {revealData.score}%
+              </motion.div>
+            )}
+            {loading && (
+              <motion.div exit={{ opacity: 0 }} className="text-2xl font-bold text-white/20 animate-pulse shrink-0">
+                —%
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        {/* Animated sweep bar */}
-        <motion.div
-          className="absolute bottom-0 left-0 h-0.5 bg-white/30"
-          initial={{ width: "0%" }}
-          animate={{ width: "100%" }}
-          transition={{ duration: 8, ease: "linear", repeat: Infinity }}
-        />
+        {/* Progress sweep — only while loading */}
+        {loading && (
+          <motion.div
+            className="absolute bottom-0 left-0 h-0.5 bg-white/30"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 10, ease: "linear" }}
+          />
+        )}
       </div>
-      {/* Body shimmer */}
-      <div className="p-5 space-y-3">
-        {[80, 60, 90, 50].map((w, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-gray-100 animate-pulse shrink-0" />
-            <div
-              className="h-3 rounded bg-gray-100 animate-pulse"
-              style={{ width: `${w}%`, animationDelay: `${i * 0.15}s` }}
-            />
+
+      {/* Body */}
+      <div className="p-5 space-y-5">
+        {/* Description */}
+        <div className="min-h-[2rem]">
+          {revealed(descIdx) ? (
+            <motion.p
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[13px] text-[#62646A] leading-relaxed"
+            >
+              {revealData!.description}
+            </motion.p>
+          ) : (
+            <div className="space-y-2">
+              <ShimmerLine width="100%" height="h-3" loading={loading} />
+              <ShimmerLine width="80%" height="h-3" delay={0.05} loading={loading} />
+            </div>
+          )}
+        </div>
+
+        {/* Why it fits you */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">Why it fits you</p>
+          <div className="space-y-2.5">
+            {whyItems.map((item, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="mt-0.5 shrink-0">
+                  <CircleCheck size={14} className={cn("transition-colors duration-300", revealed(whyStartIdx + i) ? "text-[#32C382]" : "text-gray-200")} />
+                </div>
+                {revealed(whyStartIdx + i) ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-[13px] text-[#151515] leading-relaxed"
+                  >
+                    {item}
+                  </motion.span>
+                ) : (
+                  <ShimmerLine width={i % 2 === 0 ? "70%" : "55%"} loading={loading} />
+                )}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Key risks */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">Key risks</p>
+          <div className="space-y-2.5">
+            {riskItems.map((risk, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="mt-0.5 shrink-0">
+                  <CircleX size={14} className={cn("transition-colors duration-300", revealed(riskStartIdx + i) ? "text-[#DF2E16]" : "text-gray-200")} />
+                </div>
+                {revealed(riskStartIdx + i) ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-[13px] text-[#62646A] leading-relaxed"
+                  >
+                    {risk}
+                  </motion.span>
+                ) : (
+                  <ShimmerLine width={i % 2 === 0 ? "65%" : "80%"} loading={loading} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </motion.div>
   );

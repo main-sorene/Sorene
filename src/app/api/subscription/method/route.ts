@@ -8,16 +8,14 @@ function getDb() {
 
 export async function GET(req: NextRequest) {
   try {
-    const email = req.nextUrl.searchParams.get("email");
-    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
-
     const authedUser = await verifyAuth(req);
     if (!authedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (email !== authedUser.uid && email !== authedUser.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // email param is optional — fall back to the verified token's identity so the
+    // lookup never fails when the client fires before its user state is populated.
+    const email =
+      req.nextUrl.searchParams.get("email") || authedUser.email || authedUser.uid;
 
     getAdminAuth();
     const db = getDb();

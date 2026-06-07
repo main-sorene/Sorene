@@ -69,7 +69,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
         credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
-        _debug: { keysRead: keys, foundCreditsDoc: !!creditOwner.credits, rawUsed: credits?.used ?? null, tokenUid: authedUser.uid, tokenEmail: authedUser.email ?? null, queryEmail: email },
       });
     }
 

@@ -6857,7 +6857,6 @@ function AgentsContent({ project }: { project: DirectionCardData | null }) {
                   tagline: agent.tagline,
                   description: agent.description,
                   content: <AgentDetail agent={agent} project={project} />,
-                  strengthTags: agent.tags,
                 }}
               />
             ))}

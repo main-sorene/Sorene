@@ -1,8 +1,8 @@
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getAdminFirestore } from "@/lib/firebaseAdmin";
+import { FieldValue } from "firebase-admin/firestore";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 export const PLAN_CREDITS: Record<string, number> = {

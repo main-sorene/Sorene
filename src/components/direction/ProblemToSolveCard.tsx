@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Separator } from "../ui/separator";
 import { useProblemScan } from "@/hooks/useProblemScan";
-import { useDirectionResult } from "@/hooks/useDirectionResult";
 import type { ProblemOpportunity } from "@/types/problemScan";
 
 const CARD_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #0f766e 34.62%, #134e4a 100%)`;
@@ -25,9 +24,8 @@ const BAR_HEIGHTS = [35, 60, 45, 80, 65, 40, 70, 50];
 const CONFIDENCE_COLOR = (score: number) =>
   score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#0f766e";
 
-export function ProblemToSolveCard() {
+export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
-  const { generateRecipeCard } = useDirectionResult();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -209,7 +207,7 @@ export function ProblemToSolveCard() {
                   <OpportunityCard key={opp.id} opportunity={opp}
                     isExpanded={expandedId === opp.id}
                     onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
-                    onGenerateDirection={() => generateRecipeCard(`${opp.title}: ${opp.one_line}`)} />
+                    onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
                 ))}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">

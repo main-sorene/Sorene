@@ -150,6 +150,7 @@ export const DirectionSection = () => {
     loadingRecipeDetailFor,
     loadingRecipeSection3For,
     loadingRecipeSection4For,
+    generateRecipeCard,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -228,8 +229,8 @@ export const DirectionSection = () => {
         )}
         <div className="flex flex-col gap-4">
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </div>
       </div>
     </div>
@@ -499,8 +500,8 @@ export const DirectionSection = () => {
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
         <section className="space-y-3">
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </section>
       </div>
     );
@@ -648,8 +649,8 @@ export const DirectionSection = () => {
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
         <section className="space-y-3">
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </section>
       </div>
     );
@@ -831,8 +832,8 @@ export const DirectionSection = () => {
       <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
       <section className="space-y-3">
-        <MarketIntelligenceCard />
-        <ProblemToSolveCard />
+        <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+        <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
       </section>
     </div>
   );

@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Separator } from "../ui/separator";
 import { useMIE } from "@/hooks/useMIE";
-import { useDirectionResult } from "@/hooks/useDirectionResult";
 import type { MIEOpportunity, MIESignal, MIEHorizonSignal } from "@/types/mie";
 
 const MIE_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #6366f1 34.62%, #4338ca 100%)`;
@@ -45,9 +44,8 @@ const COST_COLORS: Record<string, { bg: string; text: string }> = {
   High: { bg: "#fef2f2", text: "#b91c1c" },
 };
 
-export function MarketIntelligenceCard() {
+export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useMIE();
-  const { generateRecipeCard } = useDirectionResult();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedOpportunity, setExpandedOpportunity] = useState<string | null>(null);
   const topOpportunity = report?.opportunities?.[0] ?? null;
@@ -233,7 +231,7 @@ export function MarketIntelligenceCard() {
                   {report.opportunities.map((opp) => (
                     <OpportunityCard key={opp.id} opportunity={opp} isExpanded={expandedOpportunity === opp.id}
                       onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)}
-                      onGenerateDirection={() => generateRecipeCard(`${opp.title}: ${opp.one_line}`)} />
+                      onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
                   ))}
                 </div>
               </ReportSection>

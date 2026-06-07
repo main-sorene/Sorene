@@ -6522,7 +6522,7 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; }
 
@@ -6769,8 +6769,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
   const discardDraft = (id: string) =>
     setWeekDrafts((prev) => prev.filter((d) => d.id !== id));
 
-  const publishNow = async (draft: ThreadsDraft) => {
+  const publishNow = async (draft: ThreadsDraft): Promise<boolean> => {
     setPublishing(draft.id);
+    let success = false;
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/threads/post", {
@@ -6779,12 +6780,13 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
         body: JSON.stringify({ text: draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim() }),
       });
       if (res.ok) {
-        setWeekDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+        success = true;
         setSuccessMsg("Posted ✓");
         setTimeout(() => setSuccessMsg(""), 3000);
       }
     } catch { /* ignore */ }
     setPublishing(null);
+    return success;
   };
 
   // Approve all — validate token first, then schedule each draft at its slot
@@ -6817,10 +6819,12 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
         return;
       }
 
+      const pendingDrafts = weekDrafts.filter((d) => !d.frozen);
       const newScheduled: ScheduledPost[] = [];
-      for (let i = 0; i < weekDrafts.length; i++) {
-        const draft = weekDrafts[i];
-        const scheduledAt = slotOverrides[draft.id] ?? scheduleSlots[i] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+      for (let i = 0; i < pendingDrafts.length; i++) {
+        const draft = pendingDrafts[i];
+        const globalIdx = weekDrafts.indexOf(draft);
+        const scheduledAt = slotOverrides[draft.id] ?? scheduleSlots[globalIdx] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
         const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
         const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
         const res = await authFetch("/api/threads/schedule", {
@@ -6838,12 +6842,17 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
         }
       }
       setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
-      setWeekDrafts([]);
-      setSlotOverrides({});
-      // Clear saved drafts immediately (don't wait for debounce)
+      // Freeze pending drafts in place — show them as locked/waiting
+      const now = Date.now();
+      setWeekDrafts((prev) => prev.map((d, i) => d.frozen ? d : {
+        ...d,
+        frozen: true,
+        frozenAt: slotOverrides[d.id] ?? scheduleSlots[i] ?? now,
+        editing: false,
+      }));
+      // Clear saved drafts from Firestore immediately
       authFetch("/api/threads/drafts", { method: "DELETE" }).catch(() => {});
-      setSuccessMsg(`${newScheduled.length} posts saved & scheduled ✓`);
-      setTimeout(() => setSuccessMsg(""), 5000);
+      setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
     } catch { /* ignore */ }
     setApprovingAll(false);
   };
@@ -6988,8 +6997,12 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[12px] font-semibold text-[#151515]">Review this week's posts</p>
-              <p className="text-[11px] text-[#9A9A9A] mt-0.5">Edit any post, remove ones you don't like, then approve all.</p>
+              <p className="text-[12px] font-semibold text-[#151515]">This week's posts</p>
+              <p className="text-[11px] text-[#9A9A9A] mt-0.5">
+                {weekDrafts.some((d) => !d.frozen)
+                  ? "Edit any post, remove ones you don't like, then approve and schedule."
+                  : "All scheduled — posts will go live at the times shown."}
+              </p>
             </div>
             {successMsg && <span className="text-[11px] text-[#32C382] font-medium shrink-0">{successMsg}</span>}
           </div>
@@ -7025,21 +7038,28 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                     )}
                     {hasCta && ctaLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">link in comment</span>}
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className={cn("text-[11px]", displayText.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{displayText.length}/500</span>
-                    <button onClick={() => toggleEdit(draft.id)}
-                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-                      {draft.editing ? "Done" : "Edit"}
-                    </button>
-                    <button onClick={() => discardDraft(draft.id)} className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  {draft.frozen ? (
+                    <div className="flex items-center gap-1.5">
+                      <Lock size={11} className="text-[#9A9A9A]" />
+                      <span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={cn("text-[11px]", displayText.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{displayText.length}/500</span>
+                      <button onClick={() => toggleEdit(draft.id)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                        {draft.editing ? "Done" : "Edit"}
+                      </button>
+                      <button onClick={() => discardDraft(draft.id)} className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Inline slot editor */}
+                {/* Inline slot editor — only when not frozen */}
                 <AnimatePresence initial={false}>
-                  {isEditingSlot && (
+                  {isEditingSlot && !draft.frozen && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                       transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
                       className="overflow-hidden border-b border-[#ECEDEE]">
@@ -7061,8 +7081,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                   )}
                 </AnimatePresence>
 
-                <div className="p-4 space-y-3">
-                  {draft.editing ? (
+                <div className={cn("p-4 space-y-3", draft.frozen && "opacity-50")}>
+                  {draft.editing && !draft.frozen ? (
                     <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
                       rows={4} maxLength={500}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
@@ -7074,12 +7094,18 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                       <span>💬</span> First comment will include: {ctaLink}
                     </p>
                   )}
-                  {accountStatus === "connected" && (
+                  {accountStatus === "connected" && !draft.frozen && (
                     <button onClick={async () => {
-                      // Update slot label to now before publishing
-                      setSlotOverrides((prev) => ({ ...prev, [draft.id]: Date.now() }));
-                      await publishNow(draft);
-                      setSlotOverrides((prev) => { const n = { ...prev }; delete n[draft.id]; return n; });
+                      const postedAt = Date.now();
+                      setSlotOverrides((prev) => ({ ...prev, [draft.id]: postedAt }));
+                      const ok = await publishNow(draft);
+                      if (ok) {
+                        setWeekDrafts((prev) => prev.map((d) => d.id === draft.id
+                          ? { ...d, frozen: true, frozenAt: postedAt, editing: false }
+                          : d));
+                      } else {
+                        setSlotOverrides((prev) => { const n = { ...prev }; delete n[draft.id]; return n; });
+                      }
                     }} disabled={!!publishing || displayText.length > 500}
                       className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
                       {publishing === draft.id ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
@@ -7091,8 +7117,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
             );
           })}
 
-          {/* Approve all */}
-          {accountStatus === "connected" && weekDrafts.length > 0 && (
+          {/* Approve and schedule */}
+          {accountStatus === "connected" && weekDrafts.some((d) => !d.frozen) && (
             <div className="space-y-2">
               {errorMsg && (
                 <p className="text-[12px] text-red-500 text-center px-2">{errorMsg}</p>
@@ -7100,8 +7126,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
               <button onClick={approveAll} disabled={approvingAll}
                 className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {approvingAll
-                  ? <><Loader2 size={13} className="animate-spin" /> Validating & scheduling…</>
-                  : <>Approve all {weekDrafts.length} posts · auto-schedule at best times</>}
+                  ? <><Loader2 size={13} className="animate-spin" /> Scheduling…</>
+                  : <>Approve and schedule {weekDrafts.filter((d) => !d.frozen).length} posts</>}
               </button>
             </div>
           )}

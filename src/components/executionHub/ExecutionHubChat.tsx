@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DirectionCardData } from "@/lib/directionTypes";
@@ -102,6 +103,8 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setNavigateTab = useSetAtom(executionNavigateTabAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -416,8 +419,10 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
             ))}
           </div>
           <textarea ref={textareaRef} value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => !creditsExhausted && setInput(e.target.value)}
+            onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
             onKeyDown={(e) => {
+              if (creditsExhausted) { e.preventDefault(); setCreditsExhaustedOpen(true); return; }
               // Ignore Enter while the IME / mobile keyboard is still composing a
               // word — otherwise the in-progress word is dropped from the sent
               // text and then committed back, leaving/duplicating the last word.
@@ -427,12 +432,12 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
               }
             }}
             onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
-            placeholder="Ask anything about your execution"
+            placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything about your execution"}
             rows={1} disabled={loading}
             className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
           />
           <div className="flex items-center justify-end">
-            <button onClick={() => submitInput()} disabled={!input.trim() || loading}
+            <button onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : submitInput()} disabled={!input.trim() || loading}
               className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
               <ArrowUp size={16} />
             </button>

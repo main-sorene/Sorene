@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase";
+import { CREDITS_EXHAUSTED_EVENT } from "@/lib/queryClient";
 
 export async function authFetch(
   url: string,
@@ -12,5 +13,13 @@ export async function authFetch(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  return fetch(url, { ...init, headers });
+  const res = await fetch(url, { ...init, headers });
+
+  // Surface the upgrade modal for any 402 — covers callers that use authFetch
+  // directly without their own error handling (e.g. ExecutionHubChat).
+  if (res.status === 402 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(CREDITS_EXHAUSTED_EVENT));
+  }
+
+  return res;
 }

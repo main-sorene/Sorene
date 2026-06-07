@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -88,6 +89,8 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards, generateRecipeCard, generatingRecipe } = useDirectionResult();
@@ -377,9 +380,10 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <textarea
               ref={textareaRef}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything"
+              onChange={(e) => !creditsExhausted && setInputValue(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={creditsExhausted ? (e) => { e.preventDefault(); setCreditsExhaustedOpen(true); } : handleKeyDown}
+              placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
               rows={1}
               disabled={isProcessing}
               className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
@@ -394,7 +398,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                 <Mic size={14} />
               </button>
               <button
-                onClick={handleSend}
+                onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : handleSend}
                 disabled={!inputValue.trim() || isProcessing}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >

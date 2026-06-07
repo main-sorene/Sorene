@@ -11,7 +11,7 @@ import {
   usePaymentMethod,
   useInvoices,
 } from "@/hooks/useSubscriptionStatus";
-import { createPortalSession, buyCreditPack, cancelSubscription } from "@/lib/subscriptionApi";
+import { createPortalSession, buyCreditPack, cancelSubscription, resubscribe } from "@/lib/subscriptionApi";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,8 +30,12 @@ export function SubscriptionContent() {
   const [isBuyingCredits, setIsBuyingCredits] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
+  const [isResubscribing, setIsResubscribing] = React.useState(false);
 
   const cancelAtPeriodEnd = subscription?.cancel_at_period_end ?? false;
+  const cancelAt = subscription?.cancel_at
+    ? new Date(subscription.cancel_at * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
   const plan = subscription?.plan ?? "free";
   const isFree = plan === "free";
   const planDisplayName = plan === "pro" ? "Professional" : plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -84,6 +88,20 @@ export function SubscriptionContent() {
     router.push("/upgrade");
   }
 
+  async function handleResubscribe() {
+    if (isResubscribing) return;
+    setIsResubscribing(true);
+    try {
+      await resubscribe();
+      toast({ title: "Subscription reactivated", description: "Your subscription will continue as normal." });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not reactivate subscription.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsResubscribing(false);
+    }
+  }
+
   async function handleCancel() {
     if (isCancelling) return;
     setIsCancelling(true);
@@ -127,6 +145,26 @@ export function SubscriptionContent() {
           Adjust plan
         </Button>
       </div>
+
+      {/* ── Pending cancellation banner ── */}
+      {isPaid && cancelAtPeriodEnd && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-base">📅</span>
+            <p className="text-sm text-[#151515]">
+              Your subscription will be canceled on {cancelAt ?? "the end of your billing period"}.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleResubscribe}
+            disabled={isResubscribing}
+            className="shrink-0 h-9 px-4 rounded-xl border-[#ECEDEE] text-sm font-medium hover:bg-gray-50"
+          >
+            {isResubscribing ? "Loading…" : "Resubscribe"}
+          </Button>
+        </div>
+      )}
 
       <hr className="border-[#F0F0F0]" />
 
@@ -342,16 +380,6 @@ export function SubscriptionContent() {
         </>
       )}
 
-      {/* Pending cancellation notice */}
-      {isPaid && cancelAtPeriodEnd && (
-        <>
-          <hr className="border-[#F0F0F0]" />
-          <p className="text-sm text-[#9B9B9B]">
-            Your subscription is set to cancel at the end of the billing period.
-            {daysUntilReset !== null && ` You have access for ${daysUntilReset} more day${daysUntilReset !== 1 ? "s" : ""}.`}
-          </p>
-        </>
-      )}
     </div>
   );
 }

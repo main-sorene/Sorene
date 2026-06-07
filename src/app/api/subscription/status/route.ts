@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 import { PLAN_CREDITS, checkCredits } from "@/lib/credits";
+import { getStripe } from "@/lib/stripe";
 
 // Never cache — credits change with every AI call and must read fresh.
 export const dynamic = "force-dynamic";
@@ -72,12 +73,22 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Fetch cancel_at date from Stripe if subscription is pending cancellation
+    let cancelAt: number | null = null;
+    if (sub.cancel_at_period_end && sub.stripeSubscriptionId && sub.stripeSubscriptionId !== "manual-grant") {
+      try {
+        const stripeSub = await getStripe().subscriptions.retrieve(sub.stripeSubscriptionId);
+        cancelAt = (stripeSub as unknown as { current_period_end?: number }).current_period_end ?? null;
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({
       active: sub.active,
       plan: sub.plan,
       status: sub.status,
       duration: sub.duration,
       cancel_at_period_end: sub.cancel_at_period_end ?? false,
+      cancel_at: cancelAt,
       credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
     });
   } catch (err: unknown) {

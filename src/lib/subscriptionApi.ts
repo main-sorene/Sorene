@@ -172,3 +172,8 @@ export async function cancelSubscription(): Promise<{ ok: boolean; cancel_at_per
   const res = await authRequest("POST", `${API_BASE_URL}/subscription/cancel`);
   return res.json();
 }
+
+export async function resubscribe(): Promise<{ ok: boolean }> {
+  const res = await authRequest("POST", `${API_BASE_URL}/subscription/resubscribe`);
+  return res.json();
+}

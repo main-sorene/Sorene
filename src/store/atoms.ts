@@ -142,6 +142,7 @@ export interface SubscriptionStatus {
   plan: string;
   status: string;
   cancel_at_period_end?: boolean;
+  cancel_at?: number | null;
   credits?: { used: number; limit: number; extra?: number; resetAt?: number };
 }
 

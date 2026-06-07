@@ -6649,14 +6649,24 @@ ${project.first_10_customers ? `Target customer: ${project.first_10_customers}` 
 ${project.path_label ? `Stage: ${project.path_label}` : ""}`
         : "";
 
-      const system = `You are Sorene, a sharp execution coach helping a founder write for Threads. Threads posts are conversational, honest, and human — no corporate speak, no hashtag spam (max 1-2 if truly relevant). Max 500 characters per post. Write like a smart founder sharing a real moment.`;
-      const prompt = `Generate 3 different Threads post options for this founder. Each should take a different angle on the same topic.
+      const system = `You are Sorene, a sharp execution coach writing Threads posts for a founder.
+
+Threads best practices you must follow:
+- HOOK first line: bold statement, surprising fact, or pattern interrupt — makes people stop scrolling
+- Short lines: 1-2 sentences max per line, generous line breaks for rhythm
+- One clear idea per post — don't try to say everything
+- Conversational and honest — write like texting a smart friend, not publishing a blog
+- NO bullet points, NO numbered lists, NO headers
+- NO hashtags (or max 1 at the very end if truly relevant)
+- Max 500 characters total
+- End with a punchy conclusion or a thought-provoking question — never a generic CTA like "follow me"`;
+      const prompt = `Generate 3 different Threads post options for this founder. Each post must have a different angle and a different hook style (e.g. bold claim, personal story, surprising stat/lesson).
 
 ${projectContext}${dnaContext}${ctaContext}
 
 Topic: ${topicText}
 
-Format: exactly 3 posts separated by "---". No labels, no intro, no commentary.`;
+Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, no commentary. Just the posts.`;
 
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
@@ -6933,9 +6943,8 @@ Format: exactly 3 posts separated by "---". No labels, no intro, no commentary.`
                       className="overflow-hidden">
                       <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-3">
                         <p className="text-[11px] font-medium text-[#151515]">Pick a date and time</p>
-                        {dna && suggestedTimes.length > 0 && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-[11px] text-[#9A9A9A]">Suggested best times:</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[11px] text-[#9A9A9A]">{dna ? "Best times from your history:" : "Suggested times:"}</p>
                             {suggestedTimes.map((t) => (
                               <button key={t} onClick={() => setScheduleInputs((prev) => ({ ...prev, [draft.id]: { ...prev[draft.id], time: t, date: prev[draft.id]?.date ?? new Date().toISOString().split("T")[0] } }))}
                                 className="text-[11px] px-2.5 py-1 rounded-full bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
@@ -6943,7 +6952,6 @@ Format: exactly 3 posts separated by "---". No labels, no intro, no commentary.`
                               </button>
                             ))}
                           </div>
-                        )}
                         <div className="flex items-center gap-2">
                           <input type="date" value={scheduleInputs[draft.id]?.date ?? ""}
                             min={new Date().toISOString().split("T")[0]}

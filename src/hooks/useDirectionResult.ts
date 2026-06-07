@@ -9,6 +9,24 @@ import { useQuery } from "@tanstack/react-query";
 import type { DirectionCardData } from "@/lib/directionTypes";
 import type { StructuralModel } from "@/lib/dnaEngine";
 
+function friendlyApiError(raw: string): string {
+  try {
+    // Strip leading HTTP status code if present (e.g. "400 {...}")
+    const jsonStart = raw.indexOf("{");
+    const json = jsonStart >= 0 ? JSON.parse(raw.slice(jsonStart)) : JSON.parse(raw);
+    const msg: string = json?.error?.message ?? json?.message ?? "";
+    if (/api usage limits|spending limit/i.test(msg)) {
+      const resetMatch = msg.match(/\d{4}-\d{2}-\d{2}/);
+      const resetDate = resetMatch ? ` Your limit resets on ${resetMatch[0]}.` : "";
+      return `You've reached the Anthropic API monthly usage limit.${resetDate} Go to console.anthropic.com → Settings → Limits to increase it.`;
+    }
+    if (/credit balance|billing/i.test(msg)) return "Anthropic API billing issue. Top up your balance at console.anthropic.com.";
+    if (/invalid.*api.*key|authentication/i.test(msg)) return "Invalid Anthropic API key. Check your server environment variables.";
+    if (msg) return msg;
+  } catch {}
+  return raw;
+}
+
 export type DirectionAlternative = {
   model: string;
   compatibility: number;
@@ -131,8 +149,8 @@ export function useDirectionResult() {
 
         if (!res1.ok) {
           let errMsg = "Please try again.";
-          try { const j = await res1.json(); errMsg = j.error || errMsg; } catch { try { errMsg = await res1.text() || errMsg; } catch {} }
-          setGenerateError(`Generation failed (${res1.status}): ${errMsg}`);
+          try { const j = await res1.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res1.text()); } catch {} }
+          setGenerateError(errMsg);
           // Clear the intent so the user lands back on the form, not a dead spinner
           try { localStorage.removeItem("rcGenerationRequested"); } catch {}
           setNeedsRC(true);
@@ -349,8 +367,8 @@ export function useDirectionResult() {
       });
       if (!res.ok) {
         let errMsg = "Please try again.";
-        try { const j = await res.json(); errMsg = j.error || errMsg; } catch { try { errMsg = await res.text() || errMsg; } catch {} }
-        setGenerateError(`Generation failed (${res.status}): ${errMsg}`);
+        try { const j = await res.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res.text()); } catch {} }
+        setGenerateError(errMsg);
         return;
       }
       const data = (await res.json()) as { cards?: DirectionCardData[] };

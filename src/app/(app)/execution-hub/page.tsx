@@ -6542,6 +6542,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [ctaLink, setCtaLink] = useState("");
   const [generating, setGenerating] = useState(false);
   const [weekDrafts, setWeekDrafts] = useState<ThreadsDraft[]>([]);
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
 
   // Publishing / scheduling
   const [publishing, setPublishing] = useState<string | null>(null);
@@ -6582,9 +6583,10 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
-    const [accountRes, scheduleRes] = await Promise.all([
+    const [accountRes, scheduleRes, draftsRes] = await Promise.all([
       authFetch("/api/threads/account"),
       authFetch("/api/threads/schedule"),
+      authFetch("/api/threads/drafts"),
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string };
@@ -6595,13 +6597,44 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       const data = await scheduleRes.json() as { posts: ScheduledPost[] };
       setScheduledPosts(data.posts ?? []);
     }
+    if (draftsRes.ok) {
+      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2; slotOverrides: Record<string, number> } | null };
+      if (data.batch && data.batch.drafts.length > 0) {
+        setWeekDrafts(data.batch.drafts);
+        setCtaLink(data.batch.ctaLink ?? "");
+        setCadence(data.batch.cadence ?? 1);
+        setSlotOverrides(data.batch.slotOverrides ?? {});
+      }
+    }
+    setDraftsLoaded(true);
   };
 
   useEffect(() => {
     if (!authUser) return;
-    loadAccount().catch(() => setAccountStatus("disconnected"));
+    loadAccount().catch(() => { setAccountStatus("disconnected"); setDraftsLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
+
+  // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
+  useEffect(() => {
+    if (!draftsLoaded || !authUser) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        if (weekDrafts.length === 0) {
+          await authFetch("/api/threads/drafts", { method: "DELETE" });
+        } else {
+          await authFetch("/api/threads/drafts", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides }),
+          });
+        }
+      } catch { /* ignore */ }
+    }, 1500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDrafts, ctaLink, cadence, slotOverrides, draftsLoaded]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -6806,6 +6839,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       }
       setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
       setWeekDrafts([]);
+      setSlotOverrides({});
+      // Clear saved drafts immediately (don't wait for debounce)
+      authFetch("/api/threads/drafts", { method: "DELETE" }).catch(() => {});
       setSuccessMsg(`${newScheduled.length} posts saved & scheduled ✓`);
       setTimeout(() => setSuccessMsg(""), 5000);
     } catch { /* ignore */ }

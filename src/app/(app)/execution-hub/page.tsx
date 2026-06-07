@@ -30,6 +30,7 @@ import {
   Settings,
   Archive,
   AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
@@ -6536,20 +6537,43 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [dna, setDna] = useState<ContentDNA | null>(null);
   const [scanningHistory, setScanningHistory] = useState(false);
 
-  // Generate
-  const [topic, setTopic] = useState("win");
-  const [customTopic, setCustomTopic] = useState("");
+  // Weekly batch
+  const [cadence, setCadence] = useState<1 | 2>(1);
   const [ctaLink, setCtaLink] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [drafts, setDrafts] = useState<ThreadsDraft[]>([]);
+  const [weekDrafts, setWeekDrafts] = useState<ThreadsDraft[]>([]);
 
   // Publishing / scheduling
   const [publishing, setPublishing] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [approvingAll, setApprovingAll] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
-  const [scheduleInputs, setScheduleInputs] = useState<Record<string, { date: string; time: string }>>({});
-  const [scheduling, setScheduling] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Best posting times (local HH:MM strings)
+  const bestTimes: string[] = dna?.bestHours?.slice(0, 2).map((utcH) => {
+    const d = new Date();
+    d.setUTCHours(utcH, 0, 0, 0);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  }) ?? ["08:00", "19:00"];
+
+  // Pre-compute schedule slots for the next 7 days at bestTimes
+  const scheduleSlots = (() => {
+    const slots: number[] = [];
+    const today = new Date();
+    today.setSeconds(0, 0);
+    for (let day = 0; day < 7; day++) {
+      const times = cadence === 2 ? bestTimes : [bestTimes[0]];
+      for (const t of times) {
+        const [h, m] = t.split(":").map(Number);
+        const d = new Date(today);
+        d.setDate(d.getDate() + day);
+        d.setHours(h, m, 0, 0);
+        if (d.getTime() > Date.now() + 60_000) slots.push(d.getTime());
+      }
+    }
+    return slots.sort((a, b) => a - b);
+  })();
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
@@ -6574,13 +6598,11 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
-  // Handle OAuth return
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("threads_connected") === "1") {
       setAccountStatus("connected");
       window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
-      // Trigger history scan on fresh connect
       setTimeout(() => scanHistory(), 500);
     }
     if (params.get("threads_error") === "1") {
@@ -6623,50 +6645,70 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       await authFetch("/api/threads/account", { method: "DELETE" });
       setAccountStatus("disconnected");
       setUsername("");
-      setDrafts([]);
+      setWeekDrafts([]);
       setDna(null);
     } catch { /* ignore */ }
     setDisconnecting(false);
   };
 
-  const generate = async () => {
+  const generateWeek = async () => {
     setGenerating(true);
+    setWeekDrafts([]);
     try {
-      const topicText = topic === "custom" ? customTopic : (POST_TOPICS.find((t) => t.value === topic)?.label ?? topic);
       const { authFetch } = await import("@/lib/authFetch");
+      const count = cadence * 7;
+
+      // Pull brand context from Launchpad localStorage
+      const title = project?.title ?? "";
+      const brandName    = title ? (localStorage.getItem(`business-name-${title}`) ?? "") : "";
+      const tagline      = title ? (localStorage.getItem(`brand-tagline-${title}`) ?? "") : "";
+      const benefit      = title ? (localStorage.getItem(`brand-benefit-${title}`) ?? "") : "";
+      const offerings    = title ? (localStorage.getItem(`brand-offerings-${title}`) ?? "") : "";
+
+      const brandContext = [
+        brandName  && `Brand name: ${brandName}`,
+        tagline    && `Tagline: ${tagline}`,
+        benefit    && `Core benefit: ${benefit}`,
+        offerings  && `Offerings: ${offerings}`,
+      ].filter(Boolean).join("\n");
+
+      // Brand is the source of truth for social content — LaunchPad is final
+      // Only fall back to project direction if no brand info exists yet
+      const projectContext = !brandContext && project
+        ? [`About: ${project.title}`, project.oneliner && `What it does: ${project.oneliner}`, project.first_10_customers && `Target customer: ${project.first_10_customers}`].filter(Boolean).join("\n")
+        : "";
 
       const dnaContext = dna?.summary
-        ? `\n\nThis founder's content DNA (what works for their audience): ${dna.summary}`
-        : "";
-      const ctaContext = ctaLink.trim()
-        ? `\n\nInclude this CTA link naturally in each post: ${ctaLink.trim()}`
+        ? `\nContent DNA (what resonates with this audience): ${dna.summary}`
         : "";
 
-      const projectContext = project
-        ? `Project: "${project.title}"
-${project.oneliner ? `What it does: ${project.oneliner}` : ""}
-${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
-${project.path_label ? `Stage: ${project.path_label}` : ""}`
+      const ctaNote = ctaLink.trim()
+        ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. Mark posts that should have a CTA link with [ADD_LINK_IN_COMMENT] at the very end.`
         : "";
 
-      const system = `You are Sorene, a sharp execution coach writing Threads posts for a founder.
+      const system = `You are Sorene, writing a week of Threads posts for a founder.
 
-Threads best practices you must follow:
-- HOOK first line: bold statement, surprising fact, or pattern interrupt — makes people stop scrolling
-- Short lines: 1-2 sentences max per line, generous line breaks for rhythm
-- One clear idea per post — don't try to say everything
-- Conversational and honest — write like texting a smart friend, not publishing a blog
-- NO bullet points, NO numbered lists, NO headers
-- NO hashtags (or max 1 at the very end if truly relevant)
-- Max 500 characters total
-- End with a punchy conclusion or a thought-provoking question — never a generic CTA like "follow me"`;
-      const prompt = `Generate 3 different Threads post options for this founder. Each post must have a different angle and a different hook style (e.g. bold claim, personal story, surprising stat/lesson).
+Threads content principles — every post MUST follow these:
+- PURPOSE: spark a conversation or discussion. Ask a question, share a hot take, invite disagreement, tell a real story with a lesson.
+- HOOK: first line stops the scroll — bold claim, surprising truth, or pattern interrupt. No "I want to talk about…" openers.
+- FORMAT: short lines, generous white space. 1-2 sentences per line. NO bullet points, NO numbered lists, NO headers.
+- TONE: honest founder voice — direct, human, a little raw. Like texting a smart peer, not writing a blog post.
+- LENGTH: max 500 characters. Tight > long.
+- LINKS: Threads suppresses link reach. NEVER put URLs in the post body. If a CTA is needed, mark it [ADD_LINK_IN_COMMENT].
+- HASHTAGS: 0. Never add hashtags.
+- VARIETY: across 7 posts use different formats — hot take, question, story, lesson, unpopular opinion, behind the scenes, data/result.
+- END: a thought-provoking question OR a punchy conclusion. Never "follow me" or generic CTAs.`;
 
-${projectContext}${dnaContext}${ctaContext}
+      const prompt = `Generate exactly ${count} Threads posts for a 7-day schedule (${cadence} post${cadence > 1 ? "s" : ""} per day).
 
-Topic: ${topicText}
+${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}
 
-Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, no commentary. Just the posts.`;
+Rules:
+- Each post must be a different format/angle (hot take, story, question, lesson, result, unpopular opinion, behind the scenes)
+- Posts should feel like a coherent founder voice, not random topics
+- Vary which posts get the CTA marker (max 2 of the ${count})
+
+Separate posts with exactly "---". No labels, no numbering, no intro. Just the ${count} posts.`;
 
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
@@ -6675,21 +6717,19 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
       });
       if (res.ok) {
         const data = await res.json() as { reply?: string };
-        const options = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, 3);
-        setDrafts(options.map((text, i) => ({ id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false })));
+        const posts = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, count);
+        setWeekDrafts(posts.map((text, i) => ({ id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false })));
       }
     } catch { /* ignore */ }
     setGenerating(false);
   };
 
   const updateDraft = (id: string, text: string) =>
-    setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, text } : d));
+    setWeekDrafts((prev) => prev.map((d) => d.id === id ? { ...d, text } : d));
   const toggleEdit = (id: string) =>
-    setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, editing: !d.editing } : d));
-  const toggleScheduler = (id: string) =>
-    setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, schedulerOpen: !d.schedulerOpen } : d));
+    setWeekDrafts((prev) => prev.map((d) => d.id === id ? { ...d, editing: !d.editing } : d));
   const discardDraft = (id: string) =>
-    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    setWeekDrafts((prev) => prev.filter((d) => d.id !== id));
 
   const publishNow = async (draft: ThreadsDraft) => {
     setPublishing(draft.id);
@@ -6698,39 +6738,44 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
       const res = await authFetch("/api/threads/post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: draft.text }),
+        body: JSON.stringify({ text: draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim() }),
       });
       if (res.ok) {
-        setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
-        setSuccessMsg("Posted to Threads ✓");
-        setTimeout(() => setSuccessMsg(""), 4000);
+        setWeekDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+        setSuccessMsg("Posted ✓");
+        setTimeout(() => setSuccessMsg(""), 3000);
       }
     } catch { /* ignore */ }
     setPublishing(null);
   };
 
-  const schedulePost = async (draft: ThreadsDraft) => {
-    const inputs = scheduleInputs[draft.id];
-    if (!inputs?.date || !inputs?.time) return;
-    const scheduledAt = new Date(`${inputs.date}T${inputs.time}`).getTime();
-    if (isNaN(scheduledAt) || scheduledAt <= Date.now()) return;
-    setScheduling(draft.id);
+  // Approve all — schedule each draft at its corresponding slot
+  const approveAll = async () => {
+    if (weekDrafts.length === 0) return;
+    setApprovingAll(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: draft.text, scheduledAt }),
-      });
-      if (res.ok) {
-        const data = await res.json() as { post: ScheduledPost };
-        setScheduledPosts((prev) => [...prev, data.post].sort((a, b) => a.scheduledAt - b.scheduledAt));
-        setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
-        setSuccessMsg("Scheduled ✓");
-        setTimeout(() => setSuccessMsg(""), 4000);
+      const newScheduled: ScheduledPost[] = [];
+      for (let i = 0; i < weekDrafts.length; i++) {
+        const draft = weekDrafts[i];
+        const scheduledAt = scheduleSlots[i] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+        const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+        const res = await authFetch("/api/threads/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: cleanText, scheduledAt }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { post: ScheduledPost };
+          newScheduled.push(data.post);
+        }
       }
+      setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
+      setWeekDrafts([]);
+      setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
+      setTimeout(() => setSuccessMsg(""), 4000);
     } catch { /* ignore */ }
-    setScheduling(null);
+    setApprovingAll(false);
   };
 
   const cancelScheduled = async (id: string) => {
@@ -6746,15 +6791,6 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
     } catch { /* ignore */ }
     setCancellingId(null);
   };
-
-  // Suggested times from DNA best hours, converted to local time labels
-  const suggestedTimes = dna?.bestHours?.slice(0, 2).map((utcH) => {
-    const local = new Date();
-    local.setUTCHours(utcH, 0, 0, 0);
-    return local.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  }) ?? ["08:00", "19:00"];
-
-  const selectedTopicDef = POST_TOPICS.find((t) => t.value === topic);
 
   return (
     <div className="p-5 space-y-5">
@@ -6781,7 +6817,7 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
                 <button onClick={scanHistory} disabled={scanningHistory}
                   className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium flex items-center gap-1">
                   {scanningHistory ? <Loader2 size={11} className="animate-spin" /> : null}
-                  {dna ? "Re-scan history" : "Scan history"}
+                  {dna ? "Re-scan" : "Scan history"}
                 </button>
                 <button onClick={disconnectThreads} disabled={disconnecting}
                   className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors font-medium">
@@ -6803,27 +6839,25 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
             <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate, schedule, and post directly from here.</p>
           </div>
         )}
-
         {/* Content DNA */}
         {accountStatus === "connected" && (
           <div className="px-5 py-4 border-t border-[#ECEDEE]">
             {scanningHistory && (
               <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
-                <Loader2 size={12} className="animate-spin" /> Scanning your post history and learning what works…
+                <Loader2 size={12} className="animate-spin" /> Scanning your post history…
               </div>
             )}
             {!scanningHistory && dna && (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Content DNA · {dna.postCount} posts analysed</p>
-                  <p className="text-[10px] text-[#9A9A9A]">Best times: {suggestedTimes.join(", ")}</p>
+                  <p className="text-[10px] text-[#9A9A9A]">Best times: {bestTimes.join(" & ")}</p>
                 </div>
                 <p className="text-[12px] text-[#62646A] leading-relaxed">{dna.summary}</p>
               </div>
             )}
             {!scanningHistory && !dna && (
-              <button onClick={scanHistory}
-                className="text-[12px] text-[#9A9A9A] hover:text-[#151515] transition-colors">
+              <button onClick={scanHistory} className="text-[12px] text-[#9A9A9A] hover:text-[#151515] transition-colors">
                 Scan your post history → Sorene learns what works for your audience
               </button>
             )}
@@ -6831,149 +6865,123 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
         )}
       </div>
 
-      {/* Generate section */}
+      {/* Plan a week */}
       <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
           <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-            <Lightbulb size={14} className="text-white" />
+            <CalendarDays size={14} className="text-white" />
           </div>
           <div>
-            <p className="text-[13px] font-semibold text-[#151515]">Generate posts</p>
+            <p className="text-[13px] font-semibold text-[#151515]">Plan your week</p>
             <p className="text-[11px] text-[#9A9A9A]">
-              {dna ? "Informed by your content DNA" : "Sorene writes 3 options — you pick, edit, and post"}
+              Generate a full week of posts · review · approve all at once
             </p>
           </div>
         </div>
         <div className="p-5 space-y-4">
-          <>
-              <div>
-                <p className="text-[12px] font-medium text-[#151515] mb-2">What do you want to write about?</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {POST_TOPICS.map((t) => (
-                    <button key={t.value} onClick={() => setTopic(t.value)}
-                      className={cn("px-3 py-2 rounded-xl text-left text-[12px] font-medium transition-colors border",
-                        topic === t.value
-                          ? "bg-[#151515] text-white border-[#151515]"
-                          : "bg-white text-[#62646A] border-gray-200 hover:border-[#151515] hover:text-[#151515]")}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                {selectedTopicDef && topic !== "custom" && (
-                  <p className="text-[11px] text-[#9A9A9A] mt-2">{selectedTopicDef.hint}</p>
-                )}
-              </div>
-              {topic === "custom" && (
-                <textarea value={customTopic} onChange={(e) => setCustomTopic(e.target.value)}
-                  placeholder="Describe what you want to post about…" rows={2}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
-              )}
-              <div className="relative">
-                <input value={ctaLink} onChange={(e) => setCtaLink(e.target.value)}
-                  placeholder="CTA link (optional) — e.g. https://sorene.ai/waitlist"
-                  className="w-full pl-3 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
-              </div>
-              <button onClick={generate} disabled={generating || (topic === "custom" && !customTopic.trim())}
-                className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                {generating ? <><Loader2 size={13} className="animate-spin" /> Writing 3 options…</> : "Generate 3 post options →"}
-              </button>
-          </>
+          {/* Cadence */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-2">Posts per day</p>
+            <div className="flex gap-2">
+              {([1, 2] as const).map((n) => (
+                <button key={n} onClick={() => setCadence(n)}
+                  className={cn("flex-1 py-2.5 rounded-xl text-[12px] font-semibold border transition-colors",
+                    cadence === n ? "bg-[#151515] text-white border-[#151515]" : "bg-white text-[#62646A] border-gray-200 hover:border-[#151515] hover:text-[#151515]")}>
+                  {n === 1 ? "1 post / day" : "2 posts / day"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#9A9A9A] mt-1.5">
+              Best times: <span className="font-medium text-[#151515]">{bestTimes.join(" & ")}</span>
+              {dna ? " · from your history" : " · general best practice"}
+            </p>
+          </div>
+
+          {/* CTA link */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-1.5">CTA link <span className="text-[#9A9A9A] font-normal">(optional)</span></p>
+            <input value={ctaLink} onChange={(e) => setCtaLink(e.target.value)}
+              placeholder="e.g. https://sorene.ai/waitlist"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+            <p className="text-[11px] text-[#9A9A9A] mt-1">Links go in the first comment, not the post — Threads suppresses link reach.</p>
+          </div>
+
+          <button onClick={generateWeek} disabled={generating}
+            className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {generating ? <><Loader2 size={13} className="animate-spin" /> Writing {cadence * 7} posts…</> : `Generate ${cadence * 7} posts for the week →`}
+          </button>
         </div>
       </div>
 
-      {/* Drafts — review, post or schedule */}
-      {drafts.length > 0 && (
+      {/* Weekly drafts — review + approve */}
+      {weekDrafts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[12px] font-semibold text-[#151515]">Review before posting</p>
-            {successMsg && <span className="text-[11px] text-[#32C382] font-medium">{successMsg}</span>}
+            <div>
+              <p className="text-[12px] font-semibold text-[#151515]">Review this week's posts</p>
+              <p className="text-[11px] text-[#9A9A9A] mt-0.5">Edit any post, remove ones you don't like, then approve all.</p>
+            </div>
+            {successMsg && <span className="text-[11px] text-[#32C382] font-medium shrink-0">{successMsg}</span>}
           </div>
-          {drafts.map((draft, i) => (
-            <div key={draft.id} className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-                <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Option {i + 1}</p>
-                <div className="flex items-center gap-3">
-                  <span className={cn("text-[11px]", draft.text.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{draft.text.length}/500</span>
-                  <button onClick={() => toggleEdit(draft.id)}
-                    className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-                    {draft.editing ? "Done" : "Edit"}
-                  </button>
-                  <button onClick={() => discardDraft(draft.id)}
-                    className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-              <div className="p-4 space-y-3">
-                {draft.editing ? (
-                  <textarea value={draft.text} onChange={(e) => updateDraft(draft.id, e.target.value)}
-                    rows={5} maxLength={500}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
-                ) : (
-                  <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{draft.text}</p>
-                )}
 
-                {accountStatus === "connected" && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={() => publishNow(draft)} disabled={!!publishing || draft.text.length > 500}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                      {publishing === draft.id ? <Loader2 size={12} className="animate-spin" /> : THREADS_ICON}
-                      Post now
+          {weekDrafts.map((draft, i) => {
+            const slot = scheduleSlots[i];
+            const slotLabel = slot ? new Date(slot).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+            const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
+            const displayText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+            return (
+              <div key={draft.id} className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Day {Math.floor(i / cadence) + 1}{cadence === 2 ? ` · ${i % 2 === 0 ? "AM" : "PM"}` : ""}</p>
+                    {slotLabel && <p className="text-[11px] text-[#9A9A9A]">· {slotLabel}</p>}
+                    {hasCta && ctaLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">link in comment</span>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={cn("text-[11px]", displayText.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{displayText.length}/500</span>
+                    <button onClick={() => toggleEdit(draft.id)}
+                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                      {draft.editing ? "Done" : "Edit"}
                     </button>
-                    <button onClick={() => toggleScheduler(draft.id)}
-                      className={cn("flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold border transition-colors",
-                        draft.schedulerOpen ? "bg-gray-100 text-[#62646A] border-gray-200" : "bg-white text-[#151515] border-gray-200 hover:border-[#151515]")}>
-                      Schedule
+                    <button onClick={() => discardDraft(draft.id)} className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                      <Trash2 size={12} />
                     </button>
                   </div>
-                )}
-                {accountStatus === "disconnected" && (
-                  <button onClick={() => navigator.clipboard.writeText(draft.text)}
-                    className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-                    Copy to clipboard →
-                  </button>
-                )}
-
-                {/* Schedule picker */}
-                <AnimatePresence initial={false}>
-                  {draft.schedulerOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                      transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
-                      className="overflow-hidden">
-                      <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-3">
-                        <p className="text-[11px] font-medium text-[#151515]">Pick a date and time</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-[11px] text-[#9A9A9A]">{dna ? "Best times from your history:" : "Suggested times:"}</p>
-                            {suggestedTimes.map((t) => (
-                              <button key={t} onClick={() => setScheduleInputs((prev) => ({ ...prev, [draft.id]: { ...prev[draft.id], time: t, date: prev[draft.id]?.date ?? new Date().toISOString().split("T")[0] } }))}
-                                className="text-[11px] px-2.5 py-1 rounded-full bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
-                                {t}
-                              </button>
-                            ))}
-                          </div>
-                        <div className="flex items-center gap-2">
-                          <input type="date" value={scheduleInputs[draft.id]?.date ?? ""}
-                            min={new Date().toISOString().split("T")[0]}
-                            onChange={(e) => setScheduleInputs((prev) => ({ ...prev, [draft.id]: { ...prev[draft.id], date: e.target.value } }))}
-                            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
-                          <input type="time" value={scheduleInputs[draft.id]?.time ?? ""}
-                            onChange={(e) => setScheduleInputs((prev) => ({ ...prev, [draft.id]: { ...prev[draft.id], time: e.target.value } }))}
-                            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
-                          <button onClick={() => schedulePost(draft)}
-                            disabled={!scheduleInputs[draft.id]?.date || !scheduleInputs[draft.id]?.time || scheduling === draft.id}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                            {scheduling === draft.id ? <Loader2 size={12} className="animate-spin" /> : null}
-                            Confirm
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {draft.editing ? (
+                    <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
+                      rows={4} maxLength={500}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+                  ) : (
+                    <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{displayText}</p>
                   )}
-                </AnimatePresence>
+                  {hasCta && ctaLink && (
+                    <p className="text-[11px] text-blue-500 flex items-center gap-1">
+                      <span>💬</span> First comment will include: {ctaLink}
+                    </p>
+                  )}
+                  {accountStatus === "connected" && (
+                    <button onClick={() => publishNow(draft)} disabled={!!publishing || displayText.length > 500}
+                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                      {publishing === draft.id ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
+                      Post now instead →
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+
+          {/* Approve all */}
+          {accountStatus === "connected" && weekDrafts.length > 0 && (
+            <button onClick={approveAll} disabled={approvingAll}
+              className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              {approvingAll
+                ? <><Loader2 size={13} className="animate-spin" /> Scheduling…</>
+                : <>Approve all {weekDrafts.length} posts · auto-schedule at best times</>}
+            </button>
+          )}
         </div>
       )}
 
@@ -6981,7 +6989,7 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
       {scheduledPosts.length > 0 && (
         <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-            <p className="text-[12px] font-semibold text-[#151515]">Scheduled</p>
+            <p className="text-[12px] font-semibold text-[#151515]">Scheduled queue</p>
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-[#62646A] font-semibold">{scheduledPosts.length}</span>
           </div>
           <div className="divide-y divide-gray-50">
@@ -6990,7 +6998,7 @@ Format: exactly 3 posts separated by "---". No labels, no numbering, no intro, n
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] text-[#151515] leading-relaxed line-clamp-2">{post.text}</p>
                   <p className="text-[11px] text-[#9A9A9A] mt-1">
-                    {new Date(post.scheduledAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {new Date(post.scheduledAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
                 <button onClick={() => cancelScheduled(post.id)} disabled={cancellingId === post.id}

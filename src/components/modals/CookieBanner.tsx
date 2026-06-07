@@ -52,19 +52,18 @@ export function CookieBanner() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="fixed bottom-6 z-40 left-1/2 -translate-x-1/2 w-[min(320px,calc(100vw-3rem))] md:w-auto md:max-w-[min(760px,calc(100vw-3rem))]"
         >
-          <div className="bg-white border border-[#ECEDEE] rounded-2xl shadow-2xl p-5 md:flex md:items-center md:gap-6 space-y-4 md:space-y-0">
-            {/* Header + Body */}
-            <div className="flex-1 space-y-4 md:space-y-0 md:flex md:items-center md:gap-4">
-              <div className="flex items-center gap-2.5 md:shrink-0">
+          <div className="bg-white border border-[#ECEDEE] rounded-2xl shadow-2xl p-5 space-y-4 md:space-y-0 md:flex md:items-center md:gap-6">
+            {/* Left: icon + title + body stacked */}
+            <div className="flex-1 space-y-1.5">
+              <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#F7F7F7] flex items-center justify-center shrink-0">
                   <Cookie size={16} className="text-[#151515]" />
                 </div>
-                <h3 className="text-sm font-semibold text-[#151515] md:whitespace-nowrap">
+                <h3 className="text-sm font-semibold text-[#151515]">
                   Our website uses cookies
                 </h3>
               </div>
-
-              <p className="text-xs text-[#62646A] leading-relaxed">
+              <p className="text-xs text-[#62646A] leading-relaxed md:line-clamp-2">
                 We use cookies to enhance your browsing experience, analyze site
                 traffic, and personalize content. You can accept all cookies or
                 manage your preferences. For more details, see our{" "}
@@ -78,8 +77,8 @@ export function CookieBanner() {
               </p>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2 md:shrink-0">
+            {/* Right: buttons stacked on desktop, side-by-side on mobile */}
+            <div className="flex items-center gap-2 md:flex-col md:items-stretch md:gap-2 md:shrink-0">
               <Button
                 onClick={handleAccept}
                 className="flex-1 md:flex-none h-9 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-xs font-medium md:px-5"

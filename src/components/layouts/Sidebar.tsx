@@ -378,7 +378,11 @@ export function Sidebar({
     {
       icon: "/figmaAssets/compass.svg",
       label: "Your DIRECTION",
-      path: "/direction",
+      action: () => {
+        localStorage.removeItem("rcGenerationRequested");
+        router.push("/direction");
+        if (mobile) setSidebarOpen(false);
+      },
     },
     {
       icon: null,

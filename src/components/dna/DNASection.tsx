@@ -3,7 +3,8 @@
 import { DNACard } from "./DNACard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDnaData } from "@/hooks/useDnaData";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
@@ -536,6 +537,12 @@ const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
 export const DNASection = () => {
   const { data: profile, isLoading, refetch } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleSeeDirection = useCallback(() => {
+    localStorage.removeItem("rcGenerationRequested");
+    router.push("/direction");
+  }, [router]);
   const authUser = useAtomValue(userAtom);
 
   // Backfill strengths_edges_strengths if missing
@@ -654,40 +661,52 @@ export const DNASection = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 lg:p-3 lg:pt-6 pb-20 max-w-5xl mx-auto"
+        className="max-w-5xl mx-auto"
       >
-        {dnaItems
-          .filter((item) => !expandedId || expandedId === item.title)
-          .map((item) => {
-            const isExpanded = expandedId === item.title;
-            const showFullWidth = item.fullWidth || isExpanded;
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 lg:p-3 lg:pt-6 max-w-5xl mx-auto">
+          {dnaItems
+            .filter((item) => !expandedId || expandedId === item.title)
+            .map((item) => {
+              const isExpanded = expandedId === item.title;
+              const showFullWidth = item.fullWidth || isExpanded;
 
-            return (
-              <div
-                key={item.title}
-                className={cn(
-                  "transition-all duration-500 ease-in-out",
-                  showFullWidth ? "col-span-1 sm:col-span-2" : "col-span-1",
-                )}
-              >
-                <DNACard
-                  title={item.title}
-                  description={isExpanded ? item.description : item.summary}
-                  gradient={item.gradient}
-                  icon={item.icon}
-                  variant={item.variant}
-                  keySignals={item.key_signals}
-                  strengthPatterns={item.strength_patterns}
-                  blindSpots={item.blind_spots}
-                  riskExamples={item.risk_examples}
-                  heroStatement={item.hero_statement}
-                  isLarge={item.isLarge}
-                  isExpanded={isExpanded}
-                  onToggle={() => handleToggle(item.title)}
-                />
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={item.title}
+                  className={cn(
+                    "transition-all duration-500 ease-in-out",
+                    showFullWidth ? "col-span-1 sm:col-span-2" : "col-span-1",
+                  )}
+                >
+                  <DNACard
+                    title={item.title}
+                    description={isExpanded ? item.description : item.summary}
+                    gradient={item.gradient}
+                    icon={item.icon}
+                    variant={item.variant}
+                    keySignals={item.key_signals}
+                    strengthPatterns={item.strength_patterns}
+                    blindSpots={item.blind_spots}
+                    riskExamples={item.risk_examples}
+                    heroStatement={item.hero_statement}
+                    isLarge={item.isLarge}
+                    isExpanded={isExpanded}
+                    onToggle={() => handleToggle(item.title)}
+                  />
+                </div>
+              );
+            })}
+        </div>
+
+        {/* See My Direction CTA */}
+        <div className="flex justify-center px-4 py-10 pb-20">
+          <button
+            onClick={handleSeeDirection}
+            className="bg-black text-white text-sm font-semibold px-8 py-3.5 rounded-full hover:bg-gray-900 transition-colors"
+          >
+            See My Direction
+          </button>
+        </div>
       </motion.div>
     </AnimatePresence>
   );

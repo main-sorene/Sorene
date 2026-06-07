@@ -6,16 +6,10 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
-import { buyCreditPack } from "@/lib/subscriptionApi";
-import { useToast } from "@/hooks/use-toast";
 
 export function CreditsExhaustedModal() {
   const [isOpen, setIsOpen] = useAtom(isCreditsExhaustedOpenAtom);
   const { data: subscription } = useSubscriptionStatus();
-  const user = useAtomValue(userAtom);
-  const { toast } = useToast();
 
   const isPaidPlan = subscription?.active && subscription.plan !== "free";
   const isProPlan = subscription?.plan === "pro";
@@ -23,22 +17,6 @@ export function CreditsExhaustedModal() {
   const handleUpgrade = () => {
     setIsOpen(false);
     window.location.href = "https://www.sorene.ai/upgrade";
-  };
-
-  const handleBuyCredits = async () => {
-    const email = user?.email ?? user?.uid ?? user?.profile?.email ?? "";
-    if (!email) return;
-    try {
-      const { url } = await buyCreditPack({
-        email,
-        success_url: `${window.location.origin}/upgrade?credits_added=true`,
-        cancel_url: window.location.href,
-      });
-      setIsOpen(false);
-      window.location.href = url;
-    } catch {
-      toast({ title: "Error", description: "Could not open credits checkout.", variant: "destructive" });
-    }
   };
 
   return (
@@ -97,32 +75,12 @@ export function CreditsExhaustedModal() {
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
-            {isPaidPlan ? (
-              <>
-                <Button
-                  onClick={handleBuyCredits}
-                  className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
-                >
-                  Buy more credits
-                </Button>
-                {!isProPlan && (
-                  <Button
-                    variant="outline"
-                    onClick={handleUpgrade}
-                    className="w-full h-11 rounded-xl border-[#ECEDEE] text-sm font-medium"
-                  >
-                    Upgrade to Professional
-                  </Button>
-                )}
-              </>
-            ) : (
-              <Button
-                onClick={handleUpgrade}
-                className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
-              >
-                Upgrade now
-              </Button>
-            )}
+            <Button
+              onClick={handleUpgrade}
+              className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
+            >
+              {isPaidPlan && !isProPlan ? "Upgrade to Professional" : "See upgrade plans"}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => setIsOpen(false)}

@@ -10,13 +10,13 @@ import { userAtom } from "@/store/atoms";
 import { useToast } from "@/hooks/use-toast";
 import {
   createCheckoutSession,
-  upgradeSubscription,
   syncSubscription,
 } from "@/lib/subscriptionApi";
 import {
   useRefetchSubscriptionStatus,
   useSubscriptionStatus,
 } from "@/hooks/useSubscriptionStatus";
+import { UpgradeConfirmModal } from "@/components/modals/UpgradeConfirmModal";
 
 import { plans, PLAN_WEIGHTS, type Plan } from "@/lib/plans";
 
@@ -27,6 +27,7 @@ export function UpgradePage() {
     "monthly",
   );
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const searchParams = useSearchParams();
   const user = useAtomValue(userAtom);
   const refetchSubscriptionStatus = useRefetchSubscriptionStatus();
@@ -73,49 +74,35 @@ export function UpgradePage() {
 
   async function handleUpgrade(plan: Plan, isCurrent: boolean) {
     if (isCurrent || loadingPlan) return;
-    // uid === email in this app's Firebase custom token setup
     const email = user?.email ?? user?.uid ?? user?.profile?.email;
     if (!email) {
-      toast({
-        title: "Error",
-        description: "User email not found. Please log in again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "User email not found. Please log in again.", variant: "destructive" });
+      return;
+    }
+
+    const hasActiveSubscription = subscription?.active && subscription?.plan !== "free";
+
+    if (hasActiveSubscription) {
+      // Show confirmation modal with promo code option
+      setConfirmPlan(plan);
       return;
     }
 
     setLoadingPlan(plan.name);
     try {
-      const hasActiveSubscription =
-        subscription?.active && subscription?.plan !== "free";
-
-      if (hasActiveSubscription) {
-        await upgradeSubscription({
-          email,
-          plan: plan.id,
-          duration: billingCycle === "monthly" ? 1 : 6,
-          prorate: true,
-        });
-        await refetchSubscriptionStatus();
-        toast({
-          title: "Plan updated",
-          description: `Your plan has been updated to ${plan.name} (${billingCycle === "monthly" ? "Monthly" : "6 Months"}).`,
-        });
-      } else {
-        const result = await createCheckoutSession({
-          cancel_url: `${window.location.origin}/upgrade`,
-          success_url: `${window.location.origin}/upgrade?checkout_success=true`,
-          duration: billingCycle === "monthly" ? 1 : 6,
-          email,
-          plan: plan.id,
-        });
-        window.location.href = result.url;
-      }
+      const result = await createCheckoutSession({
+        cancel_url: `${window.location.origin}/upgrade`,
+        success_url: `${window.location.origin}/upgrade?checkout_success=true`,
+        duration: billingCycle === "monthly" ? 1 : 6,
+        email,
+        plan: plan.id,
+      });
+      window.location.href = result.url;
     } catch (err) {
       console.error(err);
       toast({
-        title: "Update failed",
-        description: "There was an error updating your plan. Please try again.",
+        title: "Checkout failed",
+        description: "There was an error starting checkout. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -123,7 +110,25 @@ export function UpgradePage() {
     }
   }
 
+  const confirmPlanPrice = confirmPlan
+    ? billingCycle === "monthly"
+      ? confirmPlan.id === "pro" ? "$49 / mo" : "$15 / mo"
+      : confirmPlan.id === "pro" ? "$245 / 6 mo" : "$75 / 6 mo"
+    : "";
+
   return (
+    <>
+    {confirmPlan && (
+      <UpgradeConfirmModal
+        open={!!confirmPlan}
+        onClose={() => setConfirmPlan(null)}
+        onSuccess={() => { refetchSubscriptionStatus(); setTimeout(refetchSubscriptionStatus, 3000); }}
+        plan={confirmPlan.id}
+        planDisplayName={confirmPlan.name}
+        price={confirmPlanPrice}
+        duration={billingCycle === "monthly" ? 1 : 6}
+      />
+    )}
     <div className="min-h-screen bg-white relative overflow-y-auto px-4 pt-14 pb-8 md:pt-10 md:pb-10">
       {/* Close button — offset so it never overlaps the heading */}
       <button
@@ -266,5 +271,6 @@ export function UpgradePage() {
         })}
       </div>
     </div>
+    </>
   );
 }

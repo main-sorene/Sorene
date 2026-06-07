@@ -132,9 +132,9 @@ export async function getInvoices(
 
 interface UpgradePayload {
   duration: number;
-  email: string;
   plan: string;
   prorate: boolean;
+  promotionCode?: string;
 }
 
 interface UpgradeResponse {

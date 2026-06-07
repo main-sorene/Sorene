@@ -409,7 +409,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
           <div className="grid grid-cols-2 gap-1.5">
             {SUGGESTIONS.map((s) => (
               <button key={s.recipeId} onClick={() => send(s.label, s.recipeId)} disabled={loading}
-                className="flex items-center justify-center gap-1 px-2 py-2 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
+                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
                 <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
                 <span className="truncate">{s.label}</span>
               </button>

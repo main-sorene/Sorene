@@ -30,8 +30,8 @@ function initializeFirebase() {
   try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
-    // Explicitly persist auth session in localStorage so mobile refreshes
-    // don't lose the session.
+    // Explicitly persist session in localStorage so mobile refreshes and
+    // app-switching never drop the auth state.
     setPersistence(auth, browserLocalPersistence).catch(() => {});
     storage = getStorage(app);
     db = getFirestore(app);

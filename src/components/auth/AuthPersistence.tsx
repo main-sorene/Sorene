@@ -17,15 +17,22 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
     const fallbackTimer = setTimeout(() => setLoading(false), 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(fallbackTimer);
       if (!firebaseUser) {
         setUser(null);
-        clearTimeout(fallbackTimer);
         setLoading(false);
         return;
       }
 
       const appUid = firebaseUser.email || firebaseUser.uid;
-      const profile = await getUserProfile(appUid);
+
+      let profile = null;
+      try {
+        profile = await getUserProfile(appUid);
+      } catch {
+        // Firestore read failed (offline / network issue). Keep the user
+        // signed in — don't bounce them to the homepage.
+      }
 
       if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {
         saveUserProfile(appUid, { photoUrl: undefined }).catch(() => {});
@@ -39,11 +46,13 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
         photoURL: firebaseUser.photoURL,
         profile: profile || undefined,
       });
-      clearTimeout(fallbackTimer);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <>{children}</>;

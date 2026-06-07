@@ -5996,17 +5996,11 @@ type ConnectSetting = {
   defaultValue: string | boolean;
 };
 
-const CHANNEL_SETTINGS: Record<"whatsapp" | "telegram", ConnectSetting[]> = {
+const CHANNEL_SETTINGS: Record<"whatsapp", ConnectSetting[]> = {
   whatsapp: [
     { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Weekly" },
     { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article via WhatsApp each morning.",         type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Off" },
     { id: "checkin_prompt",  label: "Weekly accountability check-in", description: "Sorene asks how your week went every Monday.",                     type: "toggle",  defaultValue: true },
-    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
-  ],
-  telegram: [
-    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article each morning.",                      type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "realtime_coach",  label: "Real-time coaching",         description: "Ask Sorene anything via Telegram between sessions.",                   type: "toggle",  defaultValue: true },
     { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
   ],
 };
@@ -6023,14 +6017,13 @@ const MESSENGER_FEATURES = [
 
 function MessengerConnectCard() {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
     whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
-    telegram: Object.fromEntries(CHANNEL_SETTINGS.telegram.map((s) => [s.id, s.defaultValue])),
   });
-  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle", telegram: "idle" });
+  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle" });
 
-  const handleLink = async (platform: "whatsapp" | "telegram") => {
+  const handleLink = async (platform: "whatsapp") => {
     if (linkState[platform] !== "idle") return;
     setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
     try {
@@ -6050,13 +6043,12 @@ function MessengerConnectCard() {
     }
   };
 
-  const setSetting = (platform: "whatsapp" | "telegram", id: string, val: string | boolean) => {
+  const setSetting = (platform: "whatsapp", id: string, val: string | boolean) => {
     setSettings((prev) => ({ ...prev, [platform]: { ...prev[platform], [id]: val } }));
   };
 
-  const platforms: { id: "whatsapp" | "telegram"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
-    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Weekly check-ins · Progress tracking" },
-    { id: "telegram", name: "Telegram",  icon: TG_ICON, color: "#229ED9", tagline: "Instant messaging · Real-time coaching" },
+  const platforms: { id: "whatsapp"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
+    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Real-time coaching · Weekly check-ins · Progress tracking" },
   ];
 
   const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #34D399 34.62%, #059669 100%)";
@@ -6077,7 +6069,7 @@ function MessengerConnectCard() {
               <MessageCircle size={13} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp or Telegram</p>
+              <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
               <p className="text-[13px] text-white/80 mt-0.5">Sorene in your pocket — coaching, logging, reminders</p>
             </div>
           </div>

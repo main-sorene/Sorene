@@ -5693,7 +5693,7 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         name: "Customer Research Agent",
         tagline: "Validation · Interviews",
         description: "Finds and qualifies your target customers, drafts interview scripts, and synthesizes patterns from the conversations you log.",
-        tags: ["Find customers", "Interview scripts", "Pattern synthesis"],
+        tags: ["Live now", "Find customers", "Interview scripts", "Pattern synthesis"],
         whatItDoes: [
           "Identifies and ranks your ideal customer segments",
           "Drafts tailored interview questions and outreach to recruit them",
@@ -5709,7 +5709,7 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         name: "Outreach Agent",
         tagline: "Distribution · Pipeline",
         description: "Writes and personalises cold DMs and emails to prospects, partners, and early users, then tracks replies and suggests follow-ups.",
-        tags: ["Cold DMs", "Personalisation", "Follow-ups"],
+        tags: ["Live now", "Cold DMs", "Personalisation", "Follow-ups"],
         whatItDoes: [
           "Drafts personalised messages from your offer and a prospect's context",
           "Suggests channels and the best time to reach out",
@@ -5880,7 +5880,464 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
   },
 ];
 
+// ── Customer Research Agent UI ─────────────────────────────────────────────
+function CustomerResearchAgentUI() {
+  const project = useAtomValue(selectedExecutionProjectAtom);
+  const title = project?.title ?? "";
+
+  type Stage = "idle" | "loading" | "done";
+  const [targetStage, setTargetStage] = useState<Stage>("idle");
+  const [targetResult, setTargetResult] = useState("");
+  const [scriptStage, setScriptStage] = useState<Stage>("idle");
+  const [scriptResult, setScriptResult] = useState("");
+  const [patternStage, setPatternStage] = useState<Stage>("idle");
+  const [patternResult, setPatternResult] = useState("");
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const t = localStorage.getItem(`cr-target-${title}`);
+      if (t) { setTargetResult(t); setTargetStage("done"); }
+      const s = localStorage.getItem(`cr-script-${title}`);
+      if (s) { setScriptResult(s); setScriptStage("done"); }
+      const p = localStorage.getItem(`cr-patterns-${title}`);
+      if (p) { setPatternResult(p); setPatternStage("done"); }
+    } catch { /* ignore */ }
+  }, [title]);
+
+  const callAI = async (prompt: string, system: string): Promise<string> => {
+    const { authFetch } = await import("@/lib/authFetch");
+    const res = await authFetch("/api/execution-assist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, system }),
+    });
+    if (!res.ok) throw new Error("AI error");
+    const data = await res.json();
+    return (data?.reply ?? "").trim();
+  };
+
+  const findTargets = async () => {
+    if (!project) return;
+    setTargetStage("loading");
+    try {
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown headers, no JSON. Use short numbered lines.`;
+      const prompt = `Find 8 specific types of people or communities this founder should talk to immediately for customer research.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.description ? `Details: ${project.description.slice(0, 300)}` : ""}
+
+List 8 specific targets. For each: their role/community, where to find them (platform or place), and why they're relevant. Be specific — not "entrepreneurs" but "bootstrapped SaaS founders in Southeast Asia who run < 10-person teams". Keep each line short.`;
+      const reply = await callAI(prompt, system);
+      setTargetResult(reply);
+      setTargetStage("done");
+      try { localStorage.setItem(`cr-target-${title}`, reply); } catch { /* ignore */ }
+    } catch { setTargetStage("idle"); }
+  };
+
+  const generateScript = async () => {
+    if (!project) return;
+    setScriptStage("loading");
+    try {
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown headers, no JSON.`;
+      const prompt = `Write a customer interview script for this project.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.description ? `Details: ${project.description.slice(0, 300)}` : ""}
+
+Write 8 questions. Start with easy openers about their current situation, move to problem depth, end with willingness to pay/change. The goal is to validate whether the pain is real and severe enough. Don't mention the product until question 7+. Format as numbered questions only — no intro, no explanations between questions.`;
+      const reply = await callAI(prompt, system);
+      setScriptResult(reply);
+      setScriptStage("done");
+      try { localStorage.setItem(`cr-script-${title}`, reply); } catch { /* ignore */ }
+    } catch { setScriptStage("idle"); }
+  };
+
+  const analysePatterns = async () => {
+    if (!project) return;
+    setPatternStage("loading");
+    try {
+      let convSummary = "No conversations logged yet.";
+      try {
+        const raw = localStorage.getItem(`convlog-${title}`);
+        if (raw) {
+          const entries = JSON.parse(raw) as { name?: string; notes?: string }[];
+          if (entries.length > 0) {
+            convSummary = `${entries.length} conversations logged:\n` +
+              entries.map((e, i) => `${i + 1}. ${e.name ?? "Anonymous"}: ${(e.notes ?? "").slice(0, 200)}`).join("\n");
+          }
+        }
+      } catch { /* ignore */ }
+
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown, no JSON.`;
+      const prompt = `Analyse the patterns across these customer conversations and give a validation verdict.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+
+Conversations:
+${convSummary}
+
+Write 4-5 sentences covering: (1) the strongest signal you see, (2) the most common pain point or objection, (3) any surprising insight, (4) a clear verdict — is the pain validated, partially validated, or not validated yet, and why. Be specific to what they actually said. End with one concrete next action.`;
+      const reply = await callAI(prompt, system);
+      setPatternResult(reply);
+      setPatternStage("done");
+      try { localStorage.setItem(`cr-patterns-${title}`, reply); } catch { /* ignore */ }
+    } catch { setPatternStage("idle"); }
+  };
+
+  const AgentSection = ({
+    icon: Icon, label, sublabel, stage, result, onRun, runLabel, refreshLabel = "Refresh",
+  }: {
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    label: string; sublabel: string;
+    stage: Stage; result: string;
+    onRun: () => void; runLabel: string; refreshLabel?: string;
+  }) => (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Icon size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">{label}</p>
+            <p className="text-[11px] text-[#9A9A9A]">{sublabel}</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={onRun} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">{refreshLabel}</button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <button onClick={onRun}
+            className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+            {runLabel}
+          </button>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+            <Loader2 size={13} className="animate-spin" /> Working on it…
+          </div>
+        )}
+        {stage === "done" && result && (
+          <div className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">
+            <MarkdownText text={result} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!project) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-[13px] text-[#9A9A9A]">Select a project from your Hub first to use this agent.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5F5F5]">
+        <FolderOpen size={12} className="text-[#9A9A9A]" />
+        <p className="text-[12px] text-[#62646A]">Working on: <span className="font-semibold text-[#151515]">{project.title}</span></p>
+      </div>
+      <AgentSection
+        icon={Users}
+        label="Who to talk to"
+        sublabel="Specific people and communities to reach for interviews"
+        stage={targetStage}
+        result={targetResult}
+        onRun={findTargets}
+        runLabel="Find my target customers →"
+      />
+      <AgentSection
+        icon={MessageCircle}
+        label="Interview script"
+        sublabel="Tailored questions to surface real pain — not polite feedback"
+        stage={scriptStage}
+        result={scriptResult}
+        onRun={generateScript}
+        runLabel="Generate interview script →"
+      />
+      <AgentSection
+        icon={BarChart3}
+        label="Pattern analysis"
+        sublabel="Reads your logged conversations and finds the signal"
+        stage={patternStage}
+        result={patternResult}
+        onRun={analysePatterns}
+        runLabel="Analyse my conversations →"
+      />
+    </div>
+  );
+}
+
+// ── Outreach Agent UI ──────────────────────────────────────────────────────
+interface OutreachProspect {
+  id: string;
+  name: string;
+  role: string;
+  context: string;
+  message: string;
+  format: "dm" | "email";
+  status: "drafted" | "sent" | "replied" | "interested" | "declined";
+  createdAt: string;
+}
+
+function OutreachAgentUI() {
+  const project = useAtomValue(selectedExecutionProjectAtom);
+  const title = project?.title ?? "";
+  const pipelineKey = `outreach-pipeline-${title}`;
+
+  const [prospects, setProspects] = useState<OutreachProspect[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "", context: "", format: "dm" as "dm" | "email" });
+  const [generating, setGenerating] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(pipelineKey);
+      if (raw) setProspects(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [title, pipelineKey]);
+
+  const save = (updated: OutreachProspect[]) => {
+    setProspects(updated);
+    try { localStorage.setItem(pipelineKey, JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
+  const generateMessage = async () => {
+    if (!project || !form.name.trim()) return;
+    setGenerating(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const system = `You are Sorene, a sharp execution coach helping a founder write outreach. Write only the message itself — no subject line label, no intro explaining what you're writing, no sign-off instructions. Just the message text, ready to copy and send.`;
+      const prompt = `Write a personalised ${form.format === "email" ? "cold email" : "cold DM"} for this founder to send to a prospect.
+
+Founder's project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Who they're targeting: ${project.first_10_customers}` : ""}
+
+Prospect: ${form.name}${form.role ? `, ${form.role}` : ""}
+${form.context ? `Context about them: ${form.context}` : ""}
+
+The message should: reference something specific about the prospect, connect their situation to what the founder is building, and end with one clear low-friction ask (a 20-min call, a quick reply, feedback on an idea — not a sale). Keep it under 120 words. Sound like a real person, not a template.`;
+
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (!res.ok) throw new Error("fail");
+      const data = await res.json();
+      const msg = (data?.reply ?? "").trim();
+
+      const prospect: OutreachProspect = {
+        id: Date.now().toString(),
+        name: form.name.trim(),
+        role: form.role.trim(),
+        context: form.context.trim(),
+        message: msg,
+        format: form.format,
+        status: "drafted",
+        createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      };
+      save([prospect, ...prospects]);
+      setExpandedId(prospect.id);
+      setForm({ name: "", role: "", context: "", format: "dm" });
+      setFormOpen(false);
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  const updateStatus = (id: string, status: OutreachProspect["status"]) => {
+    save(prospects.map((p) => p.id === id ? { ...p, status } : p));
+  };
+
+  const deleteProspect = (id: string) => {
+    save(prospects.filter((p) => p.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  const STATUS_COLORS: Record<OutreachProspect["status"], string> = {
+    drafted: "bg-gray-100 text-[#62646A]",
+    sent: "bg-blue-50 text-blue-600",
+    replied: "bg-yellow-50 text-yellow-700",
+    interested: "bg-[#DCFCE7] text-[#16A34A]",
+    declined: "bg-red-50 text-red-500",
+  };
+  const STATUS_LABELS: Record<OutreachProspect["status"], string> = {
+    drafted: "Drafted", sent: "Sent", replied: "Replied", interested: "Interested", declined: "Declined",
+  };
+  const STATUS_NEXT: Record<OutreachProspect["status"], OutreachProspect["status"][]> = {
+    drafted: ["sent"],
+    sent: ["replied", "declined"],
+    replied: ["interested", "declined"],
+    interested: ["declined"],
+    declined: [],
+  };
+
+  if (!project) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-[13px] text-[#9A9A9A]">Select a project from your Hub first to use this agent.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5F5F5]">
+          <FolderOpen size={12} className="text-[#9A9A9A]" />
+          <p className="text-[12px] text-[#62646A]">Working on: <span className="font-semibold text-[#151515]">{project.title}</span></p>
+        </div>
+        <button
+          onClick={() => setFormOpen((v) => !v)}
+          className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",
+            formOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+          <Plus size={13} />{formOpen ? "Cancel" : "New prospect"}
+        </button>
+      </div>
+
+      {/* Add prospect form */}
+      <AnimatePresence initial={false}>
+        {formOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+            className="overflow-hidden">
+            <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] p-4 space-y-3">
+              <p className="text-[12px] font-semibold text-[#151515]">Tell Sorene about the prospect</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Name *"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                <input
+                  value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
+                  placeholder="Role / company"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+              </div>
+              <textarea
+                value={form.context} onChange={(e) => setForm((p) => ({ ...p, context: e.target.value }))}
+                placeholder="What do you know about them? (LinkedIn summary, recent post, mutual connection, their problem…)"
+                rows={3}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <p className="text-[12px] text-[#62646A]">Format:</p>
+                  {(["dm", "email"] as const).map((f) => (
+                    <button key={f} onClick={() => setForm((p) => ({ ...p, format: f }))}
+                      className={cn("px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+                        form.format === f ? "bg-[#151515] text-white" : "bg-gray-100 text-[#62646A] hover:bg-gray-200")}>
+                      {f === "dm" ? "Cold DM" : "Cold Email"}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={generateMessage} disabled={!form.name.trim() || generating}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  {generating && <Loader2 size={13} className="animate-spin" />}
+                  Write message →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pipeline */}
+      {prospects.length === 0 && !formOpen ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-8 text-center">
+          <Mail size={20} className="text-[#9A9A9A] mx-auto mb-2" />
+          <p className="text-[13px] text-[#9A9A9A]">No prospects yet. Add one and Sorene will write the message.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+            <p className="text-[12px] font-semibold text-[#151515]">Pipeline</p>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-[#62646A] font-semibold">{prospects.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {prospects.map((p) => {
+              const isOpen = expandedId === p.id;
+              return (
+                <div key={p.id}>
+                  <button onClick={() => setExpandedId(isOpen ? null : p.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                    <div className="w-7 h-7 rounded-full bg-[#F3F4F6] flex items-center justify-center shrink-0 text-[11px] font-bold text-[#62646A]">
+                      {(p.name[0] ?? "?").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-body-small-medium text-[#151515] truncate">{p.name}</p>
+                      <p className="text-[11px] text-[#9A9A9A] truncate">{p.role || p.createdAt}</p>
+                    </div>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0", STATUS_COLORS[p.status])}>
+                      {STATUS_LABELS[p.status]}
+                    </span>
+                    {isOpen ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                        className="overflow-hidden">
+                        <div className="px-4 pb-4 space-y-3 bg-[#FAFAFA]">
+                          <div className="rounded-xl bg-white border border-gray-100 px-3 py-3">
+                            <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide mb-1.5">
+                              {p.format === "email" ? "Cold Email" : "Cold DM"}
+                            </p>
+                            <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{p.message}</p>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(p.message)}
+                              className="mt-2 text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                              Copy →
+                            </button>
+                          </div>
+                          {STATUS_NEXT[p.status].length > 0 && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[11px] text-[#9A9A9A]">Mark as:</p>
+                              {STATUS_NEXT[p.status].map((s) => (
+                                <button key={s} onClick={() => updateStatus(p.id, s)}
+                                  className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors", STATUS_COLORS[s], "hover:opacity-80")}>
+                                  {STATUS_LABELS[s]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <button onClick={() => deleteProspect(p.id)}
+                            className="flex items-center gap-1.5 text-[12px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Agent detail panel ─────────────────────────────────────────────────────
 function AgentDetail({ agent }: { agent: AgentDef }) {
+  if (agent.id === "customer_research") return <CustomerResearchAgentUI />;
+  if (agent.id === "outreach") return <OutreachAgentUI />;
+
   return (
     <div className="p-6 space-y-6">
       <section>

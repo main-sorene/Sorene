@@ -5724,8 +5724,8 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)`,
         name: "Content & Social Agent",
         tagline: "Build-in-public · Inbound",
-        description: "Turns your founder journey and offer into posts and a weekly calendar, adapting tone and format per channel (X, Threads, LinkedIn).",
-        tags: ["X", "Threads", "LinkedIn", "Content calendar"],
+        description: "Turns your founder journey into Threads posts — generates options in your voice, you review and post with one click.",
+        tags: ["Live now", "Threads", "Generate & post"],
         whatItDoes: [
           "Generates post ideas from your journey, wins, and customer insights",
           "Adapts each idea to the norms of X, Threads, and LinkedIn",
@@ -6505,10 +6505,300 @@ The message should: reference something specific about the prospect, connect the
   );
 }
 
+// ── Content & Social Agent UI ──────────────────────────────────────────────
+const POST_TOPICS = [
+  { value: "win", label: "Recent win", hint: "Something that worked, a milestone, a small victory" },
+  { value: "lesson", label: "Lesson learned", hint: "Something that didn't work and what you took from it" },
+  { value: "customer", label: "Customer insight", hint: "Something surprising you heard from a customer conversation" },
+  { value: "build", label: "What I'm building", hint: "Update on progress, what changed, what's next" },
+  { value: "blocker", label: "Current blocker", hint: "Real struggle — vulnerability builds trust and often gets advice" },
+  { value: "custom", label: "Custom topic", hint: "Describe what you want to write about" },
+];
+
+interface ThreadsDraft { id: string; text: string; editing: boolean; }
+
+function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
+  const authUser = useAtomValue(userAtom);
+  const [accountStatus, setAccountStatus] = useState<"loading" | "disconnected" | "connected">("loading");
+  const [username, setUsername] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const [topic, setTopic] = useState("win");
+  const [customTopic, setCustomTopic] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [drafts, setDrafts] = useState<ThreadsDraft[]>([]);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [publishedIds, setPublishedIds] = useState<Set<string>>(new Set());
+  const [successMsg, setSuccessMsg] = useState("");
+
+  useEffect(() => {
+    if (!authUser) return;
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch("/api/threads/account")
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          if (data?.connected) { setAccountStatus("connected"); setUsername(data.username ?? ""); }
+          else setAccountStatus("disconnected");
+        })
+        .catch(() => setAccountStatus("disconnected"))
+    );
+  }, [authUser]);
+
+  // Handle OAuth return — threads_connected param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("threads_connected") === "1") {
+      setAccountStatus("connected");
+      window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
+    }
+    if (params.get("threads_error") === "1") {
+      setAccountStatus("disconnected");
+      window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
+    }
+  }, []);
+
+  const connectThreads = async () => {
+    setConnecting(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/auth");
+      if (res.ok) {
+        const data = await res.json() as { url?: string };
+        if (data.url) { window.location.href = data.url; return; }
+      }
+    } catch { /* ignore */ }
+    setConnecting(false);
+  };
+
+  const disconnectThreads = async () => {
+    setDisconnecting(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/threads/account", { method: "DELETE" });
+      setAccountStatus("disconnected");
+      setUsername("");
+      setDrafts([]);
+    } catch { /* ignore */ }
+    setDisconnecting(false);
+  };
+
+  const generate = async () => {
+    if (!project) return;
+    setGenerating(true);
+    try {
+      const topicLabel = POST_TOPICS.find((t) => t.value === topic)?.label ?? topic;
+      const topicText = topic === "custom" ? customTopic : topicLabel;
+
+      const { authFetch } = await import("@/lib/authFetch");
+      const system = `You are Sorene, a sharp execution coach helping a founder write for Threads. Threads posts are conversational, honest, and human — no corporate speak, no hashtag spam (max 1-2 if truly relevant), no emojis unless the founder's voice calls for it. Max 500 characters per post. Write like a smart founder sharing a real moment, not a marketer.`;
+      const prompt = `Generate 3 different Threads post options for this founder. Each should take a different angle on the same topic.
+
+Founder's project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.path_label ? `Current stage: ${project.path_label}` : ""}
+${project.description ? `More context: ${project.description.slice(0, 200)}` : ""}
+
+Topic to write about: ${topicText}
+
+Format your response as exactly 3 posts separated by "---". Nothing else — no labels, no intro, no commentary. Just the 3 posts separated by "---".`;
+
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { reply?: string };
+        const raw = (data.reply ?? "").trim();
+        const options = raw.split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, 3);
+        setDrafts(options.map((text, i) => ({ id: `${Date.now()}-${i}`, text, editing: false })));
+      }
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  const updateDraft = (id: string, text: string) =>
+    setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, text } : d));
+  const toggleEdit = (id: string) =>
+    setDrafts((prev) => prev.map((d) => d.id === id ? { ...d, editing: !d.editing } : d));
+  const discardDraft = (id: string) =>
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+
+  const publishDraft = async (draft: ThreadsDraft) => {
+    setPublishing(draft.id);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: draft.text }),
+      });
+      if (res.ok) {
+        setPublishedIds((prev) => new Set([...prev, draft.id]));
+        setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+        setSuccessMsg("Posted to Threads ✓");
+        setTimeout(() => setSuccessMsg(""), 3000);
+      }
+    } catch { /* ignore */ }
+    setPublishing(null);
+  };
+
+  const selectedTopicDef = POST_TOPICS.find((t) => t.value === topic);
+
+  return (
+    <div className="p-5 space-y-5">
+      {/* Threads connection */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
+              {/* Threads icon */}
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+                <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.064c0-3.518.85-6.372 2.495-8.423C5.845 1.277 8.599.095 12.18.071h.014c2.746.018 5.143.808 7.137 2.35 1.89 1.46 3.19 3.51 3.867 6.105l-2.012.54c-.55-2.07-1.586-3.696-3.078-4.832-1.584-1.213-3.564-1.826-5.889-1.82-2.94.02-5.086.92-6.37 2.67C4.568 6.89 3.937 9.19 3.937 12.004v.064c0 2.814.63 5.114 1.912 6.92 1.284 1.75 3.43 2.65 6.37 2.67 2.497.017 4.253-.557 5.5-1.752 1.392-1.332 2.094-3.31 2.086-5.876a7.2 7.2 0 0 0-.085-1.136h-7.558v-2.33h9.756c.112.573.168 1.176.168 1.793v.003c.013 3.363-.962 5.937-2.9 7.647-1.72 1.515-4.08 2.284-6.999 2.268Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Threads</p>
+              {accountStatus === "connected"
+                ? <p className="text-[11px] text-[#32C382]">Connected{username ? ` · @${username}` : ""}</p>
+                : <p className="text-[11px] text-[#9A9A9A]">Connect to generate and post directly</p>}
+            </div>
+          </div>
+          {accountStatus === "loading" && <Loader2 size={14} className="animate-spin text-[#9A9A9A]" />}
+          {accountStatus === "disconnected" && (
+            <button onClick={connectThreads} disabled={connecting}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-50">
+              {connecting ? <Loader2 size={12} className="animate-spin" /> : null}
+              Connect
+            </button>
+          )}
+          {accountStatus === "connected" && (
+            <button onClick={disconnectThreads} disabled={disconnecting}
+              className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors font-medium">
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          )}
+        </div>
+        {accountStatus === "disconnected" && (
+          <div className="px-5 py-4 text-center">
+            <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate and publish posts directly from here.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Generate section */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Lightbulb size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Generate posts</p>
+            <p className="text-[11px] text-[#9A9A9A]">Sorene writes 3 options — you pick, edit, and post</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          {!project && (
+            <p className="text-[12px] text-[#9A9A9A] text-center">Select a project from your Hub first.</p>
+          )}
+          {project && (
+            <>
+              <div>
+                <p className="text-[12px] font-medium text-[#151515] mb-2">What do you want to write about?</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {POST_TOPICS.map((t) => (
+                    <button key={t.value} onClick={() => setTopic(t.value)}
+                      className={cn("px-3 py-2 rounded-xl text-left text-[12px] font-medium transition-colors border",
+                        topic === t.value
+                          ? "bg-[#151515] text-white border-[#151515]"
+                          : "bg-white text-[#62646A] border-gray-200 hover:border-[#151515] hover:text-[#151515]")}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {selectedTopicDef && topic !== "custom" && (
+                  <p className="text-[11px] text-[#9A9A9A] mt-2">{selectedTopicDef.hint}</p>
+                )}
+              </div>
+              {topic === "custom" && (
+                <textarea value={customTopic} onChange={(e) => setCustomTopic(e.target.value)}
+                  placeholder="Describe what you want to post about…"
+                  rows={2}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+              )}
+              <button onClick={generate} disabled={generating || (topic === "custom" && !customTopic.trim())}
+                className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {generating ? <><Loader2 size={13} className="animate-spin" /> Writing 3 options…</> : "Generate 3 post options →"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Drafts — review & post */}
+      {drafts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[12px] font-semibold text-[#151515]">Review before posting</p>
+            {successMsg && <span className="text-[11px] text-[#32C382] font-medium">{successMsg}</span>}
+          </div>
+          {drafts.map((draft, i) => (
+            <div key={draft.id} className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Option {i + 1}</p>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-[#9A9A9A]">{draft.text.length}/500</span>
+                  <button onClick={() => toggleEdit(draft.id)}
+                    className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                    {draft.editing ? "Done" : "Edit"}
+                  </button>
+                  <button onClick={() => discardDraft(draft.id)}
+                    className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4">
+                {draft.editing ? (
+                  <textarea value={draft.text} onChange={(e) => updateDraft(draft.id, e.target.value)}
+                    rows={5} maxLength={500}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+                ) : (
+                  <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{draft.text}</p>
+                )}
+                {accountStatus === "connected" && (
+                  <button onClick={() => publishDraft(draft)} disabled={!!publishing || draft.text.length > 500}
+                    className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#1a1a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    {publishing === draft.id ? <Loader2 size={12} className="animate-spin" /> : (
+                      <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white">
+                        <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.064c0-3.518.85-6.372 2.495-8.423C5.845 1.277 8.599.095 12.18.071h.014c2.746.018 5.143.808 7.137 2.35 1.89 1.46 3.19 3.51 3.867 6.105l-2.012.54c-.55-2.07-1.586-3.696-3.078-4.832-1.584-1.213-3.564-1.826-5.889-1.82-2.94.02-5.086.92-6.37 2.67C4.568 6.89 3.937 9.19 3.937 12.004v.064c0 2.814.63 5.114 1.912 6.92 1.284 1.75 3.43 2.65 6.37 2.67 2.497.017 4.253-.557 5.5-1.752 1.392-1.332 2.094-3.31 2.086-5.876a7.2 7.2 0 0 0-.085-1.136h-7.558v-2.33h9.756c.112.573.168 1.176.168 1.793v.003c.013 3.363-.962 5.937-2.9 7.647-1.72 1.515-4.08 2.284-6.999 2.268Z" />
+                      </svg>
+                    )}
+                    Post to Threads
+                  </button>
+                )}
+                {accountStatus === "disconnected" && (
+                  <button onClick={() => navigator.clipboard.writeText(draft.text)}
+                    className="mt-3 text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                    Copy to clipboard →
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Agent detail panel ─────────────────────────────────────────────────────
 function AgentDetail({ agent, project }: { agent: AgentDef; project: DirectionCardData | null }) {
   if (agent.id === "customer_research") return <CustomerResearchAgentUI project={project} />;
   if (agent.id === "outreach") return <OutreachAgentUI project={project} />;
+  if (agent.id === "content_social") return <ContentSocialAgentUI project={project} />;
 
   return (
     <div className="p-6 space-y-6">

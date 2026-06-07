@@ -4995,6 +4995,43 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
           )}
         </>
       )}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-px bg-gray-100" />
+          <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or describe your own</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
+          <textarea
+            value={ownDesc}
+            onChange={(e) => setOwnDesc(e.target.value)}
+            placeholder="Describe your pricing packages (e.g. a starter at $99/mo, a pro at $299/mo with 5 seats)…"
+            rows={3}
+            className="w-full text-[13px] text-[#151515] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382] resize-none placeholder:text-[#9CA3AF]"
+          />
+          <button
+            onClick={async () => {
+              const text = ownDesc.trim();
+              if (!text || ownEvalLoading) return;
+              setOwnEvalLoading(true);
+              setOwnEval("");
+              await generate(`\n\nUser described their own packages: "${text}". Use this as the basis — structure them into the correct format and evaluate if the pricing makes sense for this business.`);
+              setOwnEval("Packages structured from your description.");
+              setOwnEvalLoading(false);
+            }}
+            disabled={!ownDesc.trim() || ownEvalLoading}
+            className="flex items-center gap-1 text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30"
+          >
+            {ownEvalLoading ? <Loader2 size={10} className="animate-spin" /> : <img src="/figmaAssets/starfour.svg" className="w-2 h-2" alt="" />}
+            Structure &amp; evaluate
+          </button>
+          {ownEval && (
+            <p className="text-[11px] text-[#62646A] leading-relaxed">
+              <span className="text-[#32C382] font-semibold">Sorene: </span>{ownEval}
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -5602,20 +5639,6 @@ function GrowthContent({ project }: { project: DirectionCardData | null }) {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <span className="text-[12px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
-        {tipsStage === "idle" && (
-          <button onClick={generateTips} disabled={!title}
-            className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center gap-1">
-            <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Get personalised tips
-          </button>
-        )}
-        {tipsStage === "loading" && (
-          <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
-            <Loader2 size={11} className="animate-spin" /> Getting tips…
-          </div>
-        )}
-      </div>
 
       <div className="space-y-4">
         {pillar.items.map((item) => {

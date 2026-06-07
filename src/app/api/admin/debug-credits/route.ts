@@ -2,8 +2,13 @@ import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 import { checkCredits } from "@/lib/credits";
 
-// Debug endpoint: shows raw Firestore credits for a user + runs checkCredits
-// GET /api/admin/debug-credits?secret=...&email=user@example.com
+// Debug endpoint: dumps raw Firestore credit state.
+//
+// GET /api/admin/debug-credits?secret=...                → lists ALL user docs
+//      with their doc id (key), email field, and credits. Use this to see
+//      exactly which document key credits are being written under.
+// GET /api/admin/debug-credits?secret=...&email=...       → single doc lookup
+//      by the given key (could be uid OR email), plus live checkCredits.
 export async function GET(req: NextRequest) {
   const secret = process.env.ADMIN_SECRET;
   const provided =
@@ -13,25 +18,35 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const email = req.nextUrl.searchParams.get("email");
-  if (!email) return Response.json({ error: "Missing email" }, { status: 400 });
-
   const db = getAdminFirestore();
-  const snap = await db.collection("users").doc(email).get();
+  const key = req.nextUrl.searchParams.get("email");
 
-  if (!snap.exists) {
-    return Response.json({ error: "User not found" });
+  // Single-doc mode
+  if (key) {
+    const snap = await db.collection("users").doc(key).get();
+    const creditStatus = await checkCredits(key);
+    return Response.json({
+      lookupKey: key,
+      exists: snap.exists,
+      firestore_raw_credits: snap.data()?.credits ?? null,
+      firestore_email_field: snap.data()?.email ?? null,
+      firestore_subscription: snap.data()?.subscription ?? null,
+      checkCredits_result: creditStatus,
+    });
   }
 
-  const data = snap.data()!;
-
-  // Also run checkCredits to see what it returns live
-  const creditStatus = await checkCredits(email);
-
-  return Response.json({
-    firestore_raw_credits: data.credits ?? null,
-    firestore_subscription: data.subscription ?? null,
-    firestore_dnaAssessmentComplete: data.dnaAssessmentComplete ?? false,
-    checkCredits_result: creditStatus,
+  // List-all mode — see every user doc, its key, and credits
+  const usersSnap = await db.collection("users").get();
+  const docs = usersSnap.docs.map((d) => {
+    const data = d.data();
+    return {
+      docId: d.id,
+      emailField: data.email ?? null,
+      hasEmailKey: d.id.includes("@"),
+      credits: data.credits ?? null,
+      dnaAssessmentComplete: data.dnaAssessmentComplete ?? false,
+    };
   });
+
+  return Response.json({ totalDocs: docs.length, docs });
 }

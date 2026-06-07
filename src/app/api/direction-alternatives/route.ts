@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
+import { assertTextCompletion } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -48,19 +49,31 @@ The array must contain exactly ${models.length} strings, in the same order as th
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 600,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const block = message.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return Response.json({ summaries: [] });
+    const raw = assertTextCompletion(message);
+
+    // Extract JSON from the response, tolerating any surrounding whitespace
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) {
+      console.error("[direction-alternatives] No JSON object found in response");
+      return Response.json({ summaries: [] });
+    }
 
     try {
-      const parsed = JSON.parse(jsonMatch[0]) as { summaries?: string[] };
+      const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as { summaries?: string[] };
       const summaries = Array.isArray(parsed.summaries) ? parsed.summaries : [];
+      if (summaries.length !== models.length) {
+        console.error(
+          `[direction-alternatives] Expected ${models.length} summaries, got ${summaries.length}`,
+        );
+      }
       return Response.json({ summaries });
-    } catch {
+    } catch (parseErr) {
+      console.error("[direction-alternatives] JSON parse error:", parseErr);
       return Response.json({ summaries: [] });
     }
   } catch (err) {

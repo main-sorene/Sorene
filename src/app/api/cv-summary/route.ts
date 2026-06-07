@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { assertTextCompletion } from "@/lib/aiSafety";
 
 export const maxDuration = 60;
 
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 600,
+      temperature: 0,
       messages: [
         {
           role: "user",
@@ -76,9 +78,7 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    const block = message.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
-
+    const text = assertTextCompletion(message);
     return Response.json({ summary: text });
   } catch (error) {
     console.error("[cv-summary] error:", error);

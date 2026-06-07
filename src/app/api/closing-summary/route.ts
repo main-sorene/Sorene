@@ -1,16 +1,18 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { maskAnswers, assertTextCompletion } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
-    const { firstName, answers, hasCv } = (await req.json()) as {
+    const { firstName, answers: rawAnswers, hasCv } = (await req.json()) as {
       firstName: string;
       answers: Record<string, string>;
       hasCv: boolean;
     };
 
+    const answers = maskAnswers(rawAnswers);
     const answerBlock = Object.entries(answers)
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
@@ -38,11 +40,11 @@ Output only the two paragraphs.`;
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const block = message.content[0];
-    const summary = block && block.type === "text" ? block.text.trim() : "";
+    const summary = assertTextCompletion(message);
     return Response.json({ summary });
   } catch (err) {
     console.error("[closing-summary] error:", err);

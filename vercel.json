@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/whatsapp-scheduled",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/threads-scheduled",
+      "schedule": "0 * * * *"
     }
   ]
 }

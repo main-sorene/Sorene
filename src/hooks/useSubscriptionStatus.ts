@@ -7,12 +7,14 @@ export const subscriptionQueryKey = (email: string) => ["subscription", email];
 
 export function useSubscriptionStatus() {
   const user = useAtomValue(userAtom);
-  const email = user?.email ?? user?.profile?.email ?? null;
+  // email may be null for some auth providers — fall back to uid so the query
+  // still runs (the server now accepts an empty email and uses the token identity).
+  const email = user?.email ?? user?.profile?.email ?? user?.uid ?? null;
 
   return useQuery({
     queryKey: subscriptionQueryKey(email ?? ""),
-    queryFn: () => getSubscriptionStatus(email!),
-    enabled: !!email,
+    queryFn: () => getSubscriptionStatus(email ?? ""),
+    enabled: !!user,
     staleTime: 0,
     retry: 1,
   });

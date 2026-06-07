@@ -124,14 +124,26 @@ export function useDnaEdit() {
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
           let accumulated = "";
+          let rafId: number | null = null;
+          // Batch DOM updates to once per animation frame for smooth rendering
+          const flush = () => {
+            const snapshot = accumulated;
+            setMessages((prev) =>
+              prev.map((m) => m.id === placeholderId ? { ...m, content: snapshot } : m)
+            );
+            rafId = null;
+          };
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             accumulated += decoder.decode(value, { stream: true });
-            setMessages((prev) =>
-              prev.map((m) => m.id === placeholderId ? { ...m, content: accumulated } : m)
-            );
+            if (rafId === null) {
+              rafId = requestAnimationFrame(flush);
+            }
           }
+          // Final flush to ensure last chunk is rendered
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          flush();
         } catch (error) {
           console.error("[useDnaEdit] streaming error:", error);
           setMessages((prev) =>

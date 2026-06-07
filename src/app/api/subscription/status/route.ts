@@ -18,25 +18,33 @@ export async function GET(req: NextRequest) {
     getAdminAuth();
     const db = getAdminFirestore();
 
-    // IMPORTANT: the canonical user document (profile, dnaScores, and — critically —
-    // credits written by the AI API routes) is keyed by UID (see src/lib/firestore.ts).
-    // Billing/subscription data, however, is written by the Stripe webhook keyed by
-    // email. So we read credits from the UID doc and subscription from the email doc.
+    // The user document key is ambiguous across this codebase: the AI API routes
+    // write credits via the value of verifyAuth().uid, while the Stripe webhook and
+    // the client write by email. For some accounts decoded.uid IS the email, for
+    // others it's a Firebase uid. To be bulletproof we read BOTH possible keys and
+    // use whichever document actually holds the credits / subscription data.
     const uid = authedUser.uid;
-    const [creditsDoc, billingDoc] = await Promise.all([
-      db.collection("users").doc(uid).get(),
-      db.collection("users").doc(email).get(),
-    ]);
-    const creditsData = creditsDoc.data() || {};
-    const billingData = billingDoc.data() || {};
+    const keys = Array.from(new Set([uid, email].filter(Boolean) as string[]));
+    const snaps = await Promise.all(
+      keys.map((k) => db.collection("users").doc(k).get()),
+    );
+    const datas = snaps.map((s) => s.data() || {});
 
-    const sub = billingData.subscription ?? creditsData.subscription;
-    let credits = creditsData.credits;
+    // The doc that owns credits is the one whose credits field exists.
+    const creditOwner = datas.find((d) => d.credits) || {};
+    const subOwner = datas.find((d) => d.subscription) || {};
+
+    const sub = subOwner.subscription;
+    let credits = creditOwner.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
+
+    // The key we should initialize against if no credits exist yet — prefer the
+    // same key the AI routes use (uid) so future deductions land on the same doc.
+    const initKey = uid;
 
     // Auto-initialize credits for users who haven't made an AI call yet
     if (!credits?.reset_at) {
-      const status = await checkCredits(uid);
+      const status = await checkCredits(initKey);
       credits = { used: status.used, limit: status.limit, extra: status.extra, reset_at: status.resetAt };
     }
 

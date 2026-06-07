@@ -6098,10 +6098,6 @@ Write 4-5 sentences covering: (1) the strongest signal you see, (2) the most com
 
   return (
     <div className="p-5 space-y-4">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5F5F5]">
-        <FolderOpen size={12} className="text-[#9A9A9A]" />
-        <p className="text-[12px] text-[#62646A]">Working on: <span className="font-semibold text-[#151515]">{project.title}</span></p>
-      </div>
       <AgentSection
         icon={Users}
         label="Who to talk to"
@@ -6376,11 +6372,7 @@ The message should: reference something specific about the prospect, connect the
 
   return (
     <div className="p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#F5F5F5]">
-          <FolderOpen size={12} className="text-[#9A9A9A]" />
-          <p className="text-[12px] text-[#62646A]">Working on: <span className="font-semibold text-[#151515]">{project.title}</span></p>
-        </div>
+      <div className="flex items-center justify-end">
         <button
           onClick={() => setFormOpen((v) => !v)}
           className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",

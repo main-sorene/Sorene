@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 import { PLAN_CREDITS, checkCredits } from "@/lib/credits";
 
+// Never cache — credits change with every AI call and must read fresh.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   try {
     const email = req.nextUrl.searchParams.get("email");
@@ -62,6 +66,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
         credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
+        _debug: { keysRead: keys, foundCreditsDoc: !!creditOwner.credits, rawUsed: credits?.used ?? null },
       });
     }
 

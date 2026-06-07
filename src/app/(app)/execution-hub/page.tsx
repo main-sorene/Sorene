@@ -5892,6 +5892,15 @@ function CustomerResearchAgentUI({ project }: { project: DirectionCardData | nul
   const [patternStage, setPatternStage] = useState<Stage>("idle");
   const [patternResult, setPatternResult] = useState("");
 
+  // Conversation log state (shared with Validation tab via same localStorage key)
+  interface ConvEntry { id: string; name: string; notes: string; fileName?: string; createdAt: string; }
+  const [convEntries, setConvEntries] = useState<ConvEntry[]>([]);
+  const [addConvOpen, setAddConvOpen] = useState(false);
+  const [convForm, setConvForm] = useState({ name: "", notes: "", fileName: "" });
+  const [convSaving, setConvSaving] = useState(false);
+  const [convExpandedId, setConvExpandedId] = useState<string | null>(null);
+  const convFileRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!title) return;
     try {
@@ -5901,8 +5910,54 @@ function CustomerResearchAgentUI({ project }: { project: DirectionCardData | nul
       if (s) { setScriptResult(s); setScriptStage("done"); }
       const p = localStorage.getItem(`cr-patterns-${title}`);
       if (p) { setPatternResult(p); setPatternStage("done"); }
+      // Load conversations (same key as Validation tab)
+      const c = localStorage.getItem(`convlog-${title}`);
+      if (c) setConvEntries(JSON.parse(c));
     } catch { /* ignore */ }
   }, [title]);
+
+  const saveConvEntries = (updated: ConvEntry[]) => {
+    setConvEntries(updated);
+    try { localStorage.setItem(`convlog-${title}`, JSON.stringify(updated)); } catch { /* ignore */ }
+    // Persist to Firestore
+    import("@/lib/firebase").then(({ auth }) =>
+      auth?.currentUser?.getIdToken().then((token) => {
+        if (!token) return;
+        // Sync all entries via the existing conversations API
+        updated.forEach((entry) => {
+          fetch("/api/execution-projects/conversations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ projectTitle: title, entry }),
+          }).catch(() => {});
+        });
+      })
+    ).catch(() => {});
+  };
+
+  const handleAddConv = async () => {
+    if (!convForm.name.trim() && !convForm.notes.trim()) return;
+    setConvSaving(true);
+    const entry: ConvEntry = {
+      id: Date.now().toString(),
+      name: convForm.name.trim(),
+      notes: convForm.notes.trim(),
+      fileName: convForm.fileName || undefined,
+      createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    };
+    const updated = [entry, ...convEntries];
+    saveConvEntries(updated);
+    setConvForm({ name: "", notes: "", fileName: "" });
+    if (convFileRef.current) convFileRef.current.value = "";
+    setAddConvOpen(false);
+    setConvSaving(false);
+  };
+
+  const handleDeleteConv = (id: string) => {
+    const updated = convEntries.filter((e) => e.id !== id);
+    saveConvEntries(updated);
+    if (convExpandedId === id) setConvExpandedId(null);
+  };
 
   const callAI = async (prompt: string, system: string): Promise<string> => {
     const { authFetch } = await import("@/lib/authFetch");
@@ -6065,15 +6120,142 @@ Write 4-5 sentences covering: (1) the strongest signal you see, (2) the most com
         onRun={generateScript}
         runLabel="Generate interview script →"
       />
-      <AgentSection
-        icon={BarChart3}
-        label="Pattern analysis"
-        sublabel="Reads your logged conversations and finds the signal"
-        stage={patternStage}
-        result={patternResult}
-        onRun={analysePatterns}
-        runLabel="Analyse my conversations →"
-      />
+      {/* Pattern analysis with inline conversation logger */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+              <BarChart3 size={14} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Pattern analysis</p>
+              <p className="text-[11px] text-[#9A9A9A]">Log conversations, then Sorene finds the signal</p>
+            </div>
+          </div>
+          {patternStage === "done" && (
+            <button onClick={analysePatterns} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Refresh</button>
+          )}
+        </div>
+
+        {/* Conversation logger */}
+        <div className="border-b border-[#ECEDEE]">
+          <div className="flex items-center justify-between px-5 py-3 bg-white">
+            <p className="text-[12px] font-medium text-[#151515]">
+              Conversations logged
+              {convEntries.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-semibold text-[#62646A]">{convEntries.length}</span>}
+            </p>
+            <button onClick={() => setAddConvOpen((v) => !v)}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all",
+                addConvOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+              <Plus size={11} />{addConvOpen ? "Cancel" : "Add"}
+            </button>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {addConvOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                className="overflow-hidden">
+                <div className="px-5 pb-4 space-y-3 bg-[#FAFAFA] border-t border-gray-100">
+                  <div className="pt-3">
+                    <input value={convForm.name} onChange={(e) => setConvForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Who did you speak to? (name or description)"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                  </div>
+                  <textarea value={convForm.notes} onChange={(e) => setConvForm((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="Notes — what problems did they mention? What exact words did they use? How much pain were they in?"
+                    rows={4}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border border-dashed border-gray-200 hover:border-[#151515] transition-colors text-[11px] text-[#62646A] hover:text-[#151515]">
+                      <Paperclip size={12} />
+                      {convForm.fileName
+                        ? <span className="text-[#151515] font-medium truncate max-w-[160px]">{convForm.fileName}</span>
+                        : "Attach notes (Word / PDF)"}
+                      <input ref={convFileRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) setConvForm((p) => ({ ...p, fileName: f.name })); }} />
+                    </label>
+                    <button onClick={handleAddConv} disabled={!convForm.name.trim() && !convForm.notes.trim()}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      {convSaving && <Loader2 size={12} className="animate-spin" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {convEntries.length === 0 && !addConvOpen && (
+            <div className="px-5 py-4 text-center">
+              <p className="text-[12px] text-[#9A9A9A]">No conversations yet — add one after each customer chat.</p>
+            </div>
+          )}
+          <div className="divide-y divide-gray-50">
+            {convEntries.map((entry) => {
+              const isOpen = convExpandedId === entry.id;
+              return (
+                <div key={entry.id}>
+                  <button onClick={() => setConvExpandedId(isOpen ? null : entry.id)}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-[#F3F4F6] flex items-center justify-center shrink-0 text-[10px] font-bold text-[#62646A]">
+                      {(entry.name?.[0] || "?").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-medium text-[#151515] truncate">{entry.name || "Anonymous"}</p>
+                    </div>
+                    {entry.fileName && <FileText size={12} className="text-[#9A9A9A] shrink-0" />}
+                    <span className="text-[11px] text-[#9A9A9A] shrink-0">{entry.createdAt}</span>
+                    {isOpen ? <ChevronUp size={13} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={13} className="text-[#9A9A9A] shrink-0" />}
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                        className="overflow-hidden">
+                        <div className="px-5 pb-3 space-y-2 bg-[#FAFAFA]">
+                          {entry.notes && (
+                            <div className="rounded-xl bg-white border border-gray-100 px-3 py-2.5">
+                              <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{entry.notes}</p>
+                            </div>
+                          )}
+                          {entry.fileName && (
+                            <p className="flex items-center gap-1.5 text-[11px] text-[#62646A]"><Paperclip size={11} />{entry.fileName}</p>
+                          )}
+                          <button onClick={() => handleDeleteConv(entry.id)}
+                            className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Analyse button / result */}
+        <div className="px-5 py-4">
+          {patternStage === "idle" && (
+            <button onClick={analysePatterns}
+              className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+              Analyse my conversations →
+            </button>
+          )}
+          {patternStage === "loading" && (
+            <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+              <Loader2 size={13} className="animate-spin" /> Analysing patterns…
+            </div>
+          )}
+          {patternStage === "done" && patternResult && (
+            <div className="text-[13px] text-[#151515] leading-relaxed">
+              <MarkdownText text={patternResult} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

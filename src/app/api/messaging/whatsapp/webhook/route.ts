@@ -6,9 +6,8 @@ import {
   getUidByPlatformId,
   saveMessagingMessage,
   getRecentMessages,
-  getWhatsAppCredits,
-  deductWhatsAppCredit,
 } from "@/lib/messagingAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -84,7 +83,6 @@ function safeDocTitle(title: string) {
 }
 
 async function saveCustomerConversation(uid: string, projectTitle: string, text: string) {
-  const safeTitle = safeDocTitle(projectTitle);
   const entry = {
     id: Date.now().toString(),
     text,
@@ -93,19 +91,71 @@ async function saveCustomerConversation(uid: string, projectTitle: string, text:
   };
   await getAdminFirestore()
     .collection("users").doc(uid)
-    .collection("executionConversations").doc(safeTitle)
+    .collection("executionConversations").doc(safeDocTitle(projectTitle))
     .set({ entries: FieldValue.arrayUnion(entry) }, { merge: true });
 }
 
 const CUSTOMER_CONVO_KEYWORDS = [
   "talked to", "spoke with", "met with", "customer said", "they said",
-  "interview", "had a call", "conversation with",
+  "interview", "had a call", "conversation with", "user said", "prospect said",
 ];
 
 function isCustomerConversation(text: string): boolean {
   if (text.length < 30) return false;
   const lower = text.toLowerCase();
   return CUSTOMER_CONVO_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+// Sorene's WhatsApp system prompt — same character as the web app,
+// adapted for conversational messaging (no markdown, short paragraphs).
+function buildSystemPrompt(userData: UserData, executionState: Record<string, string>): string {
+  const profile = userData.profile ?? {};
+  const projects = userData.executionProjects ?? [];
+  const activeProjectTitle = userData.whatsappSettings?.activeProjectTitle;
+  const activeProject = activeProjectTitle
+    ? projects.find((p) => p.title === activeProjectTitle) ?? null
+    : null;
+
+  const name = profile.firstName ? `The user's name is ${profile.firstName}.` : "";
+  const occupation = profile.occupation ? `They are a ${profile.occupation}.` : "";
+  const dna = profile.dna_narrative
+    ? `Their entrepreneurial profile: ${profile.dna_narrative.slice(0, 300)}`
+    : "";
+
+  let projectContext = "";
+  if (activeProject) {
+    projectContext = `\n\nThey are working on: "${activeProject.title}"${activeProject.oneliner ? ` — ${activeProject.oneliner}` : ""}.`;
+    if (activeProject.path_label) projectContext += ` Current stage: ${activeProject.path_label}.`;
+    if (activeProject.description) projectContext += ` ${activeProject.description.slice(0, 200)}.`;
+
+    const relevantState: Record<string, string> = {};
+    for (const [k, v] of Object.entries(executionState)) {
+      if (["launchpad_", "business-status", "validation_score", "painkiller", "pattern-summary"].some((p) => k.includes(p))) {
+        relevantState[k] = v;
+      }
+    }
+    if (Object.keys(relevantState).length > 0) {
+      projectContext += `\n\nExecution progress: ${JSON.stringify(relevantState).slice(0, 500)}`;
+    }
+  } else if (projects.length > 0) {
+    projectContext = `\n\nThey have ${projects.length} project(s) in their Hub but haven't set an active project for WhatsApp coaching yet. If relevant, encourage them to set one in the Connect tab.`;
+  }
+
+  return `You are Sorene — a sharp, warm, direct execution coach. You help founders move fast on their specific business.
+
+Your character on WhatsApp:
+- Talk like a smart friend who's also an expert — not a corporate bot
+- Address them by name when natural, not every message
+- Be specific to their project and where they're at — never give generic advice
+- Short messages only: 2-4 sentences max per reply, plain text, no bullet points, no asterisks
+- When you see a real blocker, name it directly and give one clear next move
+- Celebrate wins briefly and redirect to the next thing — don't linger
+- If you don't have enough context, ask one sharp question, not three vague ones
+
+${name} ${occupation}
+${dna}${projectContext}
+
+VIBE framework context (use when relevant): Validate → Interview → Build demo → Experiment. Most early founders skip Validate and regret it.`;
 }
 
 async function coach(uid: string, text: string, to: string): Promise<void> {
@@ -115,61 +165,22 @@ async function coach(uid: string, text: string, to: string): Promise<void> {
     getExecutionState(uid),
   ]);
 
-  const profile = userData.profile ?? {};
-  const projects = userData.executionProjects ?? [];
-  const whatsappSettings = userData.whatsappSettings ?? {};
-  const activeProjectTitle = whatsappSettings.activeProjectTitle;
-
-  const activeProject = activeProjectTitle
-    ? projects.find((p) => p.title === activeProjectTitle)
-    : null;
-
-  // Build profile note
-  const profileNote = profile.firstName
-    ? `User profile: name=${profile.firstName}, occupation=${profile.occupation ?? "unknown"}.`
-    : "";
-
-  // Build project context note
-  let projectNote = "";
-  if (activeProject) {
-    projectNote = `\n\nActive project: "${activeProject.title}"${activeProject.oneliner ? ` — ${activeProject.oneliner}` : ""}.`;
-    if (activeProject.path_label) {
-      projectNote += ` Stage: ${activeProject.path_label}.`;
-    }
-    if (activeProject.description) {
-      projectNote += ` Description: ${activeProject.description.slice(0, 200)}.`;
-    }
-
-    // Add relevant execution state keys
-    const relevantKeys: Record<string, string> = {};
-    const relevantPrefixes = ["launchpad_", "business-status", "validation_score"];
-    for (const [k, v] of Object.entries(executionState)) {
-      if (relevantPrefixes.some((prefix) => k.includes(prefix))) {
-        relevantKeys[k] = v;
-      }
-    }
-    if (Object.keys(relevantKeys).length > 0) {
-      projectNote += ` Execution state: ${JSON.stringify(relevantKeys).slice(0, 400)}.`;
-    }
-  } else if (projects.length > 0) {
-    projectNote = `\n\nUser has ${projects.length} project(s) but no active project selected for WhatsApp coaching.`;
-  }
-
-  // Detect customer conversation
   const isConvo = isCustomerConversation(text);
-  const conversationProjectTitle = activeProjectTitle || "whatsapp_logs";
+  const activeProjectTitle = userData.whatsappSettings?.activeProjectTitle ?? "whatsapp_logs";
 
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
-    system: `You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical — ideal for WhatsApp (short paragraphs, no markdown). ${profileNote}${projectNote}`,
+    max_tokens: 400,
+    system: buildSystemPrompt(userData, executionState),
     messages: [
       ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
       { role: "user", content: text },
     ],
   });
 
-  let reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
+  await deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
+
+  let reply = response.content[0].type === "text" ? response.content[0].text : "Something went wrong on my end — try again.";
 
   const ops: Promise<unknown>[] = [
     saveMessagingMessage(uid, "whatsapp", "user", text),
@@ -177,13 +188,35 @@ async function coach(uid: string, text: string, to: string): Promise<void> {
   ];
 
   if (isConvo) {
-    reply += "\n\n✅ Saved to your Execution Hub.";
-    ops.push(saveCustomerConversation(uid, conversationProjectTitle, text));
+    reply += "\n\n(Saved to your Execution Hub ✓)";
+    ops.push(saveCustomerConversation(uid, activeProjectTitle, text));
   }
 
   ops.push(sendWhatsApp(to, reply));
-
   await Promise.all(ops);
+}
+
+// Warm onboarding message sent immediately after account linking.
+async function sendWelcome(uid: string, to: string): Promise<void> {
+  const userData = await getUserData(uid);
+  const name = userData.profile?.firstName;
+  const projects = userData.executionProjects ?? [];
+
+  let msg = "";
+  if (name) {
+    msg = `Hey ${name}! I'm Sorene — your execution coach, now in your pocket.`;
+  } else {
+    msg = `Hey! I'm Sorene — your execution coach, now in your pocket.`;
+  }
+
+  if (projects.length > 0) {
+    const activeTitle = userData.whatsappSettings?.activeProjectTitle ?? projects[0].title;
+    msg += `\n\nI can see you're working on ${activeTitle}. Message me any time — progress updates, customer conversations, questions, blockers. I'll keep it real and specific.\n\nHead to the Connect tab in your Hub to set up your project link and schedule reminders.`;
+  } else {
+    msg += `\n\nMessage me any time — progress updates, questions, blockers. I'll keep it real and specific.\n\nTo get the most out of this, create a project in your Execution Hub and link it to WhatsApp from the Connect tab.`;
+  }
+
+  await sendWhatsApp(to, msg);
 }
 
 // Meta webhook verification
@@ -207,40 +240,32 @@ export async function POST(req: NextRequest) {
     const from: string = message.from;
     const text: string = message.text?.body ?? "";
 
+    // Account linking flow
     if (text.startsWith("LINK-")) {
       const token = text.slice(5).trim();
       const result = await consumeLinkToken(token);
       if (result && result.platform === "whatsapp") {
         await linkPlatformToUser(result.uid, "whatsapp", from);
-        await sendWhatsApp(from, "✅ Your WhatsApp is now linked to Sorene! Message me any time to log progress or get coaching.\n\nYou have 10 free messages to start. Top up credits anytime from your Execution Hub.");
+        await sendWelcome(result.uid, from);
       } else {
-        await sendWhatsApp(from, "❌ That link is invalid or expired. Please generate a new one from your Execution Hub.");
+        await sendWhatsApp(from, "That link has expired or isn't valid. Grab a fresh one from the Connect tab in your Execution Hub.");
       }
       return new Response("OK", { status: 200 });
     }
 
     const uid = await getUidByPlatformId("whatsapp", from);
     if (!uid) {
-      await sendWhatsApp(from, "I don't recognise your account yet. Go to Execution Hub → Connect → WhatsApp to link your Sorene account first.");
+      await sendWhatsApp(from, "I don't recognise this number yet. Go to your Execution Hub → Connect tab → WhatsApp to link your account first.");
       return new Response("OK", { status: 200 });
     }
 
-    const credits = await getWhatsAppCredits(uid);
-    if (credits <= 0) {
-      await sendWhatsApp(from, "⚠️ You've used all your WhatsApp coaching credits. Top up from your Sorene Execution Hub to continue.");
+    const credits = await checkCredits(uid);
+    if (!credits.ok) {
+      await sendWhatsApp(from, "You've used up your coaching credits for this month. Upgrade your plan at sorene.ai to keep going.");
       return new Response("OK", { status: 200 });
     }
 
-    await Promise.all([
-      coach(uid, text, from),
-      deductWhatsAppCredit(uid),
-    ]);
-
-    if (credits === 1) {
-      await sendWhatsApp(from, "ℹ️ That was your last credit. Top up from your Execution Hub to keep coaching on WhatsApp.");
-    } else if (credits <= 3) {
-      await sendWhatsApp(from, `ℹ️ You have ${credits - 1} WhatsApp credit${credits - 1 === 1 ? "" : "s"} remaining.`);
-    }
+    await coach(uid, text, from);
   } catch (err) {
     console.error("[whatsapp webhook]", err);
   }

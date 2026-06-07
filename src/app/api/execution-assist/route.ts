@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
     const user = await verifyAuth(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const creditCheck = await checkCredits(user.uid);
+    const userKey = user.email ?? user.uid;
+    const creditCheck = await checkCredits(userKey);
     if (!creditCheck.ok) return NextResponse.json({ error: "Credit limit reached" }, { status: 402 });
 
     const { prompt, system, history } = (await req.json()) as {
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       messages: [...prior, { role: "user", content: prompt }],
     });
 
-    await deductCredits(user.uid, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
+    await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const reply = block && block.type === "text" ? block.text.trim() : "";
 

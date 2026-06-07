@@ -120,7 +120,8 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
-  const creditCheck = await checkCredits(authedUser.uid);
+  const userKey = authedUser.email ?? authedUser.uid;
+  const creditCheck = await checkCredits(userKey);
   if (!creditCheck.ok) {
     return new Response(JSON.stringify({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }), { status: 402 });
   }
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
         // Deduct after stream completes, before closing so the write finishes
         // while the serverless function is still alive
         const final = await stream.finalMessage();
-        await deductCredits(authedUser.uid, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
+        await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
       },
     });

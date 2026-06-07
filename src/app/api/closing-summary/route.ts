@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creditCheck = await checkCredits(user.uid);
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
   if (!creditCheck.ok) {
     return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
   }
@@ -54,7 +55,7 @@ Output only the two paragraphs followed by the one closing question.`;
       messages: [{ role: "user", content: prompt }],
     });
 
-    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
     const block = message.content[0];
     const summary = block && block.type === "text" ? block.text.trim() : "";

@@ -200,8 +200,13 @@ export async function POST(req: NextRequest) {
   const authedUser = await verifyAuth(req);
   if (!authedUser) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
-  const creditCheck = await checkCredits(authedUser.uid);
-  if (!creditCheck.ok) return new Response(JSON.stringify({ error: "Credit limit reached" }), { status: 402 });
+  const userKey = authedUser.email ?? authedUser.uid;
+  try {
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) return new Response(JSON.stringify({ error: "Credit limit reached" }), { status: 402 });
+  } catch (err) {
+    console.error("[market-intelligence] credit check failed, allowing through:", err);
+  }
 
   try {
     const body = await req.json() as {
@@ -231,7 +236,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Deduct a flat cost for this agentic Sonnet call (multi-turn web search)
-    await deductCredits(authedUser.uid, 150);
+    await deductCredits(userKey, 150);
     return new Response(JSON.stringify({ report }), {
       headers: { "Content-Type": "application/json" },
     });

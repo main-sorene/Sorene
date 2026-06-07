@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const creditCheck = await checkCredits(user.uid);
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
   if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
 
   try {
@@ -80,7 +81,7 @@ Output format: [reflection sentence]---[question or DONE]`;
       messages: [{ role: "user", content: userPrompt }],
     });
 
-    await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = (message.content[0]?.type === "text" ? message.content[0].text : "").trim();
 
     const [reflectionPart, questionPart] = raw.split("---").map((s) => s.trim());

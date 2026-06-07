@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creditCheck = await checkCredits(user.uid);
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
   if (!creditCheck.ok) {
     return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
   }
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
         const final = await stream.finalMessage();
         // Must await before close — serverless freezes once the response ends,
         // killing any fire-and-forget write.
-        await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", final.usage.input_tokens, final.usage.output_tokens));
+        await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
       },
     });

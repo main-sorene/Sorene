@@ -4,16 +4,41 @@ import { useAtom } from "jotai";
 import { isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 import { Zap } from "lucide-react";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { useAtomValue } from "jotai";
+import { userAtom } from "@/store/atoms";
+import { buyCreditPack } from "@/lib/subscriptionApi";
+import { useToast } from "@/hooks/use-toast";
 
 export function CreditsExhaustedModal() {
   const [isOpen, setIsOpen] = useAtom(isCreditsExhaustedOpenAtom);
-  const router = useRouter();
+  const { data: subscription } = useSubscriptionStatus();
+  const user = useAtomValue(userAtom);
+  const { toast } = useToast();
+
+  const isPaidPlan = subscription?.active && subscription.plan !== "free";
+  const isProPlan = subscription?.plan === "pro";
 
   const handleUpgrade = () => {
     setIsOpen(false);
     window.location.href = "https://www.sorene.ai/upgrade";
+  };
+
+  const handleBuyCredits = async () => {
+    const email = user?.email ?? user?.uid ?? user?.profile?.email ?? "";
+    if (!email) return;
+    try {
+      const { url } = await buyCreditPack({
+        email,
+        success_url: `${window.location.origin}/upgrade?credits_added=true`,
+        cancel_url: window.location.href,
+      });
+      setIsOpen(false);
+      window.location.href = url;
+    } catch {
+      toast({ title: "Error", description: "Could not open credits checkout.", variant: "destructive" });
+    }
   };
 
   return (
@@ -36,43 +61,68 @@ export function CreditsExhaustedModal() {
                 You&apos;ve used all your credits
               </h2>
               <p className="text-sm text-[#62646A] mt-1 leading-relaxed">
-                Upgrade to keep using Sorene — unlock more AI conversations,
-                direction refinements, and DNA updates.
+                {isPaidPlan
+                  ? isProPlan
+                    ? "You've used all your monthly credits. Buy more to keep going, or wait for your monthly reset."
+                    : "You've used all your monthly credits. Buy more credits or upgrade to Professional for 5,000 credits/month."
+                  : "Upgrade to keep using Sorene — unlock more AI conversations, direction refinements, and DNA updates."}
               </p>
             </div>
           </div>
 
-          {/* Plan comparison */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between p-3 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA]">
-              <div>
-                <p className="text-sm font-medium text-[#151515]">Starter</p>
-                <p className="text-xs text-[#62646A]">1,500 credits / month</p>
+          {/* Options for free users: plan comparison */}
+          {!isPaidPlan && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between p-3 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA]">
+                <div>
+                  <p className="text-sm font-medium text-[#151515]">Starter</p>
+                  <p className="text-xs text-[#62646A]">1,500 credits / month</p>
+                </div>
+                <p className="text-sm font-semibold text-[#151515]">$15 / mo</p>
               </div>
-              <p className="text-sm font-semibold text-[#151515]">$15 / mo</p>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-xl border border-[#FDC24C] bg-[#FFFBF0]">
-              <div>
-                <p className="text-sm font-medium text-[#151515]">
-                  Professional
-                  <span className="ml-2 text-xs text-[#F99207] font-semibold bg-[#FFF1C6] px-2 py-0.5 rounded-full">
-                    Most popular
-                  </span>
-                </p>
-                <p className="text-xs text-[#62646A]">5,000 credits / month</p>
+              <div className="flex items-center justify-between p-3 rounded-xl border border-[#FDC24C] bg-[#FFFBF0]">
+                <div>
+                  <p className="text-sm font-medium text-[#151515]">
+                    Professional
+                    <span className="ml-2 text-xs text-[#F99207] font-semibold bg-[#FFF1C6] px-2 py-0.5 rounded-full">
+                      Most popular
+                    </span>
+                  </p>
+                  <p className="text-xs text-[#62646A]">5,000 credits / month</p>
+                </div>
+                <p className="text-sm font-semibold text-[#151515]">$49 / mo</p>
               </div>
-              <p className="text-sm font-semibold text-[#151515]">$49 / mo</p>
             </div>
-          </div>
+          )}
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
-            <Button
-              onClick={handleUpgrade}
-              className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
-            >
-              Upgrade now
-            </Button>
+            {isPaidPlan ? (
+              <>
+                <Button
+                  onClick={handleBuyCredits}
+                  className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
+                >
+                  Buy more credits
+                </Button>
+                {!isProPlan && (
+                  <Button
+                    variant="outline"
+                    onClick={handleUpgrade}
+                    className="w-full h-11 rounded-xl border-[#ECEDEE] text-sm font-medium"
+                  >
+                    Upgrade to Professional
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button
+                onClick={handleUpgrade}
+                className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
+              >
+                Upgrade now
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={() => setIsOpen(false)}

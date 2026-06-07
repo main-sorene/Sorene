@@ -48,18 +48,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(CREDITS_EXHAUSTED_EVENT, handler);
   }, [setCreditsExhausted]);
 
-  // Proactively show the upgrade modal when a free user's credits are fully
+  // Proactively show the upgrade modal when any user's credits are fully
   // exhausted — so they see it as soon as the bar turns red, not only on their
   // next failed AI call.
   useEffect(() => {
     if (!subscription) return;
-    const plan = subscription.plan ?? "free";
     const used = subscription.credits?.used ?? 0;
     const limit = (subscription.credits?.limit ?? 250) + (subscription.credits?.extra ?? 0);
-    if (plan === "free" && limit > 0 && used >= limit && pathname !== "/upgrade") {
+    const exhausted = limit > 0 && used >= limit;
+    if (exhausted && pathname !== "/upgrade") {
       setCreditsExhausted(true);
-    } else if (plan !== "free" || used < limit || pathname === "/upgrade") {
-      // Close the modal once the user upgrades or gets more credits
+    } else if (!exhausted || pathname === "/upgrade") {
       setCreditsExhausted(false);
     }
   }, [subscription, setCreditsExhausted]);

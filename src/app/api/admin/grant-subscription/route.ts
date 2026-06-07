@@ -10,25 +10,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { userKey, plan = "starter", duration = 1 } = await req.json();
+  const { userKey, plan = "starter", duration = 1, stripeCustomerId, stripeSubscriptionId } = await req.json();
   if (!userKey) {
     return NextResponse.json({ error: "Missing userKey" }, { status: 400 });
   }
 
   const db = getAdminFirestore();
 
-  await db.collection("users").doc(userKey).set(
-    {
-      subscription: {
-        active: true,
-        plan,
-        status: "active",
-        duration,
-        stripeSubscriptionId: "manual-grant",
-      },
+  const updateData: Record<string, unknown> = {
+    subscription: {
+      active: true,
+      plan,
+      status: "active",
+      duration,
+      stripeSubscriptionId: stripeSubscriptionId ?? "manual-grant",
     },
-    { merge: true },
-  );
+  };
+  if (stripeCustomerId) updateData.stripeCustomerId = stripeCustomerId;
+
+  await db.collection("users").doc(userKey).set(updateData, { merge: true });
 
   await setCreditsLimit(userKey, plan, true);
 

@@ -48,7 +48,8 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useMIE();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedOpportunity, setExpandedOpportunity] = useState<string | null>(null);
-  const topOpportunity = report?.opportunities?.[0] ?? null;
+  const opportunities = report?.opportunities?.slice(0, 3) ?? [];
+  const topOpportunity = opportunities[0] ?? null;
 
   return (
     <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
@@ -122,7 +123,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-5 mt-5">
               <div className="flex items-center gap-1.5"><TrendingUp size={14} className="text-emerald-300" /><span className="text-white text-[13px] font-semibold">{report.rising_signals.length} Rising</span></div>
               <div className="flex items-center gap-1.5"><TrendingDown size={14} className="text-red-300" /><span className="text-white text-[13px] font-semibold">{report.falling_signals.length} Falling</span></div>
-              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunit{report.opportunities.length === 1 ? "y" : "ies"}</span></div>
+              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunit{opportunities.length === 1 ? "y" : "ies"}</span></div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -228,7 +229,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
               </ReportSection>
               <ReportSection title="Your Opportunities" icon={<Sparkles size={15} className="text-[#6366f1]" />}>
                 <div className="space-y-3">
-                  {report.opportunities.map((opp) => (
+                  {opportunities.map((opp) => (
                     <OpportunityCard key={opp.id} opportunity={opp} isExpanded={expandedOpportunity === opp.id}
                       onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)}
                       onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
@@ -378,8 +379,14 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
   );
 }
 
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
 function renderBold(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
   return parts.map((p, i) =>
     p.startsWith("**") && p.endsWith("**")
       ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>

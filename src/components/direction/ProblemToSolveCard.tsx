@@ -26,6 +26,7 @@ const CONFIDENCE_COLOR = (score: number) =>
 
 export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
+  const opportunities = report?.opportunities?.slice(0, 3) ?? [];
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -99,7 +100,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
         <AnimatePresence>
           {status === "complete" && report && !isExpanded && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5">
-              <span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunities Found</span>
+              <span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunities Found</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -177,7 +178,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
       <AnimatePresence>
         {status === "complete" && report && !isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
-            <TopOpportunityTeaser opportunity={report.opportunities[0]} />
+            <TopOpportunityTeaser opportunity={opportunities[0]} />
             <div className="flex items-center justify-between gap-3">
               <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
                 <RefreshCw size={12} /> Regenerate
@@ -203,7 +204,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
               </div>
               <Separator className="bg-[#ECEDEE]" />
               <div className="space-y-3">
-                {report.opportunities.map((opp) => (
+                {opportunities.map((opp) => (
                   <OpportunityCard key={opp.id} opportunity={opp}
                     isExpanded={expandedId === opp.id}
                     onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
@@ -305,8 +306,14 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
   );
 }
 
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
 function renderBold(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
   return parts.map((p, i) =>
     p.startsWith("**") && p.endsWith("**")
       ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>

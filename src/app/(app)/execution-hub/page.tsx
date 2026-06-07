@@ -6546,6 +6546,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // Publishing / scheduling
   const [publishing, setPublishing] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [approvingAll, setApprovingAll] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -6749,21 +6750,50 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     setPublishing(null);
   };
 
-  // Approve all — schedule each draft at its corresponding slot
+  // Approve all — validate token first, then schedule each draft at its slot
   const approveAll = async () => {
     if (weekDrafts.length === 0) return;
     setApprovingAll(true);
+    setErrorMsg("");
     try {
       const { authFetch } = await import("@/lib/authFetch");
+
+      // Validate token before committing
+      const validateRes = await authFetch("/api/threads/validate");
+      if (validateRes.ok) {
+        const vd = await validateRes.json() as { valid: boolean; reason?: string };
+        if (!vd.valid) {
+          setErrorMsg(`Threads token issue: ${vd.reason ?? "please reconnect your account"}`);
+          setApprovingAll(false);
+          return;
+        }
+      }
+
+      // Check all posts are within 500 chars
+      const overLimit = weekDrafts.filter((d) => {
+        const clean = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+        return clean.length > 500;
+      });
+      if (overLimit.length > 0) {
+        setErrorMsg(`${overLimit.length} post${overLimit.length > 1 ? "s are" : " is"} over 500 characters — please edit before scheduling.`);
+        setApprovingAll(false);
+        return;
+      }
+
       const newScheduled: ScheduledPost[] = [];
       for (let i = 0; i < weekDrafts.length; i++) {
         const draft = weekDrafts[i];
         const scheduledAt = scheduleSlots[i] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+        const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
         const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
         const res = await authFetch("/api/threads/schedule", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: cleanText, scheduledAt }),
+          body: JSON.stringify({
+            text: cleanText,
+            scheduledAt,
+            ...(hasCta && ctaLink.trim() ? { ctaLink: ctaLink.trim() } : {}),
+          }),
         });
         if (res.ok) {
           const data = await res.json() as { post: ScheduledPost };
@@ -6772,8 +6802,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       }
       setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
       setWeekDrafts([]);
-      setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
-      setTimeout(() => setSuccessMsg(""), 4000);
+      setSuccessMsg(`${newScheduled.length} posts saved & scheduled ✓`);
+      setTimeout(() => setSuccessMsg(""), 5000);
     } catch { /* ignore */ }
     setApprovingAll(false);
   };
@@ -6975,12 +7005,17 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
 
           {/* Approve all */}
           {accountStatus === "connected" && weekDrafts.length > 0 && (
-            <button onClick={approveAll} disabled={approvingAll}
-              className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              {approvingAll
-                ? <><Loader2 size={13} className="animate-spin" /> Scheduling…</>
-                : <>Approve all {weekDrafts.length} posts · auto-schedule at best times</>}
-            </button>
+            <div className="space-y-2">
+              {errorMsg && (
+                <p className="text-[12px] text-red-500 text-center px-2">{errorMsg}</p>
+              )}
+              <button onClick={approveAll} disabled={approvingAll}
+                className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {approvingAll
+                  ? <><Loader2 size={13} className="animate-spin" /> Validating & scheduling…</>
+                  : <>Approve all {weekDrafts.length} posts · auto-schedule at best times</>}
+              </button>
+            </div>
           )}
         </div>
       )}

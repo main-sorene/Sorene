@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 export interface ScheduledPost {
   id: string;
   text: string;
+  ctaLink?: string;
   scheduledAt: number;
   status: "pending" | "published" | "failed";
   createdAt: number;
@@ -31,11 +32,18 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { text, scheduledAt } = await req.json() as { text: string; scheduledAt: number };
+  const { text, scheduledAt, ctaLink } = await req.json() as { text: string; scheduledAt: number; ctaLink?: string };
   if (!text?.trim() || !scheduledAt) return Response.json({ error: "Missing fields" }, { status: 400 });
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const post: ScheduledPost = { id, text: text.trim(), scheduledAt, status: "pending", createdAt: Date.now() };
+  const post: ScheduledPost = {
+    id,
+    text: text.trim(),
+    scheduledAt,
+    status: "pending",
+    createdAt: Date.now(),
+    ...(ctaLink?.trim() ? { ctaLink: ctaLink.trim() } : {}),
+  };
 
   await getAdminFirestore()
     .collection("users").doc(user.uid)

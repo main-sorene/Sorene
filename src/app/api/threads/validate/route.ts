@@ -14,14 +14,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://graph.threads.net/v1.0/${account.userId}?fields=id,username&access_token=${account.accessToken}`
+      `https://graph.threads.net/v1.0/me?fields=id,username&access_token=${account.accessToken}`
     );
-    const data = await res.json() as { id?: string; error?: { message?: string; code?: number } };
+    const data = await res.json() as { id?: string; username?: string; error?: { message?: string; code?: number } };
 
     if (data.error) {
       return Response.json({ valid: false, reason: data.error.message ?? "token_invalid" });
     }
-    return Response.json({ valid: true, username: (data as { username?: string }).username ?? "" });
+    if (!data.id) {
+      return Response.json({ valid: false, reason: "token_invalid" });
+    }
+    return Response.json({ valid: true, username: data.username ?? "" });
   } catch {
     return Response.json({ valid: false, reason: "network_error" });
   }

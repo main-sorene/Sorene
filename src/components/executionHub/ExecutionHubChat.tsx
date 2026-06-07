@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { ArrowUp, Loader2, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { DirectionCardData } from "@/lib/directionTypes";
 
-// Recipe buttons — each maps to a recipeId the coach endpoint understands.
 const SUGGESTIONS: { label: string; recipeId: string }[] = [
   { label: "Where do I start?", recipeId: "start" },
   { label: "Review my progress", recipeId: "progress" },
@@ -18,7 +18,12 @@ const SUGGESTIONS: { label: string; recipeId: string }[] = [
   { label: "Update business status", recipeId: "update_status" },
 ];
 
-interface ChatMsg { id: string; role: "user" | "assistant"; content: string; isStatusButtons?: boolean; confirmTab?: string }
+interface ChatMsg {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  routeTab?: "validation" | "launchpad" | "growth";
+}
 
 const TAB_LABELS: Record<string, string> = {
   validation: "Validation",
@@ -26,22 +31,8 @@ const TAB_LABELS: Record<string, string> = {
   growth: "Growth",
 };
 
-type OnboardStep = "idle" | "name" | "description" | "status" | "traction" | "done";
-interface OnboardData { name: string; description: string; status: string; traction: string }
-
-const STATUS_OPTIONS = [
-  { label: "Just an idea", value: "just_an_idea" },
-  { label: "Talking to customers / validating", value: "validating" },
-  { label: "Built something / ready to launch", value: "ready_to_launch" },
-  { label: "Already launched and growing", value: "launched_growing" },
-];
-
-// Shared across chat instances (desktop + mobile both mount) so an onboarding
-// trigger only fires once.
 let lastHandledOnboard = 0;
 
-// Build a compact snapshot of the project's progress from localStorage so the
-// coach can answer recipes against the user's real status.
 function gatherProjectStatus(title: string): Record<string, unknown> {
   if (!title) return {};
   const status: Record<string, unknown> = {};
@@ -56,7 +47,6 @@ function gatherProjectStatus(title: string): Record<string, unknown> {
       const val = localStorage.getItem(key);
       if (val == null || val === "") continue;
       const base = key.slice(0, -suffix.length);
-
       if (base.startsWith("launchpad-status-")) {
         if (val === "done" || val === "progress") launchpadDone.push(`${base.replace("launchpad-status-", "")}:${val}`);
       } else if (base === "business-name") {
@@ -76,7 +66,6 @@ function gatherProjectStatus(title: string): Record<string, unknown> {
       }
     }
   } catch { /* ignore */ }
-
   if (launchpadDone.length) status.launchpadItems = launchpadDone;
   if (Object.keys(brandAssets).length) status.brandAssets = brandAssets;
   if (Object.keys(validation).length) status.validation = validation;
@@ -100,133 +89,43 @@ function FormattedMessage({ content }: { content: string }) {
 }
 
 export function ExecutionHubChat({ project, onClose }: { project?: DirectionCardData | null; onClose?: () => void }) {
+  const router = useRouter();
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const setNavigateTab = useSetAtom(executionNavigateTabAtom);
+  const setStartValidate = useSetAtom(executionStartValidateAtom);
   const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
   const creditsExhausted = useIsCreditsExhausted();
+
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const awaitingStatusRef = useRef(false);
+  const [onboarding, setOnboarding] = useState(false);
+  const [routed, setRouted] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [onboardStep, setOnboardStepState] = useState<OnboardStep>("idle");
-  const onboardStepRef = useRef<OnboardStep>("idle");
-  const onboardLockRef = useRef(false);
+  const awaitingStatusRef = useRef(false);
   const idRef = useRef(0);
-  const onboardDataRef = useRef<OnboardData>({ name: "", description: "", status: "", traction: "" });
+  // Conversation history accumulated during onboarding for context
+  const onboardHistoryRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
+  // Track user messages to extract project title/oneliner for "Start Validate"
+  const userMsgCountRef = useRef(0);
+  const onboardTitleRef = useRef("");
+  const onboardOneinerRef = useRef("");
+  // Whether onboard_start has been sent yet
+  const onboardTurnRef = useRef(0);
 
-  // Keep a synchronous mirror of the step so rapid double-submits can't read a
-  // stale value and skip ahead a question.
-  const setOnboardStep = (s: OnboardStep) => { onboardStepRef.current = s; setOnboardStepState(s); };
   const nextId = () => `${Date.now()}-${idRef.current++}`;
-
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const addAssistant = (content: string, extra?: Partial<ChatMsg>) =>
-    setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content, ...extra }]);
-
-  const addUser = (content: string) =>
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content }]);
-
-  // Final evaluation — calls API with all collected onboarding data.
-  const evaluateOnboarding = async (data: OnboardData) => {
-    setLoading(true);
-    try {
-      const profile = authUser?.profile;
-      const res = await authFetch("/api/execution-coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Project name: ${data.name}\nDescription: ${data.description}\nStatus they selected: ${data.status}\nTraction details: ${data.traction}`,
-          recipeId: "onboard_evaluate",
-          history: [],
-          userProfile: profile ? {
-            firstName: profile.firstName,
-            occupation: profile.occupation,
-            cvSummary: profile.cvSummary,
-            dnaScores: profile.dnaScores,
-            dnaNarrative: profile.dna_narrative,
-            assessmentAnswers: profile.assessmentAnswers,
-          } : undefined,
-          project: null,
-          projectStatus: null,
-        }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        const raw = d?.reply ?? "Thanks! Let's get started.";
-        const match = raw.match(/\[\[TAB:(validation|launchpad|growth)\]\]/i);
-        const tab = match ? match[1].toLowerCase() : "validation";
-        const clean = raw.replace(/\[\[TAB:[^\]]*\]\]/gi, "").trim();
-        addAssistant(clean, { confirmTab: tab });
-      } else {
-        addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
-      }
-    } catch {
-      addAssistant("Thanks! I'd suggest starting in the Validation tab — want to head there?", { confirmTab: "validation" });
-    } finally {
-      setLoading(false);
-      setOnboardStep("done");
-    }
-  };
-
-  // Handle onboarding step transitions when the user submits text.
-  // Reads the synchronous step ref so a fast double-submit can't skip a step.
-  const handleOnboardInput = (text: string) => {
-    const d = onboardDataRef.current;
-    const step = onboardStepRef.current;
-    if (step === "name") {
-      d.name = text;
-      addUser(text);
-      setInput("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      setOnboardStep("description");
-      setTimeout(() => addAssistant("Love it — that's a great start.\n\nNow tell me a bit more: what does it actually do, and who is it for?"), 300);
-    } else if (step === "description") {
-      d.description = text;
-      addUser(text);
-      setInput("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      setOnboardStep("status");
-      setTimeout(() => addAssistant("Got it, thanks for sharing that.\n\nWhere are you at with it right now? Pick whichever fits best:", { isStatusButtons: true }), 300);
-    } else if (step === "traction") {
-      d.traction = text;
-      addUser(text);
-      setInput("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      setOnboardStep("done");
-      evaluateOnboarding({ ...d });
-    }
-  };
-
-  const handleConfirmTab = (tab: string) => {
-    addUser("Yes, let's go");
-    setNavigateTab(tab);
-    onClose?.();
-    setTimeout(() => addAssistant(`Opening the ${TAB_LABELS[tab] ?? tab} tab now — let's get to work.`), 200);
-  };
-
-  const handleStatusSelect = (option: { label: string; value: string }) => {
-    const d = onboardDataRef.current;
-    d.status = option.value;
-    addUser(option.label);
-    setOnboardStep("traction");
-    setTimeout(() => addAssistant(
-      "Perfect — that helps me place you accurately.\n\nOne last thing: any real traction yet — users, waitlist signups, paying customers or revenue? If it's none so far, just say 0."
-    ), 300);
-  };
-
-  // Read the committed value straight from the DOM (covers the last composed
-  // word the React state may not have caught yet), clear the box, then dispatch.
   const submitInput = () => {
     const text = (textareaRef.current?.value ?? input).trim();
-    if (!text || loading) return;
+    if (!text || loading || routed) return;
     setInput("");
     if (textareaRef.current) { textareaRef.current.value = ""; textareaRef.current.style.height = "auto"; }
     send(text);
@@ -235,41 +134,47 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
   const send = async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
 
-    // Intercept onboarding steps. Use the synchronous step ref and a short lock
-    // so a rapid double-submit can't duplicate the answer or skip a question.
-    const step = onboardStepRef.current;
-    if (step === "name" || step === "description" || step === "traction") {
-      if (onboardLockRef.current) return;
-      onboardLockRef.current = true;
-      handleOnboardInput(text);
-      setTimeout(() => { onboardLockRef.current = false; }, 400);
-      return;
-    }
-
-    const userMsg: ChatMsg = { id: Date.now().toString(), role: "user", content: text };
+    const userMsg: ChatMsg = { id: nextId(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
 
-    // Persist a free-text business status update when the user is replying to
-    // the "Update business status" prompt, so it survives sessions and feeds
-    // future coach answers.
+    // Track first/second user message for later project creation
+    if (onboarding) {
+      userMsgCountRef.current += 1;
+      if (userMsgCountRef.current === 1) onboardTitleRef.current = text;
+      if (userMsgCountRef.current === 2) onboardOneinerRef.current = text;
+      onboardHistoryRef.current.push({ role: "user", content: text });
+    }
+
+    // Persist a business status update when the user replies to the update_status recipe.
     if (recipeId === "update_status") {
       awaitingStatusRef.current = true;
     } else if (awaitingStatusRef.current && project?.title) {
       try { localStorage.setItem(`business-status-${project.title}`, text); } catch { /* ignore */ }
       awaitingStatusRef.current = false;
     }
+
+    // Determine the recipeId to send to the API
+    let apiRecipeId = recipeId;
+    if (onboarding && !recipeId) {
+      apiRecipeId = onboardTurnRef.current === 0 ? "onboard_start" : "onboard_active";
+    }
+
     try {
       const profile = authUser?.profile;
+      const history = onboarding
+        ? onboardHistoryRef.current.slice(0, -1).slice(-10) // send prior turns, not current
+        : messages.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
       const res = await authFetch("/api/execution-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          recipeId,
-          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+          recipeId: apiRecipeId,
+          history,
           userProfile: profile ? {
             firstName: profile.firstName,
             occupation: profile.occupation,
@@ -291,30 +196,71 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
           projectStatus: project ? gatherProjectStatus(project.title) : null,
         }),
       });
-      const id = (Date.now() + 1).toString();
+
+      const msgId = nextId();
       if (res.ok) {
         const data = await res.json();
-        setMessages((prev) => [...prev, { id, role: "assistant", content: data?.reply ?? "Sorry, I couldn't respond." }]);
+        const raw: string = data?.reply ?? "Sorry, I couldn't respond.";
+
+        if (onboarding) {
+          onboardTurnRef.current += 1;
+
+          // Check for routing markers
+          const readyMatch = /\[\[READY_TO_ROUTE\]\]/i.test(raw);
+          const tabMatch = raw.match(/\[\[TAB:(validation|launchpad|growth)\]\]/i);
+          const tab = tabMatch ? (tabMatch[1].toLowerCase() as "validation" | "launchpad" | "growth") : null;
+
+          // Strip markers from displayed content
+          const clean = raw
+            .replace(/\[\[READY_TO_ROUTE\]\]/gi, "")
+            .replace(/\[\[TAB:[^\]]*\]\]/gi, "")
+            .trim();
+
+          const assistantMsg: ChatMsg = {
+            id: msgId,
+            role: "assistant",
+            content: clean,
+            ...(readyMatch && tab ? { routeTab: tab } : {}),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          onboardHistoryRef.current.push({ role: "assistant", content: clean });
+
+          if (readyMatch && tab) {
+            setRouted(true);
+          }
+        } else {
+          setMessages((prev) => [...prev, { id: msgId, role: "assistant", content: raw }]);
+        }
       } else {
-        setMessages((prev) => [...prev, { id, role: "assistant", content: "Sorry, I had trouble with that. Please try again." }]);
+        const errMsg = onboarding
+          ? "Thanks for sharing that — let me suggest you start with the Validation tab to test your idea with real people."
+          : "Sorry, I had trouble with that. Please try again.";
+        setMessages((prev) => [...prev, { id: msgId, role: "assistant", content: errMsg, ...(onboarding ? { routeTab: "validation" as const } : {}) }]);
+        if (onboarding) setRouted(true);
       }
     } catch {
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, I had trouble reaching the coach. Please try again." }]);
+      const errId = nextId();
+      const errMsg = onboarding
+        ? "Thanks for sharing that — let me suggest you start with the Validation tab to test your idea with real people."
+        : "Sorry, I had trouble reaching the coach. Please try again.";
+      setMessages((prev) => [...prev, { id: errId, role: "assistant", content: errMsg, ...(onboarding ? { routeTab: "validation" as const } : {}) }]);
+      if (onboarding) setRouted(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Onboarding kickoff — client-driven, no API call needed for the first question.
   const kickoffOnboarding = () => {
-    onboardDataRef.current = { name: "", description: "", status: "", traction: "" };
-    onboardLockRef.current = false;
-    setOnboardStep("name");
-    setMessages([{
-      id: nextId(),
-      role: "assistant",
-      content: `Hey${userName !== "there" ? ` ${userName}` : ""} — exciting to be setting up something new with you!\n\nLet's start simple: what's your project called?`,
-    }]);
+    onboardHistoryRef.current = [];
+    onboardTurnRef.current = 0;
+    userMsgCountRef.current = 0;
+    onboardTitleRef.current = "";
+    onboardOneinerRef.current = "";
+    setOnboarding(true);
+    setRouted(false);
+    setMessages([]);
+    // Trigger the first AI turn — send a placeholder user message that the recipe ignores
+    send("__onboard_start__", "onboard_start");
   };
 
   const onboardTrigger = useAtomValue(executionOnboardTriggerAtom);
@@ -325,6 +271,79 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardTrigger]);
+
+  // ── Route button handlers ──
+
+  const handleNotYet = () => {
+    setRouted(false);
+    setOnboarding(false);
+    setMessages((prev) => [...prev, {
+      id: nextId(),
+      role: "assistant",
+      content: "No problem — take your time. Use the recipe buttons below whenever you're ready, or ask me anything.",
+    }]);
+  };
+
+  const handleGoToTab = (tab: string) => {
+    setNavigateTab(tab);
+    onClose?.();
+  };
+
+  const handleCheckFit = () => {
+    try { sessionStorage.setItem("autoGenerateDirection", "1"); } catch { /* ignore */ }
+    onClose?.();
+    router.push("/direction");
+  };
+
+  const handleStartValidate = () => {
+    const title = onboardTitleRef.current || "My Project";
+    const oneliner = onboardOneinerRef.current || title;
+    setStartValidate({ title, oneliner });
+    onClose?.();
+  };
+
+  // ── Route buttons by tab ──
+  const RouteButtons = ({ tab }: { tab: "validation" | "launchpad" | "growth" }) => {
+    if (tab === "validation") {
+      return (
+        <div className="flex flex-col gap-2 mt-3">
+          <button onClick={handleCheckFit}
+            className="text-left px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+            Check Founder &amp; Market Fit
+          </button>
+          <button onClick={handleStartValidate}
+            className="text-left px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
+            Start Validate
+          </button>
+          <button onClick={handleNotYet}
+            className="text-left px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#6B7280] hover:bg-[#F1F3F5] transition-all">
+            Not yet
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button onClick={() => handleGoToTab(tab)}
+          className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
+          Open {TAB_LABELS[tab]}
+        </button>
+        <button onClick={handleNotYet}
+          className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
+          Not yet
+        </button>
+      </div>
+    );
+  };
+
+  const showChips = !onboarding;
+  const inputPlaceholder = creditsExhausted
+    ? "Upgrade to keep chatting"
+    : routed
+    ? "Use the buttons above to continue…"
+    : onboarding
+    ? "Reply here…"
+    : "Ask anything about your execution";
 
   return (
     <div className="flex flex-col h-full xl:h-[97vh] w-full bg-white xl:border-l xl:border-gray-100 xl:rounded-4xl xl:my-6 overflow-hidden shrink-0">
@@ -364,33 +383,16 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
               <div className="px-6 py-6 space-y-4">
                 {messages.map((m) => (
                   <div key={m.id} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                    <div className={m.role === "user"
-                      ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
-                      : "max-w-[85%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
-                      <FormattedMessage content={m.content} />
-                      {m.isStatusButtons && onboardStep === "status" && (
-                        <div className="flex flex-col gap-2 mt-3">
-                          {STATUS_OPTIONS.map((opt) => (
-                            <button key={opt.value} onClick={() => handleStatusSelect(opt)}
-                              className="text-left px-3 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#111111] font-medium hover:bg-[#F1F3F5] hover:border-[#D1D5DB] transition-all">
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {m.confirmTab && onboardStep === "done" && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <button onClick={() => handleConfirmTab(m.confirmTab!)}
-                            className="px-4 py-2 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-all">
-                            Yes, take me to {TAB_LABELS[m.confirmTab] ?? m.confirmTab}
-                          </button>
-                          <button onClick={() => addAssistant("No problem — ask me anything, or pick a different tab whenever you're ready.")}
-                            className="px-4 py-2 rounded-xl border border-[#E5E7EB] bg-white text-sm font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all">
-                            Not yet
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {m.role === "user" && m.content === "__onboard_start__" ? null : (
+                      <div className={m.role === "user"
+                        ? "max-w-[80%] px-4 py-3 rounded-2xl bg-black text-white text-sm leading-relaxed"
+                        : "max-w-[85%] px-4 py-3 rounded-2xl bg-[#F8F9FA] text-[#111111] text-sm leading-relaxed"}>
+                        <FormattedMessage content={m.content} />
+                        {m.routeTab && routed && (
+                          <RouteButtons tab={m.routeTab} />
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {loading && (
@@ -407,43 +409,48 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
       </div>
 
       {/* Input */}
-      <div className="p-6 pt-0 shrink-0">
-        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          <div className="grid grid-cols-2 gap-1.5">
-            {SUGGESTIONS.map((s) => (
-              <button key={s.recipeId} onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : send(s.label, s.recipeId)} disabled={loading}
-                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
-                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
-                <span className="truncate">{s.label}</span>
-              </button>
-            ))}
-          </div>
-          <textarea ref={textareaRef} value={input}
-            onChange={(e) => !creditsExhausted && setInput(e.target.value)}
-            onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
-            onKeyDown={(e) => {
-              if (creditsExhausted) { e.preventDefault(); setCreditsExhaustedOpen(true); return; }
-              // Ignore Enter while the IME / mobile keyboard is still composing a
-              // word — otherwise the in-progress word is dropped from the sent
-              // text and then committed back, leaving/duplicating the last word.
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                submitInput();
-              }
-            }}
-            onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
-            placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything about your execution"}
-            rows={1} disabled={loading}
-            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
-          />
-          <div className="flex items-center justify-end">
-            <button onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : submitInput()} disabled={!input.trim() || loading}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-              <ArrowUp size={16} />
+      <div className="px-3 pb-3 pt-0 shrink-0">
+        <div className="flex flex-col gap-2 p-3 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          {showChips && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {SUGGESTIONS.map((s) => (
+                <button key={s.recipeId}
+                  onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : send(s.label, s.recipeId)}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
+                  <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                  <span className="truncate">{s.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <textarea ref={textareaRef} value={input}
+              onChange={(e) => !creditsExhausted && !routed && setInput(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={(e) => {
+                if (creditsExhausted) { e.preventDefault(); setCreditsExhaustedOpen(true); return; }
+                if (routed) { e.preventDefault(); return; }
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submitInput();
+                }
+              }}
+              onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
+              placeholder={inputPlaceholder}
+              rows={1}
+              disabled={loading || routed}
+              className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
+            />
+            <button
+              onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : submitInput()}
+              disabled={!input.trim() || loading || routed}
+              className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0">
+              <ArrowUp size={15} />
             </button>
           </div>
         </div>
-        <p className="text-center text-[11px] sm:text-[12px] text-[#9CA3AF] mt-2">
+        <p className="text-center text-[10px] text-[#9CA3AF] mt-1.5 truncate whitespace-nowrap">
           <a href="https://sorene.ai/responsible-ai" target="_blank" rel="noopener noreferrer"
             className="underline hover:text-[#6B7280] transition-colors">
             Sorene can make mistakes. Consider checking important information.

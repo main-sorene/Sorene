@@ -177,3 +177,8 @@ export async function resubscribe(): Promise<{ ok: boolean }> {
   const res = await authRequest("POST", `${API_BASE_URL}/subscription/resubscribe`);
   return res.json();
 }
+
+export async function syncSubscription(): Promise<{ ok: boolean; synced: boolean; plan?: string }> {
+  const res = await authRequest("POST", `${API_BASE_URL}/subscription/sync`);
+  return res.json();
+}

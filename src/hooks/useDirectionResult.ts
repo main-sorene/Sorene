@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, recipeDirectionsAtom, type RecipeDirection } from "@/store/atoms";
+import { userAtom, recipeDirectionsAtom, resourcesConstraintsAtom, type RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
@@ -52,6 +52,7 @@ export function useDirectionResult() {
   // Recipe (brainstorm/check-my-idea) cards — shared via jotai so DirectionChat
   // and DirectionSection see the same list and lazy-load the same staged data.
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const setResourcesConstraints = useSetAtom(resourcesConstraintsAtom);
   const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [loadingRecipeDetailFor, setLoadingRecipeDetailFor] = useState<string | null>(null);
   const [loadingRecipeSection3For, setLoadingRecipeSection3For] = useState<string | null>(null);
@@ -72,6 +73,17 @@ export function useDirectionResult() {
       setAlternatives(profile.directionAlternatives);
     }
 
+    // If Firestore has R&C but localStorage doesn't, sync it to localStorage + atom + intent flag.
+    // This covers users who filled the form on one device and visit on another.
+    const firestoreHasRC = !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+    if (firestoreHasRC && !localStorage.getItem("resourcesConstraints")) {
+      try {
+        localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints));
+        localStorage.setItem("rcGenerationRequested", "true");
+      } catch {}
+      setResourcesConstraints(profile.resourcesConstraints as unknown as Parameters<typeof setResourcesConstraints>[0]);
+    }
+
     // New path: structured direction cards
     // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
     const cachedCards = profile.directionCards;
@@ -79,14 +91,8 @@ export function useDirectionResult() {
       ((cachedCards[0].title && cachedCards[0].constraint_check) ||
        (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
     if (cardsAreUpToDate) {
-      // Only show cached cards if R&C has been filled — fall back to Firestore copy for cross-device support
-      const localRC = localStorage.getItem("resourcesConstraints");
-      const hasRC = !!localRC || !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
-      // If Firestore has it but localStorage doesn't, sync it back to localStorage
-      if (!localRC && profile.resourcesConstraints) {
-        try { localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints)); } catch {}
-      }
-      if (!hasRC) { setNeedsRC(true); return; }
+      // User already has generated cards — show them directly without requiring R&C check.
+      // (R&C gate only applies before the first generation.)
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;
@@ -104,13 +110,7 @@ export function useDirectionResult() {
     if (!profile.directionEligibility.eligible) return;
 
     const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
-    // Also allow generation if Firestore has R&C data — user already submitted on another device
-    const firestoreHasRC = !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
-    if (!hasGenerationIntent && !firestoreHasRC) { setNeedsRC(true); return; }
-    // Sync Firestore R&C to localStorage so subsequent reads work locally
-    if (firestoreHasRC && !localStorage.getItem("resourcesConstraints")) {
-      try { localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints)); } catch {}
-    }
+    if (!hasGenerationIntent) { setNeedsRC(true); return; }
 
     const generate = async () => {
       setIsStreaming(true);

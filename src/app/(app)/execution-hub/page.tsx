@@ -4340,6 +4340,54 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
   },
 };
 
+function LogoUploadArea({ title }: { title: string }) {
+  const storageKey = `brand-logo-upload-${title}`;
+  const [preview, setPreview] = useState<string>(() => {
+    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setPreview(dataUrl);
+      try { localStorage.setItem(storageKey, dataUrl); } catch { /* ignore — too large */ }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="space-y-2 pt-1">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-px bg-gray-100" />
+        <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or upload your logo</span>
+        <div className="flex-1 h-px bg-gray-100" />
+      </div>
+      {preview ? (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#32C382]/30 bg-[#F5FFD9]">
+          <img src={preview} alt="Logo" className="w-10 h-10 object-contain rounded-lg border border-white" />
+          <span className="text-[12px] font-medium text-[#151515] flex-1">Logo saved</span>
+          <button onClick={() => { setPreview(""); try { localStorage.removeItem(storageKey); } catch {} }}
+            className="text-[10px] text-[#9CA3AF] hover:text-[#374151] transition-colors">Remove</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] hover:border-[#32C382]/50 hover:bg-[#F5FFD9]/30 transition-all"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V7M7 10l3-3 3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="2" width="16" height="16" rx="4" stroke="#9CA3AF" strokeWidth="1.5"/></svg>
+          <span className="text-[11px] text-[#9CA3AF]">Upload logo file</span>
+          <span className="text-[10px] text-[#C4C4C4]">PNG, JPG, SVG</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+    </div>
+  );
+}
+
 function BrandTextSection({ type, project }: { type: BrandTextType; project: DirectionCardData | null }) {
   const title = project?.title ?? "";
   const storageKey = `brand-${type}-${title}`;
@@ -4550,6 +4598,37 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
   };
 
+  const [ownInput, setOwnInput] = useState("");
+  const [ownEval, setOwnEval] = useState("");
+  const [ownLoading, setOwnLoading] = useState(false);
+
+  const evaluateOwn = async () => {
+    const text = ownInput.trim();
+    if (!text || ownLoading) return;
+    setOwnLoading(true);
+    setOwnEval("");
+    const ctx = buildContext();
+    const evalPrompt = `The user has written their own ${type} for their business. Evaluate it briefly (2-3 sentences): what works well, what could be stronger, and give one concrete improvement suggestion. Be warm and specific.
+
+Project: "${title}"
+Their ${type}: "${text}"
+${ctx.chosenName ? `Business name: "${ctx.chosenName}"` : ""}
+${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: evalPrompt, system: "You are Sorene, a startup brand coach. Give warm, specific, actionable feedback in 2-3 sentences." }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOwnEval(data?.reply ?? "");
+      }
+    } catch { /* ignore */ }
+    setOwnLoading(false);
+  };
+
   const [customInput, setCustomInput] = useState("");
   const [customChecking, setCustomChecking] = useState(false);
   const [customResult, setCustomResult] = useState<boolean | null>(null);
@@ -4701,6 +4780,52 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
               </div>
             </div>
           )}
+          {type !== "domain" && type !== "website" && type !== "hosting" && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or write your own</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
+                <textarea
+                  value={ownInput}
+                  onChange={(e) => setOwnInput(e.target.value)}
+                  placeholder={`Type your ${type === "logo" ? "logo concept idea" : type === "benefit" ? "benefit description" : type === "offerings" ? "offering description" : "tagline"} here…`}
+                  rows={2}
+                  className="w-full text-[13px] text-[#151515] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382] resize-none placeholder:text-[#9CA3AF]"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  {ownInput.trim() && (
+                    <button
+                      onClick={() => choose(ownInput.trim())}
+                      className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors"
+                    >
+                      Use this
+                    </button>
+                  )}
+                  <button
+                    onClick={evaluateOwn}
+                    disabled={!ownInput.trim() || ownLoading}
+                    className="flex items-center gap-1 text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 ml-auto"
+                  >
+                    {ownLoading ? <Loader2 size={10} className="animate-spin" /> : <img src="/figmaAssets/starfour.svg" className="w-2 h-2" alt="" />}
+                    Get feedback
+                  </button>
+                </div>
+                {ownEval && (
+                  <div className="rounded-lg bg-white border border-[#32C382]/20 px-3 py-2">
+                    <p className="text-[11px] text-[#62646A] leading-relaxed">
+                      <span className="text-[#32C382] font-semibold">Sorene: </span>{ownEval}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {type === "logo" && (
+            <LogoUploadArea title={title} />
+          )}
         </>
       )}
     </div>
@@ -4723,6 +4848,9 @@ function PricingPackageSection({ project }: { project: DirectionCardData | null 
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [ownDesc, setOwnDesc] = useState("");
+  const [ownEval, setOwnEval] = useState("");
+  const [ownEvalLoading, setOwnEvalLoading] = useState(false);
 
   useEffect(() => {
     if (!title) return;
@@ -4875,6 +5003,49 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
 // BrandColorSection
 // ─────────────────────────────────────────────
 
+function ColorUploadArea({ title }: { title: string }) {
+  const storageKey = `brand-color-upload-${title}`;
+  const [preview, setPreview] = useState<string>(() => {
+    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setPreview(dataUrl);
+      try { localStorage.setItem(storageKey, dataUrl); } catch { /* ignore */ }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <>
+      {preview ? (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#32C382]/30 bg-[#F5FFD9]">
+          <img src={preview} alt="Brand colors" className="w-10 h-10 object-contain rounded-lg border border-white" />
+          <span className="text-[12px] font-medium text-[#151515] flex-1">Brand image saved</span>
+          <button onClick={() => { setPreview(""); try { localStorage.removeItem(storageKey); } catch {} }}
+            className="text-[10px] text-[#9CA3AF] hover:text-[#374151] transition-colors">Remove</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] hover:border-[#32C382]/50 hover:bg-[#F5FFD9]/30 transition-all"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V7M7 10l3-3 3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="2" width="16" height="16" rx="4" stroke="#9CA3AF" strokeWidth="1.5"/></svg>
+          <span className="text-[11px] text-[#9CA3AF]">Upload brand image or mood board</span>
+          <span className="text-[10px] text-[#C4C4C4]">PNG, JPG, SVG</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+    </>
+  );
+}
+
 type ColorPalette = { id: string; name: string; vibe: string; primary: string; secondary: string; accent: string; neutral: string };
 
 function BrandColorSection({ project }: { project: DirectionCardData | null }) {
@@ -4992,6 +5163,14 @@ Return JSON: [{"id":"p1","name":"palette name","vibe":"2-word mood description",
               <button onClick={generate} className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
             </div>
           )}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or upload brand colors</span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+            <ColorUploadArea title={title} />
+          </div>
         </>
       )}
     </div>
@@ -5245,21 +5424,6 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
         </div>
       </motion.div>
 
-      {/* Collapsed body */}
-      <AnimatePresence>
-        {!isExpanded && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
-            className="px-4 pt-3 pb-4">
-            <p className="text-[12px] text-[#9A9A9A] mb-2">{doneCount}/{pillar.items.length} tasks complete</p>
-            <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[#32C382] transition-all duration-500"
-                style={{ width: `${pillar.items.length > 0 ? Math.round((doneCount / pillar.items.length) * 100) : 0}%` }}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Expanded body */}
       <AnimatePresence initial={false}>
@@ -5271,22 +5435,6 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5">
-              {/* Tips controls */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[12px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
-                {tipsStage === "idle" && (
-                  <button onClick={generateTips} disabled={!title}
-                    className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center gap-1">
-                    <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Get personalised tips
-                  </button>
-                )}
-                {tipsStage === "loading" && (
-                  <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
-                    <Loader2 size={11} className="animate-spin" /> Getting tips…
-                  </div>
-                )}
-              </div>
-
               <div className="space-y-3">
                 {pillar.items.map((item) => {
                   const status = statuses[item.id] ?? "todo";

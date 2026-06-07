@@ -21,7 +21,7 @@ export function SubscriptionContent() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const { data: subscription, isLoading: isSubLoading } = useSubscriptionStatus();
+  const { data: subscription, isLoading: isSubLoading, refetch: refetchSubscription } = useSubscriptionStatus();
   const isPaid = !!subscription?.active && subscription.plan !== "free";
   const { data: paymentMethod } = usePaymentMethod(isPaid);
   const { data: invoicesData, isLoading: isInvoicesLoading } = useInvoices(1, 10, isPaid);
@@ -93,6 +93,7 @@ export function SubscriptionContent() {
     setIsResubscribing(true);
     try {
       await resubscribe();
+      await refetchSubscription();
       toast({ title: "Subscription reactivated", description: "Your subscription will continue as normal." });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not reactivate subscription.";
@@ -107,6 +108,7 @@ export function SubscriptionContent() {
     setIsCancelling(true);
     try {
       await cancelSubscription();
+      await refetchSubscription();
       toast({
         title: "Subscription cancelled",
         description: "You'll keep full access until the end of your billing period.",

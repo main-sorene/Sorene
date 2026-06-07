@@ -386,8 +386,14 @@ export async function POST(req: NextRequest) {
   const authedUser = await verifyAuth(req);
   if (!authedUser) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const creditCheck = await checkCredits(authedUser.uid);
-  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
+  const userKey = authedUser.email ?? authedUser.uid;
+  try {
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
+  } catch (err) {
+    console.error("[direction-cards] credit check failed, allowing through:", err);
+    // Don't block generation if credit check itself errors
+  }
 
   try {
     const body = (await req.json()) as {
@@ -437,7 +443,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -459,7 +465,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      await deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(userKey, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -476,7 +482,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -493,7 +499,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
-      await deductCredits(authedUser.uid, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -509,7 +515,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_PROMPT_CACHED,
       messages: [{ role: "user", content: prompt }],
     });
-    await deductCredits(authedUser.uid, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
+    await deductCredits(userKey, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const raw = block?.type === "text" ? block.text : "";
     const card = parseCard(raw);

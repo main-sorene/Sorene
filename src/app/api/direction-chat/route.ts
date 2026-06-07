@@ -174,9 +174,14 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creditCheck = await checkCredits(user.uid);
-  if (!creditCheck.ok) {
-    return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
+  const userKey = user.email ?? user.uid;
+  try {
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) {
+      return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
+    }
+  } catch (err) {
+    console.error("[direction-chat] credit check failed, allowing through:", err);
   }
 
   try {
@@ -423,7 +428,7 @@ Sorene Direction Engine v1.1`;
           }
         }
         const final = await anthropicStream.finalMessage();
-        await deductCredits(user.uid, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
+        await deductCredits(userKey, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
       },
     });

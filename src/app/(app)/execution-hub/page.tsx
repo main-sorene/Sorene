@@ -5678,7 +5678,6 @@ interface AgentDef {
   tags: string[];
   whatItDoes: string[];
   output: string;
-  liveNow?: boolean;
 }
 
 const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDef[] }[] = [
@@ -5794,18 +5793,17 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         id: "coach",
         icon: CheckCircle2,
         gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #4ADE80 34.62%, #16A34A 100%)`,
-        name: "WhatsApp Coaching",
-        tagline: "Live · Connect tab",
-        description: "Sorene is already in your pocket. Get scheduled check-ins, accountability nudges, and on-demand coaching through WhatsApp — set it up in the Connect tab.",
-        tags: ["Live now", "Check-ins", "On-demand"],
+        name: "Accountability & Coach Agent",
+        tagline: "Check-ins · Nudges",
+        description: "Runs daily and weekly check-ins through your connected channels, nudges stalled tasks across Launchpad and Growth, and celebrates wins.",
+        tags: ["Check-ins", "Nudges", "Momentum"],
         whatItDoes: [
-          "Scheduled business update reminders (daily or weekly)",
-          "Daily knowledge snippets tailored to your stage",
-          "Accountability check-ins on open Launchpad tasks",
-          "On-demand coaching — ask anything, any time",
+          "Sends scheduled check-ins via WhatsApp or Telegram",
+          "Spots stalled tasks across your Hub and nudges you",
+          "Helps you set the week's focus and review it",
+          "Celebrates milestones to keep momentum",
         ],
-        output: "Ongoing coaching + nudges via WhatsApp",
-        liveNow: true,
+        output: "Regular check-ins + proactive nudges on stalled work",
       },
     ],
   },
@@ -5904,17 +5902,10 @@ function AgentDetail({ agent }: { agent: AgentDef }) {
           <p className="text-[13px] text-[#151515] leading-relaxed">{agent.output}</p>
         </div>
       </section>
-      {agent.liveNow ? (
-        <div className="flex items-center gap-2 pt-1">
-          <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#DCFCE7] text-[#16A34A] font-semibold">Live now</span>
-          <p className="text-[12px] text-[#62646A]">Set it up in the <span className="font-medium text-[#151515]">Connect tab</span>.</p>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 pt-1">
-          <span className="text-[11px] px-2.5 py-1 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Coming soon</span>
-          <p className="text-[12px] text-[#9A9A9A]">This agent is on the roadmap.</p>
-        </div>
-      )}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-[11px] px-2.5 py-1 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Coming soon</span>
+        <p className="text-[12px] text-[#9A9A9A]">This agent is on the roadmap.</p>
+      </div>
     </div>
   );
 }

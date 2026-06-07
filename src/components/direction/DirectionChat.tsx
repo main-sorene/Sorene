@@ -358,20 +358,18 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       {/* Input Section */}
       <div className="px-3 pb-3 pt-0 shrink-0">
         <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {hasDirections && (
-            <div className="grid grid-cols-2 gap-1.5">
-              {DIRECTION_RECIPES.map((recipe) => (
-                <button
-                  key={recipe.label}
-                  onClick={() => sendMessage(recipe.label, recipe.id)}
-                  className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
-                  <span className="truncate">{recipe.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIRECTION_RECIPES.map((recipe) => (
+              <button
+                key={recipe.label}
+                onClick={() => sendMessage(recipe.label, recipe.id)}
+                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{recipe.label}</span>
+              </button>
+            ))}
+          </div>
           <div className="flex items-end gap-2">
             <button className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
               <Plus size={16} />

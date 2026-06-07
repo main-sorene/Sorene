@@ -6011,15 +6011,7 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 });
 const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-const MESSENGER_FEATURES = [
-  "Real-time coaching between sessions",
-  "Ask Sorene anything on the go",
-  "Log customer conversations via chat",
-  "Progress synced to your Execution Hub",
-  "Daily reminders via message",
-  "Business status update prompts",
-  "Business knowledge learning in chat",
-];
+const MESSENGER_FEATURES: string[] = [];
 
 function HourSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -6152,7 +6144,7 @@ function MessengerConnectCard() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
-              <p className="text-[13px] text-white/80 mt-0.5">Sorene in your pocket — coaching, logging, reminders</p>
+              <p className="text-[13px] text-white/80 mt-0.5 leading-relaxed">Your coach is now in your pocket. Get sharp, personalised coaching on the go, log customer conversations instantly, and stay on track with daily check-ins and reminders — all through WhatsApp.</p>
             </div>
           </div>
           <button onClick={() => setIsExpanded((v) => !v)}
@@ -6170,12 +6162,6 @@ function MessengerConnectCard() {
             className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5 space-y-3">
-              {/* Features */}
-              <div className="flex flex-wrap gap-1.5 mb-1">
-                {MESSENGER_FEATURES.map((f) => (
-                  <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
-                ))}
-              </div>
               {/* WhatsApp row */}
               <div className="rounded-2xl border border-gray-100 overflow-hidden">
                 <div className="flex items-center gap-3 px-4 py-3">

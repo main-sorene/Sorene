@@ -4031,7 +4031,6 @@ const LAUNCH_PILLARS = [
     { id: "brand_color", label: "Brand color palette" },
     { id: "domain", label: "Choose domain" },
     { id: "website", label: "Build website" },
-    { id: "hosting", label: "Get web hosting" },
     { id: "social", label: "Set up social media profiles" },
   ]},
   { id: "tools", label: "Tools Stack", icon: BarChart3, items: [
@@ -4300,7 +4299,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
 // BrandTextSection — generic for tagline / benefit / offerings
 // ─────────────────────────────────────────────
 
-type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "website" | "hosting";
+type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "website";
 
 const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
   tagline: {
@@ -4332,11 +4331,6 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
     hint: "At launch you need just 3 pages: Home, Services/Pricing, and Contact or Booking. Pick a platform you can launch in a weekend.",
     promptInstruction: `Recommend 3 website platform options for this business type. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — Page1, Page2, Page3". The "reason" field explains why it fits. Example: [{"text": "Squarespace — Home, Services, Contact", "reason": "Easy to use, great templates"}, ...]`,
     placeholder: 'e.g. "Something with booking built in"',
-  },
-  hosting: {
-    hint: "Most simple sites have hosting built in. Only set up separate hosting if you are building a custom coded site.",
-    promptInstruction: `Recommend 3 hosting or all-in-one website platform options for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — price/plan". The "reason" field explains why it fits. Example: [{"text": "Squarespace Basic — ~$16/mo", "reason": "Hosting included, easy to manage"}, ...]`,
-    placeholder: 'e.g. "What is the cheapest reliable option?"',
   },
 };
 
@@ -4780,7 +4774,7 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
               </div>
             </div>
           )}
-          {type !== "domain" && type !== "website" && type !== "hosting" && (
+          {type !== "domain" && type !== "website" && (
             <div className="space-y-2 pt-1">
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-px bg-gray-100" />
@@ -5478,7 +5472,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                   const tip = tips[item.id];
                   const hasContent = pillar.id === "brand_digital" && [
                     "biz_name", "tagline", "benefit", "offerings", "pricing",
-                    "logo", "domain", "website", "hosting", "brand_color", "social",
+                    "logo", "domain", "website", "brand_color", "social",
                   ].includes(item.id);
                   const open = !!openItems[item.id];
                   return (
@@ -5527,7 +5521,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                             {item.id === "pricing" && (
                               <PricingPackageSection project={project} />
                             )}
-                            {(item.id === "logo" || item.id === "domain" || item.id === "website" || item.id === "hosting") && (
+                            {(item.id === "logo" || item.id === "domain" || item.id === "website") && (
                               <BrandTextSection type={item.id as BrandTextType} project={project} />
                             )}
                             {item.id === "brand_color" && (
@@ -5539,7 +5533,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "hosting" && item.id !== "brand_color" && item.id !== "social" && (
+                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           {tip}
                         </p>

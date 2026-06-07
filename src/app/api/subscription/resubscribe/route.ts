@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     await db.collection("users").doc(userKey).set(
       { subscription: { cancel_at_period_end: false, status: updated.status } },
-      { merge: true },
+      { mergeFields: ["subscription.cancel_at_period_end", "subscription.status"] },
     );
 
     return NextResponse.json({ ok: true });

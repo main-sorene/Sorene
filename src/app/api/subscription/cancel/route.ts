@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
       cancel_at_period_end: true,
     });
 
-    // Reflect pending cancellation in Firestore
+    // Use mergeFields to update only specific subscription subfields without wiping others
     await db.collection("users").doc(userKey).set(
       { subscription: { cancel_at_period_end: true, status: updated.status } },
-      { merge: true },
+      { mergeFields: ["subscription.cancel_at_period_end", "subscription.status"] },
     );
 
     return NextResponse.json({

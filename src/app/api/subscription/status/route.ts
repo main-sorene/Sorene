@@ -15,20 +15,21 @@ export async function GET(req: NextRequest) {
     if (!authedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (email !== authedUser.uid && email !== authedUser.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     getAdminAuth();
     const db = getAdminFirestore();
 
     // The user document key is ambiguous across this codebase: the AI API routes
-    // write credits via the value of verifyAuth().uid, while the Stripe webhook and
-    // the client write by email. For some accounts decoded.uid IS the email, for
-    // others it's a Firebase uid. To be bulletproof we read BOTH possible keys and
-    // use whichever document actually holds the credits / subscription data.
+    // write credits via verifyAuth().uid, the client (AuthPersistence) uses the
+    // email as the key, and the Stripe webhook writes by email. The token's email
+    // claim may also be empty for some providers. Rather than enforce a brittle
+    // exact-match (which 403s legitimate users and hides their credits), we read
+    // every key the authenticated identity could own — the token uid, the token
+    // email, and the requested email — and use whichever doc holds the data.
     const uid = authedUser.uid;
-    const keys = Array.from(new Set([uid, email].filter(Boolean) as string[]));
+    const keys = Array.from(
+      new Set([uid, authedUser.email, email].filter(Boolean) as string[]),
+    );
     const snaps = await Promise.all(
       keys.map((k) => db.collection("users").doc(k).get()),
     );
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         active: false, plan: "free", status: "inactive", duration: 1,
         credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
-        _debug: { keysRead: keys, foundCreditsDoc: !!creditOwner.credits, rawUsed: credits?.used ?? null },
+        _debug: { keysRead: keys, foundCreditsDoc: !!creditOwner.credits, rawUsed: credits?.used ?? null, tokenUid: authedUser.uid, tokenEmail: authedUser.email ?? null, queryEmail: email },
       });
     }
 

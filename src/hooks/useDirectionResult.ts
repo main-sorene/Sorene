@@ -130,8 +130,9 @@ export function useDirectionResult() {
         });
 
         if (!res1.ok) {
-          const detail = await res1.text().catch(() => "");
-          setGenerateError(`Generation failed (${res1.status}). ${detail || "Please try again."}`);
+          let errMsg = "Please try again.";
+          try { const j = await res1.json(); errMsg = j.error || errMsg; } catch { try { errMsg = await res1.text() || errMsg; } catch {} }
+          setGenerateError(`Generation failed (${res1.status}): ${errMsg}`);
           // Clear the intent so the user lands back on the form, not a dead spinner
           try { localStorage.removeItem("rcGenerationRequested"); } catch {}
           setNeedsRC(true);
@@ -347,8 +348,9 @@ export function useDirectionResult() {
         body: JSON.stringify({ ...basePayload, phase: 1 }),
       });
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        setGenerateError(`Generation failed (${res.status}). ${detail || "Please try again."}`);
+        let errMsg = "Please try again.";
+        try { const j = await res.json(); errMsg = j.error || errMsg; } catch { try { errMsg = await res.text() || errMsg; } catch {} }
+        setGenerateError(`Generation failed (${res.status}): ${errMsg}`);
         return;
       }
       const data = (await res.json()) as { cards?: DirectionCardData[] };

@@ -383,6 +383,11 @@ function parseCard(text: string): DirectionCardData | null {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("[direction-cards] ANTHROPIC_API_KEY not set");
+    return Response.json({ cards: [], error: "Server configuration error: API key missing" }, { status: 500 });
+  }
+
   const authedUser = await verifyAuth(req);
   if (!authedUser) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -521,7 +526,8 @@ export async function POST(req: NextRequest) {
     const card = parseCard(raw);
     return Response.json({ cards: card ? [card] : [] });
   } catch (err) {
-    console.error("[direction-cards] error:", err);
-    return Response.json({ cards: [] }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[direction-cards] error:", msg);
+    return Response.json({ cards: [], error: msg }, { status: 500 });
   }
 }

@@ -6630,7 +6630,6 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   };
 
   const generate = async () => {
-    if (!project) return;
     setGenerating(true);
     try {
       const topicText = topic === "custom" ? customTopic : (POST_TOPICS.find((t) => t.value === topic)?.label ?? topic);
@@ -6643,13 +6642,17 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         ? `\n\nInclude this CTA link naturally in each post: ${ctaLink.trim()}`
         : "";
 
+      const projectContext = project
+        ? `Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.path_label ? `Stage: ${project.path_label}` : ""}`
+        : "";
+
       const system = `You are Sorene, a sharp execution coach helping a founder write for Threads. Threads posts are conversational, honest, and human — no corporate speak, no hashtag spam (max 1-2 if truly relevant). Max 500 characters per post. Write like a smart founder sharing a real moment.`;
       const prompt = `Generate 3 different Threads post options for this founder. Each should take a different angle on the same topic.
 
-Project: "${project.title}"
-${project.oneliner ? `What it does: ${project.oneliner}` : ""}
-${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
-${project.path_label ? `Stage: ${project.path_label}` : ""}${dnaContext}${ctaContext}
+${projectContext}${dnaContext}${ctaContext}
 
 Topic: ${topicText}
 
@@ -6832,10 +6835,7 @@ Format: exactly 3 posts separated by "---". No labels, no intro, no commentary.`
           </div>
         </div>
         <div className="p-5 space-y-4">
-          {!project ? (
-            <p className="text-[12px] text-[#9A9A9A] text-center">Select a project from your Hub first.</p>
-          ) : (
-            <>
+          <>
               <div>
                 <p className="text-[12px] font-medium text-[#151515] mb-2">What do you want to write about?</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -6867,8 +6867,7 @@ Format: exactly 3 posts separated by "---". No labels, no intro, no commentary.`
                 className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {generating ? <><Loader2 size={13} className="animate-spin" /> Writing 3 options…</> : "Generate 3 post options →"}
               </button>
-            </>
-          )}
+          </>
         </div>
       </div>
 

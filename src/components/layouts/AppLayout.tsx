@@ -19,6 +19,7 @@ import {
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { CREDITS_EXHAUSTED_EVENT } from "@/lib/queryClient";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useRouter } from "next/navigation";
 import { SettingsModal } from "../modals/SettingsModal";
 import { LogoutConfirmModal } from "../modals/LogoutConfirmModal";
@@ -38,12 +39,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const { data: subscription } = useSubscriptionStatus();
+
   // Listen for 402 credits-exhausted events from anywhere in the app
   useEffect(() => {
     const handler = () => setCreditsExhausted(true);
     window.addEventListener(CREDITS_EXHAUSTED_EVENT, handler);
     return () => window.removeEventListener(CREDITS_EXHAUSTED_EVENT, handler);
   }, [setCreditsExhausted]);
+
+  // Proactively show the upgrade modal when a free user's credits are fully
+  // exhausted — so they see it as soon as the bar turns red, not only on their
+  // next failed AI call.
+  useEffect(() => {
+    if (!subscription) return;
+    const plan = subscription.plan ?? "free";
+    const used = subscription.credits?.used ?? 0;
+    const limit = (subscription.credits?.limit ?? 250) + (subscription.credits?.extra ?? 0);
+    if (plan === "free" && limit > 0 && used >= limit) {
+      setCreditsExhausted(true);
+    }
+  }, [subscription, setCreditsExhausted]);
 
   // Redirect unauthenticated users to landing page, incomplete onboarding to /onBoarding
   useEffect(() => {

@@ -776,6 +776,37 @@ export function SettingsModal() {
                 <p className="text-xs text-[#9B9B9B]">One-time budget · <button onClick={() => { setActiveTab("Billing"); }} className="underline hover:text-[#151515]">Upgrade for more</button></p>
               ) : null}
             </div>
+
+            {/* Proactive upgrade prompt when free user is at or near limit */}
+            {isFree && pct >= 80 && (
+              <div className={`rounded-2xl p-5 space-y-3 ${pct >= 100 ? "bg-[#FFF8E6] border border-[#FDC24C]" : "bg-[#FAFAFA] border border-[#ECEDEE]"}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${pct >= 100 ? "bg-[#FFF1C6]" : "bg-[#F5F5F5]"}`}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 1.5L10 6H14.5L11 9L12.5 13.5L8 11L3.5 13.5L5 9L1.5 6H6L8 1.5Z" fill={pct >= 100 ? "#F99207" : "#9B9B9B"} />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#151515]">
+                      {pct >= 100 ? "You've used all your free credits" : "You're almost out of credits"}
+                    </p>
+                    <p className="text-xs text-[#62646A] mt-0.5 leading-relaxed">
+                      {pct >= 100
+                        ? "Upgrade to continue using Sorene. Your DNA and Direction results are saved."
+                        : `${effectiveLimit - used} credits left. Upgrade to keep your momentum going.`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setActiveTab("Billing")}
+                    className="w-full h-10 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-[#222222] transition-colors"
+                  >
+                    See upgrade plans
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       }

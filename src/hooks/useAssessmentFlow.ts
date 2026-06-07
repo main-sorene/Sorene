@@ -272,11 +272,15 @@ export function useAssessmentFlow() {
       });
 
       try {
-        const buf = await file.arrayBuffer();
-        let binary = "";
-        const bytes = new Uint8Array(buf);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const fileBase64 = btoa(binary);
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve(dataUrl.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
         const res = await authFetch("/api/cv-summary", {
           method: "POST",

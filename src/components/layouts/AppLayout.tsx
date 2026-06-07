@@ -37,7 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authLoading && !authUser) {
       router.replace("/");
-    } else if (!authLoading && authUser && !authUser.profile?.onboardingComplete) {
+    } else if (!authLoading && authUser && authUser.profile !== undefined && !authUser.profile?.onboardingComplete) {
       router.replace("/onBoarding");
     }
   }, [authLoading, authUser, router]);
@@ -64,6 +64,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Don't render protected content for unauthenticated or incomplete onboarding users
   if (!authUser) return null;
+  // Wait for profile to load before deciding to redirect (undefined = not yet loaded)
+  if (authUser.profile === undefined) return (
+    <div className="flex h-screen w-full items-center justify-center bg-[#f7f7f7]">
+      <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
   if (!authUser.profile?.onboardingComplete) return null;
 
   return (

@@ -107,7 +107,13 @@ export function useDirectionResult() {
     };
 
     stream();
-  }, [profile, hasStreamed, user]);
+  // Use stable primitives to avoid re-firing on every query refetch (profile is a new object reference each time)
+  }, [
+    profile?.directionEligibility?.eligible,
+    profile?.directionText,
+    hasStreamed,
+    user?.uid,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchAlternativeSummaries(
     alts: DirectionAlternative[],

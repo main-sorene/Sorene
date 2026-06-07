@@ -1270,12 +1270,9 @@ export function DirectionCard({
         {!isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
             className="px-5 pb-5 flex flex-col flex-1" onClick={(e) => handleToggle(e)}>
-            {cardData && (
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[11px] text-[#9A9A9A] font-medium">{cardData.oneliner}</p>
-              </div>
-            )}
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-2">{description}</p>
+            <p className="text-[13px] text-[#62646A] leading-relaxed mb-4 line-clamp-2">
+              {cardData?.oneliner || description}
+            </p>
             <div className="mt-auto flex items-center justify-between gap-2">
               {/* Left: Hide + constraint badge (no label text — space is tight in grid) */}
               <div className="flex items-center gap-2">

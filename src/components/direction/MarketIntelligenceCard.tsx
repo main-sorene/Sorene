@@ -13,12 +13,14 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Separator } from "../ui/separator";
 import { useMIE } from "@/hooks/useMIE";
+import { useDirectionResult } from "@/hooks/useDirectionResult";
 import type { MIEOpportunity, MIESignal, MIEHorizonSignal } from "@/types/mie";
 
 const MIE_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #6366f1 34.62%, #4338ca 100%)`;
@@ -45,6 +47,7 @@ const COST_COLORS: Record<string, { bg: string; text: string }> = {
 
 export function MarketIntelligenceCard() {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useMIE();
+  const { generateRecipeCard } = useDirectionResult();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedOpportunity, setExpandedOpportunity] = useState<string | null>(null);
   const topOpportunity = report?.opportunities?.[0] ?? null;
@@ -229,7 +232,8 @@ export function MarketIntelligenceCard() {
                 <div className="space-y-3">
                   {report.opportunities.map((opp) => (
                     <OpportunityCard key={opp.id} opportunity={opp} isExpanded={expandedOpportunity === opp.id}
-                      onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)} />
+                      onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)}
+                      onGenerateDirection={() => generateRecipeCard(`${opp.title}: ${opp.one_line}`)} />
                   ))}
                 </div>
               </ReportSection>
@@ -330,7 +334,7 @@ function SignalRow({ signal, variant }: { signal: MIESignal; variant: "rising" |
   );
 }
 
-function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void }) {
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   const v = VELOCITY_COLORS[opportunity.velocity_tier] ?? VELOCITY_COLORS.V2;
   const c = COST_COLORS[opportunity.startup_cost] ?? { bg: "#f3f4f6", text: "#374151" };
   const score = opportunity.dna_fit_score;
@@ -364,6 +368,10 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: M
                 <DetailItem label="Window risk" value={opportunity.window_risk} />
                 <DetailItem label="Underlying signal" value={opportunity.underlying_signal} />
               </div>
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
+              </button>
             </div>
           </motion.div>
         )}

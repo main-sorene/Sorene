@@ -8,12 +8,14 @@ import {
   Search,
   RefreshCw,
   AlertCircle,
+  Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { Separator } from "../ui/separator";
 import { useProblemScan } from "@/hooks/useProblemScan";
+import { useDirectionResult } from "@/hooks/useDirectionResult";
 import type { ProblemOpportunity } from "@/types/problemScan";
 
 const CARD_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #0f766e 34.62%, #134e4a 100%)`;
@@ -25,6 +27,7 @@ const CONFIDENCE_COLOR = (score: number) =>
 
 export function ProblemToSolveCard() {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
+  const { generateRecipeCard } = useDirectionResult();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -205,7 +208,8 @@ export function ProblemToSolveCard() {
                 {report.opportunities.map((opp) => (
                   <OpportunityCard key={opp.id} opportunity={opp}
                     isExpanded={expandedId === opp.id}
-                    onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)} />
+                    onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
+                    onGenerateDirection={() => generateRecipeCard(`${opp.title}: ${opp.one_line}`)} />
                 ))}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -263,7 +267,7 @@ function TopOpportunityTeaser({ opportunity }: { opportunity: ProblemOpportunity
   );
 }
 
-function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void }) {
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
       <button onClick={onToggle} className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
@@ -291,6 +295,10 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: P
                 <DetailItem label="MVP Steps" value={opportunity.mvp_steps} />
                 <DetailItem label="Why It Fits You" value={opportunity.why_fits_you} highlight />
               </div>
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
+              </button>
             </div>
           </motion.div>
         )}

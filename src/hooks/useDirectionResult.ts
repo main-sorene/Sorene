@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, recipeDirectionsAtom, resourcesConstraintsAtom, type RecipeDirection } from "@/store/atoms";
+import { userAtom, recipeDirectionsAtom, resourcesConstraintsAtom, newRecipeCardIdAtom, type RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { friendlyApiError } from "@/lib/apiError";
@@ -37,6 +37,7 @@ export function useDirectionResult() {
   // and DirectionSection see the same list and lazy-load the same staged data.
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const setResourcesConstraints = useSetAtom(resourcesConstraintsAtom);
+  const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [loadingRecipeDetailFor, setLoadingRecipeDetailFor] = useState<string | null>(null);
   const [loadingRecipeSection3For, setLoadingRecipeSection3For] = useState<string | null>(null);
@@ -273,6 +274,7 @@ export function useDirectionResult() {
         concept,
       };
       persistRecipes((prev) => [...prev, recipe]);
+      setNewRecipeCardId(recipe.id);
       return recipe;
     } catch (err) {
       console.error("[generateRecipeCard] failed:", err);

@@ -265,7 +265,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       const text = recipe
         ? `Your new direction card **"${recipe.title}"** has been added and is now open on the left — open it to load the detail, market reality, and operations sections. Want to adjust anything?`
         : "Sorry, I couldn't generate that direction. Please try again.";
-      if (recipe) setNewRecipeCardId(recipe.id);
+      // newRecipeCardId already set inside generateRecipeCard
       const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: text };
       const withAi = [...messages, aiMsg];
       setMessages(withAi);

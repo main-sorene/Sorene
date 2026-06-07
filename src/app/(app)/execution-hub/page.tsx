@@ -5831,17 +5831,11 @@ type ConnectSetting = {
   defaultValue: string | boolean;
 };
 
-const CHANNEL_SETTINGS: Record<"whatsapp" | "telegram", ConnectSetting[]> = {
+const CHANNEL_SETTINGS: Record<"whatsapp", ConnectSetting[]> = {
   whatsapp: [
     { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Weekly" },
     { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article via WhatsApp each morning.",         type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Off" },
     { id: "checkin_prompt",  label: "Weekly accountability check-in", description: "Sorene asks how your week went every Monday.",                     type: "toggle",  defaultValue: true },
-    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
-  ],
-  telegram: [
-    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article each morning.",                      type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "realtime_coach",  label: "Real-time coaching",         description: "Ask Sorene anything via Telegram between sessions.",                   type: "toggle",  defaultValue: true },
     { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
   ],
 };
@@ -5857,14 +5851,13 @@ const MESSENGER_FEATURES = [
 ];
 
 function MessengerConnectCard() {
-  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
     whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
-    telegram: Object.fromEntries(CHANNEL_SETTINGS.telegram.map((s) => [s.id, s.defaultValue])),
   });
-  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle", telegram: "idle" });
+  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle" });
 
-  const handleLink = async (platform: "whatsapp" | "telegram") => {
+  const handleLink = async (platform: "whatsapp") => {
     if (linkState[platform] !== "idle") return;
     setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
     try {
@@ -5884,13 +5877,12 @@ function MessengerConnectCard() {
     }
   };
 
-  const setSetting = (platform: "whatsapp" | "telegram", id: string, val: string | boolean) => {
+  const setSetting = (platform: "whatsapp", id: string, val: string | boolean) => {
     setSettings((prev) => ({ ...prev, [platform]: { ...prev[platform], [id]: val } }));
   };
 
-  const platforms: { id: "whatsapp" | "telegram"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
-    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Weekly check-ins · Progress tracking" },
-    { id: "telegram", name: "Telegram",  icon: TG_ICON, color: "#229ED9", tagline: "Instant messaging · Real-time coaching" },
+  const platforms: { id: "whatsapp"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
+    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Real-time coaching · Weekly check-ins · Progress tracking" },
   ];
 
   return (
@@ -5898,12 +5890,9 @@ function MessengerConnectCard() {
       {/* Header */}
       <div className="p-6 pb-5">
         <div className="flex items-center gap-3 mb-1">
-          <div className="flex -space-x-2">
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{TG_ICON}</div>
-          </div>
+          <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
           <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp or Telegram</h3>
+            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp</h3>
             <p className="text-[12px] text-[#9A9A9A]">Sorene in your pocket — coaching, logging, reminders</p>
           </div>
         </div>

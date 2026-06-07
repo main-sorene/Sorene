@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       plan: sub.plan,
       status: sub.status,
       duration: sub.duration,
+      cancel_at_period_end: sub.cancel_at_period_end ?? false,
       credits: { used: creditsUsed, limit: creditsLimit, extra, resetAt },
     });
   } catch (err: unknown) {

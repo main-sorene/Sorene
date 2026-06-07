@@ -11,7 +11,7 @@ import {
   usePaymentMethod,
   useInvoices,
 } from "@/hooks/useSubscriptionStatus";
-import { createPortalSession, buyCreditPack } from "@/lib/subscriptionApi";
+import { createPortalSession, buyCreditPack, cancelSubscription } from "@/lib/subscriptionApi";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,7 +28,10 @@ export function SubscriptionContent() {
 
   const [isPortalLoading, setIsPortalLoading] = React.useState(false);
   const [isBuyingCredits, setIsBuyingCredits] = React.useState(false);
+  const [isCancelling, setIsCancelling] = React.useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
 
+  const cancelAtPeriodEnd = subscription?.cancel_at_period_end ?? false;
   const plan = subscription?.plan ?? "free";
   const isFree = plan === "free";
   const planDisplayName = plan === "pro" ? "Professional" : plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -79,6 +82,24 @@ export function SubscriptionContent() {
   function handleAdjustPlan() {
     setSettingsOpen(false);
     router.push("/upgrade");
+  }
+
+  async function handleCancel() {
+    if (isCancelling) return;
+    setIsCancelling(true);
+    try {
+      await cancelSubscription();
+      toast({
+        title: "Subscription cancelled",
+        description: "You'll keep full access until the end of your billing period.",
+      });
+      setShowCancelConfirm(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not cancel subscription.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setIsCancelling(false);
+    }
   }
 
   if (isSubLoading) {
@@ -280,6 +301,55 @@ export function SubscriptionContent() {
               </table>
             </div>
           </div>
+        </>
+      )}
+
+      {/* ── Cancel subscription ── */}
+      {isPaid && !cancelAtPeriodEnd && (
+        <>
+          <hr className="border-[#F0F0F0]" />
+          {!showCancelConfirm ? (
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              className="text-sm text-[#9B9B9B] hover:text-red-500 transition-colors"
+            >
+              Cancel subscription
+            </button>
+          ) : (
+            <div className="rounded-xl border border-red-100 bg-red-50 p-4 space-y-3">
+              <p className="text-sm font-medium text-[#151515]">Cancel subscription?</p>
+              <p className="text-sm text-[#9B9B9B]">
+                You&apos;ll keep full access until the end of your current billing period. No refund is issued.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleCancel}
+                  disabled={isCancelling}
+                  className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium"
+                >
+                  {isCancelling ? "Cancelling…" : "Yes, cancel"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="h-9 px-4 rounded-xl border-[#ECEDEE] text-sm font-medium"
+                >
+                  Keep subscription
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Pending cancellation notice */}
+      {isPaid && cancelAtPeriodEnd && (
+        <>
+          <hr className="border-[#F0F0F0]" />
+          <p className="text-sm text-[#9B9B9B]">
+            Your subscription is set to cancel at the end of the billing period.
+            {daysUntilReset !== null && ` You have access for ${daysUntilReset} more day${daysUntilReset !== 1 ? "s" : ""}.`}
+          </p>
         </>
       )}
     </div>

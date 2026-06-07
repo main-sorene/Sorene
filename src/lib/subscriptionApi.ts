@@ -167,3 +167,8 @@ export async function upgradeSubscription(
   );
   return res.json();
 }
+
+export async function cancelSubscription(): Promise<{ ok: boolean; cancel_at_period_end: boolean }> {
+  const res = await authRequest("POST", `${API_BASE_URL}/subscription/cancel`);
+  return res.json();
+}

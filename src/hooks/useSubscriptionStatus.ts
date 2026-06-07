@@ -53,7 +53,7 @@ export function useInvoices(page: number = 1, limit: number = 10, enabled: boole
 export function useRefetchSubscriptionStatus() {
   const queryClient = useQueryClient();
   const user = useAtomValue(userAtom);
-  const email = user?.email ?? user?.profile?.email ?? null;
+  const email = user?.email ?? user?.profile?.email ?? user?.uid ?? null;
 
   return () => {
     if (email) {

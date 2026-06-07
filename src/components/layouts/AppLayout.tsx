@@ -58,6 +58,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     const limit = (subscription.credits?.limit ?? 250) + (subscription.credits?.extra ?? 0);
     if (plan === "free" && limit > 0 && used >= limit) {
       setCreditsExhausted(true);
+    } else if (plan !== "free" || used < limit) {
+      // Close the modal once the user upgrades or gets more credits
+      setCreditsExhausted(false);
     }
   }, [subscription, setCreditsExhausted]);
 

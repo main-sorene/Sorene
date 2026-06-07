@@ -1,6 +1,15 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { consumeLinkToken, linkPlatformToUser, getUidByPlatformId } from "@/lib/messagingAdmin";
+import {
+  consumeLinkToken,
+  linkPlatformToUser,
+  getUidByPlatformId,
+  saveMessagingMessage,
+  getRecentMessages,
+  getWhatsAppCredits,
+  deductWhatsAppCredit,
+} from "@/lib/messagingAdmin";
+import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const WA_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
@@ -23,15 +32,50 @@ async function sendWhatsApp(to: string, text: string) {
   });
 }
 
-async function coach(text: string, to: string): Promise<void> {
+async function getUserProfile(uid: string): Promise<Record<string, unknown>> {
+  try {
+    const snap = await getAdminFirestore().collection("users").doc(uid).get();
+    const data = snap.data();
+    if (!data?.profile) return {};
+    const p = data.profile;
+    return {
+      firstName: p.firstName,
+      occupation: p.occupation,
+      dnaScores: p.dnaScores,
+      dnaNarrative: p.dna_narrative,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function coach(uid: string, text: string, to: string): Promise<void> {
+  const [history, profile] = await Promise.all([
+    getRecentMessages(uid, 10),
+    getUserProfile(uid),
+  ]);
+
+  const profileNote = profile.firstName
+    ? `User profile: name=${profile.firstName}, occupation=${profile.occupation ?? "unknown"}.`
+    : "";
+
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 512,
-    system: "You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical.",
-    messages: [{ role: "user", content: text }],
+    system: `You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical — ideal for WhatsApp (short paragraphs, no markdown). ${profileNote}`,
+    messages: [
+      ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      { role: "user", content: text },
+    ],
   });
+
   const reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
-  await sendWhatsApp(to, reply);
+
+  await Promise.all([
+    sendWhatsApp(to, reply),
+    saveMessagingMessage(uid, "whatsapp", "user", text),
+    saveMessagingMessage(uid, "whatsapp", "assistant", reply),
+  ]);
 }
 
 // Meta webhook verification
@@ -60,7 +104,7 @@ export async function POST(req: NextRequest) {
       const result = await consumeLinkToken(token);
       if (result && result.platform === "whatsapp") {
         await linkPlatformToUser(result.uid, "whatsapp", from);
-        await sendWhatsApp(from, "✅ Your WhatsApp is now linked to Sorene! Message me any time to log progress or get coaching.");
+        await sendWhatsApp(from, "✅ Your WhatsApp is now linked to Sorene! Message me any time to log progress or get coaching.\n\nYou have 10 free messages to start. Top up credits anytime from your Execution Hub.");
       } else {
         await sendWhatsApp(from, "❌ That link is invalid or expired. Please generate a new one from your Execution Hub.");
       }
@@ -69,11 +113,26 @@ export async function POST(req: NextRequest) {
 
     const uid = await getUidByPlatformId("whatsapp", from);
     if (!uid) {
-      await sendWhatsApp(from, "I don't recognise your account yet. Go to Execution Hub → Direct Sync → WhatsApp to link your Sorene account first.");
+      await sendWhatsApp(from, "I don't recognise your account yet. Go to Execution Hub → Connect → WhatsApp to link your Sorene account first.");
       return new Response("OK", { status: 200 });
     }
 
-    await coach(text, from);
+    const credits = await getWhatsAppCredits(uid);
+    if (credits <= 0) {
+      await sendWhatsApp(from, "⚠️ You've used all your WhatsApp coaching credits. Top up from your Sorene Execution Hub to continue.");
+      return new Response("OK", { status: 200 });
+    }
+
+    await Promise.all([
+      coach(uid, text, from),
+      deductWhatsAppCredit(uid),
+    ]);
+
+    if (credits === 1) {
+      await sendWhatsApp(from, "ℹ️ That was your last credit. Top up from your Execution Hub to keep coaching on WhatsApp.");
+    } else if (credits <= 3) {
+      await sendWhatsApp(from, `ℹ️ You have ${credits - 1} WhatsApp credit${credits - 1 === 1 ? "" : "s"} remaining.`);
+    }
   } catch (err) {
     console.error("[whatsapp webhook]", err);
   }

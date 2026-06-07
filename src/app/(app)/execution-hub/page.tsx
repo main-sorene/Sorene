@@ -5982,9 +5982,9 @@ const FB_ICON = (
 );
 
 const COMMUNITY_CHANNELS = [
-  { id: "discord",   label: "Discord",   icon: DISCORD_ICON,  description: "Join our Discord — daily standups, founder channels, co-working sessions, and the fastest path to real peer accountability.",   color: "#5865F2", link: "#" },
-  { id: "whatsapp",  label: "WhatsApp",  icon: WA_ICON,       description: "A private WhatsApp community for Sorene founders. Share wins, ask questions, get feedback — in a group that understands early-stage.",   color: "#25D366", link: "#" },
-  { id: "facebook",  label: "Facebook",  icon: FB_ICON,       description: "The Sorene Facebook Group — weekly challenges, founder spotlights, and a broader network of entrepreneurs at every stage.",            color: "#1877F2", link: "#" },
+  { id: "discord",   label: "Discord",   icon: DISCORD_ICON,  description: "Join our Discord — daily standups, founder channels, co-working sessions, and the fastest path to real peer accountability.",   color: "#5865F2", link: "https://discord.gg/2YtvCm2SWp" },
+  { id: "whatsapp",  label: "WhatsApp",  icon: WA_ICON,       description: "A private WhatsApp community for Sorene founders. Share wins, ask questions, get feedback — in a group that understands early-stage.",   color: "#25D366", link: "https://chat.whatsapp.com/DdV5otkoSdV0tLmg1RUxrG" },
+  { id: "facebook",  label: "Facebook",  icon: FB_ICON,       description: "The Sorene Facebook Group — weekly challenges, founder spotlights, and a broader network of entrepreneurs at every stage.",            color: "#1877F2", link: "https://www.facebook.com/groups/sorene" },
 ];
 
 type ConnectSetting = {
@@ -6022,7 +6022,7 @@ const MESSENGER_FEATURES = [
 ];
 
 function MessengerConnectCard() {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
     whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
@@ -6063,41 +6063,29 @@ function MessengerConnectCard() {
 
   return (
     <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
-      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
     >
       {/* Gradient header */}
       <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-4")}
+        className="flex flex-col relative p-5 pb-8"
         style={{ background: gradient }}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
-              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-6 w-fit relative z-10">
-              <ChevronLeft size={18} />Back
-            </motion.button>
-          )}
-        </AnimatePresence>
-        <div className="flex justify-between items-center relative z-10 gap-2 min-w-0">
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
               <MessageCircle size={13} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className={cn("font-semibold text-white truncate transition-all", isExpanded ? "text-[18px]" : "text-[15px]")}>
-                Connect via WhatsApp or Telegram
-              </p>
-              {!isExpanded && <p className="text-[11px] text-white/70 truncate">Sorene in your pocket — coaching, logging, reminders</p>}
+              <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp or Telegram</p>
+              <p className="text-[13px] text-white/80 mt-0.5">Sorene in your pocket — coaching, logging, reminders</p>
             </div>
           </div>
-          {!isExpanded && <ChevronDown size={15} className="text-white/70 shrink-0 -rotate-90" />}
+          <button onClick={() => setIsExpanded((v) => !v)}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0 mt-0.5">
+            <ChevronDown size={15} className={cn("text-white transition-transform", isExpanded ? "" : "-rotate-90")} />
+          </button>
         </div>
-        {isExpanded && (
-          <p className="text-[13px] text-white/80 mt-1 relative z-10">Sorene in your pocket — coaching, logging, reminders</p>
-        )}
       </motion.div>
 
       {/* Expanded body */}
@@ -6180,46 +6168,34 @@ function MessengerConnectCard() {
 }
 
 function CommunityCard() {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)";
 
   return (
     <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
-      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
     >
       {/* Gradient header */}
       <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-4")}
+        className="flex flex-col relative p-5 pb-8"
         style={{ background: gradient }}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
-        <AnimatePresence>
-          {isExpanded && (
-            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
-              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-6 w-fit relative z-10">
-              <ChevronLeft size={18} />Back
-            </motion.button>
-          )}
-        </AnimatePresence>
-        <div className="flex justify-between items-center relative z-10 gap-2 min-w-0">
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
               <Users size={13} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className={cn("font-semibold text-white truncate transition-all", isExpanded ? "text-[18px]" : "text-[15px]")}>
-                Sorene Entrepreneur Community
-              </p>
-              {!isExpanded && <p className="text-[11px] text-white/70 truncate">Join fellow founders — accountability, insights, real talk</p>}
+              <p className="text-[18px] font-semibold text-white truncate">Sorene Entrepreneur Community</p>
+              <p className="text-[13px] text-white/80 mt-0.5">Join fellow founders — accountability, insights, real talk</p>
             </div>
           </div>
-          {!isExpanded && <ChevronDown size={15} className="text-white/70 shrink-0 -rotate-90" />}
+          <button onClick={() => setIsExpanded((v) => !v)}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0 mt-0.5">
+            <ChevronDown size={15} className={cn("text-white transition-transform", isExpanded ? "" : "-rotate-90")} />
+          </button>
         </div>
-        {isExpanded && (
-          <p className="text-[13px] text-white/80 mt-1 relative z-10">Join fellow founders — accountability, insights, real talk</p>
-        )}
       </motion.div>
 
       {/* Expanded body */}

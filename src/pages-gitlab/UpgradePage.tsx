@@ -37,14 +37,30 @@ export function UpgradePage() {
 
   useEffect(() => {
     if (searchParams.get("checkout_success") !== "true") return;
-    // Sync subscription from Stripe directly as a guaranteed fallback in case
-    // the webhook was delayed or failed, then refetch status to update the UI.
+
+    toast({
+      title: "Payment successful!",
+      description: "Your subscription is being activated…",
+    });
+
+    // Sync subscription from Stripe directly — guaranteed fallback in case
+    // the webhook was delayed or failed. Retry up to 3 times (Stripe may need
+    // a moment to finalize the subscription after redirect).
     const run = async () => {
-      try { await syncSubscription(); } catch { /* non-fatal */ }
+      let synced = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const result = await syncSubscription();
+          if (result.synced) { synced = true; break; }
+        } catch { /* non-fatal */ }
+      }
       refetchSubscriptionStatus();
-      const t1 = setTimeout(() => refetchSubscriptionStatus(), 3000);
-      const t2 = setTimeout(() => refetchSubscriptionStatus(), 8000);
-      return () => { clearTimeout(t1); clearTimeout(t2); };
+      if (synced) {
+        toast({ title: "Subscription activated!", description: "Welcome to your new plan." });
+      }
+      const t = setTimeout(() => refetchSubscriptionStatus(), 5000);
+      return () => clearTimeout(t);
     };
     run();
   }, []);

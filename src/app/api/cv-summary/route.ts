@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
           }
         }
         const final = await stream.finalMessage();
-        void deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", final.usage.input_tokens, final.usage.output_tokens));
+        // Must await before close — serverless freezes once the response ends,
+        // killing any fire-and-forget write.
+        await deductCredits(user.uid, calculateCredits("claude-haiku-4-5-20251001", final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
       },
     });

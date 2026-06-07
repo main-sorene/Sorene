@@ -36,7 +36,14 @@ export function UpgradePage() {
 
   useEffect(() => {
     if (searchParams.get("checkout_success") !== "true") return;
+    // Refetch immediately, then again after 3s and 8s to handle the Stripe
+    // webhook delay — the webhook writes the new plan+credits to Firestore
+    // asynchronously after the Stripe redirect, so one immediate refetch
+    // often reads stale data.
     refetchSubscriptionStatus();
+    const t1 = setTimeout(() => refetchSubscriptionStatus(), 3000);
+    const t2 = setTimeout(() => refetchSubscriptionStatus(), 8000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
   useEffect(() => {

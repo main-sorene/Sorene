@@ -17,16 +17,26 @@ export async function GET(req: NextRequest) {
 
     getAdminAuth();
     const db = getAdminFirestore();
-    const userDoc = await db.collection("users").doc(email).get();
-    const data = userDoc.data() || {};
 
-    const sub = data.subscription;
-    let credits = data.credits;
+    // IMPORTANT: the canonical user document (profile, dnaScores, and — critically —
+    // credits written by the AI API routes) is keyed by UID (see src/lib/firestore.ts).
+    // Billing/subscription data, however, is written by the Stripe webhook keyed by
+    // email. So we read credits from the UID doc and subscription from the email doc.
+    const uid = authedUser.uid;
+    const [creditsDoc, billingDoc] = await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection("users").doc(email).get(),
+    ]);
+    const creditsData = creditsDoc.data() || {};
+    const billingData = billingDoc.data() || {};
+
+    const sub = billingData.subscription ?? creditsData.subscription;
+    let credits = creditsData.credits;
     const plan = sub?.active ? (sub.plan ?? "free") : "free";
 
     // Auto-initialize credits for users who haven't made an AI call yet
     if (!credits?.reset_at) {
-      const status = await checkCredits(email);
+      const status = await checkCredits(uid);
       credits = { used: status.used, limit: status.limit, extra: status.extra, reset_at: status.resetAt };
     }
 

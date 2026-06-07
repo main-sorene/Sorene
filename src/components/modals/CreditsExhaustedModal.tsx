@@ -13,7 +13,7 @@ export function CreditsExhaustedModal() {
 
   const handleUpgrade = () => {
     setIsOpen(false);
-    router.push("/upgrade");
+    window.location.href = "https://www.sorene.ai/upgrade";
   };
 
   return (

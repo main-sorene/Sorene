@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { Plus, X, ArrowUp, Loader2, Mic, Square } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDnaEdit } from "@/hooks/useDnaEdit";
@@ -42,6 +43,8 @@ function FormattedMessage({ content }: { content: string }) {
 export function DNAChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,7 +247,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
             {DNA_SUGGESTIONS.map((label) => (
               <button
                 key={label}
-                onClick={() => sendMessage(label)}
+                onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : sendMessage(label)}
                 disabled={isProcessing}
                 className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50"
               >
@@ -274,9 +277,10 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
             <textarea
               ref={textareaRef}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything"
+              onChange={(e) => !creditsExhausted && setInputValue(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={creditsExhausted ? (e) => { e.preventDefault(); setCreditsExhaustedOpen(true); } : handleKeyDown}
+              placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
               rows={1}
               disabled={isProcessing}
               className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
@@ -296,7 +300,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
                 {isRecording ? <Square size={12} className="fill-current" /> : <Mic size={14} />}
               </button>
               <button
-                onClick={handleSend}
+                onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : handleSend}
                 disabled={!inputValue.trim() || isProcessing}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >

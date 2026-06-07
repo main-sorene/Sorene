@@ -800,7 +800,7 @@ export function SettingsModal() {
                 <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => { setIsOpen(false); router.push("/upgrade"); }}
+                    onClick={() => { setIsOpen(false); window.location.href = "https://www.sorene.ai/upgrade"; }}
                     className="w-full h-10 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-[#222222] transition-colors"
                   >
                     See upgrade plans

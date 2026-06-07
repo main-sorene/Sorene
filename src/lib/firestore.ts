@@ -68,6 +68,7 @@ export interface UserProfile {
     summary?: string;
   }[];
   directionCards?: DirectionCardData[];
+  resourcesConstraints?: Record<string, string>;
 }
 
 function getDb() {

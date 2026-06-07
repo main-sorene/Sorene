@@ -79,8 +79,13 @@ export function useDirectionResult() {
       ((cachedCards[0].title && cachedCards[0].constraint_check) ||
        (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
     if (cardsAreUpToDate) {
-      // Only show cached cards if R&C has been filled — otherwise gate on R&C first
-      const hasRC = !!localStorage.getItem("resourcesConstraints");
+      // Only show cached cards if R&C has been filled — fall back to Firestore copy for cross-device support
+      const localRC = localStorage.getItem("resourcesConstraints");
+      const hasRC = !!localRC || !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+      // If Firestore has it but localStorage doesn't, sync it back to localStorage
+      if (!localRC && profile.resourcesConstraints) {
+        try { localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints)); } catch {}
+      }
       if (!hasRC) { setNeedsRC(true); return; }
       setDirectionCards(cachedCards);
       setHasStreamed(true);
@@ -99,7 +104,13 @@ export function useDirectionResult() {
     if (!profile.directionEligibility.eligible) return;
 
     const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
-    if (!hasGenerationIntent) { setNeedsRC(true); return; }
+    // Also allow generation if Firestore has R&C data — user already submitted on another device
+    const firestoreHasRC = !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+    if (!hasGenerationIntent && !firestoreHasRC) { setNeedsRC(true); return; }
+    // Sync Firestore R&C to localStorage so subsequent reads work locally
+    if (firestoreHasRC && !localStorage.getItem("resourcesConstraints")) {
+      try { localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints)); } catch {}
+    }
 
     const generate = async () => {
       setIsStreaming(true);
@@ -536,13 +547,16 @@ export function useDirectionResult() {
     .slice(0, 2);
 
   // Show button whenever R&C is filled (no hard cap — user can always generate more)
+  // Fall back to Firestore copy for cross-device support
   const hasRCFilled = (() => {
     try {
       const stored = localStorage.getItem("resourcesConstraints");
-      if (!stored) return false;
-      const rc = JSON.parse(stored);
-      return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
-    } catch { return false; }
+      if (stored) {
+        const rc = JSON.parse(stored);
+        if (Object.values(rc).some((v) => String(v ?? "").trim() !== "")) return true;
+      }
+    } catch {}
+    return !!(profile?.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
   })();
   const canGenerateMore = hasRCFilled;
 

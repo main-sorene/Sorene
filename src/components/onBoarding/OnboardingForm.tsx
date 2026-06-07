@@ -54,7 +54,7 @@ export function OnboardingForm() {
   return (
     <div className="min-h-screen w-full bg-white flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <img className="h-11 w-11 mb-8 mx-auto" alt="Sorene" src="/figmaAssets/logo.png" />
+        <img className="h-12 w-12 mb-4 mx-auto" alt="Sorene" src="/figmaAssets/logo.png" />
 
         <h1 className="text-2xl font-semibold text-[#151515] mb-2">What should Sorene call you?</h1>
         <p className="text-sm text-[#62646A] mb-8">

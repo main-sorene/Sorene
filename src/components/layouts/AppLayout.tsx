@@ -89,6 +89,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setSidebarOpen(false);
   }, [pathname, setSidebarOpen]);
 
+  // Persist current route so we can restore it after a mobile refresh
+  useEffect(() => {
+    if (pathname && pathname !== "/") {
+      try { localStorage.setItem("sorene_last_route", pathname); } catch {}
+    }
+  }, [pathname]);
+
   // Show spinner while auth is loading
   if (authLoading) {
     return (

@@ -66,7 +66,13 @@ function PageInner() {
     if (authLoading || signingIn) return;
     if (!authUser) return;
     if (authUser.profile?.onboardingComplete) {
-      router.replace("/chat");
+      // Restore the last page the user was on before refresh/closing the app
+      let lastRoute = "/chat";
+      try {
+        const saved = localStorage.getItem("sorene_last_route");
+        if (saved && saved.startsWith("/") && saved !== "/") lastRoute = saved;
+      } catch {}
+      router.replace(lastRoute);
     } else {
       router.replace("/onBoarding");
     }

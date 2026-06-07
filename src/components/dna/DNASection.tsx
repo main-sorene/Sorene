@@ -545,11 +545,21 @@ export const DNASection = () => {
   }, [router]);
   const authUser = useAtomValue(userAtom);
 
+  // Extract stable primitive values from narrative so effects only re-run
+  // when the actual field values change, not on every query refetch (which
+  // returns a new object reference even when data is identical).
+  const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+  const hasAnswers = !!profile?.assessmentAnswers;
+  const uid = authUser?.uid;
+  const strengthsField = narrative?.strengths_edges_strengths ?? "";
+  const energyFields = `${narrative?.energy_source_label ?? ""}|${narrative?.energy_drain_label ?? ""}|${narrative?.your_energy_strengths ?? ""}`;
+  const visionFields = `${narrative?.success_vision_label ?? ""}|${narrative?.non_negotiable_label ?? ""}`;
+  const coreFields = `${narrative?.core_dna_label ?? ""}|${narrative?.strength_patterns_labels ?? ""}|${narrative?.what_drives_you_strengths ?? ""}|${narrative?.how_you_work_strengths ?? ""}|${narrative?.risk_and_change_strengths ?? ""}`;
+
   // Backfill strengths_edges_strengths if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if (strengthsField || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if (narrative?.strengths_edges_strengths || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -559,20 +569,19 @@ export const DNASection = () => {
       .then(async ({ strengths_edges_strengths }) => {
         if (strengths_edges_strengths) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), strengths_edges_strengths },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [strengthsField, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Backfill energy labels if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.energy_source_label && narrative?.energy_drain_label && narrative?.your_energy_strengths) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.energy_source_label && narrative?.energy_drain_label && narrative?.your_energy_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -583,20 +592,19 @@ export const DNASection = () => {
         const { energy_source_label, energy_drain_label, your_energy_strengths } = labels;
         if (energy_source_label || energy_drain_label || your_energy_strengths) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), energy_source_label, energy_drain_label, your_energy_strengths },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [energyFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Backfill success_vision_label and non_negotiable_label if missing via lightweight endpoint
+  // Backfill success_vision_label and non_negotiable_label if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.success_vision_label && narrative?.non_negotiable_label) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.success_vision_label && narrative?.non_negotiable_label) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -606,20 +614,19 @@ export const DNASection = () => {
       .then(async ({ success_vision_label, non_negotiable_label }) => {
         if (success_vision_label || non_negotiable_label) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), success_vision_label, non_negotiable_label },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visionFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Regenerate full narrative if missing entirely or missing key fields
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -629,12 +636,12 @@ export const DNASection = () => {
       .then(async ({ narrative: newNarrative }) => {
         if (newNarrative?.core_dna_label || newNarrative?.primary_motivation_label) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, { dna_narrative: newNarrative });
+          await saveUserProfile(uid, { dna_narrative: newNarrative });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [coreFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);

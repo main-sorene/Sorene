@@ -115,7 +115,10 @@ Part 2 — ONE short sentence (max 20 words) in that language that:
 - If you see a contradiction or tension between answers, gently name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
-- Use **bold** (markdown double asterisks) to highlight the single most important phrase — the specific energy, drive, or insight you're naming about them. Only bold one phrase per sentence, max 4 words.
+- Use **bold** (markdown double asterisks) to highlight one phrase, max 4 words:
+  - If their answer contains struggle, burnout, friction, or something they're escaping → bold the friction/obstacle phrase (what's holding them back or draining them)
+  - If their answer is neutral or positive → bold the energy/drive phrase (what pulls them forward or defines their core strength)
+  - Never bold both; pick the one that makes the reflection land harder
 
 Part 3 — The next question, translated/adapted into that language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If responding in English, output the original question unchanged.${
           hasChoices

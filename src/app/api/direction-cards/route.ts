@@ -163,6 +163,35 @@ ${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}━━━ MODEL 
 ${modelLine}`;
 }
 
+function buildConceptPhase1Prompt(
+  concept: string,
+  scores: DnaScores,
+  firstName: string,
+  rawAnswers: Record<string, string>,
+  cvSummary?: string,
+  dnaNarrative?: Record<string, string>,
+  resources?: Record<string, string>,
+): string {
+  const context = buildUserContext([], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, 0);
+  return `Generate 1 direction card for ${firstName} based on this specific opportunity concept: "${concept}".
+
+${context}
+
+Adapt the concept to fit the user's DNA, skills, and constraints. Make the direction concrete and specific to them.
+
+Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markdown):
+{"cards": [{
+  "title": "<specific business name based on the concept, max 10 words>",
+  "compatibility": <estimated 0-100 fit score based on DNA>,
+  "oneliner": "<what it does and who it serves, max 20 words>",
+  "description": "<3–5 sentences: specific complaint solved, why now, first customers>",
+  "why_fits_you": ["<bullet 1 — reference their exact credential/tool>", "<bullet 2>", "<bullet 3>"],
+  "key_risks": ["<risk 1>", "<risk 2>"],
+  "why_now": "<1 sentence: what market shift makes this timely>",
+  "constraint_check": { "status": "Pass" | "Warn" | "Fail", "reason": "<why, if not Pass>" }
+}]}`;
+}
+
 function buildPhase1Prompt(
   models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
   scores: DnaScores,
@@ -381,9 +410,25 @@ export async function POST(req: NextRequest) {
       cardIndex?: number;
       phase?: 1 | 2 | 3 | 4;
       phase1Card?: Partial<DirectionCardData>;
+      concept?: string;
     };
 
     const { models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources } = body;
+
+    // Concept-based card: generate a direction from an opportunity concept (no model required)
+    if (body.concept && (!models || models.length === 0)) {
+      const conceptPrompt = buildConceptPhase1Prompt(body.concept, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources);
+      const msg = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 800,
+        system: SYSTEM_PROMPT_CACHED,
+        messages: [{ role: "user", content: conceptPrompt }],
+      });
+      const block = msg.content[0];
+      const raw = block?.type === "text" ? block.text : "";
+      const card = parseCard(raw);
+      return Response.json({ cards: card ? [card] : [] });
+    }
 
     if (!models || models.length === 0) {
       return Response.json({ cards: [] });

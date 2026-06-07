@@ -6017,6 +6017,7 @@ const MESSENGER_FEATURES = [
 
 function MessengerConnectCard() {
   const [isExpanded, setIsExpanded] = useState(true);
+
   const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
     whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
@@ -6071,6 +6072,7 @@ function MessengerConnectCard() {
             <div className="min-w-0 flex-1">
               <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
               <p className="text-[13px] text-white/80 mt-0.5">Sorene in your pocket — coaching, logging, reminders</p>
+
             </div>
           </div>
           <button onClick={() => setIsExpanded((v) => !v)}

@@ -26,8 +26,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ has_payment_method: false });
     }
 
+    // Try attached payment methods first, then fall back to subscription's default
     const methods = await getStripe().customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
-    const card = methods.data[0]?.card;
+    let card = methods.data[0]?.card;
+
+    if (!card) {
+      // Payment method may be attached to the subscription instead of the customer directly
+      const userData = userDoc.data();
+      const subId: string = userData?.subscription?.stripeSubscriptionId;
+      if (subId && subId !== "manual-grant") {
+        const sub = await getStripe().subscriptions.retrieve(subId, { expand: ["default_payment_method"] });
+        const pm = sub.default_payment_method as import("stripe").Stripe.PaymentMethod | null;
+        card = pm?.card ?? undefined;
+      }
+    }
 
     if (!card) return NextResponse.json({ has_payment_method: false });
 

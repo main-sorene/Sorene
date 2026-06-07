@@ -8,8 +8,10 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    const email = req.nextUrl.searchParams.get("email");
-    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    // email query param is optional — the client sometimes fires before its user
+    // state is populated, sending an empty value. We derive identity from the
+    // verified token instead, so the lookup never depends on the param.
+    const email = req.nextUrl.searchParams.get("email") || "";
 
     const authedUser = await verifyAuth(req);
     if (!authedUser) {

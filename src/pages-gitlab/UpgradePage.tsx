@@ -113,7 +113,7 @@ export function UpgradePage() {
   const confirmPlanPrice = confirmPlan
     ? billingCycle === "monthly"
       ? confirmPlan.id === "pro" ? "$49 / mo" : "$15 / mo"
-      : confirmPlan.id === "pro" ? "$245 / 6 mo" : "$75 / 6 mo"
+      : confirmPlan.id === "pro" ? "$265 / 6 mo" : "$81 / 6 mo"
     : "";
 
   return (
@@ -173,7 +173,7 @@ export function UpgradePage() {
                 : "text-[#62646A] hover:text-black",
             )}
           >
-            6 months (30% off)
+            6 months (10% off)
           </button>
         </div>
       </div>
@@ -236,6 +236,11 @@ export function UpgradePage() {
                   </span>
                   <span className="text-gray-400 text-[13px]">/month</span>
                 </div>
+                {billingCycle === "semiAnnual" && plan.price.semiAnnual > 0 && (
+                  <p className="text-xs text-[#9B9B9B] -mt-1 mb-1">
+                    billed as ${Math.round(plan.price.semiAnnual * 6)} every 6 months
+                  </p>
+                )}
                 <p className="text-[#62646A] text-sm leading-relaxed min-h-[40px]">
                   {plan.description}
                 </p>

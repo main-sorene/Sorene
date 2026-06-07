@@ -1,6 +1,6 @@
 "use client";
 
-import { DirectionCard } from "./DirectionCard";
+import { DirectionCard, RecipeSkeletonCard } from "./DirectionCard";
 import { MarketIntelligenceCard } from "./MarketIntelligenceCard";
 import { ProblemToSolveCard } from "./ProblemToSolveCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -332,20 +332,21 @@ export const DirectionSection = () => {
             />
           )}
           {promotedRecipe && (
-            <DirectionCard
-              variant="hero"
-              title={promotedRecipe.title}
-              description={promotedRecipe.description}
-
-              actionText="View detail"
-              score={String(promotedRecipe.score)}
-              whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
-              keyRisks={promotedRecipe.keyRisks}
-              isExpanded={expandedId === promotedRecipe.id}
-              onToggle={() => setExpandedId(expandedId === promotedRecipe.id ? null : promotedRecipe.id)}
-              onHide={() => hideCard(promotedRecipe.id)}
-              rawContent={promotedRecipe.rawContent}
-            />
+            promotedRecipe.loading
+              ? <RecipeSkeletonCard concept={promotedRecipe.concept} />
+              : <DirectionCard
+                  variant="hero"
+                  title={promotedRecipe.title}
+                  description={promotedRecipe.description}
+                  actionText="View detail"
+                  score={String(promotedRecipe.score)}
+                  whyFitsYou={promotedRecipe.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                  keyRisks={promotedRecipe.keyRisks}
+                  isExpanded={expandedId === promotedRecipe.id}
+                  onToggle={() => setExpandedId(expandedId === promotedRecipe.id ? null : promotedRecipe.id)}
+                  onHide={() => hideCard(promotedRecipe.id)}
+                  rawContent={promotedRecipe.rawContent}
+                />
           )}
         </section>
 
@@ -427,20 +428,22 @@ export const DirectionSection = () => {
                     />
                   ))}
                   {gridOnlyRecipes.map((rd) => (
-                    <DirectionCard
-                      key={rd.id}
-                      variant="standard"
-                      title={rd.title}
-                      description={rd.description}
-                      score={String(rd.score)}
-                      actionText="View detail"
-                      whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
-                      keyRisks={rd.keyRisks}
-                      isExpanded={false}
-                      onToggle={() => setExpandedId(rd.id)}
-                      onHide={() => hideCard(rd.id)}
-                      rawContent={rd.rawContent}
-                    />
+                    rd.loading
+                      ? <RecipeSkeletonCard key={rd.id} concept={rd.concept} />
+                      : <DirectionCard
+                          key={rd.id}
+                          variant="standard"
+                          title={rd.title}
+                          description={rd.description}
+                          score={String(rd.score)}
+                          actionText="View detail"
+                          whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
+                          keyRisks={rd.keyRisks}
+                          isExpanded={false}
+                          onToggle={() => setExpandedId(rd.id)}
+                          onHide={() => hideCard(rd.id)}
+                          rawContent={rd.rawContent}
+                        />
                   ))}
                 </div>
               )}
@@ -494,12 +497,13 @@ export const DirectionSection = () => {
               onHide={() => hideCard(a.model)}
             />
           ); })()}
-          {promotedRecipeId && (() => { const rd = visibleRecipes.find(x => x.id === promotedRecipeId)!; return (
+          {promotedRecipeId && (() => { const rd = visibleRecipes.find(x => x.id === promotedRecipeId)!; return rd.loading
+            ? <RecipeSkeletonCard concept={rd.concept} />
+            : (
             <DirectionCard
               variant="hero"
               title={rd.title}
               description={rd.description}
-
               actionText="View detail"
               score={String(rd.score)}
               whyFitsYou={rd.whyFitsYou.map((w) => ({ title: w, description: "" }))}
@@ -535,6 +539,7 @@ export const DirectionSection = () => {
                   key={rd.id}
                   className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 sm:col-span-2" : "col-span-1")}
                 >
+                  {rd.loading ? <RecipeSkeletonCard concept={rd.concept} /> : (
                   <DirectionCard
                     variant="standard"
                     title={rd.title}
@@ -547,8 +552,9 @@ export const DirectionSection = () => {
                     isExpanded={expandedId === rd.id}
                     onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                     onHide={() => hideCard(rd.id)}
-              rawContent={rd.rawContent}
+                    rawContent={rd.rawContent}
                   />
+                  )}
                 </div>
               ))}
             </div>
@@ -630,7 +636,9 @@ export const DirectionSection = () => {
             onHide={() => hideCard(displayedHero.name)}
           />
         )}
-        {promotedHeroRecipeId && (() => { const rd = visibleRecipeCards.find(x => x.id === promotedHeroRecipeId)!; return (
+        {promotedHeroRecipeId && (() => { const rd = visibleRecipeCards.find(x => x.id === promotedHeroRecipeId)!; return rd.loading
+          ? <RecipeSkeletonCard concept={rd.concept} />
+          : (
           <DirectionCard
             variant="hero"
             title={rd.title}
@@ -643,7 +651,7 @@ export const DirectionSection = () => {
             isExpanded={expandedId === rd.id}
             onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
             onHide={() => hideCard(rd.id)}
-              rawContent={rd.rawContent}
+            rawContent={rd.rawContent}
           />
         ); })()}
       </section>
@@ -680,6 +688,7 @@ export const DirectionSection = () => {
               key={rd.id}
               className={cn("transition-all duration-500", expandedId === rd.id ? "col-span-1 md:col-span-2" : "col-span-1")}
             >
+              {rd.loading ? <RecipeSkeletonCard concept={rd.concept} /> : (
               <DirectionCard
                 variant="standard"
                 title={rd.title}
@@ -692,8 +701,9 @@ export const DirectionSection = () => {
                 isExpanded={expandedId === rd.id}
                 onToggle={() => setExpandedId(expandedId === rd.id ? null : rd.id)}
                 onHide={() => hideCard(rd.id)}
-              rawContent={rd.rawContent}
+                rawContent={rd.rawContent}
               />
+              )}
             </div>
           ))}
         </div>

@@ -135,6 +135,8 @@ export interface RecipeDirection {
   firstStep: string;
   score: number;
   rawContent?: string;
+  loading?: boolean;
+  concept?: string;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

@@ -1178,3 +1178,85 @@ export function DirectionCard({
     </motion.div>
   );
 }
+
+// Skeleton card shown immediately while a recipe card is being generated
+export function RecipeSkeletonCard({ concept }: { concept?: string }) {
+  const title = concept?.split(":")[0]?.trim() ?? "Building your direction…";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+      className="relative rounded-4xl overflow-hidden bg-white shadow-sm border border-gray-100 flex flex-col"
+    >
+      {/* Gradient header — same style as real card */}
+      <div className="p-6 flex flex-col" style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" }}>
+        <div className="flex justify-between items-start">
+          <div className="flex-1 mr-4">
+            <p className="text-[13px] text-white/50 font-medium mb-2 flex items-center gap-2">
+              <motion.span
+                className="inline-block w-1.5 h-1.5 rounded-full bg-white/60"
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              />
+              Generating direction
+            </p>
+            <h3 className="text-[18px] font-medium text-white leading-snug tracking-tight">
+              {title}
+            </h3>
+          </div>
+          {/* Pulsing score placeholder */}
+          <motion.div
+            animate={{ opacity: [0.3, 0.7, 0.3] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            className="text-right shrink-0"
+          >
+            <div className="text-[32px] font-medium text-white/30 leading-none">—%</div>
+            <div className="text-[11px] text-white/30 font-medium mt-1">Compatibility</div>
+          </motion.div>
+        </div>
+
+        {/* Animated progress bar */}
+        <div className="mt-5 h-1 bg-white/10 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-white/40 rounded-full"
+            animate={{ x: ["-100%", "200%"] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+      </div>
+
+      {/* Body skeleton */}
+      <div className="bg-white p-5 space-y-4">
+        {/* Simulated action bar */}
+        <div className="flex gap-2 pb-3 border-b border-gray-100">
+          {[60, 90, 110].map((w, i) => (
+            <motion.div key={i} className="h-8 rounded-xl bg-gray-100"
+              style={{ width: w }}
+              animate={{ opacity: [0.5, 0.8, 0.5] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }} />
+          ))}
+        </div>
+
+        {/* Simulated text rows */}
+        {[
+          { lines: [{ w: "75%" }, { w: "90%" }, { w: "60%" }], label: "Why it fits you" },
+          { lines: [{ w: "85%" }, { w: "70%" }], label: "First steps" },
+        ].map(({ lines, label }, si) => (
+          <div key={si}>
+            <motion.div className="h-3 w-24 bg-gray-100 rounded mb-2"
+              animate={{ opacity: [0.4, 0.7, 0.4] }}
+              transition={{ duration: 1.2, repeat: Infinity, delay: si * 0.2 }} />
+            {lines.map((l, li) => (
+              <motion.div key={li} className="h-3 bg-gray-100 rounded mb-1.5"
+                style={{ width: l.w }}
+                animate={{ opacity: [0.3, 0.6, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: (si * 0.2) + (li * 0.1) }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}

@@ -363,6 +363,23 @@ export function useDirectionResult() {
   const generateRecipeCard = async (concept: string): Promise<RecipeDirection | null> => {
     if (generatingRecipe || !profile) return null;
     setGeneratingRecipe(true);
+
+    // Add a loading placeholder immediately so the card appears right away
+    const placeholderId = `recipe-${Date.now()}`;
+    const placeholder: RecipeDirection = {
+      id: placeholderId,
+      title: concept.split(":")[0]?.trim() || "Generating direction…",
+      description: "",
+      whyFitsYou: [],
+      keyRisks: [],
+      firstStep: "",
+      score: 0,
+      loading: true,
+      concept,
+    };
+    setRecipeDirections((prev) => [...prev, placeholder]);
+    setNewRecipeCardId(placeholderId);
+
     try {
       const resources = (() => {
         try {
@@ -384,28 +401,38 @@ export function useDirectionResult() {
           resources,
         }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // Remove the placeholder on failure
+        setRecipeDirections((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
       const data = (await res.json()) as { cards?: DirectionCardData[] };
       const card = data.cards?.[0];
-      if (!card) return null;
+      if (!card) {
+        setRecipeDirections((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
       const recipe: RecipeDirection = {
-        id: `recipe-${Date.now()}`,
+        id: placeholderId,
         title: card.title,
         description: card.description,
         whyFitsYou: card.why_fits_you ?? [],
         keyRisks: card.key_risks ?? [],
         firstStep: "",
         score: card.compatibility ?? 80,
+        loading: false,
+        concept,
       };
+      // Replace placeholder with real content
       setRecipeDirections((prev) => {
-        const updated = [...prev, recipe];
+        const updated = prev.map((r) => r.id === placeholderId ? recipe : r);
         try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
         return updated;
       });
-      setNewRecipeCardId(recipe.id);
       return recipe;
     } catch (err) {
       console.error("[generateRecipeCard] failed:", err);
+      setRecipeDirections((prev) => prev.filter((r) => r.id !== placeholderId));
       return null;
     } finally {
       setGeneratingRecipe(false);

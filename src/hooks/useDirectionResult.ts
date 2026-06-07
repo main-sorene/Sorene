@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, recipeDirectionsAtom, newRecipeCardIdAtom, type RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +17,8 @@ export type DirectionAlternative = {
 
 export function useDirectionResult() {
   const user = useAtomValue(userAtom);
+  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   // Legacy streaming text — kept for users who have old cached data
   const [streamedText, setStreamedText] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -25,6 +27,7 @@ export function useDirectionResult() {
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
   const [needsRC, setNeedsRC] = useState(false);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
   const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
   const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
@@ -357,6 +360,58 @@ export function useDirectionResult() {
     }
   }
 
+  const generateRecipeCard = async (concept: string): Promise<RecipeDirection | null> => {
+    if (generatingRecipe || !profile) return null;
+    setGeneratingRecipe(true);
+    try {
+      const resources = (() => {
+        try {
+          const stored = localStorage.getItem("resourcesConstraints");
+          return stored ? JSON.parse(stored) : undefined;
+        } catch { return undefined; }
+      })();
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          models: [],
+          concept,
+          scores: profile.dnaScores,
+          firstName: profile.firstName || "there",
+          rawAnswers: profile.assessmentAnswers,
+          cvSummary: profile.cvSummary,
+          dnaNarrative: profile.dna_narrative,
+          resources,
+        }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const card = data.cards?.[0];
+      if (!card) return null;
+      const recipe: RecipeDirection = {
+        id: `recipe-${Date.now()}`,
+        title: card.title,
+        description: card.description,
+        whyFitsYou: card.why_fits_you ?? [],
+        keyRisks: card.key_risks ?? [],
+        firstStep: "",
+        score: card.compatibility ?? 80,
+      };
+      setRecipeDirections((prev) => {
+        const updated = [...prev, recipe];
+        try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+      setNewRecipeCardId(recipe.id);
+      return recipe;
+    } catch (err) {
+      console.error("[generateRecipeCard] failed:", err);
+      return null;
+    } finally {
+      setGeneratingRecipe(false);
+    }
+  };
+
   const eligibleModel = profile?.directionEligibility?.eligible ? profile.directionEligibility.model : null;
   const primaryCard = directionCards.find((c) => c.title) ? directionCards[0] : null;
   const altCards = directionCards.slice(1);
@@ -400,5 +455,7 @@ export function useDirectionResult() {
     loadingDetailFor,
     loadingSection3For,
     loadingSection4For,
+    generateRecipeCard,
+    generatingRecipe,
   };
 }

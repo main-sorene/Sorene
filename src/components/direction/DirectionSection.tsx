@@ -1,6 +1,8 @@
 "use client";
 
 import { DirectionCard } from "./DirectionCard";
+import { MarketIntelligenceCard } from "./MarketIntelligenceCard";
+import { ProblemToSolveCard } from "./ProblemToSolveCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
 import { useAtom, useAtomValue } from "jotai";
 import {
@@ -141,7 +143,14 @@ export const DirectionSection = () => {
     loadingDetailFor,
     loadingSection3For,
     loadingSection4For,
+    generateRecipeCard,
   } = useDirectionResult();
+
+  const handleGenerateDirection = async (concept: string): Promise<boolean> => {
+    const result = await generateRecipeCard(concept);
+    return result !== null;
+  };
+
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
   const [newRecipeCardId, setNewRecipeCardId] = useAtom(newRecipeCardIdAtom);
@@ -280,6 +289,11 @@ export const DirectionSection = () => {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+
+        <section className="space-y-3">
+          <MarketIntelligenceCard onGenerateDirection={handleGenerateDirection} />
+          <ProblemToSolveCard onGenerateDirection={handleGenerateDirection} />
+        </section>
 
         {/* Hero — primary structured card (or promoted replacement) */}
         <section>
@@ -453,6 +467,10 @@ export const DirectionSection = () => {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+        <section className="space-y-3">
+          <MarketIntelligenceCard onGenerateDirection={handleGenerateDirection} />
+          <ProblemToSolveCard onGenerateDirection={handleGenerateDirection} />
+        </section>
         <section>
           {!heroHidden && (
             <DirectionCard
@@ -598,6 +616,10 @@ export const DirectionSection = () => {
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
       <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
+      <section className="space-y-3">
+        <MarketIntelligenceCard onGenerateDirection={handleGenerateDirection} />
+        <ProblemToSolveCard onGenerateDirection={handleGenerateDirection} />
+      </section>
       {/* Hero Section */}
       <section>
         {displayedHero && (

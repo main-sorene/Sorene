@@ -1,0 +1,345 @@
+"use client";
+
+import {
+  ArrowRight,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  RefreshCw,
+  AlertCircle,
+  Wand2,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Separator } from "../ui/separator";
+import { useProblemScan } from "@/hooks/useProblemScan";
+import type { ProblemOpportunity } from "@/types/problemScan";
+
+const CARD_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #0f766e 34.62%, #134e4a 100%)`;
+const BAR_HEIGHTS = [35, 60, 45, 80, 65, 40, 70, 50];
+const CONFIDENCE_COLOR = (score: number) => score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#0f766e";
+
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
+function renderBold(text: string) {
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
+export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => Promise<boolean> }) {
+  const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
+  const opportunities = report?.opportunities?.slice(0, 3) ?? [];
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  return (
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[20px] overflow-hidden bg-white shadow-sm border border-gray-200 flex flex-col">
+
+      {/* Gradient Header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col", isExpanded ? "p-6 pb-8" : "p-5 pb-4")}
+        style={{ background: CARD_GRADIENT }}>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={() => setIsExpanded(false)}
+              className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium mb-8 w-fit">
+              <ChevronLeft size={20} />Back to summary
+            </motion.button>
+          )}
+        </AnimatePresence>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              {status === "loading"
+                ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><Search size={18} className="text-white" /></motion.div>
+                : <Search size={18} className="text-white" />}
+            </div>
+            <div>
+              <h3 className="text-white font-semibold text-[17px] tracking-tight leading-snug">Problem to Solve</h3>
+              <p className="text-white/60 text-[12px] mt-0.5">Real pain signals with demand but no good solution yet</p>
+            </div>
+          </div>
+          <StatusPill status={status} lastRun={lastRun} />
+        </div>
+
+        <AnimatePresence>
+          {!isExpanded && status === "idle" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-end gap-[3px] h-9 mt-5">
+              {BAR_HEIGHTS.map((h, i) => (
+                <motion.div key={i} initial={{ scaleY: 0 }} animate={{ scaleY: 1 }}
+                  transition={{ delay: 0.05 * i, duration: 0.4, ease: "easeOut" }}
+                  className="flex-1 rounded-[2px] origin-bottom"
+                  style={{ height: `${h}%`, backgroundColor: "rgba(255,255,255,0.22)" }} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {status === "loading" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5">
+              <div className="flex items-end gap-[3px] h-9 mb-4">
+                {BAR_HEIGHTS.map((h, i) => (
+                  <motion.div key={i}
+                    animate={{ scaleY: [1, 1.4, 0.8, 1.2, 1], opacity: [0.22, 0.5, 0.22] }}
+                    transition={{ duration: 1.5, repeat: Infinity, delay: 0.1 * i, ease: "easeInOut" }}
+                    className="flex-1 rounded-[2px] origin-bottom"
+                    style={{ height: `${h}%`, backgroundColor: "rgba(255,255,255,0.22)" }} />
+                ))}
+              </div>
+              <motion.p key={loadingStep} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="text-white/80 text-[13px] font-medium">
+                {loadingSteps[loadingStep]}
+              </motion.p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {status === "complete" && report && !isExpanded && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5">
+              <span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunities Found</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-white/70 text-[13px] leading-relaxed mt-4">
+              Autonomously scans Reddit, Quora, X, Product Hunt, and App Store reviews for real pain signals, then surfaces the top business opportunities matched to your DNA.
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Body: idle */}
+      <AnimatePresence>
+        {status === "idle" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
+            <p className="text-[13px] text-[#62646A] leading-relaxed">
+              Autonomously scans Reddit, Quora, X, Product Hunt, and App Store reviews for real pain signals, then surfaces the top 3 business opportunities matched to your DNA.
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {[{ label: "6 Channels", color: "#ccfbf1", text: "#0f766e" }, { label: "DNA-Matched", color: "#f0fdf4", text: "#166534" }, { label: "On Demand", color: "#fdf4ff", text: "#7e22ce" }]
+                  .map(({ label, color, text }) => (
+                    <span key={label} className="px-3 py-1 rounded-full text-[12px] font-medium" style={{ backgroundColor: color, color: text }}>{label}</span>
+                  ))}
+              </div>
+              <button onClick={generate} disabled={!canGenerate}
+                className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium border transition-all shadow-sm shrink-0",
+                  canGenerate ? "bg-[#0f766e] text-white border-[#0f766e] hover:bg-[#0d6660]" : "bg-white text-[#9A9A9A] border-[#ECEDEE] cursor-not-allowed")}>
+                {!hasProfile ? "Complete DNA first" : "Generate"}
+                {canGenerate && <ArrowRight size={14} />}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Body: loading */}
+      <AnimatePresence>
+        {status === "loading" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-[#0f766e]">
+              <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><RefreshCw size={14} /></motion.div>
+              <p className="text-[12px] font-medium">Scanning the web for pain signals…</p>
+            </div>
+            <div className="h-1.5 bg-[#f0f0f0] rounded-full overflow-hidden">
+              <motion.div className="h-full bg-[#0f766e] rounded-full"
+                animate={{ width: ["0%", "70%", "90%"] }}
+                transition={{ duration: 25, ease: "easeOut" }} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Body: error */}
+      <AnimatePresence>
+        {status === "error" && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-3">
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
+              <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-[12px] text-red-700 leading-relaxed">{errorMessage}</p>
+            </div>
+            <button onClick={generate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-colors w-fit">
+              <RefreshCw size={13} />Try again
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Body: complete, collapsed */}
+      <AnimatePresence>
+        {status === "complete" && report && !isExpanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
+            {opportunities[0] && <TopOpportunityTeaser opportunity={opportunities[0]} />}
+            <div className="flex items-center justify-between">
+              <button onClick={() => setIsExpanded(true)}
+                className="flex items-center gap-1.5 text-[13px] font-medium text-[#0f766e] hover:text-[#0d6660] transition-colors">
+                <Search size={13} />See all {opportunities.length} opportunities
+                <ArrowRight size={13} />
+              </button>
+              <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
+                <RefreshCw size={12} />Regenerate
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Body: expanded */}
+      <AnimatePresence>
+        {status === "complete" && report && isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 300, damping: 35 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white">
+            <div className="p-5 space-y-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Search size={15} className="text-[#0f766e]" />
+                <h4 className="text-[13px] font-semibold text-[#151515]">Top 3 Opportunities</h4>
+              </div>
+              <Separator className="bg-[#ECEDEE]" />
+              <div className="space-y-3">
+                {opportunities.map((opp) => (
+                  <OpportunityCard key={opp.id} opportunity={opp}
+                    isExpanded={expandedId === opp.id}
+                    onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
+                    onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
+                ))}
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                {report.generated_at && (
+                  <p className="text-[11px] text-[#9A9A9A]">
+                    Generated {new Date(report.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                )}
+                <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
+                  <RefreshCw size={12} />Regenerate
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function StatusPill({ status, lastRun }: { status: string; lastRun: string | null }) {
+  if (status === "loading") return (
+    <div className="flex items-center gap-1.5 bg-white/10 text-white/80 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
+      <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }} className="w-1.5 h-1.5 rounded-full bg-yellow-300" />Running
+    </div>
+  );
+  if (status === "complete") return (
+    <div className="flex items-center gap-1.5 bg-white/10 text-white/80 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Active
+    </div>
+  );
+  if (status === "error") return (
+    <div className="flex items-center gap-1.5 bg-white/10 text-white/70 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Error
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-1.5 bg-white/10 text-white/60 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
+      <span className="w-1.5 h-1.5 rounded-full bg-white/40" />Inactive
+    </div>
+  );
+}
+
+function TopOpportunityTeaser({ opportunity }: { opportunity: ProblemOpportunity }) {
+  return (
+    <div className="rounded-xl border border-[#ccfbf1] bg-[#f0fdfa] p-3.5 flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] text-[#0f766e] font-medium uppercase tracking-wide mb-1">Top Match</p>
+          <p className="text-[14px] font-semibold text-[#151515] leading-snug">{opportunity.title}</p>
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <span className="text-[22px] font-bold text-[#0f766e] leading-none">{opportunity.confidence}</span>
+          <span className="text-[10px] text-[#0f766e] font-medium">score</span>
+        </div>
+      </div>
+      <p className="text-[12px] text-[#62646A] leading-relaxed">{opportunity.one_line}</p>
+    </div>
+  );
+}
+
+function DetailItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={cn("rounded-xl p-3", highlight ? "bg-[#f0fdfa] border border-[#ccfbf1]" : "bg-[#fafafa] border border-gray-100")}>
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-[12px] text-[#151515] leading-relaxed">{renderBold(value)}</p>
+    </div>
+  );
+}
+
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => Promise<boolean> }) {
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenError(null);
+    const ok = await onGenerateDirection();
+    setGenerating(false);
+    if (!ok) setGenError("Failed to generate — please try again.");
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+      <button onClick={onToggle} className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
+        <div className="flex flex-col items-center shrink-0 mt-0.5">
+          <span className="text-[18px] font-bold leading-none" style={{ color: CONFIDENCE_COLOR(opportunity.confidence) }}>{opportunity.confidence}</span>
+          <span className="text-[9px] text-[#9A9A9A] font-medium leading-none mt-0.5">conf.</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-semibold text-[#151515] leading-snug">{opportunity.title}</p>
+          <p className="text-[12px] text-[#62646A] mt-0.5 leading-relaxed">{opportunity.one_line}</p>
+        </div>
+        {isExpanded ? <ChevronUp size={16} className="text-[#9A9A9A] shrink-0 mt-1" /> : <ChevronDown size={16} className="text-[#9A9A9A] shrink-0 mt-1" />}
+      </button>
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 40 }} className="overflow-hidden">
+            <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <DetailItem label="The Problem" value={opportunity.problem} />
+                <DetailItem label="Who Suffers" value={opportunity.who_suffers} />
+                <DetailItem label="Evidence" value={opportunity.evidence} />
+                <DetailItem label="Business Idea" value={opportunity.business_idea} highlight />
+                <DetailItem label="Revenue Model" value={opportunity.revenue_model} />
+                <DetailItem label="MVP Steps" value={opportunity.mvp_steps} />
+                <DetailItem label="Why It Fits You" value={opportunity.why_fits_you} highlight />
+              </div>
+              {genError && <p className="text-[11px] text-red-500 text-center">{genError}</p>}
+              <button onClick={handleGenerate} disabled={generating}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all disabled:opacity-60">
+                {generating
+                  ? <><motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}><Wand2 size={14} /></motion.span>Generating...</>
+                  : <><Wand2 size={14} />Generate Direction</>}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

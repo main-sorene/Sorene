@@ -19,6 +19,7 @@ import {
   Loader2,
   Plug,
   CreditCard,
+  BarChart2,
   Database,
   Lock,
   LogOut,
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
@@ -40,10 +42,11 @@ import { authFetch } from "@/lib/authFetch";
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
   { id: "Account", icon: User, label: "Account" },
+  { id: "Billing", icon: CreditCard, label: "Billing" },
+  { id: "Usage", icon: BarChart2, label: "Usage" },
   { id: "Preferences", icon: Wrench, label: "Preferences" },
   { id: "Notifications", icon: Bell, label: "Notifications" },
   { id: "Integrations", icon: Plug, label: "Integrations" },
-  { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
   { id: "Data control", icon: Database, label: "Data control" },
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
@@ -254,7 +257,7 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
-  const { data: subscription } = useSubscriptionStatus();
+  const { data: subscription, refetch: refetchSubscription } = useSubscriptionStatus();
   const setConversations = useSetAtom(conversationsAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [, setUser] = useAtom(userAtom);
@@ -276,10 +279,12 @@ export function SettingsModal() {
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
   const [nickname, setNickname] = React.useState(authUser?.profile?.nickname || "");
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
+  const [savedGeneral, setSavedGeneral] = React.useState(false);
   const genderDropdownRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [mounted, setMounted] = React.useState(false);
+  const [mobileView, setMobileView] = React.useState<"list" | "content">("list");
   React.useEffect(() => { setMounted(true); }, []);
 
   // Sync form state when user data changes
@@ -292,6 +297,17 @@ export function SettingsModal() {
       setNickname(authUser.profile?.nickname || "");
     }
   }, [authUser]);
+
+  // Refetch fresh subscription/credit data whenever the modal opens or tab changes
+  React.useEffect(() => {
+    if (isOpen) refetchSubscription();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (activeTab === "Usage" || activeTab === "Billing") {
+      refetchSubscription();
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close gender dropdown on outside click
   React.useEffect(() => {
@@ -446,7 +462,8 @@ export function SettingsModal() {
           ? { ...authUser.profile, firstName, lastName, birthday, sex: gender, nickname }
           : undefined,
       });
-      toast({ description: "Settings saved." });
+      setSavedGeneral(true);
+      setTimeout(() => setSavedGeneral(false), 3000);
     } catch {
       toast({ description: "Failed to save settings.", variant: "destructive" });
     } finally {
@@ -454,10 +471,7 @@ export function SettingsModal() {
     }
   };
 
-  const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
-    if (item.id === "Manage Subscription") return !!subscription?.active;
-    return true;
-  });
+  const filteredSidebarItems = SIDEBAR_ITEMS;
 
   const emailForDisplay = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
   const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || emailForDisplay.split("@")[0] || "User";
@@ -645,13 +659,18 @@ export function SettingsModal() {
             </div>
 
             {/* Save */}
-            <button
-              onClick={handleSaveGeneral}
-              disabled={isSavingGeneral}
-              className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
-            >
-              {isSavingGeneral ? "Saving…" : "Save changes"}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveGeneral}
+                disabled={isSavingGeneral}
+                className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                {isSavingGeneral ? "Saving…" : "Save changes"}
+              </button>
+              {savedGeneral && (
+                <span className="text-sm text-green-600 font-medium">Saved ✓</span>
+              )}
+            </div>
           </div>
         );
       }
@@ -715,8 +734,83 @@ export function SettingsModal() {
           </div>
         );
 
-      case "Manage Subscription":
+      case "Billing":
         return <SubscriptionContent />;
+
+      case "Usage": {
+        const used = subscription?.credits?.used ?? 0;
+        const limit = subscription?.credits?.limit ?? 250;
+        const extra = subscription?.credits?.extra ?? 0;
+        const resetAt = subscription?.credits?.resetAt;
+        const plan = subscription?.plan ?? "free";
+        const isFree = plan === "free";
+        const effectiveLimit = limit + extra;
+        const pct = effectiveLimit > 0 ? Math.min(100, Math.round((used / effectiveLimit) * 100)) : 0;
+        const daysUntilReset = (!isFree && resetAt)
+          ? Math.max(0, Math.ceil((resetAt - Date.now()) / (1000 * 60 * 60 * 24)))
+          : null;
+        const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-[#111111]";
+        const planLabel = isFree ? "Free" : plan === "pro" ? "Professional" : "Starter";
+
+        return (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider">
+              Usage
+            </p>
+            <div className="rounded-2xl border border-[#ECEDEE] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#151515]">{planLabel} plan</p>
+                <span className="text-sm font-semibold text-[#151515]">{pct}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-[#F0F0F0] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {daysUntilReset !== null ? (
+                <p className="text-xs text-[#9B9B9B]">
+                  Resets in {daysUntilReset} day{daysUntilReset !== 1 ? "s" : ""}
+                </p>
+              ) : isFree ? (
+                <p className="text-xs text-[#9B9B9B]">One-time budget · <button onClick={() => { setActiveTab("Billing"); }} className="underline hover:text-[#151515]">Upgrade for more</button></p>
+              ) : null}
+            </div>
+
+            {/* Proactive upgrade prompt when free user is at or near limit */}
+            {isFree && pct >= 80 && (
+              <div className={`rounded-2xl p-5 space-y-3 ${pct >= 100 ? "bg-[#FFF8E6] border border-[#FDC24C]" : "bg-[#FAFAFA] border border-[#ECEDEE]"}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${pct >= 100 ? "bg-[#FFF1C6]" : "bg-[#F5F5F5]"}`}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 1.5L10 6H14.5L11 9L12.5 13.5L8 11L3.5 13.5L5 9L1.5 6H6L8 1.5Z" fill={pct >= 100 ? "#F99207" : "#9B9B9B"} />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#151515]">
+                      {pct >= 100 ? "You've used all your free credits" : "You're almost out of credits"}
+                    </p>
+                    <p className="text-xs text-[#62646A] mt-0.5 leading-relaxed">
+                      {pct >= 100
+                        ? "Upgrade to continue using Sorene. Your DNA and Direction results are saved."
+                        : `${effectiveLimit - used} credits left. Upgrade to keep your momentum going.`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsOpen(false); window.location.href = "https://www.sorene.ai/upgrade"; }}
+                    className="w-full h-10 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-[#222222] transition-colors"
+                  >
+                    See upgrade plans
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
 
       case "Security":
         return (
@@ -737,18 +831,106 @@ export function SettingsModal() {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full sm:w-[220px] shrink-0 flex flex-col py-3 sm:py-6 px-3 border-b sm:border-b-0 sm:border-r border-[#F0F0F0] overflow-x-auto sm:overflow-visible">
-          <div className="hidden sm:flex items-center justify-between px-2 mb-5">
+      {/* Modal — slides up from bottom on mobile, centered on desktop */}
+      <div className="relative z-10 w-full sm:w-[95vw] sm:max-w-[900px] h-[92dvh] sm:h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
+
+        {/* ── MOBILE: nav list view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "list" ? "flex" : "hidden")}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#F0F0F0] shrink-0">
+            <span className="text-base font-semibold text-[#151515]">Settings</span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* User card */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#F0F0F0] shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-11 h-11 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-purple-600 flex items-center justify-center text-white text-base font-semibold shrink-0">{initial}</div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#151515] truncate">{displayName}</p>
+              <p className="text-xs text-[#62646A] truncate">{email}</p>
+            </div>
+          </div>
+
+          {/* Nav list */}
+          <nav className="flex-1 overflow-y-auto px-3 py-3">
+            {filteredSidebarItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setMobileView("content"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-gray-50 transition-colors text-left mb-0.5"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center shrink-0">
+                    <Icon size={15} className="text-[#444]" />
+                  </div>
+                  <span className="text-[14px] font-medium text-[#151515] flex-1">{item.label}</span>
+                  <svg width="6" height="10" viewBox="0 0 6 10" fill="none" className="text-[#BCBCBC]">
+                    <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Logout button — always visible at bottom */}
+          <div className="px-3 pb-6 pt-2 border-t border-[#F0F0F0] shrink-0">
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-[#ECEDEE] hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-60"
+            >
+              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                <LogOut size={15} className="text-red-500" />
+              </div>
+              <span className="text-[14px] font-medium text-red-500 flex-1">
+                {isLoggingOut ? "Logging out…" : "Log out"}
+              </span>
+              {isLoggingOut && <Loader2 size={14} className="animate-spin text-red-400" />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── MOBILE: content view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "content" ? "flex" : "hidden")}>
+          {/* Back header */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-[#F0F0F0] shrink-0">
+            <button
+              onClick={() => { setMobileView("list"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B] mr-1"
+            >
+              <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                <path d="M7 1L1 7l6 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <span className="text-base font-semibold text-[#151515] flex-1">
+              {showClearConfirm || showDeleteConfirm ? "Confirm" : activeTab}
+            </span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            {renderContent()}
+          </div>
+        </div>
+
+        {/* ── DESKTOP: sidebar + content ── */}
+        <aside className="hidden sm:flex w-[220px] shrink-0 flex-col py-6 px-3 border-r border-[#F0F0F0]">
+          <div className="flex items-center justify-between px-2 mb-5">
             <span className="text-base font-semibold text-[#151515]">Settings</span>
           </div>
-          <nav className="flex sm:flex-col flex-row gap-1 sm:gap-0 sm:space-y-0.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 sm:flex-1">
+          <nav className="flex flex-col space-y-0.5 flex-1">
             {filteredSidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id && !showClearConfirm && !showDeleteConfirm;
@@ -757,10 +939,8 @@ export function SettingsModal() {
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
                   className={cn(
-                    "sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-[13px] sm:text-[14px] font-medium transition-all text-left whitespace-nowrap shrink-0 sm:shrink sm:whitespace-normal",
-                    isActive
-                      ? "bg-purple-50 text-purple-700"
-                      : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-all text-left",
+                    isActive ? "bg-purple-50 text-purple-700" : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
                   )}
                 >
                   <Icon size={16} className={isActive ? "text-purple-600" : "text-[#6B6B6B]"} />
@@ -772,16 +952,15 @@ export function SettingsModal() {
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="hidden sm:flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60 whitespace-nowrap shrink-0"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60"
           >
             <LogOut size={16} />
             {isLoggingOut ? "Logging out…" : "Log out"}
           </button>
         </aside>
 
-        {/* Content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Close button */}
+        {/* Desktop content */}
+        <main className="hidden sm:flex flex-1 flex-col overflow-hidden">
           <div className="flex justify-end px-5 pt-4 pb-2 shrink-0">
             <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
               <X size={18} />

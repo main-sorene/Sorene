@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -88,6 +89,8 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards, generateRecipeCard, generatingRecipe } = useDirectionResult();
@@ -99,6 +102,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const convIdRef = useRef(`direction-chat-${Date.now()}`);
+  const restoredRef = useRef(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -113,6 +117,32 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   useEffect(() => {
     if (hasMessages) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, hasMessages]);
+
+  // Restore the most recent direction chat from localStorage once uid is available
+  useEffect(() => {
+    if (!authUser?.uid || restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const uid = authUser.uid;
+      const keys = Object.keys(localStorage)
+        .filter((k) => k.startsWith(`direction_chat_${uid}_`));
+      let best: { conv: Conversation; updatedAt: number } | null = null;
+      for (const k of keys) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const c = JSON.parse(raw) as Conversation;
+        const t = new Date(c.updatedAt).getTime();
+        if (!best || t > best.updatedAt) best = { conv: c, updatedAt: t };
+      }
+      if (!best) return;
+      convIdRef.current = best.conv.id;
+      setMessages(best.conv.messages.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })));
+    } catch {}
+  }, [authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistToSidebar = (msgs: ChatMessage[]) => {
     const uid = authUser?.uid || "local";
@@ -262,7 +292,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       const text = recipe
         ? `Your new direction card **"${recipe.title}"** has been added and is now open on the left — open it to load the detail, market reality, and operations sections. Want to adjust anything?`
         : "Sorry, I couldn't generate that direction. Please try again.";
-      if (recipe) setNewRecipeCardId(recipe.id);
+      // newRecipeCardId already set inside generateRecipeCard
       const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: text };
       const withAi = [...messages, aiMsg];
       setMessages(withAi);
@@ -357,21 +387,19 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
 
       {/* Input Section */}
       <div className="px-3 pb-3 pt-0 shrink-0">
-        <div className="flex flex-col gap-2 p-3 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {hasDirections && (
-            <div className="grid grid-cols-2 gap-1.5">
-              {DIRECTION_RECIPES.map((recipe) => (
-                <button
-                  key={recipe.label}
-                  onClick={() => sendMessage(recipe.label, recipe.id)}
-                  className="flex items-center gap-1 px-2 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all truncate"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
-                  <span className="truncate">{recipe.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIRECTION_RECIPES.map((recipe) => (
+              <button
+                key={recipe.label}
+                onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : sendMessage(recipe.label, recipe.id)}
+                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{recipe.label}</span>
+              </button>
+            ))}
+          </div>
           <div className="flex items-end gap-2">
             <button className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
               <Plus size={16} />
@@ -379,9 +407,10 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <textarea
               ref={textareaRef}
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask anything"
+              onChange={(e) => !creditsExhausted && setInputValue(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={creditsExhausted ? (e) => { e.preventDefault(); setCreditsExhaustedOpen(true); } : handleKeyDown}
+              placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
               rows={1}
               disabled={isProcessing}
               className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
@@ -396,7 +425,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                 <Mic size={14} />
               </button>
               <button
-                onClick={handleSend}
+                onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : handleSend}
                 disabled={!inputValue.trim() || isProcessing}
                 className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
@@ -405,7 +434,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         </div>
-        <p className="text-center text-[10px] text-[#9CA3AF] mt-2 truncate whitespace-nowrap">
+        <p className="text-center text-[11px] sm:text-[12px] text-[#9CA3AF] mt-2">
           <a
             href="https://sorene.ai/responsible-ai"
             target="_blank"

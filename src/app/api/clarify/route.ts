@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
+
   try {
     const { currentQuestion, userMessage, preferredLanguage } = (await req.json()) as {
       currentQuestion: string;
@@ -52,6 +57,7 @@ Is this an answer or a clarifying question?`;
       messages: [{ role: "user", content: prompt }],
     });
 
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = (message.content[0]?.type === "text" ? message.content[0].text : "").trim();
 
     if (raw === "ANSWER") {

@@ -595,12 +595,12 @@ export function DirectionCard({
             <div className="flex items-center gap-2">
               {onHide && (
                 <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                   Hide
                 </button>
               )}
               {cardData && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                   style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                   {constraintLabel(cardData.constraint_check.status)}
                 </div>
@@ -611,12 +611,12 @@ export function DirectionCard({
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                   className="flex items-center gap-2">
                   <button onClick={goValidate}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
                     Start Validate
                   </button>
                   <button onClick={(e) => handleToggle(e)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                    {actionText}<ArrowRight size={16} />
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                    {actionText}<ArrowRight size={14} />
                   </button>
                 </motion.div>
               )}
@@ -1270,23 +1270,20 @@ export function DirectionCard({
         {!isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
             className="px-5 pb-5 flex flex-col flex-1" onClick={(e) => handleToggle(e)}>
-            {cardData && (
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[11px] text-[#9A9A9A] font-medium">{cardData.oneliner}</p>
-              </div>
-            )}
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-2">{description}</p>
+            <p className="text-[13px] text-[#62646A] leading-relaxed mb-4 line-clamp-2">
+              {cardData?.oneliner || description}
+            </p>
             <div className="mt-auto flex items-center justify-between gap-2">
               {/* Left: Hide + constraint badge (no label text — space is tight in grid) */}
               <div className="flex items-center gap-2">
                 {onHide && (
                   <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                     Hide
                   </button>
                 )}
                 {cardData && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                     style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
                     {constraintLabel(cardData.constraint_check.status)}
                   </div>
@@ -1295,12 +1292,12 @@ export function DirectionCard({
               {/* Right: Start Validate + View detail */}
               <div className="flex items-center gap-2">
                 <button onClick={(e) => { e.stopPropagation(); goValidate(e); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
                   Start Validate
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[13px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                  {actionText}<ArrowRight size={14} />
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                  {actionText}<ArrowRight size={13} />
                 </button>
               </div>
             </div>
@@ -1317,6 +1314,188 @@ export function DirectionCard({
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+
+// A shimmer bar placeholder that fades out and reveals real text when loading ends.
+function ShimmerLine({ width = "75%", height = "h-3", delay = 0, loading }: {
+  width?: string; height?: string; delay?: number; loading: boolean;
+}) {
+  return (
+    <div className="relative overflow-hidden" style={{ width }}>
+      <AnimatePresence initial={false}>
+        {loading ? (
+          <motion.div
+            key="shimmer"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, delay }}
+            className={cn(height, "rounded bg-gray-100 animate-pulse w-full")}
+          />
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+interface RecipeSkeletonCardProps {
+  concept?: string;
+  // When provided, loading is done and we reveal real content piece-by-piece.
+  revealData?: {
+    title: string;
+    description: string;
+    whyFitsYou: string[];
+    keyRisks: string[];
+    score: number;
+  };
+}
+
+export function RecipeSkeletonCard({ concept, revealData }: RecipeSkeletonCardProps) {
+  const displayTitle = revealData?.title ?? concept?.split(":")[0]?.trim() ?? "Building your direction…";
+  const loading = !revealData;
+
+  // Once revealData arrives, stagger-reveal each item by tracking a counter.
+  const [revealCount, setRevealCount] = useState(0);
+  useEffect(() => {
+    if (!revealData) { setRevealCount(0); return; }
+    const allItems = [
+      revealData.description,
+      ...revealData.whyFitsYou,
+      ...revealData.keyRisks,
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setRevealCount(i);
+      if (i >= allItems.length) clearInterval(interval);
+    }, 120);
+    return () => clearInterval(interval);
+  }, [revealData]);
+
+  const revealed = (idx: number) => !loading && revealCount > idx;
+
+  const whyItems = revealData?.whyFitsYou ?? ["", "", ""];
+  const riskItems = revealData?.keyRisks ?? ["", ""];
+  // stagger offsets: description=0, whyFitsYou starts at 1, keyRisks after
+  const descIdx = 0;
+  const whyStartIdx = 1;
+  const riskStartIdx = 1 + whyItems.length;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-[#E5E7EB] overflow-hidden bg-white"
+    >
+      {/* Header */}
+      <div className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] p-5 overflow-hidden">
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-1">
+              {loading ? "Generating direction…" : "Your direction"}
+            </p>
+            <h3 className="text-base font-semibold text-white leading-snug">{displayTitle}</h3>
+          </div>
+          <AnimatePresence>
+            {!loading && revealData && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-xl font-bold text-white shrink-0"
+              >
+                {revealData.score}%
+              </motion.div>
+            )}
+            {loading && (
+              <motion.div exit={{ opacity: 0 }} className="text-2xl font-bold text-white/20 animate-pulse shrink-0">
+                —%
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {/* Progress sweep — only while loading */}
+        {loading && (
+          <motion.div
+            className="absolute bottom-0 left-0 h-0.5 bg-white/30"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 10, ease: "linear" }}
+          />
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-5 space-y-5">
+        {/* Description */}
+        <div className="min-h-[2rem]">
+          {revealed(descIdx) ? (
+            <motion.p
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[13px] text-[#62646A] leading-relaxed"
+            >
+              {revealData!.description}
+            </motion.p>
+          ) : (
+            <div className="space-y-2">
+              <ShimmerLine width="100%" height="h-3" loading={loading} />
+              <ShimmerLine width="80%" height="h-3" delay={0.05} loading={loading} />
+            </div>
+          )}
+        </div>
+
+        {/* Why it fits you */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">Why it fits you</p>
+          <div className="space-y-2.5">
+            {whyItems.map((item, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="mt-0.5 shrink-0">
+                  <CircleCheck size={14} className={cn("transition-colors duration-300", revealed(whyStartIdx + i) ? "text-[#32C382]" : "text-gray-200")} />
+                </div>
+                {revealed(whyStartIdx + i) ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-[13px] text-[#151515] leading-relaxed"
+                  >
+                    {item}
+                  </motion.span>
+                ) : (
+                  <ShimmerLine width={i % 2 === 0 ? "70%" : "55%"} loading={loading} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Key risks */}
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-3">Key risks</p>
+          <div className="space-y-2.5">
+            {riskItems.map((risk, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="mt-0.5 shrink-0">
+                  <CircleX size={14} className={cn("transition-colors duration-300", revealed(riskStartIdx + i) ? "text-[#DF2E16]" : "text-gray-200")} />
+                </div>
+                {revealed(riskStartIdx + i) ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -4 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-[13px] text-[#62646A] leading-relaxed"
+                  >
+                    {risk}
+                  </motion.span>
+                ) : (
+                  <ShimmerLine width={i % 2 === 0 ? "65%" : "80%"} loading={loading} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 }

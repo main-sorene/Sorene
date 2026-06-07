@@ -15,13 +15,17 @@ import {
   authLoadingAtom,
   isAssessmentCompleteAtom,
   isAssessmentInProgressAtom,
+  isCreditsExhaustedOpenAtom,
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { CREDITS_EXHAUSTED_EVENT } from "@/lib/queryClient";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useRouter } from "next/navigation";
 import { SettingsModal } from "../modals/SettingsModal";
 import { LogoutConfirmModal } from "../modals/LogoutConfirmModal";
 import { CancelSubscriptionDialog } from "../modals/CancelSubscriptionDialog";
 import { ManagePaymentModal } from "../modals/ManagePaymentModal";
+import { CreditsExhaustedModal } from "../modals/CreditsExhaustedModal";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
@@ -31,8 +35,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [isAssessmentComplete, setIsAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
   const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
+  const setCreditsExhausted = useSetAtom(isCreditsExhaustedOpenAtom);
   const pathname = usePathname();
   const router = useRouter();
+
+  const { data: subscription } = useSubscriptionStatus();
+
+  // Listen for 402 credits-exhausted events from anywhere in the app
+  useEffect(() => {
+    const handler = () => setCreditsExhausted(true);
+    window.addEventListener(CREDITS_EXHAUSTED_EVENT, handler);
+    return () => window.removeEventListener(CREDITS_EXHAUSTED_EVENT, handler);
+  }, [setCreditsExhausted]);
+
+  // Proactively show the upgrade modal when any user's credits are fully
+  // exhausted — so they see it as soon as the bar turns red, not only on their
+  // next failed AI call.
+  useEffect(() => {
+    if (!subscription) return;
+    const used = subscription.credits?.used ?? 0;
+    const limit = (subscription.credits?.limit ?? 250) + (subscription.credits?.extra ?? 0);
+    const exhausted = limit > 0 && used >= limit;
+    if (exhausted && pathname !== "/upgrade") {
+      setCreditsExhausted(true);
+    } else if (!exhausted || pathname === "/upgrade") {
+      setCreditsExhausted(false);
+    }
+  }, [subscription, setCreditsExhausted]);
 
   // Redirect unauthenticated users to landing page, incomplete onboarding to /onBoarding
   useEffect(() => {
@@ -58,6 +87,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname, setSidebarOpen]);
+
+  // Persist current route so we can restore it after a mobile refresh
+  useEffect(() => {
+    if (pathname && pathname !== "/") {
+      try { localStorage.setItem("sorene_last_route", pathname); } catch {}
+    }
+  }, [pathname]);
 
   // Show spinner while auth is loading
   if (authLoading) {
@@ -148,6 +184,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <LogoutConfirmModal />
       <CancelSubscriptionDialog />
       <ManagePaymentModal />
+      <CreditsExhaustedModal />
     </div>
   );
 }

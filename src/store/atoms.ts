@@ -101,6 +101,7 @@ export const settingsTabAtom = atom<string>("General");
 export const isLogoutConfirmOpenAtom = atom<boolean>(false);
 export const isCancelSubscriptionOpenAtom = atom<boolean>(false);
 export const isManagePaymentOpenAtom = atom<boolean>(false);
+export const isCreditsExhaustedOpenAtom = atom<boolean>(false);
 export const isHistoryLoadingAtom = atom<boolean>(false);
 export const isAddMoreInfoModeAtom = atom<boolean>(false);
 export const isAssessmentCompleteAtom = atom<boolean>(false);
@@ -140,6 +141,9 @@ export interface SubscriptionStatus {
   duration: number;
   plan: string;
   status: string;
+  cancel_at_period_end?: boolean;
+  cancel_at?: number | null;
+  credits?: { used: number; limit: number; extra?: number; resetAt?: number };
 }
 
 export const subscriptionStatusAtom = atom<SubscriptionStatus | null>(null);
@@ -158,6 +162,8 @@ export interface RecipeDirection {
   cardData?: DirectionCardData;
   // The brainstormed idea + transcript used to seed the staged phases.
   concept?: string;
+  // True while the API call is in-flight; renders a skeleton card placeholder.
+  loading?: boolean;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);

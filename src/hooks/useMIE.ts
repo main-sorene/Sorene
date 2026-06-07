@@ -11,10 +11,9 @@ import type { MIEReport, MIEStatus } from "@/types/mie";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const LOADING_STEPS = [
-  "Searching live market trends and industry news…",
-  "Scanning Reddit, Product Hunt, and LinkedIn…",
-  "Identifying rising and falling demand signals…",
-  "Detecting emerging gaps in your domain…",
+  "Scanning market signals across 8 categories…",
+  "Identifying industries under pressure…",
+  "Detecting emerging demand gaps…",
   "Matching opportunities to your DNA profile…",
   "Scoring and ranking your top opportunities…",
 ];
@@ -59,12 +58,20 @@ export function useMIE() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState(0);
 
-  const { data: profile } = useQuery({
+  // Use the atom profile (always current) for the DNA-complete check so the
+  // button never shows "Complete DNA first" right after assessment finishes.
+  // Fall back to a fresh Firestore query only for the data needed by generate().
+  const atomProfile = user?.profile;
+
+  const { data: firestoreProfile } = useQuery({
     queryKey: ["mie-profile", user?.uid],
     queryFn: () => getUserProfile(user!.uid),
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Merge: atom profile wins for flags, firestoreProfile for full assessment data
+  const profile = firestoreProfile ?? (atomProfile as any);
 
   // Load cached report on mount
   useEffect(() => {
@@ -76,11 +83,9 @@ export function useMIE() {
     }
   }, [user?.uid]);
 
-  // Allow any user who has completed DNA assessment OR has dna scores.
-  // If we already have a cached report (status=complete), allow regenerate even
-  // while profile query is still loading — we'll send whatever profile data we have.
-  const hasProfile = !!(profile?.dnaAssessmentComplete || profile?.dnaScores);
-  const canGenerate = !!user?.uid && (hasProfile || status === "complete") && status !== "loading";
+  // Use atom profile for the gate so it reflects real-time state
+  const hasProfile = !!(atomProfile?.dnaAssessmentComplete || atomProfile?.dnaScores || firestoreProfile?.dnaAssessmentComplete || firestoreProfile?.dnaScores);
+  const canGenerate = !!user?.uid && hasProfile && status !== "loading";
   const lastRun = report?.generated_at ?? null;
 
   const generate = useCallback(async () => {
@@ -96,7 +101,7 @@ export function useMIE() {
         clearInterval(stepInterval);
         return prev;
       });
-    }, 8000);
+    }, 2800);
 
     try {
       const res = await authFetch("/api/market-intelligence", {

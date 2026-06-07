@@ -33,8 +33,6 @@ function PageInner() {
     }
 
     if (customToken && auth) {
-      // Gate rendering on the sign-in so the landing page never shows in the
-      // window between "token received" and "auth state populated".
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)
@@ -68,13 +66,23 @@ function PageInner() {
     if (authLoading || signingIn) return;
     if (!authUser) return;
     if (authUser.profile?.onboardingComplete) {
-      router.replace("/chat");
+      // Restore the last page the user was on before refresh/closing the app
+      let lastRoute = "/chat";
+      try {
+        const saved = localStorage.getItem("sorene_last_route");
+        if (saved && saved.startsWith("/") && saved !== "/") lastRoute = saved;
+      } catch {}
+      router.replace(lastRoute);
     } else {
       router.replace("/onBoarding");
     }
   }, [authLoading, authUser, router, signingIn]);
 
-  if (authLoading || signingIn) {
+  // Show the spinner — never the landing page — whenever we're loading, signing
+  // in, OR already authenticated. If authUser exists the redirect effect is about
+  // to navigate to /onBoarding (or /chat); rendering the landing page in that
+  // gap is the "flash of homepage before onboarding" users were seeing.
+  if (authLoading || signingIn || authUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-white">
         <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />

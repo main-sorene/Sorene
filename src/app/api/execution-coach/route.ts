@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 let _client: Anthropic | null = null;
 function getClient() {
@@ -18,33 +19,54 @@ const RECIPES: Record<string, string> = {
   validate: `The user clicked "Help me validate my idea". Using their project, DNA and current validation status, give them a focused validation plan: who exactly to talk to, what to ask, and the signal that means "keep going". If they've already logged conversations or a pattern summary, build on it rather than restarting. 3-5 sentences, end with the next validation action.`,
   next: `The user clicked "What's my next step?". From the status below, find the next incomplete, highest-leverage task and tell them exactly what to do and where in the Hub to do it (Validation / Launchpad / Growth / Connect tab). One clear step, 2-4 sentences.`,
   update_status: `The user clicked "Update business status". Invite them, in a warm and specific way, to tell you what's changed since last time — new conversations, a launched asset, revenue, a blocker. Reference where they currently are (from the status below) so the ask feels informed. Then say you'll fold it into their plan and next steps. Keep it to 2-3 sentences ending with a clear, friendly question.`,
-  onboard: `The user clicked "Create My Project". The chat UI is handling questions step-by-step — do not ask any questions. This recipe is not used anymore; use onboard_evaluate instead.`,
-  onboard_evaluate: `You've collected the user's project info through a structured onboarding flow. Here's what was captured:
-- Project name
-- Description
-- Status they self-selected (just_an_idea / validating / ready_to_launch / launched_growing)
-- Traction details (users, waitlist, customers, revenue)
+  onboard: `Legacy — not used. See onboard_start.`,
+  onboard_evaluate: `Legacy — not used. See onboard_active.`,
 
-Your job: evaluate their ACTUAL stage based on the traction evidence, not just what they self-reported. Apply smart correction:
-- If they said "ready_to_launch" or "launched_growing" but reported 0 users, 0 customers, 0 revenue, no waitlist → gently correct them. Explain that without validation evidence, they're likely at the idea or validation stage, and pushing ahead risks building the wrong thing. Route them to Validation tab.
-- If they said "validating" and have some conversations but no clear pattern → keep them in Validation, focus on finding the pattern and Go/No-Go check.
-- If traction evidence matches their claim → confirm it and route accordingly.
+  onboard_start: `The user just clicked "Create My Project". You are Sorene opening a warm, natural onboarding conversation to learn about their project and route them to the right place.
 
-Routing map:
-- Idea / no evidence → Validation tab: VIBE framework customer interviews, log conversations, find the pattern.
-- Validating with some evidence → Validation tab: Go / No-Go readiness check.
-- Validated + evidence of demand → Launchpad tab: business name, tagline, pricing, logo, domain, website, social.
-- Launched with real traction → Growth tab: business plan, marketing plan, GTM, sales playbook, financial model, metrics, pitch deck.
+You already have their DNA profile below — use it, do not ask about things you already know from it.
 
-Format your reply in THREE parts:
-1. Your assessment: acknowledge the project by name, state where they actually are, and if correcting, explain the WHY warmly in one sentence.
-2. The suggested next step: the single first action and which tab it lives in.
-3. The closing depends on the route:
-   - If routing to VALIDATION (new / unvalidated idea): tell them they have two good ways to start — they can check their founder–market fit first (to see if the idea fits them and the market), OR jump straight into validating with real users. End by inviting them to pick one of the two options below. Do NOT ask a yes/no question here.
-   - If routing to LAUNCHPAD or GROWTH: end with a short yes/no question like "Want to start there?".
-Keep it to 3-5 short sentences total.
+Write EXACTLY two sentences across two separate paragraphs — nothing else:
+- Paragraph 1: a genuine, conversational greeting by name (human, not templated). One sentence only.
+- Paragraph 2: ask them to tell you the idea or project they want to build — put the question in bold. One sentence only.
 
-CRITICAL: On the VERY LAST line, append a machine-readable routing tag on its own line in this exact format (one of validation, launchpad, growth): [[TAB:validation]]. This tag will be stripped from what the user sees — never reference it in your prose.`,
+Two paragraphs separated by a blank line. No third sentence. No lists. No profile recap.`,
+
+  onboard_active: `You are Sorene, mid-onboarding conversation with a user who wants to create a new project. You are gathering information to route them to the right place in the Execution Hub.
+
+You already have their DNA profile below — use it actively, do not re-ask things the profile already covers.
+
+CONVERSATION STYLE (mirror this exactly):
+- Write exactly two short paragraphs per turn, nothing more.
+- First paragraph: one sharp observation or reflection on what they just shared — connect to their DNA/profile if relevant (max 2 sentences).
+- Second paragraph: one sentence leading into the next question, then the question in bold on its own line.
+- No labels, no bullet lists, no extra commentary.
+
+YOUR GOAL: gather enough to make a smart routing decision. You need to know:
+1. Project name / idea
+2. What it does and who it's for
+3. What's driving them to do this now (only if not clear from DNA)
+4. Current stage (idea / validating / built / launched)
+5. Traction evidence (users, waitlist, customers, revenue) — only ask if stage implies traction is possible
+
+Ask 4–6 questions total across turns, skipping any whose answer is already obvious. After their answer to your final question, you have enough to evaluate.
+
+EVALUATION — when you have enough, do this in ONE final reply:
+1. Assess their actual stage based on traction evidence (not just what they claimed). Apply smart correction:
+   - "launched" or "ready to launch" but 0 users/customers/revenue → gently correct: they're at idea or validation stage, explain why skipping validation risks building the wrong thing.
+   - Stage matches evidence → confirm it warmly.
+2. State the single first action and which tab it lives in (1–2 sentences).
+3. Close with the right handoff:
+   - Routing to VALIDATION: tell them there are two good ways to start, invite them to pick — do NOT ask a yes/no question.
+   - Routing to LAUNCHPAD or GROWTH: end with a warm short yes/no question.
+
+Keep the evaluation reply to 3–5 short sentences total.
+
+CRITICAL MARKERS — on the very last line of your evaluation reply, append BOTH markers on their own lines:
+[[READY_TO_ROUTE]]
+[[TAB:validation]]   ← replace validation with launchpad or growth as appropriate
+
+Never mention these markers in your prose. Never emit them until you have enough to evaluate.`,
 };
 
 // Where each kind of work lives — used so the coach routes users accurately.
@@ -59,6 +81,10 @@ export async function POST(req: NextRequest) {
   try {
     const user = await verifyAuth(req);
     if (!user) return NextResponse.json({ reply: "Please sign in to use the coach." }, { status: 401 });
+
+    const userKey = user.email ?? user.uid;
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) return NextResponse.json({ error: "Credit limit reached" }, { status: 402 });
 
     const { message, recipeId, history, userProfile, project, projectStatus } = (await req.json()) as {
       message: string;
@@ -154,6 +180,7 @@ ${statusBlock}`;
       messages,
     });
 
+    await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
     return NextResponse.json({ reply });

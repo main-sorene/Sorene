@@ -98,7 +98,7 @@ export function ChatHeader() {
           href="https://discord.gg/2YtvCm2SWp"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
         >
           Product Feedback
         </a>

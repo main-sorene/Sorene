@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits } from "@/lib/credits";
 import type { ProblemScanReport, ProblemOpportunity } from "@/types/problemScan";
 
 export const maxDuration = 300;
@@ -58,10 +59,10 @@ RULES:
 function SCHEMA_BLOCK() {
   return `SCHEMA:
 {
-  "opportunities": [/* exactly 5, ranked by confidence descending */]
+  "opportunities": [/* exactly 3, ranked by confidence descending */]
 }
 
-Each opportunity:
+Each opportunity (all text fields: max 3 sentences, use **bold** on the most important 2–4 words per field to help users scan):
 {
   "id": string,
   "title": string,
@@ -94,8 +95,8 @@ function buildUserMessage(
     .join("\n");
 
   const task = withSearch
-    ? "Search for real pain signals online that this person is uniquely positioned to solve. Use web_search to scan Reddit, Quora, X, and Product Hunt. For each candidate problem also check supply (existing solutions). Then output the top 5 business opportunities as JSON only."
-    : "Identify the top 5 business problems this person is uniquely positioned to solve, where demand is real but existing solutions are weak or absent. Output only the JSON.";
+    ? "Search for real pain signals online that this person is uniquely positioned to solve. Use web_search to scan Reddit, Quora, X, and Product Hunt. For each candidate problem also check supply (existing solutions). Then output exactly 3 business opportunities as JSON only."
+    : "Identify the top 3 business problems this person is uniquely positioned to solve, where demand is real but existing solutions are weak or absent. Output only the JSON.";
 
   return `User: ${firstName}
 
@@ -174,8 +175,14 @@ function parseReport(text: string): ProblemScanReport {
 
 export async function POST(req: NextRequest) {
   const authedUser = await verifyAuth(req);
-  if (!authedUser) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  if (!authedUser) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+
+  const userKey = authedUser.email ?? authedUser.uid;
+  try {
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) return new Response(JSON.stringify({ error: "Credit limit reached" }), { status: 402 });
+  } catch (err) {
+    console.error("[problem-scan] credit check failed, allowing through:", err);
   }
 
   try {
@@ -205,6 +212,8 @@ export async function POST(req: NextRequest) {
       report = parseReport(text);
     }
 
+    // Deduct a flat cost for this agentic Sonnet call (multi-turn web search)
+    await deductCredits(userKey, 150);
     return new Response(JSON.stringify({ report }), {
       headers: { "Content-Type": "application/json" },
     });

@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/authFetch";
 import { getUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
 import type { ProblemScanReport, ProblemScanStatus } from "@/types/problemScan";
+import { friendlyApiError } from "@/lib/apiError";
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -108,8 +109,8 @@ export function useProblemScan() {
       clearInterval(stepInterval);
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? "Generation failed");
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(friendlyApiError((errBody as { error?: string }).error ?? "Generation failed"));
       }
 
       const data = await res.json() as { report: ProblemScanReport };

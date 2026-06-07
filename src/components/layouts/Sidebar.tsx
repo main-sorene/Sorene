@@ -29,25 +29,18 @@ import { useAtom, useSetAtom, useAtomValue } from "jotai";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { useMutation } from "@tanstack/react-query";
-import { deleteHistory, getChatUserId, getConvoHistory } from "@/lib/chatApi";
+import { getChatUserId } from "@/lib/chatApi";
 import { getCloudConversations, saveCloudConversation, deleteCloudConversation } from "@/lib/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
 function ConversationItem({ conv }: { conv: Conversation }) {
   const [activeId, setActiveId] = useAtom(activeConversationIdAtom);
   const [conversations, setConversations] = useAtom(conversationsAtom);
   const [authUser] = useAtom(userAtom);
   const setSidebarOpen = useSetAtom(sidebarOpenAtom);
   const router = useRouter();
-  const { toast } = useToast();
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const isActive = activeId === conv.id;
   const userId = getChatUserId(authUser);
-
-  const deleteHistoryMutation = useMutation({
-    mutationFn: async (chatId: string) => deleteHistory({ userId, chatId }),
-  });
 
   const handleClick = () => {
     if (!isAssessmentComplete) return;
@@ -59,34 +52,15 @@ function ConversationItem({ conv }: { conv: Conversation }) {
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isAssessmentComplete) return;
-    const previousConversations = conversations;
     setConversations((prev) => prev.filter((c) => c.id !== conv.id));
     if (activeId === conv.id) {
       setActiveId(null);
-      router.push("/chat");
+      router.push("/dna");
     }
-    // Local-only conversations (e.g. direction chat) don't exist on the backend
-    if (conv.isCreatedOnBackend === false) {
-      try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
-      try { localStorage.removeItem(`dna_chat_${userId}_${conv.id}`); } catch {}
-      try { localStorage.removeItem(`execution_chat_${userId}_${conv.id}`); } catch {}
-      // Remove from cross-device cloud history too.
-      if (authUser?.uid) deleteCloudConversation(authUser.uid, conv.id).catch(() => {});
-      return;
-    }
-    try {
-      await deleteHistoryMutation.mutateAsync(conv.id);
-    } catch (error) {
-      setConversations(previousConversations);
-      toast({
-        title: "Could not delete chat",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Please try again in a moment.",
-        variant: "destructive",
-      });
-    }
+    try { localStorage.removeItem(`direction_chat_${userId}_${conv.id}`); } catch {}
+    try { localStorage.removeItem(`dna_chat_${userId}_${conv.id}`); } catch {}
+    try { localStorage.removeItem(`execution_chat_${userId}_${conv.id}`); } catch {}
+    if (authUser?.uid) deleteCloudConversation(authUser.uid, conv.id).catch(() => {});
   };
 
   return (
@@ -231,12 +205,6 @@ export function Sidebar({
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const userId = getChatUserId(authUser);
 
-  const { data: convoData, refetch: refetchConvo } = useQuery({
-    queryKey: ["chat", "convo", userId],
-    queryFn: () => getConvoHistory(userId),
-    enabled: Boolean(authUser?.uid),
-  });
-
   const convoStorageKey = authUser?.uid ? `convos_${authUser.uid}` : null;
 
   // Restore conversations from localStorage on login — independent of the
@@ -257,7 +225,6 @@ export function Sidebar({
         return sortConvos(merged);
       });
     }
-    refetchConvo();
 
     // Pull cross-device history from the cloud and merge it in. This is what
     // makes assessment/DNA/Direction chats follow the user to a new device.
@@ -369,97 +336,6 @@ export function Sidebar({
     return () => clearTimeout(timer);
   }, [conversations, authUser?.uid]);
 
-  useEffect(() => {
-    if (!convoData?.chats) return;
-
-    setConversations((prev) => {
-      // Restore persisted assessment conversation from localStorage
-      let assessmentConv: Conversation | null = null;
-      try {
-        const stored = localStorage.getItem(`assessment_conv_${authUser?.uid || "local"}`);
-        if (stored) {
-          assessmentConv = JSON.parse(stored);
-        } else if (authUser?.profile?.dnaAssessmentComplete) {
-          // Fallback for users who completed assessment before localStorage was added
-          assessmentConv = {
-            id: `assessment-${authUser.uid || "local"}`,
-            title: "User Assessment Phase",
-            messages: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            model: "sorene-1",
-            done: true,
-            segment: "assessment",
-            isCreatedOnBackend: false,
-          };
-        }
-      } catch {}
-
-      const newConvs: Conversation[] = convoData.chats.map((item, index) => {
-        const id = item.chat_id;
-        const existing = prev.find((c) => c.id === id);
-        if (existing) {
-          return {
-            ...existing,
-            segment: item.segment,
-            title: item.message,
-          };
-        }
-
-        return {
-          id,
-          title: item.message,
-          segment: item.segment,
-          messages: [],
-          createdAt: new Date(),
-          updatedAt: new Date(Date.now() - index * 1000), // Slightly spread to preserve backend order
-          model: "sorene-1",
-          isCreatedOnBackend: true,
-        };
-      });
-
-      // Restore DNA chat conversations from localStorage
-      const dnaChatConvs: Conversation[] = [];
-      try {
-        const uidKey = authUser?.uid || "local";
-        Object.keys(localStorage)
-          .filter((k) =>
-            k.startsWith(`dna_chat_${uidKey}_`) ||
-            k.startsWith(`direction_chat_${uidKey}_`) ||
-            k.startsWith(`execution_chat_${uidKey}_`),
-          )
-          .forEach((k) => {
-            try {
-              const c = JSON.parse(localStorage.getItem(k)!);
-              if (c?.id) dnaChatConvs.push(c);
-            } catch {}
-          });
-      } catch {}
-
-      // Merge backend data + assessment conv + DNA chats + existing local-only chats
-      const merged = [...newConvs];
-      prev.forEach((pc) => {
-        if (!merged.find((m) => m.id === pc.id)) {
-          merged.push(pc);
-        }
-      });
-      if (assessmentConv && !merged.find((m) => m.id === assessmentConv!.id)) {
-        merged.push(assessmentConv);
-      }
-      dnaChatConvs.forEach((dc) => {
-        if (!merged.find((m) => m.id === dc.id)) {
-          merged.push(dc);
-        }
-      });
-
-      return merged.sort((a, b) => {
-        const timeA = new Date(a.updatedAt).getTime();
-        const timeB = new Date(b.updatedAt).getTime();
-        if (timeA !== timeB) return timeB - timeA;
-        return (b.id || "").localeCompare(a.id || "");
-      });
-    });
-  }, [convoData, setConversations]);
 
   const openSettings = (tab: string) => {
     setSettingsTab(tab);
@@ -493,22 +369,7 @@ export function Sidebar({
       .substring(0, 2);
   };
 
-  const handleNewChat = () => {
-    setActiveId(null);
-    router.push("/chat");
-    if (mobile) setSidebarOpen(false);
-  };
-
-  // DNA/DIRECTION logic will be applied later.
-  // For now, all conversations will be under "Your chats" section.
-
   let navItems: { icon: string | null; lucideIcon?: React.ReactNode; label: string; action?: () => void; path?: string }[] = [
-    {
-      icon: "/figmaAssets/note-pencil.svg",
-      label: "New chat",
-      action: handleNewChat,
-      path: "/chat",
-    },
     {
       icon: "/figmaAssets/dna.svg",
       label: "Your DNA",
@@ -517,7 +378,11 @@ export function Sidebar({
     {
       icon: "/figmaAssets/compass.svg",
       label: "Your DIRECTION",
-      path: "/direction",
+      action: () => {
+        localStorage.removeItem("rcGenerationRequested");
+        router.push("/direction");
+        if (mobile) setSidebarOpen(false);
+      },
     },
     {
       icon: null,

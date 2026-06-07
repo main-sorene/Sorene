@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -8,6 +9,12 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) {
+    return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
   }
 
   try {
@@ -62,6 +69,7 @@ Output only the translated question, then the separator line "---CHOICES---", th
         max_tokens: 600,
         messages: [{ role: "user", content: prompt }],
       });
+      await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block && block.type === "text" ? block.text.trim() : "";
       if (hasChoices) {
@@ -108,7 +116,10 @@ Part 2 — ONE short sentence (max 20 words) in that language that:
 - If you see a contradiction or tension between answers, gently name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
-- Use **bold** (markdown double asterisks) to highlight the single most important phrase — the specific energy, drive, or insight you're naming about them. Only bold one phrase per sentence, max 4 words.
+- Use **bold** (markdown double asterisks) to highlight one phrase, max 4 words:
+  - If their answer contains struggle, burnout, friction, or something they're escaping → bold the friction/obstacle phrase (what's holding them back or draining them)
+  - If their answer is neutral or positive → bold the energy/drive phrase (what pulls them forward or defines their core strength)
+  - Never bold both; pick the one that makes the reflection land harder
 
 Part 3 — The next question, translated/adapted into that language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If responding in English, output the original question unchanged.${
           hasChoices
@@ -141,6 +152,7 @@ Output only that one sentence. Nothing else.`;
       max_tokens: hasNextQuestion ? (hasChoices ? 700 : 400) : 80,
       messages: [{ role: "user", content: prompt }],
     });
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
     const block = message.content[0];
     const raw = block && block.type === "text" ? block.text.trim() : "";

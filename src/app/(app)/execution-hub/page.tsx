@@ -6022,6 +6022,7 @@ const MESSENGER_FEATURES = [
 ];
 
 function MessengerConnectCard() {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
   const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
     whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
@@ -6058,158 +6059,197 @@ function MessengerConnectCard() {
     { id: "telegram", name: "Telegram",  icon: TG_ICON, color: "#229ED9", tagline: "Instant messaging · Real-time coaching" },
   ];
 
+  const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #34D399 34.62%, #059669 100%)";
+
   return (
-    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
-      {/* Header */}
-      <div className="p-6 pb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="flex -space-x-2">
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{TG_ICON}</div>
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp or Telegram</h3>
-            <p className="text-[12px] text-[#9A9A9A]">Sorene in your pocket — coaching, logging, reminders</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Features list */}
-      <div className="px-6 pb-5">
-        <div className="flex flex-wrap gap-1.5">
-          {MESSENGER_FEATURES.map((f) => (
-            <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
-          ))}
-        </div>
-      </div>
-
-      {/* Platform buttons + settings */}
-      <div className="px-6 pb-6 space-y-3">
-        {platforms.map((p) => (
-          <div key={p.id} className="rounded-2xl border border-gray-100 overflow-hidden">
-            {/* Platform row */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: p.color + "20" }}>
-                {p.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#151515]">{p.name}</p>
-                <p className="text-[11px] text-[#9A9A9A]">{p.tagline}</p>
-              </div>
-              <button
-                onClick={() => setSettingsOpen(settingsOpen === p.id ? null : p.id)}
-                className={cn("p-2 rounded-lg transition-colors", settingsOpen === p.id ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
-                title="Settings"
-              >
-                <Settings size={14} />
-              </button>
-              <button
-                onClick={() => handleLink(p.id)}
-                disabled={linkState[p.id] === "loading"}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
-                  linkState[p.id] === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30"
-                  : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
-                  linkState[p.id] === "loading" && "opacity-60 cursor-not-allowed"
-                )}
-              >
-                {linkState[p.id] === "loading" && <Loader2 size={12} className="animate-spin" />}
-                {linkState[p.id] === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
-              </button>
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
+      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-4")}
+        style={{ background: gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-6 w-fit relative z-10">
+              <ChevronLeft size={18} />Back
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-between items-center relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <MessageCircle size={13} className="text-white" />
             </div>
-
-            {/* Settings panel */}
-            <AnimatePresence initial={false}>
-              {settingsOpen === p.id && (
-                <motion.div
-                  initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden border-t border-gray-100"
-                >
-                  <div className="px-4 py-3 space-y-3 bg-[#FAFAFA]">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
-                    {CHANNEL_SETTINGS[p.id].map((s) => (
-                      <div key={s.id} className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-medium text-[#151515]">{s.label}</p>
-                          <p className="text-[11px] text-[#9A9A9A] leading-snug">{s.description}</p>
-                        </div>
-                        {s.type === "toggle" ? (
-                          <button
-                            onClick={() => setSetting(p.id, s.id, !settings[p.id][s.id])}
-                            className={cn(
-                              "w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative",
-                              settings[p.id][s.id] ? "bg-[#32C382]" : "bg-gray-200"
-                            )}
-                          >
-                            <span className={cn(
-                              "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
-                              settings[p.id][s.id] ? "left-[18px]" : "left-0.5"
-                            )} />
-                          </button>
-                        ) : (
-                          <select
-                            value={settings[p.id][s.id] as string}
-                            onChange={(e) => setSetting(p.id, s.id, e.target.value)}
-                            className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0"
-                          >
-                            {s.options?.map((o) => <option key={o}>{o}</option>)}
-                          </select>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="min-w-0 flex-1">
+              <p className={cn("font-semibold text-white truncate transition-all", isExpanded ? "text-[18px]" : "text-[15px]")}>
+                Connect via WhatsApp or Telegram
+              </p>
+              {!isExpanded && <p className="text-[11px] text-white/70 truncate">Sorene in your pocket — coaching, logging, reminders</p>}
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
+          {!isExpanded && <ChevronDown size={15} className="text-white/70 shrink-0 -rotate-90" />}
+        </div>
+        {isExpanded && (
+          <p className="text-[13px] text-white/80 mt-1 relative z-10">Sorene in your pocket — coaching, logging, reminders</p>
+        )}
+      </motion.div>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 space-y-3">
+              {/* Features */}
+              <div className="flex flex-wrap gap-1.5 mb-1">
+                {MESSENGER_FEATURES.map((f) => (
+                  <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
+                ))}
+              </div>
+              {/* Platform rows */}
+              {platforms.map((p) => (
+                <div key={p.id} className="rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: p.color + "20" }}>
+                      {p.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#151515]">{p.name}</p>
+                      <p className="text-[11px] text-[#9A9A9A]">{p.tagline}</p>
+                    </div>
+                    <button onClick={() => setSettingsOpen(settingsOpen === p.id ? null : p.id)}
+                      className={cn("p-2 rounded-lg transition-colors", settingsOpen === p.id ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
+                      title="Settings">
+                      <Settings size={14} />
+                    </button>
+                    <button onClick={() => handleLink(p.id)} disabled={linkState[p.id] === "loading"}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
+                        linkState[p.id] === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30" : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+                        linkState[p.id] === "loading" && "opacity-60 cursor-not-allowed"
+                      )}>
+                      {linkState[p.id] === "loading" && <Loader2 size={12} className="animate-spin" />}
+                      {linkState[p.id] === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
+                    </button>
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {settingsOpen === p.id && (
+                      <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                        transition={{ duration: 0.2 }} className="overflow-hidden border-t border-gray-100">
+                        <div className="px-4 py-3 space-y-3 bg-[#FAFAFA]">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
+                          {CHANNEL_SETTINGS[p.id].map((s) => (
+                            <div key={s.id} className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[12px] font-medium text-[#151515]">{s.label}</p>
+                                <p className="text-[11px] text-[#9A9A9A] leading-snug">{s.description}</p>
+                              </div>
+                              {s.type === "toggle" ? (
+                                <button onClick={() => setSetting(p.id, s.id, !settings[p.id][s.id])}
+                                  className={cn("w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative", settings[p.id][s.id] ? "bg-[#32C382]" : "bg-gray-200")}>
+                                  <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all", settings[p.id][s.id] ? "left-[18px]" : "left-0.5")} />
+                                </button>
+                              ) : (
+                                <select value={settings[p.id][s.id] as string} onChange={(e) => setSetting(p.id, s.id, e.target.value)}
+                                  className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+                                  {s.options?.map((o) => <option key={o}>{o}</option>)}
+                                </select>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
 function CommunityCard() {
-  return (
-    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
-      <div className="p-6 pb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="flex -space-x-2">
-            {COMMUNITY_CHANNELS.map((c) => (
-              <div key={c.id} className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">
-                {c.icon}
-              </div>
-            ))}
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Sorene Entrepreneur Community</h3>
-            <p className="text-[12px] text-[#9A9A9A]">Join fellow founders — accountability, insights, real talk</p>
-          </div>
-        </div>
-      </div>
+  const [isExpanded, setIsExpanded] = useState(false);
+  const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)";
 
-      <div className="px-6 pb-6 space-y-3">
-        {COMMUNITY_CHANNELS.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
-              {c.icon}
+  return (
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
+      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-4")}
+        style={{ background: gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-body-small-medium mb-6 w-fit relative z-10">
+              <ChevronLeft size={18} />Back
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-between items-center relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Users size={13} className="text-white" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
-              <p className="text-[11px] text-[#9A9A9A] leading-snug">{c.description}</p>
+            <div className="min-w-0 flex-1">
+              <p className={cn("font-semibold text-white truncate transition-all", isExpanded ? "text-[18px]" : "text-[15px]")}>
+                Sorene Entrepreneur Community
+              </p>
+              {!isExpanded && <p className="text-[11px] text-white/70 truncate">Join fellow founders — accountability, insights, real talk</p>}
             </div>
-            <a
-              href={c.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0"
-            >
-              Join <ArrowRight size={12} />
-            </a>
           </div>
-        ))}
-      </div>
-    </div>
+          {!isExpanded && <ChevronDown size={15} className="text-white/70 shrink-0 -rotate-90" />}
+        </div>
+        {isExpanded && (
+          <p className="text-[13px] text-white/80 mt-1 relative z-10">Join fellow founders — accountability, insights, real talk</p>
+        )}
+      </motion.div>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 space-y-3">
+              {COMMUNITY_CHANNELS.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
+                    {c.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
+                    <p className="text-[11px] text-[#9A9A9A] leading-snug">{c.description}</p>
+                  </div>
+                  <a href={c.link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0">
+                    Join <ArrowRight size={12} />
+                  </a>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

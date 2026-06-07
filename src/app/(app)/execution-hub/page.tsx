@@ -5833,12 +5833,18 @@ type ConnectSetting = {
 
 const CHANNEL_SETTINGS: Record<"whatsapp", ConnectSetting[]> = {
   whatsapp: [
-    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Weekly" },
-    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article via WhatsApp each morning.",         type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Off" },
-    { id: "checkin_prompt",  label: "Weekly accountability check-in", description: "Sorene asks how your week went every Monday.",                     type: "toggle",  defaultValue: true },
-    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
+    { id: "reminder_freq",  label: "Business update reminders",   description: "Push a daily or weekly prompt to share your business status.",   type: "select", options: ["Off", "Daily", "Weekly"], defaultValue: "Weekly" },
+    { id: "knowledge",      label: "Business knowledge snippets", description: "Receive a curated business tip via WhatsApp each day.",          type: "select", options: ["Off", "Daily"],           defaultValue: "Off" },
+    { id: "checkin_prompt", label: "Accountability check-in",     description: "Sorene checks in on your tasks at the hour you choose.",         type: "toggle", defaultValue: false },
   ],
 };
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const suffix = i < 12 ? "AM" : "PM";
+  const h = i % 12 === 0 ? 12 : i % 12;
+  return { value: i, label: `${h}:00 ${suffix}` };
+});
+const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const MESSENGER_FEATURES = [
   "Real-time coaching between sessions",
@@ -5850,12 +5856,97 @@ const MESSENGER_FEATURES = [
   "Business knowledge learning in chat",
 ];
 
+function HourSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(Number(e.target.value))}
+      className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+      {HOUR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
+function DaySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+      {DAY_OPTIONS.map((d) => <option key={d}>{d}</option>)}
+    </select>
+  );
+}
+
+type WaSettings = {
+  activeProjectTitle?: string;
+  reminder_freq?: string;
+  reminder_hour?: number;
+  reminder_day?: string;
+  knowledge?: string;
+  knowledge_hour?: number;
+  checkin_prompt?: boolean;
+  checkin_hour?: number;
+};
+
 function MessengerConnectCard() {
+  const [isExpanded, setIsExpanded] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | null>(null);
-  const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
-    whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
+  const [waSettings, setWaSettings] = useState<WaSettings>({
+    reminder_freq: "Weekly",
+    reminder_hour: 8,
+    reminder_day: "Mon",
+    knowledge: "Off",
+    knowledge_hour: 8,
+    checkin_prompt: false,
+    checkin_hour: 8,
   });
+  const [projects, setProjects] = useState<{ title: string }[]>([]);
   const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle" });
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load settings + projects on mount
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        const [settingsRes, projectsRes] = await Promise.all([
+          authFetch("/api/messaging/whatsapp/settings"),
+          authFetch("/api/execution-projects/list"),
+        ]);
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          if (data.settings && typeof data.settings === "object") {
+            setWaSettings((prev) => ({ ...prev, ...data.settings }));
+          }
+        }
+        if (projectsRes.ok) {
+          const data = await projectsRes.json();
+          if (data.projects?.length) setProjects(data.projects);
+        }
+      } catch { /* ignore */ }
+    };
+    load();
+  }, []);
+
+  // Debounce-save settings to Firestore
+  const saveSettings = (updated: WaSettings) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        await authFetch("/api/messaging/whatsapp/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updated),
+        });
+      } catch { /* ignore */ }
+    }, 600);
+  };
+
+  const updateSetting = <K extends keyof WaSettings>(key: K, val: WaSettings[K]) => {
+    setWaSettings((prev) => {
+      const next = { ...prev, [key]: val };
+      saveSettings(next);
+      return next;
+    });
+  };
 
   const handleLink = async (platform: "whatsapp") => {
     if (linkState[platform] !== "idle") return;
@@ -5877,119 +5968,172 @@ function MessengerConnectCard() {
     }
   };
 
-  const setSetting = (platform: "whatsapp", id: string, val: string | boolean) => {
-    setSettings((prev) => ({ ...prev, [platform]: { ...prev[platform], [id]: val } }));
-  };
-
-  const platforms: { id: "whatsapp"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
-    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Real-time coaching · Weekly check-ins · Progress tracking" },
-  ];
+  const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #34D399 34.62%, #059669 100%)";
 
   return (
-    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
-      {/* Header */}
-      <div className="p-6 pb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp</h3>
-            <p className="text-[12px] text-[#9A9A9A]">Sorene in your pocket — coaching, logging, reminders</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Features list */}
-      <div className="px-6 pb-5">
-        <div className="flex flex-wrap gap-1.5">
-          {MESSENGER_FEATURES.map((f) => (
-            <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
-          ))}
-        </div>
-      </div>
-
-      {/* Platform buttons + settings */}
-      <div className="px-6 pb-6 space-y-3">
-        {platforms.map((p) => (
-          <div key={p.id} className="rounded-2xl border border-gray-100 overflow-hidden">
-            {/* Platform row */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: p.color + "20" }}>
-                {p.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#151515]">{p.name}</p>
-                <p className="text-[11px] text-[#9A9A9A]">{p.tagline}</p>
-              </div>
-              <button
-                onClick={() => setSettingsOpen(settingsOpen === p.id ? null : p.id)}
-                className={cn("p-2 rounded-lg transition-colors", settingsOpen === p.id ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
-                title="Settings"
-              >
-                <Settings size={14} />
-              </button>
-              <button
-                onClick={() => handleLink(p.id)}
-                disabled={linkState[p.id] === "loading"}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
-                  linkState[p.id] === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30"
-                  : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
-                  linkState[p.id] === "loading" && "opacity-60 cursor-not-allowed"
-                )}
-              >
-                {linkState[p.id] === "loading" && <Loader2 size={12} className="animate-spin" />}
-                {linkState[p.id] === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
-              </button>
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className="flex flex-col relative p-5 pb-8"
+        style={{ background: gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <MessageCircle size={13} className="text-white" />
             </div>
-
-            {/* Settings panel */}
-            <AnimatePresence initial={false}>
-              {settingsOpen === p.id && (
-                <motion.div
-                  initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden border-t border-gray-100"
-                >
-                  <div className="px-4 py-3 space-y-3 bg-[#FAFAFA]">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
-                    {CHANNEL_SETTINGS[p.id].map((s) => (
-                      <div key={s.id} className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-medium text-[#151515]">{s.label}</p>
-                          <p className="text-[11px] text-[#9A9A9A] leading-snug">{s.description}</p>
-                        </div>
-                        {s.type === "toggle" ? (
-                          <button
-                            onClick={() => setSetting(p.id, s.id, !settings[p.id][s.id])}
-                            className={cn(
-                              "w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative",
-                              settings[p.id][s.id] ? "bg-[#32C382]" : "bg-gray-200"
-                            )}
-                          >
-                            <span className={cn(
-                              "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
-                              settings[p.id][s.id] ? "left-[18px]" : "left-0.5"
-                            )} />
-                          </button>
-                        ) : (
-                          <select
-                            value={settings[p.id][s.id] as string}
-                            onChange={(e) => setSetting(p.id, s.id, e.target.value)}
-                            className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0"
-                          >
-                            {s.options?.map((o) => <option key={o}>{o}</option>)}
-                          </select>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
+              <p className="text-[13px] text-white/80 mt-0.5">Sorene in your pocket — coaching, logging, reminders</p>
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
+          <button onClick={() => setIsExpanded((v) => !v)}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0 mt-0.5">
+            <ChevronDown size={15} className={cn("text-white transition-transform", isExpanded ? "" : "-rotate-90")} />
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 space-y-3">
+              {/* Features */}
+              <div className="flex flex-wrap gap-1.5 mb-1">
+                {MESSENGER_FEATURES.map((f) => (
+                  <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
+                ))}
+              </div>
+              {/* WhatsApp row */}
+              <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: "#25D36620" }}>
+                    {WA_ICON}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[#151515]">WhatsApp</p>
+                    <p className="text-[11px] text-[#9A9A9A]">Real-time coaching · Weekly check-ins · Progress tracking</p>
+                  </div>
+                  <button onClick={() => setSettingsOpen(settingsOpen === "whatsapp" ? null : "whatsapp")}
+                    className={cn("p-2 rounded-lg transition-colors", settingsOpen === "whatsapp" ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
+                    title="Settings">
+                    <Settings size={14} />
+                  </button>
+                  <button onClick={() => handleLink("whatsapp")} disabled={linkState.whatsapp === "loading"}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
+                      linkState.whatsapp === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30" : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+                      linkState.whatsapp === "loading" && "opacity-60 cursor-not-allowed"
+                    )}>
+                    {linkState.whatsapp === "loading" && <Loader2 size={12} className="animate-spin" />}
+                    {linkState.whatsapp === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
+                  </button>
+                </div>
+
+                {/* Settings panel */}
+                <AnimatePresence initial={false}>
+                  {settingsOpen === "whatsapp" && (
+                    <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                      transition={{ duration: 0.2 }} className="overflow-hidden border-t border-gray-100">
+                      <div className="px-4 py-3 space-y-4 bg-[#FAFAFA]">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
+
+                        {/* Active project selector */}
+                        <div className="space-y-1">
+                          <p className="text-[12px] font-medium text-[#151515]">Active project</p>
+                          <p className="text-[11px] text-[#9A9A9A] leading-snug">Context used for coaching and scheduled messages.</p>
+                          <select
+                            value={waSettings.activeProjectTitle ?? ""}
+                            onChange={(e) => updateSetting("activeProjectTitle", e.target.value || undefined)}
+                            className="mt-1 w-full text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                          >
+                            <option value="">No project selected</option>
+                            {projects.map((p) => <option key={p.title} value={p.title}>{p.title}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Business update reminders */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Business update reminders</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Push a daily or weekly prompt to share your business status.</p>
+                            </div>
+                            <select value={waSettings.reminder_freq ?? "Off"} onChange={(e) => updateSetting("reminder_freq", e.target.value)}
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+                              {["Off", "Daily", "Weekly"].map((o) => <option key={o}>{o}</option>)}
+                            </select>
+                          </div>
+                          {(waSettings.reminder_freq === "Daily" || waSettings.reminder_freq === "Weekly") && (
+                            <div className="flex items-center gap-2 pl-1 flex-wrap">
+                              {waSettings.reminder_freq === "Weekly" && (
+                                <>
+                                  <span className="text-[11px] text-[#62646A]">on</span>
+                                  <DaySelect value={waSettings.reminder_day ?? "Mon"} onChange={(v) => updateSetting("reminder_day", v)} />
+                                </>
+                              )}
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.reminder_hour ?? 8} onChange={(v) => updateSetting("reminder_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Business knowledge snippets */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Business knowledge snippets</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Receive a curated business tip via WhatsApp each day.</p>
+                            </div>
+                            <select value={waSettings.knowledge ?? "Off"} onChange={(e) => updateSetting("knowledge", e.target.value)}
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+                              {["Off", "Daily"].map((o) => <option key={o}>{o}</option>)}
+                            </select>
+                          </div>
+                          {waSettings.knowledge === "Daily" && (
+                            <div className="flex items-center gap-2 pl-1">
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.knowledge_hour ?? 8} onChange={(v) => updateSetting("knowledge_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Accountability check-in */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Accountability check-in</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Sorene checks in on your tasks at the hour you choose.</p>
+                            </div>
+                            <button onClick={() => updateSetting("checkin_prompt", !waSettings.checkin_prompt)}
+                              className={cn("w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative", waSettings.checkin_prompt ? "bg-[#32C382]" : "bg-gray-200")}>
+                              <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all", waSettings.checkin_prompt ? "left-[18px]" : "left-0.5")} />
+                            </button>
+                          </div>
+                          {waSettings.checkin_prompt && (
+                            <div className="flex items-center gap-2 pl-1">
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.checkin_hour ?? 8} onChange={(v) => updateSetting("checkin_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 

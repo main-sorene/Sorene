@@ -1,97 +1,147 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { getUserProfile, saveUserProfile } from "@/lib/firestore";
+import { getUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
-import type { MIEReport } from "@/types/mie";
+import type { MIEReport, MIEStatus } from "@/types/mie";
+
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const LOADING_STEPS = [
-  "Scanning market trends…",
-  "Checking supply gaps…",
-  "Matching to your DNA…",
-  "Building your report…",
+  "Scanning market signals across 8 categories…",
+  "Identifying industries under pressure…",
+  "Detecting emerging demand gaps…",
+  "Matching opportunities to your DNA profile…",
+  "Scoring and ranking your top opportunities…",
 ];
+
+interface CachedMIE {
+  report: MIEReport;
+  cached_at: number;
+}
+
+function cacheKey(uid: string) {
+  return `mie_report_${uid}`;
+}
+
+function loadFromCache(uid: string): MIEReport | null {
+  try {
+    const raw = localStorage.getItem(cacheKey(uid));
+    if (!raw) return null;
+    const cached: CachedMIE = JSON.parse(raw);
+    if (Date.now() - cached.cached_at > CACHE_TTL_MS) {
+      localStorage.removeItem(cacheKey(uid));
+      return null;
+    }
+    return cached.report;
+  } catch {
+    return null;
+  }
+}
+
+function saveToCache(uid: string, report: MIEReport) {
+  try {
+    const cached: CachedMIE = { report, cached_at: Date.now() };
+    localStorage.setItem(cacheKey(uid), JSON.stringify(cached));
+  } catch {
+    // storage full — proceed silently
+  }
+}
 
 export function useMIE() {
   const user = useAtomValue(userAtom);
-  const [status, setStatus] = useState<"idle" | "loading" | "complete" | "error">("idle");
+  const [status, setStatus] = useState<MIEStatus>("idle");
   const [report, setReport] = useState<MIEReport | null>(null);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastRun, setLastRun] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
 
-  const { data: profile } = useQuery({
-    queryKey: ["direction-profile", user?.uid],
+  // Use the atom profile (always current) for the DNA-complete check so the
+  // button never shows "Complete DNA first" right after assessment finishes.
+  // Fall back to a fresh Firestore query only for the data needed by generate().
+  const atomProfile = user?.profile;
+
+  const { data: firestoreProfile } = useQuery({
+    queryKey: ["mie-profile", user?.uid],
     queryFn: () => getUserProfile(user!.uid),
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
   });
 
+  // Merge: atom profile wins for flags, firestoreProfile for full assessment data
+  const profile = firestoreProfile ?? (atomProfile as any);
+
   // Load cached report on mount
   useEffect(() => {
-    if (!profile) return;
-    const cached = (profile as any).mieReport as MIEReport | undefined;
-    if (cached?.opportunities?.length) {
+    if (!user?.uid) return;
+    const cached = loadFromCache(user.uid);
+    if (cached) {
       setReport(cached);
-      setLastRun(cached.generated_at);
       setStatus("complete");
     }
-  }, [profile?.email ?? ""]);
+  }, [user?.uid]);
 
-  // Cycle loading step
-  useEffect(() => {
-    if (status !== "loading") return;
-    const interval = setInterval(() => {
-      setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [status]);
+  // Use atom profile for the gate so it reflects real-time state
+  const hasProfile = !!(atomProfile?.dnaAssessmentComplete || atomProfile?.dnaScores || firestoreProfile?.dnaAssessmentComplete || firestoreProfile?.dnaScores);
+  const canGenerate = !!user?.uid && hasProfile && status !== "loading";
+  const lastRun = report?.generated_at ?? null;
 
-  const hasProfile = !!(profile?.dnaScores && profile?.assessmentAnswers);
-  const canGenerate = hasProfile && status !== "loading";
+  const generate = useCallback(async () => {
+    if (!canGenerate || !user?.uid) return;
 
-  const generate = async () => {
-    if (!profile || !canGenerate) return;
     setStatus("loading");
     setLoadingStep(0);
     setErrorMessage(null);
+
+    const stepInterval = setInterval(() => {
+      setLoadingStep((prev) => {
+        if (prev < LOADING_STEPS.length - 1) return prev + 1;
+        clearInterval(stepInterval);
+        return prev;
+      });
+    }, 2800);
 
     try {
       const res = await authFetch("/api/market-intelligence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: profile.firstName || "there",
-          dnaScores: profile.dnaScores,
-          rawAnswers: profile.assessmentAnswers,
-          cvSummary: profile.cvSummary,
+          firstName: profile?.firstName ?? "there",
+          dnaScores: profile?.dnaScores ?? {},
+          rawAnswers: profile?.assessmentAnswers ?? {},
+          cvSummary: profile?.cvSummary,
         }),
       });
 
+      clearInterval(stepInterval);
+
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        setErrorMessage(errData.error || "Failed to generate report.");
-        setStatus("error");
-        return;
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? "Generation failed");
       }
 
       const data = await res.json() as { report: MIEReport };
+      saveToCache(user.uid, data.report);
       setReport(data.report);
-      setLastRun(data.report.generated_at);
       setStatus("complete");
-
-      if (user?.uid) {
-        await saveUserProfile(user.uid, { mieReport: data.report } as any);
-      }
     } catch (err) {
-      console.error("[useMIE] generate failed:", err);
-      setErrorMessage(err instanceof Error ? err.message : "Unknown error");
+      clearInterval(stepInterval);
+      setErrorMessage(err instanceof Error ? err.message : "Something went wrong");
       setStatus("error");
     }
-  };
+  }, [canGenerate, user?.uid, profile]);
 
-  return { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps: LOADING_STEPS, generate };
+  return {
+    status,
+    report,
+    lastRun,
+    canGenerate,
+    hasProfile,
+    errorMessage,
+    loadingStep,
+    loadingSteps: LOADING_STEPS,
+    generate,
+  };
 }

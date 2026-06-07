@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const FULL_CARD_FORMAT = `
 **Direction: [specific business name, max 10 words]**
@@ -85,7 +86,10 @@ Layer 3 — Simple competitors: [names, or "None identified"]
 const RECIPE_PROMPTS: Record<string, string> = {
   "check-my-idea": `You are Sorene, helping the user stress-test a specific business or project idea. You already have their profile (see below). Use it — do not ask about things you already know.
 
-On turn 1: write exactly two warm, friendly sentences inviting the user to share their idea — reference their name and one thing from their profile to show you know them. Nothing else — no question label, no third line.
+On turn 1: write EXACTLY two sentences across two separate paragraphs — nothing else.
+- Paragraph 1 — Sentence 1: a genuine, conversational greeting by name (sound human, not templated). One sentence only.
+- Paragraph 2 — Sentence 2: ask them to tell you the idea they want to check — put this whole question in bold so it's clear where to focus. One sentence only.
+Two paragraphs, separated by a blank line. No third sentence. No profile recap. No lists.
 
 On turns 2–6: write exactly two short paragraphs, nothing more.
 - First paragraph: one sharp observation about what they've shared — a strength, a gap, or a pattern (max 2 sentences).
@@ -93,8 +97,9 @@ On turns 2–6: write exactly two short paragraphs, nothing more.
 
 No labels. No "Paragraph 1" or "Paragraph 2". No bullet lists. No options. No extra text.
 
-Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, output a Direction Card using EXACTLY this format:
-${FULL_CARD_FORMAT}
+Ask exactly 5 questions across turns 2–6 — dig into the idea's target audience, problem fit, competitive edge, revenue model, and first proof of traction. After their answer to question 5, do NOT output a card. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
+
+NEVER output a direction card yourself — the card is generated automatically when the user clicks Generate. If the user adds more detail after the marker, acknowledge it in one sentence and emit [[READY_TO_GENERATE]] again.
 
 NEGATIVE FILTER: If at any point the user mentions they didn't enjoy certain types of work, do NOT suggest pivots that lead them back to that work type.
 SKILLS LEVERAGE: When evaluating their idea, explicitly assess how much of their existing expertise transfers — this is a key factor in viability.
@@ -103,20 +108,20 @@ Start now with turn 1.`,
 
   "brainstorm-new-idea": `You are Sorene, helping the user brainstorm business or project ideas. You already have their profile (see below). Use it — do not ask about things you already know.
 
-On turn 1: Write a warm welcome paragraph (2–3 sentences) that:
-- Greets them by name
-- Briefly references 2–3 specific things you already know about them (their background, what energises them, their situation — be specific, not generic)
-- Ends with ONE focused question about something genuinely missing from their profile, OR asks which problem area they want to explore — NOT about things already in the profile.
-Nothing else on turn 1. No lists. No "Here's what I know" header.
+On turn 1: write EXACTLY two sentences across two separate paragraphs — nothing else.
+- Paragraph 1 — Sentence 1: a genuine, conversational greeting by name (sound human, not templated). One sentence only.
+- Paragraph 2 — Sentence 2: invite them to start brainstorming — ask which problem area or direction they'd like to explore, and put this whole question in bold so it's clear where to focus. One sentence only.
+Two paragraphs, separated by a blank line. No third sentence. No profile recap. No lists. No "Here's what I know" header.
 
-On turns 2–5: write exactly two short paragraphs, nothing more.
+On turns 2–6: write exactly two short paragraphs, nothing more.
 - First paragraph: one sharp observation about what they've shared — connect it to something from their profile if relevant (max 2 sentences).
 - Second paragraph: one sentence leading into the question, then the bolded question on its own line: **Question?**
 
 No labels. No bullet lists. No extra text.
 
-Ask up to 4 more questions (turns 2–5), skipping any whose answer you already know from the profile. After the last question is answered, output a Direction Card using EXACTLY this format:
-${FULL_CARD_FORMAT}
+Ask exactly 5 questions across turns 2–6, skipping any whose answer you already know from the profile. After the last question is answered, do NOT output a card. Instead reply in a warm, natural voice with exactly two sentences: first, confirm you now have everything you need and are about to generate their direction; second, ask if they'd like to add anything before you generate. Then put this exact marker on its own final line: [[READY_TO_GENERATE]]
+
+NEVER output a direction card yourself — the card is generated automatically when the user clicks Generate. If the user adds more detail after the marker, acknowledge it in one sentence and emit [[READY_TO_GENERATE]] again.
 
 NEGATIVE FILTER: Filter out directions that repeat work types they disliked.
 SKILLS LEVERAGE: Ground the final direction in their existing expertise — not a new field from scratch.
@@ -131,7 +136,10 @@ ${FULL_CARD_FORMAT}`,
 
   "generate-new-direction": `You are helping the user discover new directions beyond what they already have.
 
-On turn 1: write exactly two warm, friendly sentences opening the conversation and setting the tone. Nothing else — no question label, no third line.
+On turn 1: write exactly two sentences across two separate paragraphs — nothing else.
+- Paragraph 1 — Sentence 1: a warm, friendly opening by name setting the tone. One sentence only.
+- Paragraph 2 — Sentence 2: a question to open the conversation — put it in bold. One sentence only.
+Two paragraphs, separated by a blank line. No third sentence. No question label.
 
 On turns 2–6: write exactly two short paragraphs, nothing more.
 - First paragraph: one observation about a pattern in what they've shared about their current directions or what feels missing (max 2 sentences).
@@ -149,6 +157,8 @@ IKIGAI: Ensure the final direction card addresses all four Ikigai circles.
 Start now with turn 1.`,
 };
 
+export const maxDuration = 60;
+
 let _client: Anthropic | null = null;
 function getClient() {
   if (!_client) {
@@ -159,11 +169,22 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
   try {
-    const user = await verifyAuth(req);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) {
+      return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
     }
+  } catch (err) {
+    console.error("[direction-chat] credit check failed, allowing through:", err);
+  }
+
+  try {
 
     const { message, directionContext, recipeId, history, userProfile } = (await req.json()) as {
       message: string;
@@ -228,7 +249,7 @@ export async function POST(req: NextRequest) {
       if (or(res.otherNotes)) knownLines.push(`Other context: ${or(res.otherNotes)}`);
 
       const profileContext = knownLines.length > 0
-        ? `\n\n━━━ WHAT YOU ALREADY KNOW ABOUT THIS USER ━━━\n${knownLines.join("\n")}\n\nCRITICAL RULES:\n- Do NOT ask about anything already listed above — you already know it.\n- If the user shares something NEW that contradicts or adds to the above, acknowledge the update and use the new version going forward.\n- In turn 1, reference 2–3 specific things from the profile to show you know them (name, skills, situation, what energises them etc.).\n- Only ask questions about things genuinely not in the profile.`
+        ? `\n\n━━━ WHAT YOU ALREADY KNOW ABOUT THIS USER ━━━\n${knownLines.join("\n")}\n\nCRITICAL RULES:\n- Do NOT ask about anything already listed above — you already know it.\n- If the user shares something NEW that contradicts or adds to the above, acknowledge the update and use the new version going forward.\n- Keep turn 1 to the two short sentences described above — do NOT recap the profile in turn 1.\n- Only ask questions about things genuinely not in the profile.`
         : "";
 
       systemPrompt = recipePrompt + profileContext;
@@ -386,19 +407,37 @@ Sorene Direction Engine v1.1`;
       messages = [{ role: "user" as const, content: message }];
     }
 
-    const msg = await getClient().messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+    // Use Haiku for recipe turns (short conversational turns); Sonnet for full direction generation
+    const isRecipeTurn = !!recipeId || !!history?.length;
+    const selectedModel = isRecipeTurn ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
+    const maxTokens = isRecipeTurn ? 1024 : 4096;
+
+    const anthropicStream = await getClient().messages.stream({
+      model: selectedModel,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages,
     });
 
-    const block = msg.content[0];
-    const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
+    const readable = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        for await (const chunk of anthropicStream) {
+          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+            controller.enqueue(encoder.encode(chunk.delta.text));
+          }
+        }
+        const final = await anthropicStream.finalMessage();
+        await deductCredits(userKey, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
+        controller.close();
+      },
+    });
 
-    return NextResponse.json({ reply });
+    return new Response(readable, {
+      headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" },
+    });
   } catch (error) {
     console.error("[direction-chat] error:", error);
-    return NextResponse.json({ reply: "Sorry, I had trouble with that. Please try again." }, { status: 500 });
+    return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

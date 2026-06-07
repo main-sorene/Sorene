@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom } from "@/store/atoms";
+import { userAtom, conversationsAtom, Conversation, Message, isSettingsOpenAtom, recipeDirectionsAtom, RecipeDirection, resourcesConstraintsAtom, newRecipeCardIdAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { Plus, X, ArrowUp, Loader2, Mic } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -14,6 +15,12 @@ const DIRECTION_RECIPES = [
   { label: "Brainstorm new idea", id: "brainstorm-new-idea" },
   { label: "Check my idea",       id: "check-my-idea" },
 ];
+
+// Emitted by the recipe prompts once enough info is gathered; signals the UI to
+// show a "Generate" button instead of producing the card automatically.
+// Matched loosely (case/spacing/formatting tolerant) so a stray variant from the
+// model still triggers the button instead of leaking into the chat bubble.
+const READY_MARKER_RE = /\[\[\s*READY[_\s]*TO[_\s]*GENERATE\s*\]\]/i;
 
 function parseDirectionCard(text: string): RecipeDirection | null {
   // Match "Direction:" with or without bold markers
@@ -82,9 +89,11 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setConversations = useSetAtom(conversationsAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
   const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
-  const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards } = useDirectionResult();
+  const { model, bestCompatibility, directionText, otherDirections, primaryCard, altCards, generateRecipeCard, generatingRecipe } = useDirectionResult();
   const { data: dnaData } = useDnaData();
   const resourcesConstraints = useAtomValue(resourcesConstraintsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
@@ -96,11 +105,11 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const restoredRef = useRef(false);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-
   const [inputValue, setInputValue] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeRecipePrompt, setActiveRecipePrompt] = useState<string | null>(null);
   const activeRecipePromptRef = useRef<string | null>(null);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const userName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasMessages = messages.length > 0;
@@ -177,11 +186,16 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     const next = [...priorMessages, userMsg];
     setMessages(next);
     persistToSidebar(next);
+    setShowGenerate(false);
     setIsProcessing(true);
 
     const history = activeRecipeId
       ? priorMessages.map((m) => ({ role: m.role, content: m.content }))
       : undefined;
+
+    const aiMsgId = `${Date.now()}-a`;
+    // Add empty assistant message immediately so the bubble appears while streaming
+    setMessages((prev) => [...prev, { id: aiMsgId, role: "assistant", content: "" }]);
 
     try {
       const res = await authFetch("/api/direction-chat", {
@@ -208,12 +222,33 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
           ...(activeRecipeId ? { recipeId: activeRecipeId, history } : {}),
         }),
       });
-      const data = (await res.json()) as { reply: string };
-      const reply = data.reply || "Sorry, I couldn't respond. Try again.";
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.body) throw new Error("No response body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let reply = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        reply += text;
+        setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: reply } : m));
+      }
+
+      // If the AI signalled it's ready, strip the marker and show a Generate button.
+      let displayReply = reply;
+      if (READY_MARKER_RE.test(reply)) {
+        displayReply = reply
+          .replace(new RegExp(READY_MARKER_RE.source, "gi"), "")
+          .replace(/\*\*\s*\*\*/g, "")
+          .trim();
+        setShowGenerate(true);
+      }
 
       // If AI returned a Direction Card, extract it and show it in the left column
       const parsed = activeRecipePromptRef.current ? parseDirectionCard(reply) : null;
-      let displayReply = reply;
       if (parsed) {
         setRecipeDirections((prev) => {
           const updated = [...prev, parsed];
@@ -224,15 +259,13 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
         displayReply = `Your new direction card **"${parsed.title}"** has been added and is now open on the left. Are you happy with this direction, or would you like to brainstorm further or adjust anything?`;
       }
 
-      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: displayReply };
-      const withAi = [...next, aiMsg];
-      setMessages(withAi);
+      setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: displayReply } : m));
+      const withAi = [...next, { id: aiMsgId, role: "assistant" as const, content: displayReply }];
       persistToSidebar(withAi);
     } catch {
-      const errMsg: ChatMessage = { id: `${Date.now()}-e`, role: "assistant", content: "Sorry, something went wrong. Please try again." };
-      const withErr = [...next, errMsg];
-      setMessages(withErr);
-      persistToSidebar(withErr);
+      const errContent = "Sorry, something went wrong. Please try again.";
+      setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: errContent } : m));
+      persistToSidebar([...next, { id: aiMsgId, role: "assistant" as const, content: errContent }]);
     } finally {
       setIsProcessing(false);
     }
@@ -244,6 +277,29 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
     setInputValue("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     await sendMessage(text);
+  };
+
+  // Generate the structured, staged direction card from the brainstormed idea.
+  const handleGenerateRecipe = async () => {
+    if (generatingRecipe || isProcessing) return;
+    setShowGenerate(false);
+    setIsProcessing(true);
+    const concept = messages
+      .map((m) => `${m.role === "user" ? "User" : "Sorene"}: ${m.content}`)
+      .join("\n");
+    try {
+      const recipe = await generateRecipeCard(concept);
+      const text = recipe
+        ? `Your new direction card **"${recipe.title}"** has been added and is now open on the left — open it to load the detail, market reality, and operations sections. Want to adjust anything?`
+        : "Sorry, I couldn't generate that direction. Please try again.";
+      // newRecipeCardId already set inside generateRecipeCard
+      const aiMsg: ChatMessage = { id: `${Date.now()}-a`, role: "assistant", content: text };
+      const withAi = [...messages, aiMsg];
+      setMessages(withAi);
+      persistToSidebar(withAi);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -312,6 +368,17 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                   </div>
                 </div>
               )}
+              {showGenerate && !isProcessing && (
+                <div className="flex justify-start">
+                  <button
+                    onClick={handleGenerateRecipe}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+                  >
+                    <img src="/figmaAssets/starfour.svg" className="w-3.5 h-3.5" alt="" />
+                    Generate Direction
+                  </button>
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
           </ScrollArea>
@@ -319,56 +386,55 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Input Section */}
-      <div className="p-6 pt-0 shrink-0">
-        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {hasDirections && (
-            <div className="flex flex-wrap gap-2">
-              {DIRECTION_RECIPES.map((recipe) => (
-                <button
-                  key={recipe.label}
-                  onClick={() => sendMessage(recipe.label, recipe.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap"
-                >
-                  <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" />
-                  {recipe.label}
-                </button>
-              ))}
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything"
-            rows={1}
-            disabled={isProcessing}
-            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
-            onInput={(e) => {
-              const el = e.currentTarget;
-              el.style.height = "auto";
-              el.style.height = `${el.scrollHeight}px`;
-            }}
-          />
-          <div className="flex items-center justify-between">
-            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
-              <Plus size={18} />
+      <div className="px-3 pb-3 pt-0 shrink-0">
+        <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          <div className="grid grid-cols-2 gap-1.5">
+            {DIRECTION_RECIPES.map((recipe) => (
+              <button
+                key={recipe.label}
+                onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : sendMessage(recipe.label, recipe.id)}
+                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
+              >
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{recipe.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-end gap-2">
+            <button className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+              <Plus size={16} />
             </button>
-            <div className="flex items-center gap-1">
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
-                <Mic size={16} />
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => !creditsExhausted && setInputValue(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={creditsExhausted ? (e) => { e.preventDefault(); setCreditsExhaustedOpen(true); } : handleKeyDown}
+              placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
+              rows={1}
+              disabled={isProcessing}
+              className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+            />
+            <div className="flex items-center gap-1 shrink-0">
+              <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#6B7280]">
+                <Mic size={14} />
               </button>
               <button
-                onClick={handleSend}
+                onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : handleSend}
                 disabled={!inputValue.trim() || isProcessing}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <ArrowUp size={16} />
+                <ArrowUp size={14} />
               </button>
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+        <p className="text-center text-[11px] sm:text-[12px] text-[#9CA3AF] mt-2">
           <a
             href="https://sorene.ai/responsible-ai"
             target="_blank"

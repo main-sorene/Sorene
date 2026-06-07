@@ -16,8 +16,10 @@ import {
   Settings,
   Wrench,
   Bell,
+  Loader2,
   Plug,
   CreditCard,
+  BarChart2,
   Database,
   Lock,
   LogOut,
@@ -26,41 +28,30 @@ import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { SubscriptionContent } from "@/components/settings/SubscriptionContent";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useToast } from "@/hooks/use-toast";
-import { signOut, deleteUser } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { saveUserProfile, deleteUserProfile } from "@/lib/firestore";
+import { saveUserProfile, deleteUserProfile, clearCloudConversations } from "@/lib/firestore";
+import { authFetch } from "@/lib/authFetch";
 
 const SIDEBAR_ITEMS = [
   { id: "General", icon: Settings, label: "General" },
   { id: "Account", icon: User, label: "Account" },
+  { id: "Billing", icon: CreditCard, label: "Billing" },
+  { id: "Usage", icon: BarChart2, label: "Usage" },
   { id: "Preferences", icon: Wrench, label: "Preferences" },
   { id: "Notifications", icon: Bell, label: "Notifications" },
   { id: "Integrations", icon: Plug, label: "Integrations" },
-  { id: "Manage Subscription", icon: CreditCard, label: "Manage Subscription" },
   { id: "Data control", icon: Database, label: "Data control" },
   { id: "Security", icon: Lock, label: "Privacy & Security" },
 ];
 
 const GENDER_OPTIONS = ["Male", "Female"];
-
-const WORK_TYPES = [
-  "Product management",
-  "Engineering",
-  "Human resources",
-  "Finance",
-  "Marketing",
-  "Sales",
-  "Operations",
-  "Data science",
-  "Design",
-  "Legal",
-  "Other",
-];
 
 function resizeImage(file: File, maxSize: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -82,21 +73,36 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
   });
 }
 
-// Birthday stored as MM/DD/YYYY in Firestore; <input type="date"> needs YYYY-MM-DD
+// Birthday may be stored as DD/MM/YYYY (assessment), MM/DD/YYYY (old), or YYYY-MM-DD (ISO).
+// <input type="date"> needs YYYY-MM-DD. We store as YYYY-MM-DD on save.
 function birthdayToInputValue(birthday: string): string {
   if (!birthday) return "";
-  // Already ISO format
+  // Already ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return birthday;
-  // MM/DD/YYYY format from onboarding
-  const [m, d, y] = birthday.split("/");
-  return y && m && d ? `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}` : "";
+  const parts = birthday.split("/");
+  if (parts.length !== 3) return "";
+  const [a, b, y] = parts;
+  if (!y || y.length !== 4) return "";
+  const ai = parseInt(a, 10);
+  const bi = parseInt(b, 10);
+  // If first segment > 12 it must be the day (DD/MM/YYYY — assessment format)
+  // If second segment > 12 it must be the day (MM/DD/YYYY — legacy format)
+  // If both ≤ 12, assume DD/MM/YYYY since that's what the assessment collects
+  if (ai > 12) {
+    // DD/MM/YYYY
+    return `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
+  }
+  if (bi > 12) {
+    // MM/DD/YYYY
+    return `${y}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+  }
+  // Ambiguous — default to DD/MM/YYYY (assessment stores this)
+  return `${y}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
 }
 
 function inputValueToBirthday(value: string): string {
-  // Store as MM/DD/YYYY for consistency with onboarding
-  if (!value) return "";
-  const [y, m, d] = value.split("-");
-  return y && m && d ? `${m}/${d}/${y}` : "";
+  // Store as ISO YYYY-MM-DD to avoid format ambiguity
+  return value || "";
 }
 
 function generateOrgId(uid: string): string {
@@ -104,10 +110,154 @@ function generateOrgId(uid: string): string {
   return `ORG-${Math.abs(hash).toString(36).toUpperCase().slice(0, 8)}`;
 }
 
+const BG_QUESTION_LABELS: Record<string, string> = {
+  bg1_history: "Current / most recent role",
+  bg2_skills: "Years of experience & industries",
+  bg3_pattern: "Core expertise",
+  bg4_direction: "Key skills & tools",
+  bg5_turning: "Career path",
+};
+
+function renderSummaryText(text: string) {
+  return text.split(/\n\n+/).map((para, pi) => (
+    <p key={pi} className="text-sm text-[#151515] leading-relaxed mb-3 last:mb-0">
+      {para.split(/\*\*(.*?)\*\*/g).map((part, j) =>
+        j % 2 === 1 ? <strong key={j} className="font-semibold">{part}</strong> : part
+      )}
+    </p>
+  ));
+}
+
+function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
+  const setUser = useSetAtom(userAtom);
+  const { toast } = useToast();
+  const [isUploadingCv, setIsUploadingCv] = React.useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = React.useState(false);
+  const hasTriedGenRef = React.useRef(false);
+  const cvInputRef = React.useRef<HTMLInputElement>(null);
+
+  const assessmentAnswers = (authUser?.profile as any)?.assessmentAnswers as Record<string, string> | undefined;
+  const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
+  const hasBgAnswers = assessmentAnswers
+    ? Object.keys(BG_QUESTION_LABELS).some((k) => assessmentAnswers[k])
+    : false;
+
+  // Auto-generate polished summary for existing users who have bg answers but no summary yet
+  React.useEffect(() => {
+    if (cvSummary || !hasBgAnswers || !authUser?.uid || hasTriedGenRef.current) return;
+    hasTriedGenRef.current = true;
+    setIsGeneratingSummary(true);
+    import("@/lib/authFetch").then(({ authFetch: af }) =>
+      af("/api/bg-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: assessmentAnswers }),
+      })
+        .then((r) => r.json())
+        .then(async (data) => {
+          const summary = (data?.summary || "").trim();
+          if (!summary) return;
+          const { saveUserProfile: svp } = await import("@/lib/firestore");
+          await svp(authUser!.uid, { cvSummary: summary } as any);
+          setUser({ ...authUser!, profile: { ...(authUser!.profile as any), cvSummary: summary } });
+        })
+        .catch(() => {})
+        .finally(() => setIsGeneratingSummary(false))
+    );
+  }, [authUser?.uid, hasBgAnswers, cvSummary]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !authUser?.uid) return;
+    setIsUploadingCv(true);
+    try {
+      const buf = await file.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const fileBase64 = btoa(binary);
+      const { authFetch: af } = await import("@/lib/authFetch");
+      const res = await af("/api/cv-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileBase64, mimeType: file.type }),
+      });
+      let summary = "";
+      if (res.ok) {
+        const data = await res.json();
+        summary = (data?.summary || "").trim();
+      }
+      const cvDataPayload = { file_name: file.name, file_path: "", status: "uploaded", text_length: file.size };
+      const { saveUserProfile: svp } = await import("@/lib/firestore");
+      await svp(authUser.uid, { cvData: cvDataPayload, ...(summary ? { cvSummary: summary } : {}) } as any);
+      setUser({
+        ...authUser,
+        profile: { ...(authUser.profile as any), cvData: cvDataPayload, ...(summary ? { cvSummary: summary } : {}) },
+      });
+      toast({ description: "CV uploaded successfully." });
+    } catch {
+      toast({ description: "Failed to upload CV.", variant: "destructive" });
+    } finally {
+      setIsUploadingCv(false);
+      if (cvInputRef.current) cvInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3 block">Professional Experience</label>
+
+      {/* CV upload row */}
+      <div className="mb-4">
+        {authUser?.profile?.cvData?.file_name ? (
+          <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
+            <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[#151515] truncate">{authUser.profile.cvData.file_name}</p>
+              <p className="text-xs text-[#9B9B9B]">CV on file</p>
+            </div>
+            <button
+              onClick={() => cvInputRef.current?.click()}
+              disabled={isUploadingCv}
+              className="text-xs text-purple-600 hover:text-purple-700 font-medium shrink-0"
+            >
+              Replace
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => cvInputRef.current?.click()}
+            disabled={isUploadingCv}
+            className="w-full rounded-xl border border-dashed border-[#D0D0D0] px-4 py-4 text-center hover:border-purple-300 hover:bg-purple-50/30 transition-colors"
+          >
+            <p className="text-sm text-[#62646A] font-medium">{isUploadingCv ? "Uploading…" : "Upload your CV or portfolio"}</p>
+            <p className="text-xs text-[#9B9B9B] mt-1">PDF • helps Sorene understand your background</p>
+          </button>
+        )}
+        <input ref={cvInputRef} type="file" accept=".pdf,application/pdf" onChange={handleCvUpload} className="hidden" />
+      </div>
+
+      {/* Polished narrative summary */}
+      {cvSummary ? (
+        <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-5 py-4">
+          {renderSummaryText(cvSummary)}
+        </div>
+      ) : isGeneratingSummary ? (
+        <div className="flex items-center gap-2 text-xs text-[#9B9B9B] py-2">
+          <Loader2 size={13} className="animate-spin" />
+          Summarising your background…
+        </div>
+      ) : !hasBgAnswers && !authUser?.profile?.cvData?.file_name ? (
+        <p className="text-xs text-[#BCBCBC] mt-1">Your experience summary from the assessment will appear here.</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useAtom(isSettingsOpenAtom);
   const [activeTab, setActiveTab] = useAtom(settingsTabAtom);
-  const { data: subscription } = useSubscriptionStatus();
+  const { data: subscription, refetch: refetchSubscription } = useSubscriptionStatus();
   const setConversations = useSetAtom(conversationsAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const [, setUser] = useAtom(userAtom);
@@ -128,15 +278,13 @@ export function SettingsModal() {
   const [gender, setGender] = React.useState(authUser?.profile?.sex || "");
   const [genderDropdownOpen, setGenderDropdownOpen] = React.useState(false);
   const [nickname, setNickname] = React.useState(authUser?.profile?.nickname || "");
-  const [workType, setWorkType] = React.useState(authUser?.profile?.workType || "");
-  const [workDropdownOpen, setWorkDropdownOpen] = React.useState(false);
-  const [customWork, setCustomWork] = React.useState("");
   const [isSavingGeneral, setIsSavingGeneral] = React.useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [savedGeneral, setSavedGeneral] = React.useState(false);
   const genderDropdownRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [mounted, setMounted] = React.useState(false);
+  const [mobileView, setMobileView] = React.useState<"list" | "content">("list");
   React.useEffect(() => { setMounted(true); }, []);
 
   // Sync form state when user data changes
@@ -147,16 +295,23 @@ export function SettingsModal() {
       setBirthday(authUser.profile?.birthday || "");
       setGender(authUser.profile?.sex || "");
       setNickname(authUser.profile?.nickname || "");
-      setWorkType(authUser.profile?.workType || "");
     }
   }, [authUser]);
 
-  // Close dropdowns on outside click
+  // Refetch fresh subscription/credit data whenever the modal opens or tab changes
+  React.useEffect(() => {
+    if (isOpen) refetchSubscription();
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (activeTab === "Usage" || activeTab === "Billing") {
+      refetchSubscription();
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close gender dropdown on outside click
   React.useEffect(() => {
     const handle = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setWorkDropdownOpen(false);
-      }
       if (genderDropdownRef.current && !genderDropdownRef.current.contains(e.target as Node)) {
         setGenderDropdownOpen(false);
       }
@@ -191,6 +346,8 @@ export function SettingsModal() {
     setIsClearing(true);
     const uid = authUser?.uid;
     try {
+      // Clear cross-device cloud history first, while still authenticated.
+      if (uid) await clearCloudConversations(uid).catch(() => {});
       if (auth) await signOut(auth);
       setUser(null);
       setConversations([]);
@@ -230,21 +387,20 @@ export function SettingsModal() {
     setIsDeleting(true);
     const uid = authUser?.uid;
     try {
+      // Delete server-side data (Firestore profile + messaging + Firebase Auth)
+      await authFetch("/api/account/delete", { method: "POST" });
       if (uid) {
-        await deleteUserProfile(uid);
+        await deleteUserProfile(uid).catch(() => {});
       }
-      // Delete the Firebase Auth user so there's no stale session on redirect
-      if (auth?.currentUser) {
-        await deleteUser(auth.currentUser).catch(() => signOut(auth!));
-      } else if (auth) {
-        await signOut(auth);
-      }
+      // Sign out client-side (auth user already deleted server-side)
+      if (auth) await signOut(auth).catch(() => {});
       setUser(null);
       setConversations([]);
       setIsAssessmentComplete(false);
-      // Clear all local storage data for this user
+      // Clear ALL local storage data
       try {
-        Object.keys(sessionStorage).filter(k => k.startsWith("assessment_state_")).forEach(k => sessionStorage.removeItem(k));
+        sessionStorage.clear();
+        ["hiddenDirectionIds", "recipeDirections", "resourcesConstraints", "sorene_cookie_consent"].forEach(k => localStorage.removeItem(k));
         Object.keys(localStorage).filter(k =>
           k.startsWith("assessment_conv_") ||
           k.startsWith("convos_") ||
@@ -254,22 +410,6 @@ export function SettingsModal() {
       } catch {}
       setShowDeleteConfirm(false);
       setIsOpen(false);
-      // Clear all local data for this user
-      try {
-        const keysToRemove = Object.keys(localStorage).filter(k =>
-          k.startsWith("assessment_conv_") ||
-          k.startsWith("convos_") ||
-          k.startsWith("dna_chat_") ||
-          k.startsWith("direction_chat_") ||
-          k === "resourcesConstraints" ||
-          k === "recipeDirections" ||
-          k === "hiddenDirectionIds"
-        );
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-        Object.keys(sessionStorage)
-          .filter(k => k.startsWith("assessment_state_"))
-          .forEach(k => sessionStorage.removeItem(k));
-      } catch {}
       window.location.href = "/";
     } catch {
       toast({ description: "Failed to delete account.", variant: "destructive" });
@@ -314,26 +454,16 @@ export function SettingsModal() {
     if (!authUser?.uid) return;
     setIsSavingGeneral(true);
     try {
-      const finalWorkType = workType === "Other" ? customWork : workType;
-      await saveUserProfile(authUser.uid, {
-        firstName,
-        lastName,
-        birthday,
-        sex: gender,
-        nickname,
-        workType: finalWorkType,
-        occupation: WORK_TYPES.indexOf(finalWorkType) >= 0
-          ? finalWorkType.toLowerCase().replace(/ /g, "_")
-          : finalWorkType,
-      });
+      await saveUserProfile(authUser.uid, { firstName, lastName, birthday, sex: gender, nickname });
       setUser({
         ...authUser,
         displayName: `${firstName} ${lastName}`.trim() || authUser.displayName,
         profile: authUser.profile
-          ? { ...authUser.profile, firstName, lastName, birthday, sex: gender, nickname, workType: finalWorkType }
+          ? { ...authUser.profile, firstName, lastName, birthday, sex: gender, nickname }
           : undefined,
       });
-      toast({ description: "Settings saved." });
+      setSavedGeneral(true);
+      setTimeout(() => setSavedGeneral(false), 3000);
     } catch {
       toast({ description: "Failed to save settings.", variant: "destructive" });
     } finally {
@@ -341,14 +471,12 @@ export function SettingsModal() {
     }
   };
 
-  const filteredSidebarItems = SIDEBAR_ITEMS.filter((item) => {
-    if (item.id === "Manage Subscription") return !!subscription?.active;
-    return true;
-  });
+  const filteredSidebarItems = SIDEBAR_ITEMS;
 
-  const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || authUser?.email?.split("@")[0] || "User";
+  const emailForDisplay = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
+  const displayName = [authUser?.profile?.firstName, authUser?.profile?.lastName].filter(Boolean).join(" ") || authUser?.displayName || emailForDisplay.split("@")[0] || "User";
   const initial = displayName.charAt(0).toUpperCase();
-  const email = authUser?.email || "";
+  const email = authUser?.profile?.email || authUser?.email || authUser?.uid || "";
   const avatarUrl = authUser?.profile?.photoUrl;
   const orgId = authUser?.profile?.orgId || (authUser?.uid ? generateOrgId(authUser.uid) : "—");
 
@@ -394,16 +522,33 @@ export function SettingsModal() {
     }
 
     switch (activeTab) {
-      case "General":
+      case "General": {
+        const AFFIRMATIVE_RE = /^(yes|yeah|yep|yup|correct|right|ok|okay|sure|no|nope|👍|✓)$/i;
+        const firstNameLooksStale = AFFIRMATIVE_RE.test((authUser?.profile?.firstName || "").trim());
+        const profileNeedsUpdate = (authUser?.profile as any)?.dnaAssessmentComplete &&
+          (firstNameLooksStale || !authUser?.profile?.lastName);
         return (
           <div className="space-y-6">
             <h2 className="text-lg font-semibold text-[#151515]">General</h2>
 
-            {/* Avatar */}
+            {/* Stale-profile nudge for users who completed assessment before name collection was added */}
+            {profileNeedsUpdate && (
+              <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 flex items-start gap-3">
+                <span className="text-orange-400 mt-0.5 text-base leading-none">●</span>
+                <div>
+                  <p className="text-sm font-medium text-orange-700">Please update your name</p>
+                  <p className="text-xs text-orange-600 mt-0.5">
+                    We weren't able to capture your full name during your assessment. Update it below and hit Save.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Profile card — avatar + full name */}
             <div>
-              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Profile Photo</p>
+              <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-3">Profile Picture</p>
               <div className="flex items-center gap-4">
-                <div className="relative group">
+                <div className="relative group shrink-0">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full object-cover bg-purple-100" />
                   ) : (
@@ -418,15 +563,16 @@ export function SettingsModal() {
                   </button>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                 </div>
-                <div>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-[#151515] truncate">{displayName}</p>
+                  <p className="text-sm text-[#62646A] truncate">{email}</p>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploadingAvatar}
-                    className="text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                    className="text-xs font-medium text-purple-600 hover:text-purple-700 transition-colors mt-1"
                   >
                     {isUploadingAvatar ? "Uploading…" : avatarUrl ? "Change photo" : "Upload photo"}
                   </button>
-                  <p className="text-xs text-[#9B9B9B] mt-0.5">JPG, PNG. Max 5MB.</p>
                 </div>
               </div>
             </div>
@@ -497,24 +643,8 @@ export function SettingsModal() {
               )}
             </div>
 
-            {/* CV / Portfolio */}
-            <div>
-              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">CV / Portfolio</label>
-              {authUser?.profile?.cvData?.file_name ? (
-                <div className="rounded-xl border border-[#ECEDEE] px-4 py-3 flex items-center gap-3">
-                  <img src="/figmaAssets/FilePdf.svg" alt="PDF" className="w-8 h-8" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#151515] truncate">{authUser.profile.cvData.file_name}</p>
-                    <p className="text-xs text-[#9B9B9B]">Uploaded during onboarding</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-[#D0D0D0] px-4 py-4 text-center">
-                  <p className="text-sm text-[#9B9B9B]">No CV uploaded yet</p>
-                  <p className="text-xs text-[#BCBCBC] mt-1">Upload during onboarding to see it here</p>
-                </div>
-              )}
-            </div>
+            {/* Professional Experience */}
+            <ProfessionalExperienceSection authUser={authUser} />
 
             {/* Nickname */}
             <div>
@@ -528,56 +658,22 @@ export function SettingsModal() {
               />
             </div>
 
-            {/* Work Type */}
-            <div ref={dropdownRef} className="relative">
-              <label className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider mb-2 block">What best describes your work?</label>
+            {/* Save */}
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setWorkDropdownOpen(!workDropdownOpen)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-left hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all"
+                onClick={handleSaveGeneral}
+                disabled={isSavingGeneral}
+                className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
               >
-                <span className={workType ? "text-[#151515]" : "text-[#9B9B9B]"}>
-                  {workType || "Select your work type"}
-                </span>
-                <ChevronDown size={16} className={cn("text-[#9B9B9B] transition-transform", workDropdownOpen && "rotate-180")} />
+                {isSavingGeneral ? "Saving…" : "Save changes"}
               </button>
-              {workDropdownOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white rounded-xl border border-[#ECEDEE] shadow-lg max-h-64 overflow-y-auto">
-                  {WORK_TYPES.map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => { setWorkType(type); setWorkDropdownOpen(false); if (type !== "Other") setCustomWork(""); }}
-                      className={cn(
-                        "w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-colors flex items-center justify-between",
-                        workType === type && "bg-purple-50 text-purple-700",
-                      )}
-                    >
-                      {type}
-                      {workType === type && <Check size={14} className="text-purple-600" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {workType === "Other" && (
-                <input
-                  type="text"
-                  value={customWork}
-                  onChange={(e) => setCustomWork(e.target.value)}
-                  placeholder="Describe your work"
-                  className="w-full mt-2 px-4 py-3 rounded-xl border border-[#ECEDEE] text-sm text-[#151515] placeholder:text-[#9B9B9B] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
-                />
+              {savedGeneral && (
+                <span className="text-sm text-green-600 font-medium">Saved ✓</span>
               )}
             </div>
-
-            {/* Save */}
-            <button
-              onClick={handleSaveGeneral}
-              disabled={isSavingGeneral}
-              className="px-6 py-2.5 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium transition-colors disabled:opacity-60"
-            >
-              {isSavingGeneral ? "Saving…" : "Save changes"}
-            </button>
           </div>
         );
+      }
 
       case "Account":
         return (
@@ -638,8 +734,83 @@ export function SettingsModal() {
           </div>
         );
 
-      case "Manage Subscription":
+      case "Billing":
         return <SubscriptionContent />;
+
+      case "Usage": {
+        const used = subscription?.credits?.used ?? 0;
+        const limit = subscription?.credits?.limit ?? 250;
+        const extra = subscription?.credits?.extra ?? 0;
+        const resetAt = subscription?.credits?.resetAt;
+        const plan = subscription?.plan ?? "free";
+        const isFree = plan === "free";
+        const effectiveLimit = limit + extra;
+        const pct = effectiveLimit > 0 ? Math.min(100, Math.round((used / effectiveLimit) * 100)) : 0;
+        const daysUntilReset = (!isFree && resetAt)
+          ? Math.max(0, Math.ceil((resetAt - Date.now()) / (1000 * 60 * 60 * 24)))
+          : null;
+        const barColor = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-400" : "bg-[#111111]";
+        const planLabel = isFree ? "Free" : plan === "pro" ? "Professional" : "Starter";
+
+        return (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold text-[#9B9B9B] uppercase tracking-wider">
+              Usage
+            </p>
+            <div className="rounded-2xl border border-[#ECEDEE] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-[#151515]">{planLabel} plan</p>
+                <span className="text-sm font-semibold text-[#151515]">{pct}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-[#F0F0F0] overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {daysUntilReset !== null ? (
+                <p className="text-xs text-[#9B9B9B]">
+                  Resets in {daysUntilReset} day{daysUntilReset !== 1 ? "s" : ""}
+                </p>
+              ) : isFree ? (
+                <p className="text-xs text-[#9B9B9B]">One-time budget · <button onClick={() => { setActiveTab("Billing"); }} className="underline hover:text-[#151515]">Upgrade for more</button></p>
+              ) : null}
+            </div>
+
+            {/* Proactive upgrade prompt when free user is at or near limit */}
+            {isFree && pct >= 80 && (
+              <div className={`rounded-2xl p-5 space-y-3 ${pct >= 100 ? "bg-[#FFF8E6] border border-[#FDC24C]" : "bg-[#FAFAFA] border border-[#ECEDEE]"}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${pct >= 100 ? "bg-[#FFF1C6]" : "bg-[#F5F5F5]"}`}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 1.5L10 6H14.5L11 9L12.5 13.5L8 11L3.5 13.5L5 9L1.5 6H6L8 1.5Z" fill={pct >= 100 ? "#F99207" : "#9B9B9B"} />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#151515]">
+                      {pct >= 100 ? "You've used all your free credits" : "You're almost out of credits"}
+                    </p>
+                    <p className="text-xs text-[#62646A] mt-0.5 leading-relaxed">
+                      {pct >= 100
+                        ? "Upgrade to continue using Sorene. Your DNA and Direction results are saved."
+                        : `${effectiveLimit - used} credits left. Upgrade to keep your momentum going.`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsOpen(false); window.location.href = "https://www.sorene.ai/upgrade"; }}
+                    className="w-full h-10 rounded-xl bg-[#111111] text-white text-sm font-medium hover:bg-[#222222] transition-colors"
+                  >
+                    See upgrade plans
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
 
       case "Security":
         return (
@@ -660,18 +831,106 @@ export function SettingsModal() {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center">
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={handleClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full h-full sm:w-[95vw] sm:max-w-[900px] sm:h-[85vh] bg-white sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full sm:w-[220px] shrink-0 flex flex-col py-3 sm:py-6 px-3 border-b sm:border-b-0 sm:border-r border-[#F0F0F0] overflow-x-auto sm:overflow-visible">
-          <div className="hidden sm:flex items-center justify-between px-2 mb-5">
+      {/* Modal — slides up from bottom on mobile, centered on desktop */}
+      <div className="relative z-10 w-full sm:w-[95vw] sm:max-w-[900px] h-[92dvh] sm:h-[85vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col sm:flex-row overflow-hidden">
+
+        {/* ── MOBILE: nav list view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "list" ? "flex" : "hidden")}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#F0F0F0] shrink-0">
+            <span className="text-base font-semibold text-[#151515]">Settings</span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* User card */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#F0F0F0] shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="w-11 h-11 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-purple-600 flex items-center justify-center text-white text-base font-semibold shrink-0">{initial}</div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#151515] truncate">{displayName}</p>
+              <p className="text-xs text-[#62646A] truncate">{email}</p>
+            </div>
+          </div>
+
+          {/* Nav list */}
+          <nav className="flex-1 overflow-y-auto px-3 py-3">
+            {filteredSidebarItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); setMobileView("content"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-gray-50 transition-colors text-left mb-0.5"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#F5F5F5] flex items-center justify-center shrink-0">
+                    <Icon size={15} className="text-[#444]" />
+                  </div>
+                  <span className="text-[14px] font-medium text-[#151515] flex-1">{item.label}</span>
+                  <svg width="6" height="10" viewBox="0 0 6 10" fill="none" className="text-[#BCBCBC]">
+                    <path d="M1 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Logout button — always visible at bottom */}
+          <div className="px-3 pb-6 pt-2 border-t border-[#F0F0F0] shrink-0">
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border border-[#ECEDEE] hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-60"
+            >
+              <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                <LogOut size={15} className="text-red-500" />
+              </div>
+              <span className="text-[14px] font-medium text-red-500 flex-1">
+                {isLoggingOut ? "Logging out…" : "Log out"}
+              </span>
+              {isLoggingOut && <Loader2 size={14} className="animate-spin text-red-400" />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── MOBILE: content view ── */}
+        <div className={cn("sm:hidden flex flex-col h-full", mobileView === "content" ? "flex" : "hidden")}>
+          {/* Back header */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-[#F0F0F0] shrink-0">
+            <button
+              onClick={() => { setMobileView("list"); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B] mr-1"
+            >
+              <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+                <path d="M7 1L1 7l6 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <span className="text-base font-semibold text-[#151515] flex-1">
+              {showClearConfirm || showDeleteConfirm ? "Confirm" : activeTab}
+            </span>
+            <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-5">
+            {renderContent()}
+          </div>
+        </div>
+
+        {/* ── DESKTOP: sidebar + content ── */}
+        <aside className="hidden sm:flex w-[220px] shrink-0 flex-col py-6 px-3 border-r border-[#F0F0F0]">
+          <div className="flex items-center justify-between px-2 mb-5">
             <span className="text-base font-semibold text-[#151515]">Settings</span>
           </div>
-          <nav className="flex sm:flex-col flex-row gap-1 sm:gap-0 sm:space-y-0.5 overflow-x-auto sm:overflow-visible pb-1 sm:pb-0 sm:flex-1">
+          <nav className="flex flex-col space-y-0.5 flex-1">
             {filteredSidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id && !showClearConfirm && !showDeleteConfirm;
@@ -680,10 +939,8 @@ export function SettingsModal() {
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setShowClearConfirm(false); setShowDeleteConfirm(false); }}
                   className={cn(
-                    "sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-[13px] sm:text-[14px] font-medium transition-all text-left whitespace-nowrap shrink-0 sm:shrink sm:whitespace-normal",
-                    isActive
-                      ? "bg-purple-50 text-purple-700"
-                      : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium transition-all text-left",
+                    isActive ? "bg-purple-50 text-purple-700" : "text-[#444] hover:bg-gray-100 hover:text-[#151515]"
                   )}
                 >
                   <Icon size={16} className={isActive ? "text-purple-600" : "text-[#6B6B6B]"} />
@@ -695,16 +952,15 @@ export function SettingsModal() {
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="hidden sm:flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60 whitespace-nowrap shrink-0"
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[14px] font-medium text-red-500 hover:bg-red-50 transition-all disabled:opacity-60"
           >
             <LogOut size={16} />
             {isLoggingOut ? "Logging out…" : "Log out"}
           </button>
         </aside>
 
-        {/* Content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Close button */}
+        {/* Desktop content */}
+        <main className="hidden sm:flex flex-1 flex-col overflow-hidden">
           <div className="flex justify-end px-5 pt-4 pb-2 shrink-0">
             <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-[#6B6B6B]">
               <X size={18} />

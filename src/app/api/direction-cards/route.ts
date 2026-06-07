@@ -3,8 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores, StructuralModel } from "@/lib/dnaEngine";
 import type { DirectionCardData } from "@/lib/directionTypes";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Allow up to 60s — model calls can exceed the default 10s serverless limit
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT_TEXT = `You are Sorene's Direction Engine. Your job is to generate business directions for a specific user — combining who they are (DNA), what they have (Resources + Constraints), and what the market needs (Market Intelligence).
 
@@ -90,12 +94,17 @@ function buildUserContext(
     travelTolerance?: string; otherNotes?: string;
   },
   cardIndex = 0,
+  concept?: string,
 ): string {
   const or = (v: unknown, fallback = "Not provided") =>
     v && String(v).trim() ? String(v) : fallback;
 
   const nar = dnaNarrative ?? {};
   const res = resources ?? {};
+
+  const conceptBlock = concept?.trim()
+    ? `━━━ THE IDEA THE USER WANTS (anchor every field to THIS) ━━━\n${concept.trim()}\n\nBuild the card around this specific idea. Do not invent a different direction.\n\n`
+    : "";
 
   const bgBlock = cvSummary?.trim()
     ? `CV/portfolio summary:\n${cvSummary.trim()}`
@@ -111,7 +120,7 @@ function buildUserContext(
   const m = models[0];
   const modelLine = `${pathLabel}: ${m.model} (compatibility: ${m.compatibility}%)${m.isPrimary ? " ← PRIMARY DNA FIT" : ""}`;
 
-  return `━━━ DNA PROFILE ━━━
+  return `${conceptBlock}━━━ DNA PROFILE ━━━
 Name: ${firstName}
 Core Pattern: ${or(nar["core_dna_label"] ?? scores.strength_patterns?.join(", "))}
 Value Signature: ${or(nar["your_core"] ?? scores.strengths_summary)}
@@ -163,57 +172,6 @@ ${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}━━━ MODEL 
 ${modelLine}`;
 }
 
-function buildConceptPhase1Prompt(
-  concept: string,
-  scores: DnaScores,
-  firstName: string,
-  rawAnswers: Record<string, string>,
-  cvSummary?: string,
-  dnaNarrative?: Record<string, string>,
-  resources?: Record<string, string>,
-): string {
-  const or = (v: unknown, fallback = "Not provided") => v && String(v).trim() ? String(v) : fallback;
-  const nar = dnaNarrative ?? {};
-  const res = resources ?? {};
-  const bgBlock = cvSummary?.trim() || [
-    rawAnswers["bg1_history"] ? `- Most recent role: ${rawAnswers["bg1_history"]}` : "",
-    rawAnswers["bg2_skills"] ? `- Experience: ${rawAnswers["bg2_skills"]}` : "",
-    rawAnswers["bg4_direction"] ? `- Key skills: ${rawAnswers["bg4_direction"]}` : "",
-  ].filter(Boolean).join("\n");
-
-  return `Generate 1 direction card for ${firstName} based on this opportunity concept: "${concept}".
-
-━━━ DNA PROFILE ━━━
-Name: ${firstName}
-Core Pattern: ${or(nar["core_dna_label"] ?? scores.strength_patterns?.join(", "))}
-Value Signature: ${or(nar["your_core"] ?? scores.strengths_summary)}
-Risk score: ${scores.risk_score}/10
-Constraint level: ${scores.constraint_score}/10
-Readiness: ${scores.readiness_score}/10
-
-━━━ RESOURCES ━━━
-Networks: ${or(res.networks)}
-Capital: $${or(res.startingCapital)}
-Runway (months): ${or(res.financialRunway)}
-Hours/week: ${or(res.hoursPerWeek)}
-Income floor: $${or(res.incomeFloor)}/month
-
-${bgBlock ? `━━━ BACKGROUND ━━━\n${bgBlock}\n` : ""}
-Adapt the concept to fit this user's DNA, skills, and constraints. Make it concrete and specific to them.
-
-Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markdown):
-{"cards": [{
-  "title": "<specific business name based on the concept, max 10 words>",
-  "compatibility": <estimated 0-100 fit score based on DNA>,
-  "oneliner": "<what it does and who it serves, max 20 words>",
-  "description": "<3–5 sentences: specific complaint solved, why now, first customers>",
-  "why_fits_you": ["<bullet 1 — reference their exact credential/tool>", "<bullet 2>", "<bullet 3>"],
-  "key_risks": ["<risk 1>", "<risk 2>"],
-  "why_now": "<1 sentence: what market shift makes this timely>",
-  "constraint_check": { "status": "Pass" | "Warn" | "Fail", "reason": "<why, if not Pass>" }
-}]}`;
-}
-
 function buildPhase1Prompt(
   models: { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
   scores: DnaScores,
@@ -223,8 +181,9 @@ function buildPhase1Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
   const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
 
   return `Generate 1 direction card summary for ${firstName}.
@@ -242,11 +201,13 @@ Return exactly 1 DirectionCardData object with ONLY these fields (JSON, no markd
   "startup_cost_usd": "<e.g. $0–$500>",
   "time_to_first_revenue_weeks": "<e.g. 6–10 weeks>",
   "hours_per_week": "<at 1-client scale, e.g. 8–12 hrs/week>",
-  "constraint_check": {"status": "Pass"|"Warn"|"Fail", "reason": "<required if Warn or Fail>"},
+  "constraint_check": {"status": "Pass"|"Warn", "reason": "<always required — 1 sentence referencing their specific constraints. Never output Fail — if constraints are tight, use Warn and explain the specific tension>"},
   "first_10_customers": "<1 sentence, specific channel and city if provided>",
   "unfair_advantage": "<why ${firstName} specifically — reference exact credential or tool, NEVER 'your experience'>",
   "path_label": "${pathLabel}"
-}]}`;
+}]}
+
+CRITICAL: constraint_check.status must be "Pass" or "Warn" only — never "Fail". constraint_check.reason must always be a full sentence, never "—" or empty.`;
 }
 
 function buildPhase2Prompt(
@@ -259,8 +220,9 @@ function buildPhase2Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform fit analysis for this direction for ${firstName}.
 
@@ -291,8 +253,9 @@ function buildPhase3Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform market reality analysis for this direction for ${firstName}.
 
@@ -327,8 +290,9 @@ function buildPhase4Prompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
 
   return `Perform operations analysis for this direction for ${firstName}.
 
@@ -344,6 +308,9 @@ Return JSON {"cards": [{ "title": "${phase1Card.title}", ...fields }]} with ONLY
 - hours_per_week: string — at 1-client scale, e.g. "8–12 hrs/week"
 - first_10_customers: string — 1 sentence, specific channel
 - distribution_path: string — specific community/subreddit/group
+- constraint_check: { status: "Pass"|"Warn", reason: "<1 sentence specifically referencing their actual constraints — capital, runway, hours, income floor — and how this direction fits or strains them. NEVER output Fail. NEVER output '—' or empty string.>" }
+
+CRITICAL: constraint_check.reason must always explain the specific tension (Warn) or fit (Pass) using the user's actual numbers — e.g. runway months, capital amount, income floor. Never generic.
 
 Return JSON only, no markdown fences.`;
 }
@@ -357,8 +324,9 @@ function buildFullPrompt(
   dnaNarrative?: Record<string, string>,
   resources?: Record<string, string>,
   cardIndex = 0,
+  concept?: string,
 ): string {
-  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+  const context = buildUserContext(models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
   const pathLabel = cardIndex === 0 ? "Safe" : cardIndex === 1 ? "Aligned" : "Stretch";
 
   return `Generate 1 direction card for ${firstName}.
@@ -415,9 +383,21 @@ function parseCard(text: string): DirectionCardData | null {
 }
 
 export async function POST(req: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("[direction-cards] ANTHROPIC_API_KEY not set");
+    return Response.json({ cards: [], error: "Server configuration error: API key missing" }, { status: 500 });
+  }
+
   const authedUser = await verifyAuth(req);
-  if (!authedUser) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authedUser) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userKey = authedUser.email ?? authedUser.uid;
+  try {
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
+  } catch (err) {
+    console.error("[direction-cards] credit check failed, allowing through:", err);
+    // Don't block generation if credit check itself errors
   }
 
   try {
@@ -435,24 +415,17 @@ export async function POST(req: NextRequest) {
       concept?: string;
     };
 
-    const { models, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources } = body;
+    const { scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, concept } = body;
 
-    // Concept-based card: generate a direction from an opportunity concept (no model required)
-    if (body.concept && (!models || models.length === 0)) {
-      const conceptPrompt = buildConceptPhase1Prompt(body.concept, scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources);
-      const msg = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
-        system: SYSTEM_PROMPT_CACHED,
-        messages: [{ role: "user", content: conceptPrompt }],
-      });
-      const block = msg.content[0];
-      const raw = block?.type === "text" ? block.text : "";
-      const card = parseCard(raw);
-      return Response.json({ cards: card ? [card] : [] });
-    }
+    // When generating from a brainstormed idea (concept), models may be empty —
+    // fall back to a neutral entry so the staged flow still works.
+    const models = body.models && body.models.length > 0
+      ? body.models
+      : concept?.trim()
+        ? [{ model: "Skill-Leveraged Service" as StructuralModel, compatibility: 85, isPrimary: true }]
+        : [];
 
-    if (!models || models.length === 0) {
+    if (models.length === 0) {
       return Response.json({ cards: [] });
     }
 
@@ -464,27 +437,32 @@ export async function POST(req: NextRequest) {
     const fastModel = "claude-haiku-4-5-20251001";
     const deepModel = "claude-sonnet-4-6";
 
-    const model = body.models[cardIndex] ?? body.models[0];
+    const model = models[cardIndex] ?? models[0];
 
     if (phase === 1) {
       // Phase 1: fast summary using Haiku
-      const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase1Prompt([model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
-        max_tokens: 700,
+        max_tokens: 1024,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
-      return Response.json({ cards: card ? [card] : [] });
+      if (!card) {
+        console.error("[direction-cards] phase 1 parse failed. Raw:", raw.slice(0, 500));
+        return Response.json({ cards: [], error: "Could not parse model output" }, { status: 502 });
+      }
+      return Response.json({ cards: [card] });
     }
 
     if (phase === 2) {
       // Phase 2: deep analysis using Sonnet (or Haiku for alt cards)
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase2Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase2Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const selectedModel = isAltCard ? fastModel : deepModel;
       const msg = await client.messages.create({
         model: selectedModel,
@@ -492,6 +470,7 @@ export async function POST(req: NextRequest) {
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      await deductCredits(userKey, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -501,13 +480,14 @@ export async function POST(req: NextRequest) {
     if (phase === 3) {
       // Phase 3: market reality using Haiku
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase3Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
-        max_tokens: 1000,
+        max_tokens: 2000,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -517,13 +497,14 @@ export async function POST(req: NextRequest) {
     if (phase === 4) {
       // Phase 4: operations using Haiku
       const phase1Card = body.phase1Card ?? {};
-      const prompt = buildPhase4Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex);
+      const prompt = buildPhase4Prompt(phase1Card, [model], scores, firstName, rawAnswers, cvSummary, dnaNarrative, resources, cardIndex, concept);
       const msg = await client.messages.create({
         model: fastModel,
         max_tokens: 600,
         system: SYSTEM_PROMPT_CACHED,
         messages: [{ role: "user", content: prompt }],
       });
+      await deductCredits(userKey, calculateCredits(fastModel, msg.usage.input_tokens, msg.usage.output_tokens));
       const block = msg.content[0];
       const raw = block?.type === "text" ? block.text : "";
       const card = parseCard(raw);
@@ -539,12 +520,14 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_PROMPT_CACHED,
       messages: [{ role: "user", content: prompt }],
     });
+    await deductCredits(userKey, calculateCredits(selectedModel, msg.usage.input_tokens, msg.usage.output_tokens));
     const block = msg.content[0];
     const raw = block?.type === "text" ? block.text : "";
     const card = parseCard(raw);
     return Response.json({ cards: card ? [card] : [] });
   } catch (err) {
-    console.error("[direction-cards] error:", err);
-    return Response.json({ cards: [] }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[direction-cards] error:", msg);
+    return Response.json({ cards: [], error: msg }, { status: 500 });
   }
 }

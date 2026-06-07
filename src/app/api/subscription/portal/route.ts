@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 export async function POST(req: NextRequest) {
@@ -13,6 +11,14 @@ export async function POST(req: NextRequest) {
     const { email, return_url } = await req.json();
     if (!email || !return_url) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const authedUser = await verifyAuth(req);
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (email !== authedUser.uid && email !== authedUser.email) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     getAdminAuth();

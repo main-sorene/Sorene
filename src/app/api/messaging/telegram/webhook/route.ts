@@ -1,125 +1,78 @@
 import { NextRequest } from "next/server";
-import {
-  consumeLinkToken,
-  linkPlatformToUser,
-  getUidByPlatformId,
-  saveMessagingMessage,
-  getRecentMessages,
-  updateExecutionProgress,
-  getExecutionProgress,
-} from "@/lib/messagingAdmin";
-import { processMessage } from "@/lib/executionCoach";
+import Anthropic from "@anthropic-ai/sdk";
+import { consumeLinkToken, linkPlatformToUser, getUidByPlatformId } from "@/lib/messagingAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
-async function sendTelegramMessage(chatId: number | string, text: string) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+
+async function sendTelegram(chatId: number | string, text: string) {
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
   });
 }
 
-async function formatProgressSummary(uid: string): Promise<string> {
-  const p = await getExecutionProgress(uid);
-  return [
-    "Your Execution Progress:",
-    `Step 1 — Customer interviews: ${p.conversationsLogged}/10`,
-    `Step 2 — Problem identified: ${p.problemIdentified ? "Yes" : "No"}`,
-    `Step 3 — MVO created: ${p.mvoCreated ? "Yes" : "No"}`,
-    `Step 4 — Paying customers: ${p.payingCustomers}/3`,
-    p.elevatorPitch ? `Elevator pitch: ${p.elevatorPitch}` : null,
-    p.lastCheckIn ? `Last check-in: ${p.lastCheckIn}` : null,
-    `Weekly streak: ${p.weeklyStreakDays} days`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+async function coach(text: string, chatId: number | string, uid: string): Promise<void> {
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    system: "You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical.",
+    messages: [{ role: "user", content: text }],
+  });
+  await deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
+  const reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
+  await sendTelegram(chatId, reply);
 }
 
 export async function POST(req: NextRequest) {
-  // Validate secret header
-  const secret = req.headers.get("x-telegram-bot-api-secret-token");
-  if (secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-    return new Response("OK", { status: 200 });
+  if (WEBHOOK_SECRET) {
+    const secret = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+    if (secret !== WEBHOOK_SECRET) return new Response("Forbidden", { status: 403 });
   }
 
   try {
-    const update = await req.json();
-    const message = update?.message;
+    const body = await req.json();
+    const message = body?.message;
     if (!message) return new Response("OK", { status: 200 });
 
-    const chatId: number = message.chat?.id;
+    const chatId: number = message.chat.id;
     const text: string = message.text ?? "";
-    const telegramUserId = String(message.from?.id ?? chatId);
+    const telegramId = String(message.from?.id ?? chatId);
 
     if (text.startsWith("/start")) {
-      const parts = text.split(" ");
-      const token = parts[1]?.trim();
+      const token = text.split(" ")[1]?.trim();
       if (token) {
         const result = await consumeLinkToken(token);
-        if (result) {
-          await linkPlatformToUser(result.uid, "telegram", telegramUserId);
-          await sendTelegramMessage(
-            chatId,
-            "✅ Your Telegram is now linked to your Sorene account. Send me a message to get started.",
-          );
+        if (result && result.platform === "telegram") {
+          await linkPlatformToUser(result.uid, "telegram", telegramId);
+          await sendTelegram(chatId, "✅ Your Telegram is now linked to Sorene! Send me a message any time to log progress or get coaching.");
         } else {
-          await sendTelegramMessage(
-            chatId,
-            "That link is invalid or has expired. Please go to your Sorene app and tap 'Chat on Telegram' to get a new link.",
-          );
+          await sendTelegram(chatId, "❌ That link is invalid or expired. Please generate a new one from your Execution Hub.");
         }
       } else {
-        await sendTelegramMessage(
-          chatId,
-          "Welcome to Sorene! To link your account, go to the Execution Hub in the Sorene app and tap 'Chat on Telegram'.",
-        );
+        await sendTelegram(chatId, "👋 Hi! I'm Sorene, your execution coach.\n\nTo link your account, go to *Execution Hub → Direct Sync → Telegram* and tap Connect.");
       }
       return new Response("OK", { status: 200 });
     }
 
-    if (text === "/progress") {
-      const uid = await getUidByPlatformId("telegram", telegramUserId);
-      if (!uid) {
-        await sendTelegramMessage(
-          chatId,
-          "Please link your account first by going to the Sorene app and tapping 'Chat on Telegram'.",
-        );
-      } else {
-        const summary = await formatProgressSummary(uid);
-        await sendTelegramMessage(chatId, summary);
-      }
-      return new Response("OK", { status: 200 });
-    }
-
-    // Regular message
-    const uid = await getUidByPlatformId("telegram", telegramUserId);
+    const uid = await getUidByPlatformId("telegram", telegramId);
     if (!uid) {
-      await sendTelegramMessage(
-        chatId,
-        "Please link your account first by going to the Sorene app and tapping 'Chat on Telegram'.",
-      );
+      await sendTelegram(chatId, "I don't recognise your account yet. Go to *Execution Hub → Direct Sync → Telegram* to link your Sorene account first.");
       return new Response("OK", { status: 200 });
     }
 
-    const [progress, recentHistory] = await Promise.all([
-      getExecutionProgress(uid),
-      getRecentMessages(uid, 10),
-    ]);
-
-    const { reply, progressPatch } = await processMessage(uid, text, progress, recentHistory);
-
-    await Promise.all([
-      saveMessagingMessage(uid, "telegram", "user", text),
-      saveMessagingMessage(uid, "telegram", "assistant", reply),
-    ]);
-
-    if (Object.keys(progressPatch).length > 0) {
-      await updateExecutionProgress(uid, progressPatch);
+    const credits = await checkCredits(uid);
+    if (!credits.ok) {
+      await sendTelegram(chatId, "You've used up your Sorene credits. Upgrade at sorene.ai to keep coaching.");
+      return new Response("OK", { status: 200 });
     }
 
-    await sendTelegramMessage(chatId, reply);
+    await coach(text, chatId, uid);
   } catch (err) {
-    console.error("[telegram/webhook] error:", err);
+    console.error("[telegram webhook]", err);
   }
 
   return new Response("OK", { status: 200 });

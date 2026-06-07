@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAtom, useAtomValue } from "jotai";
-import { resourcesConstraintsAtom, ResourcesConstraints, recipeDirectionsAtom } from "@/store/atoms";
+import { resourcesConstraintsAtom, ResourcesConstraints, recipeDirectionsAtom, userAtom } from "@/store/atoms";
 import { Loader2, ChevronLeft, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
+import { saveUserProfile } from "@/lib/firestore";
 
 const inputCls = "w-full px-3 py-2.5 text-[13px] text-[#151515] bg-white border border-[#ECEDEE] rounded-xl outline-none focus:border-[#D1D5DB] transition-colors placeholder:text-[#9CA3AF]";
 const selectCls = inputCls + " appearance-none cursor-pointer";
@@ -43,9 +44,11 @@ interface ResourcesConstraintsFormProps {
 export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = false, canGenerateMore = false, directionCardsCount = 0 }: ResourcesConstraintsFormProps) {
   const [form, setForm] = useAtom(resourcesConstraintsAtom);
   const recipeDirections = useAtomValue(recipeDirectionsAtom);
+  const user = useAtomValue(userAtom);
   const { primaryCard } = useDirectionResult();
   const [isOpen, setIsOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasNoDirections = !primaryCard && recipeDirections.length === 0;
 
@@ -55,15 +58,22 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
       if (stored) {
         const parsed = JSON.parse(stored);
         setForm(parsed);
+        // Sync to Firestore so other devices can read it
+        if (user?.uid) saveUserProfile(user.uid, { resourcesConstraints: parsed }).catch(() => {});
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.uid]);
 
   const update = (key: keyof ResourcesConstraints, value: string) => {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
       try { localStorage.setItem("resourcesConstraints", JSON.stringify(next)); } catch {}
+      // Debounce Firestore sync so it doesn't fire on every keystroke
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        if (user?.uid) saveUserProfile(user.uid, { resourcesConstraints: next }).catch(() => {});
+      }, 2000);
       return next;
     });
     setSaved(false);
@@ -123,10 +133,10 @@ export function ResourcesConstraintsForm({ generateMore, isGeneratingMore = fals
               <div className="flex items-center justify-between gap-4 mb-4">
                 <button
                   onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
-                  className="flex items-center gap-1.5 text-white/80 hover:text-white transition-colors text-[13px] font-medium"
+                  className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium"
                 >
-                  <ChevronLeft size={16} />
-                  Back
+                  <ChevronLeft size={20} />
+                  Back to summary
                 </button>
                 {saved && (
                   <span className="text-[12px] text-white/70">Direction card added ↓</span>

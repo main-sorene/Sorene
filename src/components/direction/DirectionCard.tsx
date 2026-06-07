@@ -16,7 +16,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useSetAtom } from "jotai";
+import { selectedExecutionProjectAtom } from "@/store/atoms";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "../ui/separator";
 import type { DirectionCardData } from "@/lib/directionTypes";
@@ -74,7 +77,7 @@ export function DirectionCard({
   variant = "standard",
   score,
   badges,
-  actionText = "View detail",
+  actionText = "See Detail",
   className,
   cardData,
   whyFitsYou = [
@@ -111,14 +114,42 @@ export function DirectionCard({
   isLoadingSection3 = false,
   isLoadingSection4 = false,
 }: DirectionCardProps) {
+  const router = useRouter();
+  const setSelectedProject = useSetAtom(selectedExecutionProjectAtom);
+  const goValidate = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (cardData) setSelectedProject(cardData);
+    router.push("/execution-hub");
+  };
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);
   const [checkedSteps, setCheckedSteps] = useState<string[]>(
     recommendedFirstStep.steps.filter((s) => s.completed).map((s) => s.id),
   );
+  const [section1Open, setSection1Open] = useState(true);
   const [section3Open, setSection3Open] = useState(false);
   const [section4Open, setSection4Open] = useState(false);
+  const constraintFetchedRef = useRef(false);
+  const detailFetchedRef = useRef(false);
+
+  // Auto-fetch constraint analysis for old cards where reason is "—" but section 4 data already exists
+  useEffect(() => {
+    const missingReason = !cardData?.constraint_check?.reason || cardData.constraint_check.reason === "—";
+    const hasSection4 = !!cardData?.startup_cost_usd;
+    if (missingReason && hasSection4 && !isLoadingSection4 && !constraintFetchedRef.current) {
+      constraintFetchedRef.current = true;
+      onLoadSection4?.();
+    }
+  }, [cardData?.constraint_check?.reason, cardData?.startup_cost_usd, isLoadingSection4, onLoadSection4]);
 
   const isExpanded = isExpandedProp ?? internalIsExpanded;
+
+  // When card is expanded externally (e.g. via atom) and Section 1 not yet loaded, auto-fetch it
+  useEffect(() => {
+    if (isExpanded && !cardData?.ikigai_filters && !cardData?.four_filters && !isLoadingDetail && !detailFetchedRef.current) {
+      detailFetchedRef.current = true;
+      onLoadDetail?.();
+    }
+  }, [isExpanded, cardData?.ikigai_filters, cardData?.four_filters, isLoadingDetail, onLoadDetail]);
 
   const handleToggle = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -127,6 +158,7 @@ export function DirectionCard({
       onLoadDetail?.();
     }
     if (!expanding) {
+      setSection1Open(true);
       setSection3Open(false);
       setSection4Open(false);
     }
@@ -167,7 +199,10 @@ export function DirectionCard({
     s >= 70 ? "text-[#32C382]" : s >= 40 ? "text-[#F5B100]" : "text-[#DF2E16]";
 
   const constraintColor = (status: string) =>
-    status === "Pass" ? "#32C382" : status === "Warn" ? "#F5B100" : "#DF2E16";
+    status === "Pass" ? "#32C382" : "#F5B100";
+
+  const constraintLabel = (status: string) =>
+    status === "Pass" ? "Pass" : "Warn";
 
   const oceanColor = (type: string) =>
     type === "Blue" ? "#3B82F6" : type === "Purple" ? "#8B5CF6" : "#EF4444";
@@ -527,7 +562,7 @@ export function DirectionCard({
               <motion.button initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
                 onClick={(e) => handleToggle(e)}
                 className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-sm font-medium mb-8 w-fit">
-                <ChevronLeft size={20} />← Back to summary
+                <ChevronLeft size={20} />Back to summary
               </motion.button>
             )}
           </AnimatePresence>
@@ -560,18 +595,14 @@ export function DirectionCard({
             <div className="flex items-center gap-2">
               {onHide && (
                 <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                   Hide
                 </button>
               )}
-              {cardData ? (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+              {cardData && (
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                   style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                  {cardData.constraint_check.status}
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#CEF2E2] text-[#196141] text-[13px] font-medium">
-                  Easy to start
+                  {constraintLabel(cardData.constraint_check.status)}
                 </div>
               )}
             </div>
@@ -579,15 +610,13 @@ export function DirectionCard({
               {!isExpanded && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                   className="flex items-center gap-2">
-                  {onChoose && (
-                    <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
-                      Choose this Direction
-                    </button>
-                  )}
+                  <button onClick={goValidate}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
+                    Start Validate
+                  </button>
                   <button onClick={(e) => handleToggle(e)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                    {actionText}<ArrowRight size={16} />
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                    {actionText}<ArrowRight size={14} />
                   </button>
                 </motion.div>
               )}
@@ -606,89 +635,95 @@ export function DirectionCard({
               ) : cardData ? (
                 <div className="divide-y divide-[#ECEDEE]">
 
-                  {/* Section 1: Why This Fits You */}
-                  <div className="p-4 pb-6 space-y-4">
-                    {isLoadingDetail && !cardData?.ikigai_filters ? (
-                      <div className="flex items-center gap-2 py-8 justify-center">
-                        <Spinner />
-                        <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
-                      </div>
-                    ) : (cardData.ikigai_filters || cardData.four_filters) ? (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-                          {cardData.composite_score != null && (
-                            <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
-                              {cardData.composite_score}
-                            </span>
-                          )}
-                        </div>
-                        <Separator className="bg-[#ECEDEE]" />
-                        <div className="space-y-3">
-                          {(cardData.ikigai_filters
-                            ? [
-                                ["What You Love", cardData.ikigai_filters.what_you_love],
-                                ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
-                                ["What The World Needs", cardData.ikigai_filters.what_world_needs],
-                                ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
-                                ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
-                              ]
-                            : [
-                                ["What You Love", cardData.four_filters?.alignment],
-                                ["What You're Good At", cardData.four_filters?.skills_match],
-                                ["What The World Needs", cardData.four_filters?.market_potential],
-                                ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
-                                ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
-                              ]
-                          ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
-                          .map(([label, item], idx) => (
-                            <div key={label} className="flex gap-3">
-                              <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
-                              <div>
-                                <span className="text-[13px] font-medium text-[#151515]">{label}</span>
-                                <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {(cardData.high_risk_flags?.length ?? 0) > 0 && (
-                          <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
-                            {cardData.high_risk_flags!.map((flag, i) => (
-                              <div key={i} className="flex items-start gap-2">
-                                <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
-                                <p className="text-[12px] text-[#DF2E16]">{flag}</p>
-                              </div>
-                            ))}
-                          </div>
+                  {/* Section 1: Why This Fits You accordion */}
+                  <div>
+                    <button
+                      onClick={() => setSection1Open(!section1Open)}
+                      className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+                    >
+                      <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
+                      <div className="flex items-center gap-2">
+                        {cardData.composite_score != null && (
+                          <span className={cn("text-[15px] font-semibold tabular-nums", filterScoreClass(cardData.composite_score))}>
+                            {cardData.composite_score}
+                          </span>
                         )}
-                        {cardData.unfair_advantage && (
-                          <div>
-                            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-                            <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-                          </div>
-                        )}
-                      </>
-                    ) : null}
-                  </div>
-
-                  {/* Section 2: Positioning */}
-                  {(cardData.ikigai_filters || cardData.four_filters || isLoadingDetail) && (
-                    <div className="p-4 pb-6">
-                      {isLoadingDetail && !cardData.simple_positioning ? (
-                        <div className="flex items-center gap-2 py-4 justify-center">
+                        {isLoadingDetail && !cardData?.ikigai_filters ? (
                           <Spinner />
-                        </div>
-                      ) : cardData.simple_positioning ? (
-                        <>
-                          <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
-                          <Separator className="bg-[#ECEDEE] mb-4" />
-                          <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
-                            {cardData.simple_positioning}
-                          </p>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
+                        ) : section1Open ? (
+                          <ChevronUp size={16} className="text-[#9CA3AF]" />
+                        ) : (
+                          <ChevronDown size={16} className="text-[#9CA3AF]" />
+                        )}
+                      </div>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {section1Open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 pb-5 space-y-4">
+                            {isLoadingDetail && !cardData?.ikigai_filters ? (
+                              <div className="flex items-center gap-2 py-6 justify-center">
+                                <Spinner />
+                                <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
+                              </div>
+                            ) : (cardData.ikigai_filters || cardData.four_filters) ? (
+                              <>
+                                <div className="space-y-3">
+                                  {(cardData.ikigai_filters
+                                    ? [
+                                        ["What You Love", cardData.ikigai_filters.what_you_love],
+                                        ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                                        ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                                        ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                                        ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+                                      ]
+                                    : [
+                                        ["What You Love", cardData.four_filters?.alignment],
+                                        ["What You're Good At", cardData.four_filters?.skills_match],
+                                        ["What The World Needs", cardData.four_filters?.market_potential],
+                                        ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                                        ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+                                      ]
+                                  ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+                                  .map(([label, item], idx) => (
+                                    <div key={label} className="flex gap-3">
+                                      <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
+                                      <div>
+                                        <span className="text-[13px] font-medium text-[#151515]">{label}</span>
+                                        <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {(cardData.high_risk_flags?.length ?? 0) > 0 && (
+                                  <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+                                    {cardData.high_risk_flags!.map((flag, i) => (
+                                      <div key={i} className="flex items-start gap-2">
+                                        <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                                        <p className="text-[12px] text-[#DF2E16]">{flag}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {cardData.unfair_advantage && (
+                                  <div>
+                                    <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+                                    <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
+                                  </div>
+                                )}
+                              </>
+                            ) : null}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
                   {/* Section 3: Market Reality accordion */}
                   <div>
@@ -745,9 +780,9 @@ export function DirectionCard({
                                     <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
                                     <div className="mt-2 space-y-2">
                                       {cardData.key_competitors.map((c, i) => (
-                                        <div key={i} className="flex gap-2 items-start">
-                                          <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                                          <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
+                                        <div key={i} className="p-3 rounded-xl bg-[#F5F5F7]">
+                                          <p className="text-[13px] font-medium text-[#151515] leading-snug">{c.name}</p>
+                                          <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{c.what_they_do}</p>
                                         </div>
                                       ))}
                                     </div>
@@ -833,15 +868,27 @@ export function DirectionCard({
                                   </div>
                                 )}
                                 {cardData.constraint_check && (
-                                  <div className="flex items-start gap-3 p-3 rounded-xl border"
-                                    style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
-                                    <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
-                                      style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                                      {cardData.constraint_check.status}
-                                    </span>
-                                    {cardData.constraint_check.reason && (
-                                      <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
-                                    )}
+                                  <div>
+                                    <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
+                                    <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
+                                      style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
+                                      <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
+                                        style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                                        {constraintLabel(cardData.constraint_check.status)}
+                                      </span>
+                                      {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—" ? (
+                                        <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+                                      ) : isLoadingSection4 ? (
+                                        <p className="text-[12px] text-[#9A9A9A] leading-relaxed italic">Analysing your constraints…</p>
+                                      ) : (
+                                        <button
+                                          onClick={() => onLoadSection4?.()}
+                                          className="text-[12px] text-[#62646A] leading-relaxed underline underline-offset-2 text-left"
+                                        >
+                                          Tap to analyse constraint fit →
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                                 {cardData.first_10_customers && (
@@ -867,6 +914,14 @@ export function DirectionCard({
                     </AnimatePresence>
                   </div>
 
+                  {/* Start Validation CTA */}
+                  <div className="p-4">
+                    <button onClick={goValidate}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+                      Start Validation
+                    </button>
+                  </div>
+
                 </div>
               ) : (
                 legacyContent
@@ -880,201 +935,295 @@ export function DirectionCard({
 
   // ── Standard variant ─────────────────────────────────────────────────────────
   const expandedDetailContent = rawContent_rendered ?? (cardData ? (
-    <div className="p-3 md:p-4 space-y-8">
-      {/* Section 1: Why This Fits You */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-5">
-        <div className="flex items-center justify-between">
-          <h4 className="text-base font-medium text-[#151515]">Why This Fits You</h4>
-          {cardData.composite_score != null && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-[#9A9A9A]">Composite</span>
-              <span className={cn("text-[18px] font-semibold", filterScoreClass(cardData.composite_score))}>
+    <div className="divide-y divide-[#ECEDEE]">
+
+      {/* Section 1: Why This Fits You accordion */}
+      <div>
+        <button
+          onClick={() => setSection1Open(!section1Open)}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Why This Fits You</span>
+          <div className="flex items-center gap-2">
+            {cardData.composite_score != null && (
+              <span className={cn("text-[15px] font-semibold tabular-nums", filterScoreClass(cardData.composite_score))}>
                 {cardData.composite_score}
               </span>
-            </div>
-          )}
-        </div>
-        <Separator className="bg-[#ECEDEE]" />
-        {isLoadingDetail && !cardData.ikigai_filters ? (
-          <div className="flex items-center gap-2 py-4 justify-center">
-            <Spinner />
-            <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {(cardData.ikigai_filters
-              ? [
-                  ["What You Love", cardData.ikigai_filters.what_you_love],
-                  ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
-                  ["What The World Needs", cardData.ikigai_filters.what_world_needs],
-                  ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
-                  ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
-                ]
-              : [
-                  ["What You Love", cardData.four_filters?.alignment],
-                  ["What You're Good At", cardData.four_filters?.skills_match],
-                  ["What The World Needs", cardData.four_filters?.market_potential],
-                  ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
-                  ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
-                ]
-            ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
-            .map(([label, item], idx) => (
-              <motion.div key={label} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex items-start gap-3">
-                <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
-                <div className="flex-1">
-                  <span className="text-[13px] font-medium text-[#151515]">{label}</span>
-                  <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-        {(cardData.high_risk_flags?.length ?? 0) > 0 && (
-          <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
-            {cardData.high_risk_flags!.map((flag, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
-                <p className="text-[12px] text-[#DF2E16]">{flag}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        {cardData.unfair_advantage && (
-          <div>
-            <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
-            <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
-          </div>
-        )}
-      </motion.section>
-
-      {/* Section 2: Positioning */}
-      {cardData.simple_positioning && (
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <h4 className="text-base font-medium text-[#151515] mb-3">Positioning</h4>
-          <Separator className="bg-[#ECEDEE] mb-4" />
-          <p className="text-[13px] text-[#62646A] italic leading-relaxed border-l-2 border-[#ECEDEE] pl-3">
-            {cardData.simple_positioning}
-          </p>
-        </motion.section>
-      )}
-
-      {/* Section 3: Market Reality */}
-      {(cardData.trend_connection || cardData.ocean_classification || cardData.key_competitors || cardData.competition || cardData.economic_urgency) && (
-        <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="space-y-5">
-          <h4 className="text-base font-medium text-[#151515]">Market Reality</h4>
-          <Separator className="bg-[#ECEDEE]" />
-          {cardData.trend_connection && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
-              <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
-            </div>
-          )}
-          {cardData.ocean_classification && (
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
-                style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide"
-                  style={{ color: oceanColor(cardData.ocean_classification.type) }}>
-                  {cardData.ocean_classification.type} Ocean
-                </span>
-              </div>
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
-            </div>
-          )}
-          {(cardData.key_competitors || cardData.competition) && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
-              <div className="mt-2 space-y-2">
-                {(cardData.key_competitors && cardData.key_competitors.length > 0
-                  ? cardData.key_competitors
-                  : cardData.competition
-                    ? [
-                        { name: "Current workaround", what_they_do: cardData.competition.layer1_workaround },
-                        { name: "Main incumbent", what_they_do: cardData.competition.layer2_incumbent },
-                        { name: "Simple alternatives", what_they_do: cardData.competition.layer3_simple_competitors },
-                      ]
-                    : []
-                ).map((c, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <span className="text-[13px] font-medium text-[#151515] shrink-0 min-w-[120px]">{c.name}</span>
-                    <span className="text-[12px] text-[#62646A] leading-relaxed">— {c.what_they_do}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {cardData.economic_urgency && (
-            <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
-              <div className="flex items-center gap-1.5">
-                <DollarSign size={13} className="text-[#151515]" />
-                <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
-              </div>
-              <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
-            </div>
-          )}
-          {(cardData.key_risks?.length ?? 0) > 0 && (
-            <div>
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
-              <div className="mt-2 space-y-2">
-                {cardData.key_risks!.map((risk, idx) => (
-                  <motion.div key={idx} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 + idx * 0.04 }} className="flex gap-3 items-start">
-                    <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
-                    <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          )}
-        </motion.section>
-      )}
-
-      {/* Section 4: Operations */}
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
-        <h4 className="text-base font-medium text-[#151515]">Operations</h4>
-        <Separator className="bg-[#ECEDEE]" />
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { icon: <DollarSign size={14} />, label: "Startup Cost", value: cardData.startup_cost_usd },
-            { icon: <Clock size={14} />, label: "First Revenue", value: cardData.time_to_first_revenue_weeks },
-            { icon: <Zap size={14} />, label: "Hrs/Week", value: cardData.hours_per_week },
-          ].map(({ icon, label, value }, i) => (
-            <div key={i} className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
-              <div className="flex items-center gap-1 text-[#9A9A9A]">
-                {icon}
-                <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
-              </div>
-              <p className="text-[13px] font-medium text-[#151515]">{value || "—"}</p>
-            </div>
-          ))}
-        </div>
-        {cardData.constraint_check && (
-          <div className="flex items-start gap-3 p-3 rounded-xl border"
-            style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
-              style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-              {cardData.constraint_check.status}
-            </span>
-            {cardData.constraint_check.reason && (
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+            )}
+            {isLoadingDetail && !cardData?.ikigai_filters ? (
+              <Spinner />
+            ) : section1Open ? (
+              <ChevronUp size={16} className="text-[#9CA3AF]" />
+            ) : (
+              <ChevronDown size={16} className="text-[#9CA3AF]" />
             )}
           </div>
-        )}
-        {cardData.first_10_customers && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Users size={13} className="text-[#9A9A9A]" />
-              <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">First 10 Customers</span>
-            </div>
-            <p className="text-[13px] text-[#62646A] leading-relaxed">{cardData.first_10_customers}</p>
-          </div>
-        )}
-        {cardData.distribution_path && (
-          <div>
-            <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Distribution Path</span>
-            <p className="text-[13px] text-[#62646A] mt-0.5 leading-relaxed">{cardData.distribution_path}</p>
-          </div>
-        )}
-      </motion.section>
+        </button>
+        <AnimatePresence initial={false}>
+          {section1Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+              className="overflow-hidden"
+            >
+              <div className="px-4 pb-5 space-y-4">
+                {isLoadingDetail && !cardData?.ikigai_filters ? (
+                  <div className="flex items-center gap-2 py-6 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Analysing your fit…</span>
+                  </div>
+                ) : (cardData.ikigai_filters || cardData.four_filters) ? (
+                  <>
+                    <div className="space-y-3">
+                      {(cardData.ikigai_filters
+                        ? [
+                            ["What You Love", cardData.ikigai_filters.what_you_love],
+                            ["What You're Good At", cardData.ikigai_filters.what_you_are_good_at],
+                            ["What The World Needs", cardData.ikigai_filters.what_world_needs],
+                            ["What You Can Be Paid For", cardData.ikigai_filters.what_you_can_be_paid_for],
+                            ["Lifestyle Fit", cardData.ikigai_filters.lifestyle_fit],
+                          ]
+                        : [
+                            ["What You Love", cardData.four_filters?.alignment],
+                            ["What You're Good At", cardData.four_filters?.skills_match],
+                            ["What The World Needs", cardData.four_filters?.market_potential],
+                            ["What You Can Be Paid For", cardData.four_filters?.financial_viability],
+                            ["Lifestyle Fit", cardData.four_filters?.lifestyle_fit],
+                          ]
+                      ).filter((entry): entry is [string, { score: number; reason: string }] => !!entry[1])
+                      .map(([label, item]) => (
+                        <div key={label} className="flex gap-3">
+                          <span className={cn("w-8 shrink-0 text-right text-[13px] font-semibold tabular-nums", filterScoreClass(item.score))}>{item.score}</span>
+                          <div>
+                            <span className="text-[13px] font-medium text-[#151515]">{label}</span>
+                            <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{item.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {(cardData.high_risk_flags?.length ?? 0) > 0 && (
+                      <div className="p-3 rounded-xl bg-[#FFF5F5] border border-[#FECACA] space-y-1">
+                        {cardData.high_risk_flags!.map((flag, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <AlertTriangle size={13} className="text-[#DF2E16] shrink-0 mt-0.5" />
+                            <p className="text-[12px] text-[#DF2E16]">{flag}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cardData.unfair_advantage && (
+                      <div>
+                        <h5 className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Unfair Advantage</h5>
+                        <p className="text-[13px] text-[#151515] leading-relaxed">{cardData.unfair_advantage}</p>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Section 2: Market Reality accordion */}
+      <div>
+        <button
+          onClick={handleSection3Click}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Market Reality</span>
+          {isLoadingSection3 ? (
+            <Spinner />
+          ) : section3Open ? (
+            <ChevronUp size={16} className="text-[#9CA3AF]" />
+          ) : (
+            <ChevronDown size={16} className="text-[#9CA3AF]" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {section3Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 pt-0 space-y-5">
+                {isLoadingSection3 && !(cardData.ocean_classification || cardData.trend_connection) ? (
+                  <div className="flex items-center gap-2 py-8 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Analysing market reality…</span>
+                  </div>
+                ) : (
+                  <>
+                    {cardData.trend_connection && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Trend</span>
+                        <p className="text-[13px] text-[#62646A] mt-1 leading-relaxed">{cardData.trend_connection}</p>
+                      </div>
+                    )}
+                    {cardData.ocean_classification && (
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 min-w-[90px]"
+                          style={{ borderColor: oceanColor(cardData.ocean_classification.type) }}>
+                          <span className="text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: oceanColor(cardData.ocean_classification.type) }}>
+                            {cardData.ocean_classification.type} Ocean
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.ocean_classification.density}</p>
+                      </div>
+                    )}
+                    {(cardData.key_competitors && cardData.key_competitors.length > 0) && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Competitors</span>
+                        <div className="mt-2 space-y-2">
+                          {cardData.key_competitors.map((c, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-[#F5F5F7]">
+                              <p className="text-[13px] font-medium text-[#151515] leading-snug">{c.name}</p>
+                              <p className="text-[12px] text-[#62646A] leading-relaxed mt-0.5">{c.what_they_do}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {cardData.economic_urgency && (
+                      <div className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={13} className="text-[#151515]" />
+                          <span className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Economic Urgency</span>
+                        </div>
+                        <p className="text-[12px] text-[#151515] leading-relaxed">{cardData.economic_urgency}</p>
+                      </div>
+                    )}
+                    {(cardData.key_risks?.length ?? 0) > 0 && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Key Risks</span>
+                        <div className="mt-2 space-y-2">
+                          {cardData.key_risks!.map((risk, idx) => (
+                            <div key={idx} className="flex gap-3 items-start">
+                              <CircleX size={16} className="text-[#DC2626] shrink-0 mt-0.5" />
+                              <p className="text-[13px] text-[#62646A] leading-relaxed">{risk}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Section 3: Operations accordion */}
+      <div>
+        <button
+          onClick={handleSection4Click}
+          className="w-full flex justify-between items-center p-4 text-left hover:bg-[#FAFAFA] transition-colors"
+        >
+          <span className="text-[15px] font-medium text-[#151515]">Operations</span>
+          {isLoadingSection4 ? (
+            <Spinner />
+          ) : section4Open ? (
+            <ChevronUp size={16} className="text-[#9CA3AF]" />
+          ) : (
+            <ChevronDown size={16} className="text-[#9CA3AF]" />
+          )}
+        </button>
+        <AnimatePresence initial={false}>
+          {section4Open && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 pt-0 space-y-5">
+                {isLoadingSection4 && !cardData.startup_cost_usd ? (
+                  <div className="flex items-center gap-2 py-8 justify-center">
+                    <Spinner />
+                    <span className="text-[13px] text-[#9CA3AF]">Calculating operations…</span>
+                  </div>
+                ) : (
+                  <>
+                    {(cardData.startup_cost_usd || cardData.time_to_first_revenue_weeks || cardData.hours_per_week) && (
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { icon: <DollarSign size={14} />, label: "Startup Cost", value: cardData.startup_cost_usd },
+                          { icon: <Clock size={14} />, label: "First Revenue", value: cardData.time_to_first_revenue_weeks },
+                          { icon: <Zap size={14} />, label: "Hrs/Week", value: cardData.hours_per_week },
+                        ].map(({ icon, label, value }, i) => (
+                          <div key={i} className="p-3 rounded-xl bg-[#F5F5F7] space-y-1">
+                            <div className="flex items-center gap-1 text-[#9A9A9A]">
+                              {icon}
+                              <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
+                            </div>
+                            <p className="text-[13px] font-medium text-[#151515]">{value || "—"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cardData.constraint_check && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Constraint Check</span>
+                        <div className="flex items-start gap-3 p-3 rounded-xl border mt-1.5"
+                          style={{ borderColor: constraintColor(cardData.constraint_check.status), backgroundColor: `${constraintColor(cardData.constraint_check.status)}15` }}>
+                          <span className="text-[12px] font-bold px-2 py-0.5 rounded-md text-white shrink-0"
+                            style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
+                            {constraintLabel(cardData.constraint_check.status)}
+                          </span>
+                          {cardData.constraint_check.reason && cardData.constraint_check.reason !== "—" ? (
+                            <p className="text-[12px] text-[#62646A] leading-relaxed">{cardData.constraint_check.reason}</p>
+                          ) : isLoadingSection4 ? (
+                            <p className="text-[12px] text-[#9A9A9A] leading-relaxed italic">Analysing your constraints…</p>
+                          ) : (
+                            <button
+                              onClick={() => onLoadSection4?.()}
+                              className="text-[12px] text-[#62646A] leading-relaxed underline underline-offset-2 text-left"
+                            >
+                              Tap to analyse constraint fit →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {cardData.first_10_customers && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          <Users size={13} className="text-[#9A9A9A]" />
+                          <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">First 10 Customers</span>
+                        </div>
+                        <p className="text-[13px] text-[#62646A] leading-relaxed">{cardData.first_10_customers}</p>
+                      </div>
+                    )}
+                    {cardData.distribution_path && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wider">Distribution Path</span>
+                        <p className="text-[13px] text-[#62646A] mt-0.5 leading-relaxed">{cardData.distribution_path}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Start Validation CTA */}
+      <div className="p-4">
+        <button onClick={goValidate}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-black text-white text-[14px] font-medium hover:bg-[#2a2a2a] transition-all">
+          Start Validation
+        </button>
+      </div>
+
     </div>
   ) : legacyContent);
 
@@ -1096,7 +1245,7 @@ export function DirectionCard({
           )}
         </AnimatePresence>
         <div className="flex justify-between items-start">
-          <h3 className={cn("font-medium leading-snug tracking-tight line-clamp-2", isExpanded ? "text-heading-xsmall text-white max-w-[80%]" : "text-body-large-medium text-[#151515] pr-6 mb-4")}>
+          <h3 className={cn("font-medium leading-snug tracking-tight", isExpanded ? "text-heading-xsmall text-white max-w-[80%]" : "text-body-large-medium text-[#151515] pr-6 mb-4")}>
             {title}
           </h3>
           {score && (
@@ -1121,44 +1270,34 @@ export function DirectionCard({
         {!isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
             className="px-5 pb-5 flex flex-col flex-1" onClick={(e) => handleToggle(e)}>
-            {cardData && (
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-[11px] text-[#9A9A9A] font-medium">{cardData.oneliner}</p>
-                {cardData.path_label && (
-                  <span className="ml-auto shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F5F5F7] text-[#62646A]">
-                    {cardData.path_label}
-                  </span>
-                )}
-              </div>
-            )}
-            <p className="text-label-medium text-[#62646A] leading-relaxed mb-4 line-clamp-3">{description}</p>
+            <p className="text-[13px] text-[#62646A] leading-relaxed mb-4 line-clamp-2">
+              {cardData?.oneliner || description}
+            </p>
             <div className="mt-auto flex items-center justify-between gap-2">
-              {/* Left: Hide + constraint badge */}
+              {/* Left: Hide + constraint badge (no label text — space is tight in grid) */}
               <div className="flex items-center gap-2">
                 {onHide && (
                   <button onClick={(e) => { e.stopPropagation(); onHide(); }}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[13px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all">
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#ECEDEE] text-[#62646A] text-[12px] font-medium hover:text-[#DF2E16] hover:border-[#DF2E16] transition-all h-9">
                     Hide
                   </button>
                 )}
                 {cardData && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-white"
+                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-medium text-white h-9"
                     style={{ backgroundColor: constraintColor(cardData.constraint_check.status) }}>
-                    {cardData.constraint_check.status}
+                    {constraintLabel(cardData.constraint_check.status)}
                   </div>
                 )}
               </div>
-              {/* Right: Choose this Direction + See Detail */}
+              {/* Right: Start Validate + View detail */}
               <div className="flex items-center gap-2">
-                {onChoose && (
-                  <button onClick={(e) => { e.stopPropagation(); onChoose(); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
-                    Choose this Direction
-                  </button>
-                )}
+                <button onClick={(e) => { e.stopPropagation(); goValidate(e); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-all h-9">
+                  Start Validate
+                </button>
                 <button onClick={(e) => { e.stopPropagation(); handleToggle(e); }}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#151515] text-[14px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm">
-                  {actionText}<ArrowRight size={16} />
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-[#151515] text-[12px] font-medium border border-[#ECEDEE] hover:bg-gray-50 transition-all shadow-sm h-9">
+                  {actionText}<ArrowRight size={13} />
                 </button>
               </div>
             </div>
@@ -1179,81 +1318,41 @@ export function DirectionCard({
   );
 }
 
-// Skeleton card shown immediately while a recipe card is being generated
+
 export function RecipeSkeletonCard({ concept }: { concept?: string }) {
   const title = concept?.split(":")[0]?.trim() ?? "Building your direction…";
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-      className="relative rounded-4xl overflow-hidden bg-white shadow-sm border border-gray-100 flex flex-col"
+      className="rounded-2xl border border-[#E5E7EB] overflow-hidden bg-white"
     >
-      {/* Gradient header — same style as real card */}
-      <div className="p-6 flex flex-col" style={{ background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" }}>
-        <div className="flex justify-between items-start">
-          <div className="flex-1 mr-4">
-            <p className="text-[13px] text-white/50 font-medium mb-2 flex items-center gap-2">
-              <motion.span
-                className="inline-block w-1.5 h-1.5 rounded-full bg-white/60"
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-              />
-              Generating direction
-            </p>
-            <h3 className="text-[18px] font-medium text-white leading-snug tracking-tight">
-              {title}
-            </h3>
+      {/* Header */}
+      <div className="relative bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] p-5 overflow-hidden">
+        <div className="relative z-10 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-1">Generating direction</p>
+            <h3 className="text-base font-semibold text-white">{title}</h3>
           </div>
-          {/* Pulsing score placeholder */}
-          <motion.div
-            animate={{ opacity: [0.3, 0.7, 0.3] }}
-            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-            className="text-right shrink-0"
-          >
-            <div className="text-[32px] font-medium text-white/30 leading-none">—%</div>
-            <div className="text-[11px] text-white/30 font-medium mt-1">Compatibility</div>
-          </motion.div>
+          <div className="text-2xl font-bold text-white/20 animate-pulse">—%</div>
         </div>
-
-        {/* Animated progress bar */}
-        <div className="mt-5 h-1 bg-white/10 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-white/40 rounded-full"
-            animate={{ x: ["-100%", "200%"] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-          />
-        </div>
+        {/* Animated sweep bar */}
+        <motion.div
+          className="absolute bottom-0 left-0 h-0.5 bg-white/30"
+          initial={{ width: "0%" }}
+          animate={{ width: "100%" }}
+          transition={{ duration: 8, ease: "linear", repeat: Infinity }}
+        />
       </div>
-
-      {/* Body skeleton */}
-      <div className="bg-white p-5 space-y-4">
-        {/* Simulated action bar */}
-        <div className="flex gap-2 pb-3 border-b border-gray-100">
-          {[60, 90, 110].map((w, i) => (
-            <motion.div key={i} className="h-8 rounded-xl bg-gray-100"
-              style={{ width: w }}
-              animate={{ opacity: [0.5, 0.8, 0.5] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.15 }} />
-          ))}
-        </div>
-
-        {/* Simulated text rows */}
-        {[
-          { lines: [{ w: "75%" }, { w: "90%" }, { w: "60%" }], label: "Why it fits you" },
-          { lines: [{ w: "85%" }, { w: "70%" }], label: "First steps" },
-        ].map(({ lines, label }, si) => (
-          <div key={si}>
-            <motion.div className="h-3 w-24 bg-gray-100 rounded mb-2"
-              animate={{ opacity: [0.4, 0.7, 0.4] }}
-              transition={{ duration: 1.2, repeat: Infinity, delay: si * 0.2 }} />
-            {lines.map((l, li) => (
-              <motion.div key={li} className="h-3 bg-gray-100 rounded mb-1.5"
-                style={{ width: l.w }}
-                animate={{ opacity: [0.3, 0.6, 0.3] }}
-                transition={{ duration: 1.2, repeat: Infinity, delay: (si * 0.2) + (li * 0.1) }} />
-            ))}
+      {/* Body shimmer */}
+      <div className="p-5 space-y-3">
+        {[80, 60, 90, 50].map((w, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-gray-100 animate-pulse shrink-0" />
+            <div
+              className="h-3 rounded bg-gray-100 animate-pulse"
+              style={{ width: `${w}%`, animationDelay: `${i * 0.15}s` }}
+            />
           </div>
         ))}
       </div>

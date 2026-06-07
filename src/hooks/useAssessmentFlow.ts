@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { authFetch } from "@/lib/authFetch";
 import {
   QUESTION_NODES,
+  MAIN_QUESTION_IDS,
   OPENING_MESSAGE,
   CV_REQUEST_MESSAGE,
   CV_CONTEXT_MESSAGE,
@@ -15,7 +16,7 @@ import {
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
+import { userAtom, isAssessmentCompleteAtom, isAssessmentInProgressAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
 
 export type AssessmentMessage = {
@@ -30,6 +31,7 @@ type FlowState =
   | { phase: "opening" }
   | { phase: "question"; nodeId: string; awaitingFollowUp: false }
   | { phase: "question"; nodeId: string; awaitingFollowUp: true; followUpType: "condition" | "always" }
+
   | { phase: "closing" }
   | { phase: "done" };
 
@@ -144,10 +146,26 @@ function buildInitialMessages(
 export function useAssessmentFlow() {
   const [authUser, setAuthUser] = useAtom(userAtom);
   const setIsAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
+  const setIsAssessmentInProgress = useSetAtom(isAssessmentInProgressAtom);
   const setConversations = useSetAtom(conversationsAtom);
+
+  // Mark assessment as in-progress for the duration this hook is mounted.
+  // This is a reliable in-memory guard: even if sessionStorage fails, guards in
+  // AppLayout/chat-page check this atom and won't flip isAssessmentCompleteAtom.
+  useEffect(() => {
+    setIsAssessmentInProgress(true);
+    return () => setIsAssessmentInProgress(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const firstName = authUser?.profile?.firstName || authUser?.displayName?.split(" ")[0] || "there";
   const hasCv = !!(authUser?.profile as any)?.cvData;
   const cvSummary = (authUser?.profile as any)?.cvSummary as string | undefined;
+
+  // Collected profile data during the profile phase of assessment
+  // Pre-seeded with existing profile values so CV-path confirmation can fall back to them
+  const pendingProfileRef = useRef<{ firstName?: string; lastName?: string; birthday?: string; gender?: string }>({
+    firstName,
+    lastName: (authUser?.profile as any)?.lastName || "",
+  });
 
   const SESSION_KEY = `assessment_state_${authUser?.uid || "guest"}`;
 
@@ -173,12 +191,20 @@ export function useAssessmentFlow() {
       const saved = sessionStorage.getItem(SESSION_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.flowState) return parsed.flowState;
+        if (parsed.flowState) {
+          const fs = parsed.flowState;
+          // Migrate stale settings_review phase (removed feature) → advance to next node
+          if ((fs as any).phase === "settings_review") {
+            const nextId = (fs as any).nextNodeId || "q1_energy";
+            return { phase: "question", nodeId: nextId, awaitingFollowUp: false };
+          }
+          return fs;
+        }
       }
     } catch {}
-    return hasCv
-      ? { phase: "question", nodeId: QUESTION_NODES[0].id, awaitingFollowUp: false }
-      : { phase: "cv_request" };
+    // Always start with CV request — profile fields (name/birthday/gender)
+    // are now collected in the assessment chat, not onboarding.
+    return { phase: "cv_request" };
   });
 
   // Wrap setters to also persist to sessionStorage
@@ -220,16 +246,16 @@ export function useAssessmentFlow() {
   const addMessage = (msg: AssessmentMessage) =>
     setMessages((prev) => [...prev, msg]);
 
-  // Skip path: route into the 4 background questions (bg1_history)
+  // Skip path: go to profile collection (name/birthday/gender) without CV
   const skipCv = useCallback(() => {
     const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: false };
-    const bgNode = getNode("bg1_history")!;
+    const nameNode = getNode("onb_name_full")!;
     addMessage({
-      id: `bg1-${Date.now()}`,
+      id: `onb-name-${Date.now()}`,
       role: "assistant",
-      content: getNodeMessage(bgNode, ctx),
+      content: getNodeMessage(nameNode, ctx),
     });
-    setFlowState({ phase: "question", nodeId: "bg1_history", awaitingFollowUp: false });
+    setFlowState({ phase: "question", nodeId: "onb_name_full", awaitingFollowUp: false });
   }, [firstName]);
 
   // Upload path: user attaches PDF/image during CV request
@@ -246,11 +272,15 @@ export function useAssessmentFlow() {
       });
 
       try {
-        const buf = await file.arrayBuffer();
-        let binary = "";
-        const bytes = new Uint8Array(buf);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const fileBase64 = btoa(binary);
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve(dataUrl.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
         const res = await authFetch("/api/cv-summary", {
           method: "POST",
@@ -259,9 +289,50 @@ export function useAssessmentFlow() {
         });
 
         let summary = "";
-        if (res.ok) {
-          const data = await res.json();
-          summary = (data?.summary || "").trim();
+        let cvFirstName = firstName;
+        let cvLastName = (authUser?.profile as any)?.lastName || "";
+
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let namesParsed = false;
+          let summaryBuffer = "";
+          const streamMsgId = `cv-context-stream-${Date.now()}`;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            if (!namesParsed) {
+              const newlineIdx = buffer.indexOf("\n");
+              if (newlineIdx !== -1) {
+                const firstLine = buffer.slice(0, newlineIdx);
+                buffer = buffer.slice(newlineIdx + 1);
+                namesParsed = true;
+                if (firstLine.startsWith("NAMES:")) {
+                  const parts = firstLine.slice(6).split("|");
+                  if (parts[0]?.trim()) cvFirstName = parts[0].trim();
+                  if (parts[1] !== undefined) cvLastName = parts[1].trim();
+                }
+                // Remaining buffer is start of summary — prefix with context intro
+                const prefix = "To do that well, I'd like to start with some context about your background and experience.\n\n";
+                summaryBuffer = prefix + buffer;
+                buffer = "";
+                addMessage({ id: streamMsgId, role: "assistant", content: summaryBuffer });
+              }
+            } else {
+              summaryBuffer += buffer;
+              buffer = "";
+              // Update the streaming message in place
+              setMessages((prev) =>
+                prev.map((m) => m.id === streamMsgId ? { ...m, content: summaryBuffer } : m)
+              );
+            }
+          }
+          const prefix = "To do that well, I'd like to start with some context about your background and experience.\n\n";
+          summary = summaryBuffer.startsWith(prefix) ? summaryBuffer.slice(prefix.length).trim() : summaryBuffer.trim();
         }
 
         const cvDataPayload = {
@@ -271,10 +342,12 @@ export function useAssessmentFlow() {
           text_length: file.size,
         };
 
-        // Persist to Firestore and local atom
+        // Persist CV data + extracted name to Firestore and local atom
         await saveUserProfile(authUser.uid, {
           cvData: cvDataPayload,
           ...(summary ? { cvSummary: summary } : {}),
+          ...(cvFirstName ? { firstName: cvFirstName } : {}),
+          lastName: cvLastName,
         } as any);
 
         setAuthUser({
@@ -283,24 +356,25 @@ export function useAssessmentFlow() {
             ...(authUser.profile as any),
             cvData: cvDataPayload,
             ...(summary ? { cvSummary: summary } : {}),
+            ...(cvFirstName ? { firstName: cvFirstName } : {}),
+            lastName: cvLastName,
           },
         });
 
-        // Show CV context (if we got a summary) + first energy question
-        if (summary) {
-          addMessage({
-            id: `cv-context-${Date.now()}`,
-            role: "assistant",
-            content: CV_CONTEXT_MESSAGE(summary),
-          });
-        }
-        const ctx: AssessmentContext = { profile: { firstName }, answers: {}, hasCv: true };
+        // Pre-seed pendingProfileRef with CV-extracted names
+        pendingProfileRef.current.firstName = cvFirstName;
+        pendingProfileRef.current.lastName = cvLastName;
+
+        // CV context was already streamed into chat progressively — no addMessage needed
+        // After CV upload, confirm the full name we got from the CV
+        const ctx: AssessmentContext = { profile: { firstName: cvFirstName, lastName: cvLastName }, answers: {}, hasCv: true };
+        const confirmNode = getNode("onb_confirm_name")!;
         addMessage({
-          id: `first-q-${Date.now()}`,
+          id: `onb-confirm-${Date.now()}`,
           role: "assistant",
-          content: getNodeMessage(QUESTION_NODES.find((n) => n.id === "q1_energy")!, ctx),
+          content: getNodeMessage(confirmNode, ctx),
         });
-        setFlowState({ phase: "question", nodeId: "q1_energy", awaitingFollowUp: false });
+        setFlowState({ phase: "question", nodeId: "onb_confirm_name", awaitingFollowUp: false });
       } catch (e) {
         console.warn("CV upload failed:", e);
         // On failure, fall through to background questions so the assessment continues
@@ -326,6 +400,8 @@ export function useAssessmentFlow() {
         skipCv();
         return;
       }
+
+
 
       const answerForLogic = canonicalAnswer ?? text;
 
@@ -362,6 +438,101 @@ export function useAssessmentFlow() {
         } catch {
           setIsReflecting(false);
         }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
+      // ── Profile collection phase (onb_* nodes) ───────────────────────────────
+      if (nodeId.startsWith("onb_")) {
+        if (nodeId === "onb_confirm_name" || nodeId === "onb_name_full") {
+          // For onb_confirm_name: if user says "yes"/"correct"/"right"/etc., keep existing profile name
+          const isAffirmative = /^\s*(yes[,.]?.*|yeah|yep|yup|correct|right|that'?s? (right|correct|me)|ok|okay|sure|✓|👍)\s*$/i.test(answerForLogic.trim());
+          if (nodeId === "onb_confirm_name" && isAffirmative) {
+            // User confirmed the CV-extracted name — keep it and save immediately to Firestore
+            pendingProfileRef.current.firstName = pendingProfileRef.current.firstName || firstName;
+            pendingProfileRef.current.lastName = pendingProfileRef.current.lastName ?? (authUser?.profile?.lastName || "");
+            if (authUser?.uid) {
+              const confirmedFirst = pendingProfileRef.current.firstName || firstName;
+              const confirmedLast = pendingProfileRef.current.lastName || "";
+              try {
+                await saveUserProfile(authUser.uid, { firstName: confirmedFirst, lastName: confirmedLast } as any);
+                setAuthUser({ ...authUser, profile: { ...(authUser.profile as any), firstName: confirmedFirst, lastName: confirmedLast } });
+              } catch (e) {
+                console.warn("Failed to save confirmed name:", e);
+              }
+            }
+          } else {
+            const parts = answerForLogic.trim().split(/\s+/);
+            pendingProfileRef.current.firstName = parts[0] || answerForLogic.trim();
+            pendingProfileRef.current.lastName = parts.slice(1).join(" ") || "";
+          }
+        } else if (nodeId === "onb_birthday") {
+          pendingProfileRef.current.birthday = answerForLogic.trim();
+        } else if (nodeId === "onb_gender") {
+          pendingProfileRef.current.gender = answerForLogic;
+          // Save collected profile data to Firestore
+          if (authUser?.uid) {
+            const { firstName: fn, lastName: ln, birthday, gender } = pendingProfileRef.current;
+            const resolvedFirst = fn || firstName;
+            try {
+              await saveUserProfile(authUser.uid, {
+                firstName: resolvedFirst,
+                lastName: ln || "",
+                birthday: birthday || "",
+                sex: gender || "",
+              } as any);
+              setAuthUser({
+                ...authUser,
+                profile: {
+                  ...(authUser.profile as any),
+                  firstName: resolvedFirst,
+                  lastName: ln || "",
+                  birthday: birthday || "",
+                  sex: gender || "",
+                },
+              });
+            } catch (e) {
+              console.warn("Failed to save profile:", e);
+            }
+          }
+          // Advance directly to the next assessment node — no Settings popup interruption
+          const nextNodeId = hasCv ? "q1_energy" : "bg1_history";
+          const pendingFirstAdv = pendingProfileRef.current.firstName || firstName;
+          const pendingLastAdv = pendingProfileRef.current.lastName ?? "";
+          const ctxAdv: AssessmentContext = { profile: { firstName: pendingFirstAdv, lastName: pendingLastAdv }, answers, hasCv };
+          const nextNodeAdv = getNode(nextNodeId);
+          if (nextNodeAdv) {
+            addMessage({
+              id: `q-${nextNodeId}-${Date.now()}`,
+              role: "assistant",
+              content: getNodeMessage(nextNodeAdv, ctxAdv),
+            });
+            setFlowState({ phase: "question", nodeId: nextNodeId, awaitingFollowUp: false });
+          }
+          return;
+        }
+
+        // Advance to the next profile node
+        const pendingFirst = pendingProfileRef.current.firstName || firstName;
+        const pendingLast = pendingProfileRef.current.lastName ?? "";
+        const nextId = typeof currentNode.next === "function"
+          ? currentNode.next(answerForLogic, { profile: { firstName: pendingFirst, lastName: pendingLast }, answers, hasCv })
+          : currentNode.next;
+
+        const nextNode = getNode(nextId);
+        if (nextNode) {
+          const profileCtx: AssessmentContext = {
+            profile: { firstName: pendingFirst, lastName: pendingLast },
+            answers,
+            hasCv,
+          };
+          addMessage({
+            id: `onb-${nextId}-${Date.now()}`,
+            role: "assistant",
+            content: getNodeMessage(nextNode, profileCtx),
+          });
+          setFlowState({ phase: "question", nodeId: nextId, awaitingFollowUp: false });
+        }
+        return;
       }
       // ─────────────────────────────────────────────────────────────────────────
 
@@ -406,7 +577,7 @@ export function useAssessmentFlow() {
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }
     },
-    [flowState, answers, firstName, hasCv, authUser, skipCv]
+    [flowState, answers, firstName, hasCv, authUser, setAuthUser, skipCv]
   );
 
   async function advanceToNode(
@@ -479,23 +650,55 @@ export function useAssessmentFlow() {
       try {
         const eligibility = computeDirection(currentAnswers);
         if (authUser?.uid) {
-          // Generate AI narrative in parallel with saving
-          const narrativeResult = await authFetch("/api/dna-narrative", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              answers: currentAnswers,
-              cvSummary: (authUser?.profile as any)?.cvSummary,
-            }),
-          }).then((r) => r.json()).catch(() => ({ narrative: {} }));
-          await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
+          // Wrap backend save so a network/Firestore failure never blocks the button
+          try {
+            const narrativeResult = await authFetch("/api/dna-narrative", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                answers: currentAnswers,
+                cvSummary: (authUser?.profile as any)?.cvSummary,
+              }),
+            }).then((r) => r.json()).catch(() => ({ narrative: {} }));
+            await saveAssessmentResults(authUser.uid, currentAnswers, eligibility, narrativeResult.narrative);
+          } catch {
+            // Save failed — user can still proceed to DNA; data already in sessionStorage
+          }
+          // Generate polished background summary for users who answered bg questions (no CV)
+          if (!hasCv) {
+            authFetch("/api/bg-summary", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ answers: currentAnswers }),
+            }).then((r) => r.json()).then(async (data) => {
+              const summary = (data?.summary || "").trim();
+              if (!summary || !authUser.uid) return;
+              await saveUserProfile(authUser.uid, { cvSummary: summary } as any);
+              setAuthUser((prev) => prev ? {
+                ...prev,
+                profile: { ...(prev.profile as any), cvSummary: summary },
+              } : prev);
+            }).catch(() => {});
+          }
         }
-        // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
-        // this component and the user would never see the summary or nav buttons.
-        // The atom flips when the user clicks a nav button (see AssessmentChatPage).
-        setFlowState({ phase: "done" });
       } finally {
         setIsSaving(false);
+      }
+      // Always show the button regardless of save outcome.
+      // setFlowState writes to sessionStorage (via persist) before calling React setter,
+      // so the SESSION_KEY guard in AppLayout/chat/page blocks any auto-flip of
+      // isAssessmentCompleteAtom until the user explicitly clicks "Explore My DNA".
+      setFlowState({ phase: "done" });
+      // Update atom after button is visible so Settings modal has correct data.
+      if (authUser?.uid) {
+        setAuthUser({
+          ...authUser,
+          profile: {
+            ...(authUser.profile as any),
+            assessmentAnswers: currentAnswers,
+            dnaAssessmentComplete: true,
+          },
+        });
       }
       return;
     }
@@ -531,6 +734,11 @@ export function useAssessmentFlow() {
 
   const currentNode = flowState.phase === "question" ? getNode(flowState.nodeId) : null;
   const isWaiting = isReflecting || isSaving || isProcessingCv;
+
+  // Progress: count answered main question IDs
+  const answeredMainCount = MAIN_QUESTION_IDS.filter((id) => answers[id] !== undefined).length;
+  const progressPercent = Math.min(100, Math.round((answeredMainCount / MAIN_QUESTION_IDS.length) * 100));
+  const currentSignal = currentNode?.signal || "";
 
   // Canonical (English) choices for the current node — used for scoring/branching
   const canonicalChoices: string[] | undefined =
@@ -569,14 +777,25 @@ export function useAssessmentFlow() {
     // Persist to localStorage so it survives page refreshes
     try {
       localStorage.setItem(`assessment_conv_${uid}`, JSON.stringify(assessmentConv));
+      // Also write to convos_ immediately so Sidebar has it on next load
+      // without needing to wait for the persist effect to fire.
+      const convosKey = `convos_${uid}`;
+      try {
+        const existing = JSON.parse(localStorage.getItem(convosKey) || "[]") as Conversation[];
+        const filtered = existing.filter((c: Conversation) => (c as any).segment !== "assessment");
+        localStorage.setItem(convosKey, JSON.stringify([assessmentConv, ...filtered]));
+      } catch {}
     } catch {}
     setConversations((prev) => {
-      if (prev.some((c) => c.segment === "assessment")) return prev;
-      return [assessmentConv, ...prev];
+      // Always replace — ensures fresh messages are reflected even if assessment
+      // conv was already in the atom (e.g. from a previous loadLocalConversations call).
+      const without = prev.filter((c) => (c as any).segment !== "assessment");
+      return [assessmentConv, ...without];
     });
     try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+    setIsAssessmentInProgress(false);
     setIsAssessmentComplete(true);
-  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete, SESSION_KEY]);
+  }, [authUser?.uid, messages, setConversations, setIsAssessmentComplete, setIsAssessmentInProgress, SESSION_KEY]);
 
   return {
     messages,
@@ -591,6 +810,8 @@ export function useAssessmentFlow() {
     isDone: flowState.phase === "done",
     currentChoices: displayChoices,
     canonicalChoices,
+    currentSignal,
+    progressPercent,
     inputType:
       flowState.phase === "question" && !flowState.awaitingFollowUp
         ? currentNode?.inputType ?? "freetext"

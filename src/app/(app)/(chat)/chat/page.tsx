@@ -1,29 +1,36 @@
 "use client";
 import { useAtomValue, useSetAtom } from "jotai";
-import { isAssessmentCompleteAtom, userAtom, authLoadingAtom } from "@/store/atoms";
+import { isAssessmentCompleteAtom, isAssessmentInProgressAtom, userAtom, authLoadingAtom } from "@/store/atoms";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
-import { HomePage } from "@/pages-gitlab/HomePage";
 
 export default function Page() {
   const user = useAtomValue(userAtom);
   const authLoading = useAtomValue(authLoadingAtom);
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
+  const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const setAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
+  const router = useRouter();
 
   useEffect(() => {
-    if (user?.profile?.dnaAssessmentComplete) {
-      setAssessmentComplete(true);
+    if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
+      const sessionKey = `assessment_state_${user.uid}`;
+      const hasActiveSession = sessionStorage.getItem(sessionKey);
+      if (!hasActiveSession) {
+        setAssessmentComplete(true);
+      }
     }
-  }, [user, setAssessmentComplete]);
+  }, [user, isAssessmentInProgress, setAssessmentComplete]);
 
-  // Still loading auth
+  useEffect(() => {
+    if (isAssessmentComplete) {
+      router.replace("/dna");
+    }
+  }, [isAssessmentComplete, router]);
+
   if (authLoading) return null;
+  if (isAssessmentComplete) return null;
 
-  // Assessment not done — show the 12-question flow
-  if (!isAssessmentComplete && !user?.profile?.dnaAssessmentComplete) {
-    return <AssessmentChatPage />;
-  }
-
-  return <HomePage />;
+  return <AssessmentChatPage />;
 }

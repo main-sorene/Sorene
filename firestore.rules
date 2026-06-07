@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Sorene Firestore security rules.
+//
+// The client app keys every user on their EMAIL: the Firestore document id is
+// the email, and the auth custom token is minted with the email as its uid and
+// also carries an `email` claim (see src/app/api/auth/callback/route.ts). We
+// therefore authorize on uid OR token.email so every sign-in path resolves to
+// the same owner.
+//
+// All client-side reads/writes go through users/{userId} and its subcollections
+// (e.g. /conversations for cross-device chat history). Everything else in the
+// app (messagingChats, messagingLinkTokens, executionConversations,
+// patternSummaries, executionState, subscription writes) is accessed ONLY by
+// server routes using the Firebase Admin SDK, which bypasses these rules — so
+// they are intentionally denied to the client here.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A user owns their profile document and every subcollection beneath it.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+        && (request.auth.uid == userId || request.auth.token.email == userId);
+    }
+
+    // Default deny for everything else (admin SDK bypasses rules entirely).
+  }
+}

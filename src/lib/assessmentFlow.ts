@@ -1,6 +1,6 @@
 "use client";
 export type AssessmentContext = {
-  profile: { firstName: string; cvFileName?: string | null };
+  profile: { firstName: string; lastName?: string; cvFileName?: string | null };
   answers: Record<string, string>;
   hasCv: boolean;
 };
@@ -10,6 +10,7 @@ export type FollowUp = {
   message: string | ((answer: string) => string);
   inputType: "freetext" | "choice";
   choices?: string[];
+  allowCustom?: boolean;
 };
 
 export type QuestionNode = {
@@ -28,6 +29,49 @@ export type QuestionNode = {
     choices?: string[];
   };
 };
+
+// Profile collection nodes — run at the start of every assessment
+// (after CV upload decision). Answers are saved to the user profile,
+// not to assessment scoring answers.
+export const PROFILE_NODES: QuestionNode[] = [
+  {
+    // Shown when user uploaded a CV — confirm the full name we extracted
+    id: "onb_confirm_name",
+    signal: "Profile Setup",
+    soreneMessage: (ctx) => {
+      const fullName = [ctx.profile.firstName, ctx.profile.lastName].filter(Boolean).join(" ");
+      return `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${fullName}**. Is that correct? If not, just type your full name.`;
+    },
+    inputType: "choice",
+    choices: ["Yes"],
+    allowCustom: true,
+    next: "onb_birthday",
+  },
+  {
+    // Shown when user skipped CV — collect full name
+    id: "onb_name_full",
+    signal: "Profile Setup",
+    soreneMessage: (ctx) =>
+      `Before we begin${ctx.profile.firstName && ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""} — what's your full name?`,
+    inputType: "freetext",
+    next: "onb_birthday",
+  },
+  {
+    id: "onb_birthday",
+    signal: "Profile Setup",
+    soreneMessage: "When's your birthday? (DD/MM/YYYY)",
+    inputType: "freetext",
+    next: "onb_gender",
+  },
+  {
+    id: "onb_gender",
+    signal: "Profile Setup",
+    soreneMessage: "Last one — what's your gender?",
+    inputType: "choice",
+    choices: ["Male", "Female", "Prefer not to say"],
+    next: "settings_review", // special: handled in useAssessmentFlow
+  },
+];
 
 export const QUESTION_NODES: QuestionNode[] = [
   // Background questions — only used when user skips CV upload
@@ -130,8 +174,14 @@ export const QUESTION_NODES: QuestionNode[] = [
       condition: (answer) =>
         answer.includes("All the time") || answer.includes("Pretty often"),
       message:
-        "So this was a real thread — not just a one-off. Did it consistently energize you, or did it start to feel like extra work on top of your real job?",
-      inputType: "freetext",
+        "So this was a real pattern, not just a one-off. When it happened, did it feel exciting and natural — or more like extra effort you had to push through?",
+      inputType: "choice",
+      choices: [
+        "Exciting and natural — it felt like what I was meant to do",
+        "A mix — energizing but still required real effort",
+        "More like extra effort — I pushed through but it didn't come easily",
+      ],
+      allowCustom: true,
     },
   },
   {
@@ -330,7 +380,7 @@ export const CLOSING_MESSAGE =
   "Thank you for being honest with me. Give me a moment to bring this together.";
 
 export function getNode(id: string): QuestionNode | undefined {
-  return QUESTION_NODES.find((n) => n.id === id);
+  return QUESTION_NODES.find((n) => n.id === id) ?? PROFILE_NODES.find((n) => n.id === id);
 }
 
 export function getNodeMessage(

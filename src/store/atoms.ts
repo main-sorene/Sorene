@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import { UserProfile } from "@/lib/firestore";
+import type { DirectionCardData } from "@/lib/directionTypes";
 
 export interface AuthUser {
   uid: string;
@@ -11,6 +12,19 @@ export interface AuthUser {
 
 export const userAtom = atom<AuthUser | null>(null);
 export const authLoadingAtom = atom<boolean>(true);
+
+// Bumped to kick off the "Create My Project" onboarding conversation in the
+// Execution Hub chat (assess name + status, then route the user to the right tab).
+export const executionOnboardTriggerAtom = atom<number>(0);
+
+// Set by the onboarding chat to navigate the Execution Hub to a specific tab
+// (e.g. after evaluation the user clicks "Yes" to go to Validation/Launchpad/Growth).
+export const executionNavigateTabAtom = atom<string | null>(null);
+
+// Set by the onboarding chat when the user clicks "Start Validate" — the Hub
+// creates a project with this name/oneliner, selects it in the project bar, and
+// opens the Validation tab.
+export const executionStartValidateAtom = atom<{ title: string; oneliner: string } | null>(null);
 
 export const activeNavAtom = atom<string>("Home");
 
@@ -87,9 +101,14 @@ export const settingsTabAtom = atom<string>("General");
 export const isLogoutConfirmOpenAtom = atom<boolean>(false);
 export const isCancelSubscriptionOpenAtom = atom<boolean>(false);
 export const isManagePaymentOpenAtom = atom<boolean>(false);
+export const isCreditsExhaustedOpenAtom = atom<boolean>(false);
 export const isHistoryLoadingAtom = atom<boolean>(false);
 export const isAddMoreInfoModeAtom = atom<boolean>(false);
 export const isAssessmentCompleteAtom = atom<boolean>(false);
+// True while AssessmentChatPage is mounted and the user hasn't clicked "Explore My DNA".
+// Used by auto-flip guards so a mid-assessment Firestore save can't prematurely
+// switch the page to HomePage before the button is visible.
+export const isAssessmentInProgressAtom = atom<boolean>(false);
 export interface IdeationIdea {
   difficulty: string;
   first_validation_step: string;
@@ -122,6 +141,9 @@ export interface SubscriptionStatus {
   duration: number;
   plan: string;
   status: string;
+  cancel_at_period_end?: boolean;
+  cancel_at?: number | null;
+  credits?: { used: number; limit: number; extra?: number; resetAt?: number };
 }
 
 export const subscriptionStatusAtom = atom<SubscriptionStatus | null>(null);
@@ -135,8 +157,13 @@ export interface RecipeDirection {
   firstStep: string;
   score: number;
   rawContent?: string;
-  loading?: boolean;
+  // Structured staged-flow card (new path). When present, the card renders with
+  // the same template + lazy-loaded sections as the main direction cards.
+  cardData?: DirectionCardData;
+  // The brainstormed idea + transcript used to seed the staged phases.
   concept?: string;
+  // True while the API call is in-flight; renders a skeleton card placeholder.
+  loading?: boolean;
 }
 
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
@@ -166,3 +193,5 @@ export const EMPTY_RESOURCES: ResourcesConstraints = {
 };
 
 export const resourcesConstraintsAtom = atom<ResourcesConstraints>(EMPTY_RESOURCES);
+
+export const selectedExecutionProjectAtom = atom<DirectionCardData | null>(null);

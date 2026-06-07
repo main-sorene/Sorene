@@ -1,6 +1,7 @@
-import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField, collection, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
 import type { DirectionCardData } from "./directionTypes";
+import type { Conversation } from "@/store/atoms";
 
 export interface UserProfile {
   firstName: string;
@@ -67,6 +68,7 @@ export interface UserProfile {
     summary?: string;
   }[];
   directionCards?: DirectionCardData[];
+  resourcesConstraints?: Record<string, string>;
 }
 
 function getDb() {
@@ -97,7 +99,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
     return null;
   } catch (error) {
-    await auth?.signOut();
+    // Do NOT sign the user out here — a transient/slow read would otherwise
+    // log them out and bounce them back to the landing page.
     console.error("[Firestore] Error fetching user profile:", error);
     return null;
   }
@@ -209,5 +212,82 @@ export async function deleteUserProfile(uid: string): Promise<void> {
   } catch (error) {
     console.error("[Firestore] Error deleting user profile:", error);
     throw error;
+  }
+}
+
+// ── Cross-device conversation history ────────────────────────────────────────
+// Local-only chats (assessment, DNA, Direction) live in localStorage, which is
+// per-device. We mirror them to a per-user Firestore subcollection so the
+// sidebar history follows the user across devices. Each conversation is stored
+// as a single JSON blob (one doc per conversation) to stay well under the
+// per-document size limit and avoid Date/nested-object serialization pitfalls.
+
+const CONVERSATIONS = "conversations";
+
+function reviveConversation(raw: any): Conversation | null {
+  if (!raw?.id) return null;
+  return {
+    ...raw,
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
+    messages: Array.isArray(raw.messages)
+      ? raw.messages.map((m: any) => ({ ...m, timestamp: m?.timestamp ? new Date(m.timestamp) : new Date() }))
+      : [],
+  } as Conversation;
+}
+
+export async function getCloudConversations(uid: string): Promise<Conversation[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(collection(firestore, "users", uid, CONVERSATIONS));
+    const out: Conversation[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as { json?: string };
+      if (!data?.json) return;
+      try {
+        const revived = reviveConversation(JSON.parse(data.json));
+        if (revived) out.push(revived);
+      } catch {}
+    });
+    return out;
+  } catch (error) {
+    console.error("[Firestore] Error loading cloud conversations:", error);
+    return [];
+  }
+}
+
+export async function saveCloudConversation(uid: string, conv: Conversation): Promise<void> {
+  const firestore = getDb();
+  if (!firestore || !conv?.id) return;
+  try {
+    await setDoc(doc(firestore, "users", uid, CONVERSATIONS, conv.id), {
+      json: JSON.stringify(conv),
+      segment: conv.segment ?? "",
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[Firestore] Error saving cloud conversation:", error);
+  }
+}
+
+export async function deleteCloudConversation(uid: string, convId: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore || !convId) return;
+  try {
+    await deleteDoc(doc(firestore, "users", uid, CONVERSATIONS, convId));
+  } catch (error) {
+    console.error("[Firestore] Error deleting cloud conversation:", error);
+  }
+}
+
+export async function clearCloudConversations(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  try {
+    const snap = await getDocs(collection(firestore, "users", uid, CONVERSATIONS));
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  } catch (error) {
+    console.error("[Firestore] Error clearing cloud conversations:", error);
   }
 }

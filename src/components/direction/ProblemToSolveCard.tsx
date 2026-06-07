@@ -18,25 +18,13 @@ import { useProblemScan } from "@/hooks/useProblemScan";
 import type { ProblemOpportunity } from "@/types/problemScan";
 
 const CARD_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0, 0, 0, 0.00) 81.25%), linear-gradient(114deg, #0f766e 34.62%, #134e4a 100%)`;
+
 const BAR_HEIGHTS = [35, 60, 45, 80, 65, 40, 70, 50];
-const CONFIDENCE_COLOR = (score: number) => score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#0f766e";
 
-function cap3(text: string): string {
-  if (!text) return text;
-  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
-  return sentences.slice(0, 3).join(" ").trim();
-}
+const CONFIDENCE_COLOR = (score: number) =>
+  score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#0f766e";
 
-function renderBold(text: string) {
-  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**")
-      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
-      : <span key={i}>{p}</span>
-  );
-}
-
-export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => Promise<boolean> }) {
+export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
   const opportunities = report?.opportunities?.slice(0, 3) ?? [];
   const [isExpanded, setIsExpanded] = useState(false);
@@ -131,7 +119,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
         {status === "idle" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
             <p className="text-[13px] text-[#62646A] leading-relaxed">
-              Autonomously scans Reddit, Quora, X, Product Hunt, and App Store reviews for real pain signals, then surfaces the top 3 business opportunities matched to your DNA.
+              Autonomously scans Reddit, Quora, X, Product Hunt, and App Store reviews for real pain signals, then surfaces the top 5 business opportunities matched to your DNA.
             </p>
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
@@ -157,12 +145,15 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-5 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-[#0f766e]">
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><RefreshCw size={14} /></motion.div>
-              <p className="text-[12px] font-medium">Scanning the web for pain signals…</p>
+              <span className="text-[13px] font-medium">Scanning the web for problems…</span>
             </div>
-            <div className="h-1.5 bg-[#f0f0f0] rounded-full overflow-hidden">
-              <motion.div className="h-full bg-[#0f766e] rounded-full"
-                animate={{ width: ["0%", "70%", "90%"] }}
-                transition={{ duration: 25, ease: "easeOut" }} />
+            <div className="space-y-2">
+              {loadingSteps.map((step, idx) => (
+                <motion.div key={idx} animate={{ opacity: idx <= loadingStep ? 1 : 0.25 }} className="flex items-center gap-2">
+                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", idx < loadingStep ? "bg-[#0f766e]" : idx === loadingStep ? "bg-[#14b8a6]" : "bg-gray-200")} />
+                  <span className="text-[12px] text-[#62646A]">{step}</span>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -172,38 +163,36 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
       <AnimatePresence>
         {status === "error" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-3">
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
-              <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
-              <p className="text-[12px] text-red-700 leading-relaxed">{errorMessage}</p>
+            <div className="flex items-start gap-2 text-red-600">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <p className="text-[13px]">{errorMessage ?? "Something went wrong. Please try again."}</p>
             </div>
-            <button onClick={generate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-colors w-fit">
-              <RefreshCw size={13} />Try again
+            <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-all shadow-sm w-fit">
+              Try Again <ArrowRight size={14} />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Body: complete, collapsed */}
+      {/* Body: complete collapsed */}
       <AnimatePresence>
         {status === "complete" && report && !isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
-            {opportunities[0] && <TopOpportunityTeaser opportunity={opportunities[0]} />}
-            <div className="flex items-center justify-between">
-              <button onClick={() => setIsExpanded(true)}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-[#0f766e] hover:text-[#0d6660] transition-colors">
-                <Search size={13} />See all {opportunities.length} opportunities
-                <ArrowRight size={13} />
+            <TopOpportunityTeaser opportunity={opportunities[0]} />
+            <div className="flex items-center justify-between gap-3">
+              <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
+                <RefreshCw size={12} /> Regenerate
               </button>
-              <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
-                <RefreshCw size={12} />Regenerate
+              <button onClick={() => setIsExpanded(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-all shadow-sm shrink-0">
+                See All 3 <ArrowRight size={14} />
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Body: expanded */}
-      <AnimatePresence>
+      {/* Body: complete expanded */}
+      <AnimatePresence initial={false}>
         {status === "complete" && report && isExpanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ height: { type: "spring", stiffness: 300, damping: 35 }, opacity: { duration: 0.2 } }}
@@ -211,7 +200,7 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
             <div className="p-5 space-y-6">
               <div className="flex items-center gap-2 mb-1">
                 <Search size={15} className="text-[#0f766e]" />
-                <h4 className="text-[13px] font-semibold text-[#151515]">Top 3 Opportunities</h4>
+                <h4 className="text-[13px] font-semibold text-[#151515]">Top 5 Opportunities</h4>
               </div>
               <Separator className="bg-[#ECEDEE]" />
               <div className="space-y-3">
@@ -228,8 +217,8 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
                     Generated {new Date(report.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </p>
                 )}
-                <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
-                  <RefreshCw size={12} />Regenerate
+                <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
+                  <RefreshCw size={12} /> Regenerate
                 </button>
               </div>
             </div>
@@ -243,12 +232,12 @@ export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirectio
 function StatusPill({ status, lastRun }: { status: string; lastRun: string | null }) {
   if (status === "loading") return (
     <div className="flex items-center gap-1.5 bg-white/10 text-white/80 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
-      <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }} className="w-1.5 h-1.5 rounded-full bg-yellow-300" />Running
+      <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.2, repeat: Infinity }} className="w-1.5 h-1.5 rounded-full bg-yellow-300" />Scanning
     </div>
   );
   if (status === "complete") return (
     <div className="flex items-center gap-1.5 bg-white/10 text-white/80 rounded-full px-3 py-1 text-[11px] font-medium shrink-0 ml-3">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />Active
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{lastRun ? "Updated" : "Active"}
     </div>
   );
   if (status === "error") return (
@@ -266,42 +255,18 @@ function StatusPill({ status, lastRun }: { status: string; lastRun: string | nul
 function TopOpportunityTeaser({ opportunity }: { opportunity: ProblemOpportunity }) {
   return (
     <div className="rounded-xl border border-[#ccfbf1] bg-[#f0fdfa] p-3.5 flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[11px] text-[#0f766e] font-medium uppercase tracking-wide mb-1">Top Match</p>
-          <p className="text-[14px] font-semibold text-[#151515] leading-snug">{opportunity.title}</p>
-        </div>
-        <div className="shrink-0 flex flex-col items-end gap-1">
-          <span className="text-[22px] font-bold text-[#0f766e] leading-none">{opportunity.confidence}</span>
-          <span className="text-[10px] text-[#0f766e] font-medium">score</span>
-        </div>
-      </div>
+      <p className="text-[11px] text-[#0f766e] font-medium uppercase tracking-wide">Top Match</p>
+      <p className="text-[14px] font-semibold text-[#151515] leading-snug">{opportunity.title}</p>
       <p className="text-[12px] text-[#62646A] leading-relaxed">{opportunity.one_line}</p>
+      <div className="flex items-center gap-2 flex-wrap mt-1">
+        <span className="text-[22px] font-bold leading-none" style={{ color: CONFIDENCE_COLOR(opportunity.confidence) }}>{opportunity.confidence}</span>
+        <span className="text-[10px] text-[#0f766e] font-medium">confidence</span>
+      </div>
     </div>
   );
 }
 
-function DetailItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={cn("rounded-xl p-3", highlight ? "bg-[#f0fdfa] border border-[#ccfbf1]" : "bg-[#fafafa] border border-gray-100")}>
-      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-[12px] text-[#151515] leading-relaxed">{renderBold(value)}</p>
-    </div>
-  );
-}
-
-function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => Promise<boolean> }) {
-  const [generating, setGenerating] = useState(false);
-  const [genError, setGenError] = useState<string | null>(null);
-
-  const handleGenerate = async () => {
-    setGenerating(true);
-    setGenError(null);
-    const ok = await onGenerateDirection();
-    setGenerating(false);
-    if (!ok) setGenError("Failed to generate — please try again.");
-  };
-
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
       <button onClick={onToggle} className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
@@ -329,17 +294,38 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
                 <DetailItem label="MVP Steps" value={opportunity.mvp_steps} />
                 <DetailItem label="Why It Fits You" value={opportunity.why_fits_you} highlight />
               </div>
-              {genError && <p className="text-[11px] text-red-500 text-center">{genError}</p>}
-              <button onClick={handleGenerate} disabled={generating}
-                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all disabled:opacity-60">
-                {generating
-                  ? <><motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}><Wand2 size={14} /></motion.span>Generating...</>
-                  : <><Wand2 size={14} />Generate Direction</>}
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
+function renderBold(text: string) {
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
+function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={cn("rounded-lg p-3", highlight ? "bg-[#f0fdfa]" : "bg-gray-50")}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#0f766e]" : "text-[#62646A]")}>{renderBold(value)}</p>
     </div>
   );
 }

@@ -3,7 +3,8 @@
 import { DNACard } from "./DNACard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDnaData } from "@/hooks/useDnaData";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
@@ -536,13 +537,29 @@ const DEFAULT_DNA_ITEMS: DNACoreItem[] = [
 export const DNASection = () => {
   const { data: profile, isLoading, refetch } = useDnaData();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleSeeDirection = useCallback(() => {
+    localStorage.removeItem("rcGenerationRequested");
+    router.push("/direction");
+  }, [router]);
   const authUser = useAtomValue(userAtom);
+
+  // Extract stable primitive values from narrative so effects only re-run
+  // when the actual field values change, not on every query refetch (which
+  // returns a new object reference even when data is identical).
+  const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+  const hasAnswers = !!profile?.assessmentAnswers;
+  const uid = authUser?.uid;
+  const strengthsField = narrative?.strengths_edges_strengths ?? "";
+  const energyFields = `${narrative?.energy_source_label ?? ""}|${narrative?.energy_drain_label ?? ""}|${narrative?.your_energy_strengths ?? ""}`;
+  const visionFields = `${narrative?.success_vision_label ?? ""}|${narrative?.non_negotiable_label ?? ""}`;
+  const coreFields = `${narrative?.core_dna_label ?? ""}|${narrative?.strength_patterns_labels ?? ""}|${narrative?.what_drives_you_strengths ?? ""}|${narrative?.how_you_work_strengths ?? ""}|${narrative?.risk_and_change_strengths ?? ""}`;
 
   // Backfill strengths_edges_strengths if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if (strengthsField || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if (narrative?.strengths_edges_strengths || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -552,20 +569,19 @@ export const DNASection = () => {
       .then(async ({ strengths_edges_strengths }) => {
         if (strengths_edges_strengths) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), strengths_edges_strengths },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [strengthsField, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Backfill energy labels if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.energy_source_label && narrative?.energy_drain_label && narrative?.your_energy_strengths) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.energy_source_label && narrative?.energy_drain_label && narrative?.your_energy_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -576,20 +592,19 @@ export const DNASection = () => {
         const { energy_source_label, energy_drain_label, your_energy_strengths } = labels;
         if (energy_source_label || energy_drain_label || your_energy_strengths) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), energy_source_label, energy_drain_label, your_energy_strengths },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [energyFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Backfill success_vision_label and non_negotiable_label if missing via lightweight endpoint
+  // Backfill success_vision_label and non_negotiable_label if missing
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.success_vision_label && narrative?.non_negotiable_label) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.success_vision_label && narrative?.non_negotiable_label) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-labels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -599,20 +614,19 @@ export const DNASection = () => {
       .then(async ({ success_vision_label, non_negotiable_label }) => {
         if (success_vision_label || non_negotiable_label) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, {
+          await saveUserProfile(uid, {
             dna_narrative: { ...(narrative || {}), success_vision_label, non_negotiable_label },
           });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visionFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Regenerate full narrative if missing entirely or missing key fields
   useEffect(() => {
-    const narrative = (profile as any)?.dna_narrative as Record<string, string> | null | undefined;
+    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !hasAnswers || !uid) return;
     const answers = profile?.assessmentAnswers;
-    if ((narrative?.core_dna_label && narrative?.strength_patterns_labels && narrative?.what_drives_you_strengths && narrative?.how_you_work_strengths && narrative?.risk_and_change_strengths) || !answers || !authUser?.uid) return;
     authFetch("/api/dna-narrative", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -622,12 +636,12 @@ export const DNASection = () => {
       .then(async ({ narrative: newNarrative }) => {
         if (newNarrative?.core_dna_label || newNarrative?.primary_motivation_label) {
           const { saveUserProfile } = await import("@/lib/firestore");
-          await saveUserProfile(authUser.uid, { dna_narrative: newNarrative });
+          await saveUserProfile(uid, { dna_narrative: newNarrative });
           refetch();
         }
       })
       .catch(() => {});
-  }, [profile, authUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [coreFields, hasAnswers, uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -654,40 +668,52 @@ export const DNASection = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 lg:p-3 lg:pt-6 pb-20 max-w-5xl mx-auto"
+        className="max-w-5xl mx-auto"
       >
-        {dnaItems
-          .filter((item) => !expandedId || expandedId === item.title)
-          .map((item) => {
-            const isExpanded = expandedId === item.title;
-            const showFullWidth = item.fullWidth || isExpanded;
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-2 lg:p-3 lg:pt-6 max-w-5xl mx-auto">
+          {dnaItems
+            .filter((item) => !expandedId || expandedId === item.title)
+            .map((item) => {
+              const isExpanded = expandedId === item.title;
+              const showFullWidth = item.fullWidth || isExpanded;
 
-            return (
-              <div
-                key={item.title}
-                className={cn(
-                  "transition-all duration-500 ease-in-out",
-                  showFullWidth ? "col-span-1 sm:col-span-2" : "col-span-1",
-                )}
-              >
-                <DNACard
-                  title={item.title}
-                  description={isExpanded ? item.description : item.summary}
-                  gradient={item.gradient}
-                  icon={item.icon}
-                  variant={item.variant}
-                  keySignals={item.key_signals}
-                  strengthPatterns={item.strength_patterns}
-                  blindSpots={item.blind_spots}
-                  riskExamples={item.risk_examples}
-                  heroStatement={item.hero_statement}
-                  isLarge={item.isLarge}
-                  isExpanded={isExpanded}
-                  onToggle={() => handleToggle(item.title)}
-                />
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={item.title}
+                  className={cn(
+                    "transition-all duration-500 ease-in-out",
+                    showFullWidth ? "col-span-1 sm:col-span-2" : "col-span-1",
+                  )}
+                >
+                  <DNACard
+                    title={item.title}
+                    description={isExpanded ? item.description : item.summary}
+                    gradient={item.gradient}
+                    icon={item.icon}
+                    variant={item.variant}
+                    keySignals={item.key_signals}
+                    strengthPatterns={item.strength_patterns}
+                    blindSpots={item.blind_spots}
+                    riskExamples={item.risk_examples}
+                    heroStatement={item.hero_statement}
+                    isLarge={item.isLarge}
+                    isExpanded={isExpanded}
+                    onToggle={() => handleToggle(item.title)}
+                  />
+                </div>
+              );
+            })}
+        </div>
+
+        {/* See My Direction CTA */}
+        <div className="flex justify-center px-4 pt-4 pb-10">
+          <button
+            onClick={handleSeeDirection}
+            className="bg-black text-white text-sm font-semibold px-16 py-3.5 rounded-full hover:bg-gray-900 transition-colors w-full max-w-sm"
+          >
+            See My Direction
+          </button>
+        </div>
       </motion.div>
     </AnimatePresence>
   );

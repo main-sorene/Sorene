@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
+import { setCreditsLimit, addExtraCredits } from "@/lib/credits";
 import Stripe from "stripe";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 // Stripe requires the raw body for signature verification — disable body parsing
@@ -15,27 +14,31 @@ export const runtime = "nodejs";
 async function upsertSubscription(
   db: FirebaseFirestore.Firestore,
   subscription: Stripe.Subscription,
+  resetUsage = false,
 ) {
-  const email =
+  // The metadata.email field is actually the user's canonical Firestore doc key
+  // (uid or email depending on how they signed up — set at checkout time).
+  const userKey =
     subscription.metadata?.email ||
     (typeof subscription.customer === "object"
       ? (subscription.customer as Stripe.Customer).email
       : null);
 
-  if (!email) {
-    console.warn("[webhook] No email on subscription", subscription.id);
+  if (!userKey) {
+    console.warn("[webhook] No user key on subscription", subscription.id);
     return;
   }
 
   const plan = subscription.metadata?.plan || "starter";
   const duration = Number(subscription.metadata?.duration || 1);
   const active = subscription.status === "active" || subscription.status === "trialing";
+  const effectivePlan = active ? plan : "free";
 
-  await db.collection("users").doc(email).set(
+  await db.collection("users").doc(userKey).set(
     {
       subscription: {
         active,
-        plan: active ? plan : "free",
+        plan: effectivePlan,
         status: subscription.status,
         duration,
         stripeSubscriptionId: subscription.id,
@@ -43,6 +46,9 @@ async function upsertSubscription(
     },
     { merge: true },
   );
+
+  // Update credit limit to match new plan; reset usage on new subscriptions
+  await setCreditsLimit(userKey, effectivePlan, resetUsage);
 }
 
 export async function POST(req: NextRequest) {
@@ -70,14 +76,25 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Credit pack one-time purchase
+        if (session.mode === "payment" && session.metadata?.type === "credits") {
+          const email = session.metadata.email;
+          const amount = parseInt(session.metadata.amount || "1000", 10);
+          if (email && amount > 0) {
+            await addExtraCredits(email, amount);
+          }
+          break;
+        }
+
+        // New subscription
         if (session.mode === "subscription" && session.subscription) {
           const sub = await getStripe().subscriptions.retrieve(session.subscription as string);
-          // Ensure metadata is set from session
           if (session.metadata?.email && !sub.metadata?.email) {
             await getStripe().subscriptions.update(sub.id, { metadata: session.metadata });
             sub.metadata = session.metadata;
           }
-          await upsertSubscription(db, sub);
+          await upsertSubscription(db, sub, true); // new subscription — reset usage counter
         }
         break;
       }

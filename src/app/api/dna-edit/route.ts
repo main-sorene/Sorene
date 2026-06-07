@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -34,6 +35,12 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) {
+    return NextResponse.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
   }
 
   try {
@@ -77,6 +84,8 @@ Do not include markdown, code fences, or anything outside the JSON object.`;
       max_tokens: 512,
       messages: [{ role: "user", content: prompt }],
     });
+
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
 
     const block = msg.content[0];
     let raw = block && block.type === "text" ? block.text.trim() : "{}";

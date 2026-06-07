@@ -26,34 +26,25 @@ const MIE_GRADIENT = `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, 
 
 const BAR_HEIGHTS = [40, 65, 50, 85, 70, 45, 75, 55];
 
-const VELOCITY_LABELS: Record<string, string> = { V1: "Urgent", V2: "Steady", V3: "Structural" };
+const VELOCITY_LABELS: Record<string, string> = {
+  V1: "Urgent",
+  V2: "Steady",
+  V3: "Structural",
+};
+
 const VELOCITY_COLORS: Record<string, { bg: string; text: string }> = {
   V1: { bg: "#fef2f2", text: "#b91c1c" },
   V2: { bg: "#fffbeb", text: "#92400e" },
   V3: { bg: "#eff6ff", text: "#1d4ed8" },
 };
+
 const COST_COLORS: Record<string, { bg: string; text: string }> = {
   Low: { bg: "#f0fdf4", text: "#166534" },
   Medium: { bg: "#fffbeb", text: "#92400e" },
   High: { bg: "#fef2f2", text: "#b91c1c" },
 };
 
-function cap3(text: string): string {
-  if (!text) return text;
-  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
-  return sentences.slice(0, 3).join(" ").trim();
-}
-
-function renderBold(text: string) {
-  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**")
-      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
-      : <span key={i}>{p}</span>
-  );
-}
-
-export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => Promise<boolean> }) {
+export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useMIE();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedOpportunity, setExpandedOpportunity] = useState<string | null>(null);
@@ -132,7 +123,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-5 mt-5">
               <div className="flex items-center gap-1.5"><TrendingUp size={14} className="text-emerald-300" /><span className="text-white text-[13px] font-semibold">{report.rising_signals.length} Rising</span></div>
               <div className="flex items-center gap-1.5"><TrendingDown size={14} className="text-red-300" /><span className="text-white text-[13px] font-semibold">{report.falling_signals.length} Falling</span></div>
-              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunities</span></div>
+              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunit{opportunities.length === 1 ? "y" : "ies"}</span></div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -162,8 +153,8 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
               </div>
               <button onClick={generate} disabled={!canGenerate}
                 className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium border transition-all shadow-sm shrink-0",
-                  canGenerate ? "bg-[#6366f1] text-white border-[#6366f1] hover:bg-[#4f46e5]" : "bg-white text-[#9A9A9A] border-[#ECEDEE] cursor-not-allowed")}>
-                {!hasProfile ? "Complete DNA first" : "Generate"}
+                  canGenerate ? "bg-[#4338ca] text-white border-[#4338ca] hover:bg-[#3730a3]" : "bg-white text-[#9A9A9A] border-[#ECEDEE] cursor-not-allowed")}>
+                {!hasProfile ? "Complete DNA first" : "Generate Report"}
                 {canGenerate && <ArrowRight size={14} />}
               </button>
             </div>
@@ -175,14 +166,17 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
       <AnimatePresence>
         {status === "loading" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-5 flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[#6366f1]">
+            <div className="flex items-center gap-2 text-[#4338ca]">
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}><RefreshCw size={14} /></motion.div>
-              <p className="text-[12px] font-medium">Analysing market signals…</p>
+              <span className="text-[13px] font-medium">Generating your report…</span>
             </div>
-            <div className="h-1.5 bg-[#f0f0f0] rounded-full overflow-hidden">
-              <motion.div className="h-full bg-[#6366f1] rounded-full"
-                animate={{ width: ["0%", "70%", "90%"] }}
-                transition={{ duration: 20, ease: "easeOut" }} />
+            <div className="space-y-2">
+              {loadingSteps.map((step, idx) => (
+                <motion.div key={idx} animate={{ opacity: idx <= loadingStep ? 1 : 0.25 }} className="flex items-center gap-2">
+                  <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", idx < loadingStep ? "bg-[#4338ca]" : idx === loadingStep ? "bg-[#6366f1]" : "bg-gray-200")} />
+                  <span className="text-[12px] text-[#62646A]">{step}</span>
+                </motion.div>
+              ))}
             </div>
           </motion.div>
         )}
@@ -192,38 +186,36 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
       <AnimatePresence>
         {status === "error" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-3">
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
-              <AlertCircle size={14} className="text-red-500 mt-0.5 shrink-0" />
-              <p className="text-[12px] text-red-700 leading-relaxed">{errorMessage}</p>
+            <div className="flex items-start gap-2 text-red-600">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <p className="text-[13px]">{errorMessage ?? "Something went wrong. Please try again."}</p>
             </div>
-            <button onClick={generate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6366f1] text-white text-[13px] font-medium hover:bg-[#4f46e5] transition-colors w-fit">
-              <RefreshCw size={13} />Try again
+            <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#4338ca] text-white text-[13px] font-medium hover:bg-[#3730a3] transition-all shadow-sm w-fit">
+              Try Again <ArrowRight size={14} />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Body: complete, collapsed */}
+      {/* Body: complete collapsed */}
       <AnimatePresence>
         {status === "complete" && report && !isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
             {topOpportunity && <TopOpportunityTeaser opportunity={topOpportunity} />}
-            <div className="flex items-center justify-between">
-              <button onClick={() => setIsExpanded(true)}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-[#6366f1] hover:text-[#4f46e5] transition-colors">
-                <Sparkles size={13} />See all {opportunities.length} opportunities
-                <ArrowRight size={13} />
-              </button>
+            <div className="flex items-center justify-between gap-3">
               <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
-                <RefreshCw size={12} />Regenerate
+                <RefreshCw size={12} /> Regenerate
+              </button>
+              <button onClick={() => setIsExpanded(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#4338ca] text-white text-[13px] font-medium hover:bg-[#3730a3] transition-all shadow-sm shrink-0">
+                See My Report <ArrowRight size={14} />
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Body: expanded */}
-      <AnimatePresence>
+      {/* Body: complete expanded */}
+      <AnimatePresence initial={false}>
         {status === "complete" && report && isExpanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ height: { type: "spring", stiffness: 300, damping: 35 }, opacity: { duration: 0.2 } }}
@@ -240,8 +232,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
                   {opportunities.map((opp) => (
                     <OpportunityCard key={opp.id} opportunity={opp} isExpanded={expandedOpportunity === opp.id}
                       onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)}
-                      onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)}
-                    />
+                      onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
                   ))}
                 </div>
               </ReportSection>
@@ -255,7 +246,7 @@ export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDire
                   </p>
                 )}
                 <button onClick={generate} disabled={!canGenerate} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", canGenerate ? "text-[#62646A] hover:text-[#151515]" : "text-[#C0C0C0] cursor-not-allowed")}>
-                  <RefreshCw size={12} />Regenerate
+                  <RefreshCw size={12} /> Regenerate
                 </button>
               </div>
             </div>
@@ -306,9 +297,8 @@ function TopOpportunityTeaser({ opportunity }: { opportunity: MIEOpportunity }) 
       </div>
       <p className="text-[12px] text-[#62646A] leading-relaxed">{opportunity.one_line}</p>
       <div className="flex gap-2 flex-wrap">
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: v.bg, color: v.text }}>{VELOCITY_LABELS[opportunity.velocity_tier]}</span>
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: c.bg, color: c.text }}>{opportunity.startup_cost} cost</span>
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-[#62646A]">{opportunity.time_to_revenue}</span>
+        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: v.bg, color: v.text }}>{VELOCITY_LABELS[opportunity.velocity_tier]}</span>
+        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ backgroundColor: c.bg, color: c.text }}>{opportunity.startup_cost} cost · {opportunity.startup_cost_range}</span>
       </div>
     </div>
   );
@@ -316,76 +306,38 @@ function TopOpportunityTeaser({ opportunity }: { opportunity: MIEOpportunity }) 
 
 function ReportSection({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        {icon}
-        <h4 className="text-[13px] font-semibold text-[#151515]">{title}</h4>
-      </div>
-      <Separator className="mb-3 bg-[#ECEDEE]" />
+    <section>
+      <div className="flex items-center gap-2 mb-3">{icon}<h4 className="text-[13px] font-semibold text-[#151515]">{title}</h4></div>
+      <Separator className="bg-[#ECEDEE] mb-4" />
       {children}
-    </div>
+    </section>
   );
 }
 
 function SignalRow({ signal, variant }: { signal: MIESignal; variant: "rising" | "falling" }) {
-  const supplyColors: Record<string, { bg: string; text: string }> = {
-    Low: { bg: "#f0fdf4", text: "#166534" },
-    Medium: { bg: "#fffbeb", text: "#92400e" },
-    High: { bg: "#fef2f2", text: "#b91c1c" },
-  };
-  const sc = supplyColors[signal.supply_level] ?? supplyColors.Medium;
+  const dotColor = variant === "rising" ? "#10b981" : "#ef4444";
+  const v = VELOCITY_COLORS[signal.velocity] ?? VELOCITY_COLORS.V2;
   return (
-    <div className="flex gap-3">
-      <div className={cn("w-1 rounded-full shrink-0 mt-1", variant === "rising" ? "bg-emerald-400" : "bg-red-300")} style={{ minHeight: "40px" }} />
-      <div>
+    <div className="flex items-start gap-2">
+      <div className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+      <div className="flex-1">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <p className="text-[13px] font-semibold text-[#151515]">{signal.title}</p>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: sc.bg, color: sc.text }}>{signal.supply_level} supply</span>
+          <span className="text-[13px] font-medium text-[#151515]">{signal.title}</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: v.bg, color: v.text }}>{VELOCITY_LABELS[signal.velocity]}</span>
+          <span className="text-[10px] text-[#9A9A9A]">{signal.category}</span>
         </div>
-        <p className="text-[12px] text-[#62646A] leading-relaxed">{renderBold(signal.description)}</p>
+        <p className="text-[12px] text-[#62646A] leading-relaxed">{signal.description}</p>
         <p className="text-[12px] text-[#4338ca] leading-relaxed mt-1 font-medium">{signal.relevance_to_user}</p>
       </div>
     </div>
   );
 }
 
-function HorizonRow({ signal }: { signal: MIEHorizonSignal }) {
-  return (
-    <div className="rounded-xl border border-gray-100 p-3 bg-[#fafafa]">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-[13px] font-semibold text-[#151515]">{signal.title}</p>
-        <span className="text-[11px] text-[#9A9A9A] bg-gray-100 px-2 py-0.5 rounded-full">{signal.horizon}</span>
-      </div>
-      <p className="text-[12px] text-[#62646A] leading-relaxed">{renderBold(signal.description)}</p>
-    </div>
-  );
-}
-
-function DetailItem({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={cn("rounded-xl p-3", highlight ? "bg-[#f5f3ff] border border-[#e0e7ff]" : "bg-[#fafafa] border border-gray-100")}>
-      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-[12px] text-[#151515] leading-relaxed">{renderBold(value)}</p>
-    </div>
-  );
-}
-
-function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => Promise<boolean> }) {
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   const v = VELOCITY_COLORS[opportunity.velocity_tier] ?? VELOCITY_COLORS.V2;
   const c = COST_COLORS[opportunity.startup_cost] ?? { bg: "#f3f4f6", text: "#374151" };
   const score = opportunity.dna_fit_score;
   const scoreColor = score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#6366f1";
-  const [generating, setGenerating] = useState(false);
-  const [genError, setGenError] = useState<string | null>(null);
-
-  const handleGenerate = async () => {
-    setGenerating(true);
-    setGenError(null);
-    const ok = await onGenerateDirection();
-    setGenerating(false);
-    if (!ok) setGenError("Failed to generate — please try again.");
-  };
-
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
       <button onClick={onToggle} className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
@@ -415,17 +367,53 @@ function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirectio
                 <DetailItem label="Window risk" value={opportunity.window_risk} />
                 <DetailItem label="Underlying signal" value={opportunity.underlying_signal} />
               </div>
-              {genError && <p className="text-[11px] text-red-500 text-center">{genError}</p>}
-              <button onClick={handleGenerate} disabled={generating}
-                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all disabled:opacity-60">
-                {generating
-                  ? <><motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}><Wand2 size={14} /></motion.span>Generating...</>
-                  : <><Wand2 size={14} />Generate Direction</>}
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
+function renderBold(text: string) {
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
+function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={cn("rounded-lg p-3", highlight ? "bg-[#f5f3ff]" : "bg-gray-50")}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#4338ca]" : "text-[#62646A]")}>{renderBold(value)}</p>
+    </div>
+  );
+}
+
+function HorizonRow({ signal }: { signal: MIEHorizonSignal }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#9A9A9A] shrink-0" />
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[13px] font-medium text-[#151515]">{signal.title}</span>
+          <span className="text-[10px] text-[#9A9A9A] bg-gray-100 px-2 py-0.5 rounded-full">{signal.horizon}</span>
+        </div>
+        <p className="text-[12px] text-[#62646A] leading-relaxed">{signal.description}</p>
+      </div>
     </div>
   );
 }

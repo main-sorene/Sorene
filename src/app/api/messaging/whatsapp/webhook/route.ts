@@ -1,43 +1,48 @@
 import { NextRequest } from "next/server";
-import {
-  consumeLinkToken,
-  linkPlatformToUser,
-  getUidByPlatformId,
-  saveMessagingMessage,
-  getRecentMessages,
-  updateExecutionProgress,
-  getExecutionProgress,
-} from "@/lib/messagingAdmin";
-import { processMessage } from "@/lib/executionCoach";
+import Anthropic from "@anthropic-ai/sdk";
+import { consumeLinkToken, linkPlatformToUser, getUidByPlatformId } from "@/lib/messagingAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
-async function sendWhatsAppMessage(to: string, text: string) {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  await fetch(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body: text },
-      }),
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const WA_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
+const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
+const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
+
+async function sendWhatsApp(to: string, text: string) {
+  await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${WA_TOKEN}`,
     },
-  );
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: text },
+    }),
+  });
 }
 
+async function coach(text: string, to: string, uid: string): Promise<void> {
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    system: "You are Sorene, an AI execution coach helping entrepreneurs using the VIBE framework (Validate, Interview, Build demo, Experiment). Keep replies concise and practical.",
+    messages: [{ role: "user", content: text }],
+  });
+  await deductCredits(uid, calculateCredits("claude-haiku-4-5-20251001", response.usage.input_tokens, response.usage.output_tokens));
+  const reply = response.content[0].type === "text" ? response.content[0].text : "I couldn't process that.";
+  await sendWhatsApp(to, reply);
+}
+
+// Meta webhook verification
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get("hub.mode");
-  const verifyToken = searchParams.get("hub.verify_token");
+  const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
-
-  if (mode === "subscribe" && verifyToken === process.env.WHATSAPP_VERIFY_TOKEN) {
+  if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
     return new Response(challenge ?? "", { status: 200 });
   }
   return new Response("Forbidden", { status: 403 });
@@ -46,59 +51,39 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const value = body?.entry?.[0]?.changes?.[0]?.value;
-    const messageObj = value?.messages?.[0];
-    if (!messageObj) return new Response("OK", { status: 200 });
+    const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!message) return new Response("OK", { status: 200 });
 
-    const from: string = messageObj.from;
-    const text: string = messageObj.text?.body ?? "";
+    const from: string = message.from;
+    const text: string = message.text?.body ?? "";
 
     if (text.startsWith("LINK-")) {
       const token = text.slice(5).trim();
       const result = await consumeLinkToken(token);
-      if (result) {
+      if (result && result.platform === "whatsapp") {
         await linkPlatformToUser(result.uid, "whatsapp", from);
-        await sendWhatsAppMessage(
-          from,
-          "✅ Your WhatsApp is now linked to your Sorene account. Send me a message to get started.",
-        );
+        await sendWhatsApp(from, "✅ Your WhatsApp is now linked to Sorene! Message me any time to log progress or get coaching.");
       } else {
-        await sendWhatsAppMessage(
-          from,
-          "That link is invalid or has expired. Please go to your Sorene app and tap 'Chat on WhatsApp' to get a new link.",
-        );
+        await sendWhatsApp(from, "❌ That link is invalid or expired. Please generate a new one from your Execution Hub.");
       }
       return new Response("OK", { status: 200 });
     }
 
     const uid = await getUidByPlatformId("whatsapp", from);
     if (!uid) {
-      await sendWhatsAppMessage(
-        from,
-        "Please link your account first by going to the Sorene app and tapping 'Chat on WhatsApp'.",
-      );
+      await sendWhatsApp(from, "I don't recognise your account yet. Go to Execution Hub → Direct Sync → WhatsApp to link your Sorene account first.");
       return new Response("OK", { status: 200 });
     }
 
-    const [progress, recentHistory] = await Promise.all([
-      getExecutionProgress(uid),
-      getRecentMessages(uid, 10),
-    ]);
-
-    const { reply, progressPatch } = await processMessage(uid, text, progress, recentHistory);
-
-    await Promise.all([
-      saveMessagingMessage(uid, "whatsapp", "user", text),
-      saveMessagingMessage(uid, "whatsapp", "assistant", reply),
-    ]);
-
-    if (Object.keys(progressPatch).length > 0) {
-      await updateExecutionProgress(uid, progressPatch);
+    const credits = await checkCredits(uid);
+    if (!credits.ok) {
+      await sendWhatsApp(from, "You've used up your Sorene credits. Upgrade at sorene.ai to keep coaching.");
+      return new Response("OK", { status: 200 });
     }
 
-    await sendWhatsAppMessage(from, reply);
+    await coach(text, from, uid);
   } catch (err) {
-    console.error("[whatsapp/webhook] error:", err);
+    console.error("[whatsapp webhook]", err);
   }
 
   return new Response("OK", { status: 200 });

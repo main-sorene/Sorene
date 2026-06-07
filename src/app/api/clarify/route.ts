@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -17,7 +18,9 @@ If A: output exactly: ANSWER
 If B: output a short, natural response that:
 - Is written in the SAME language as the user's message (this is non-negotiable)
 - Explains what the question meant in plain, simple terms — translate or rephrase the concept clearly
-- Does NOT re-ask the question (end naturally, inviting them to respond)
+- Ends with a period, NOT a question mark — do NOT re-ask the question or any question at all
+- The question will be shown again automatically by the platform; your job is only to clarify what was meant
+- 1-2 sentences maximum, no more
 - Stays under 3 sentences
 - Matches Sorene's voice: direct, warm, no hype, no flattery
 
@@ -27,6 +30,10 @@ Do not output anything else for case A. For case B, output only the clarifying r
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) return Response.json({ error: "Credit limit reached" }, { status: 402 });
 
   try {
     const { currentQuestion, userMessage, preferredLanguage } = (await req.json()) as {
@@ -50,6 +57,7 @@ Is this an answer or a clarifying question?`;
       messages: [{ role: "user", content: prompt }],
     });
 
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
     const raw = (message.content[0]?.type === "text" ? message.content[0].text : "").trim();
 
     if (raw === "ANSWER") {

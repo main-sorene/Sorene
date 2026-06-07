@@ -1,6 +1,8 @@
 "use client";
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
+import { isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import {
   inputValueAtom,
   isSendingAtom,
@@ -451,8 +453,11 @@ export function ChatInput({
 
   const isAssessmentDone = activeConversation?.done;
 
+  const creditsExhausted = useIsCreditsExhausted();
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+
   const isInputDisabled =
-    isAssessmentDone && !isAddMoreInfoMode && !isAssessmentComplete;
+    (isAssessmentDone && !isAddMoreInfoMode && !isAssessmentComplete) || creditsExhausted;
 
   const canSend =
     inputValue.trim().length > 0 && !isSending && !isInputDisabled;
@@ -579,7 +584,8 @@ export function ChatInput({
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask anything"
+                  onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+                  placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
                   rows={1}
                   disabled={isInputDisabled}
                   className="w-full resize-none bg-transparent text-[17px] leading-[1.45] text-[#111111] placeholder:text-[#6B7280] focus:outline-none min-h-0 sm:min-h-[44px] max-h-[160px] pr-14"

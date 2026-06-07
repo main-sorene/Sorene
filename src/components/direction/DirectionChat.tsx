@@ -364,7 +364,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
                 <button
                   key={recipe.label}
                   onClick={() => sendMessage(recipe.label, recipe.id)}
-                  className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[13px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
+                  className="flex items-center justify-center gap-1 px-2 py-2 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all"
                 >
                   <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
                   <span className="truncate">{recipe.label}</span>

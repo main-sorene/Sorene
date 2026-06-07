@@ -332,7 +332,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
           : <div />}
         <div className="flex items-center gap-3">
           <a href="https://discord.gg/2YtvCm2SWp" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-[13px] font-medium rounded-lg hover:bg-gray-800 transition-all">
+            className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all">
             Product Feedback
           </a>
           <button onClick={() => setIsSettingsOpen(true)}
@@ -409,7 +409,7 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
           <div className="grid grid-cols-2 gap-1.5">
             {SUGGESTIONS.map((s) => (
               <button key={s.recipeId} onClick={() => send(s.label, s.recipeId)} disabled={loading}
-                className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[13px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
+                className="flex items-center justify-center gap-1 px-2 py-2 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50">
                 <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
                 <span className="truncate">{s.label}</span>
               </button>

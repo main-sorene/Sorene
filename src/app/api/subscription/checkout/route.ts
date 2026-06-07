@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: true,
       success_url,
       cancel_url,
       metadata: { email, plan, duration: String(duration) },

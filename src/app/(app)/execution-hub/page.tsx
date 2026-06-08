@@ -8326,22 +8326,28 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         if (!res.ok) return;
         const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
         const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
+        const failedTexts = new Set((data.failed ?? []).map((p) => p.text.trim()));
         const publishedTexts = new Set((data.published ?? []).map((p) => p.text.trim()));
         const now = Date.now();
         setWeekDrafts((prev) => prev.map((d) => {
-          if (!d.frozen || d.posted || d.postFailed) return d;
+          if (!d.frozen || d.posted) return d;
           if ((d.frozenAt ?? 0) > now) return d;
           const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-          const failedPost = (data.failed ?? []).find((p) => p.text.trim() === cleanText);
-          if (failedPost) return { ...d, postFailed: true, failReason: failedPost.failReason };
-          if (publishedTexts.has(cleanText)) return { ...d, posted: true };
-          if (!pendingTexts.has(cleanText)) return { ...d, posted: true }; // fallback
+          // If cron retried and published successfully, clear postFailed and mark posted
+          if (publishedTexts.has(cleanText)) return { ...d, posted: true, postFailed: false, failReason: undefined };
+          // If still in failed list, update reason
+          if (failedTexts.has(cleanText)) {
+            const failedPost = (data.failed ?? []).find((p) => p.text.trim() === cleanText);
+            return { ...d, postFailed: true, failReason: failedPost?.failReason };
+          }
+          // No longer in any list — treat as posted
+          if (!pendingTexts.has(cleanText)) return { ...d, posted: true, postFailed: false };
           return d;
         }));
       } catch { /* ignore */ }
     };
     check();
-    const interval = setInterval(check, 60_000);
+    const interval = setInterval(check, 15_000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDrafts, authUser]);

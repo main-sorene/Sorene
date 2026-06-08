@@ -9231,9 +9231,17 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
+        {accountStatus === "loading" && (
+          <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[#9A9A9A]" /></div>
+        )}
         {accountStatus === "disconnected" && (
-          <div className="px-5 py-4 text-center">
+          <div className="px-5 py-4 text-center space-y-3">
             <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate, schedule, and post directly from here.</p>
+            <button onClick={connectThreads} disabled={connecting}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-50">
+              {connecting ? <Loader2 size={12} className="animate-spin" /> : null}
+              Connect Threads
+            </button>
           </div>
         )}
         {/* Content DNA */}
@@ -9677,6 +9685,10 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
+
+              {xStatus === "loading" && (
+                <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[#9A9A9A]" /></div>
+              )}
 
               {/* Setup flow — disconnected */}
               {xStatus === "disconnected" && (
@@ -11449,7 +11461,7 @@ export default function Page() {
             </div>
 
             {/* Tabs + inline accordion content */}
-            <div className="px-4 lg:px-6 pt-2 pb-24 space-y-2">
+            <div className="px-4 lg:px-6 pt-2 pb-24 space-y-1">
               {/* Tab strip */}
               <div className="flex overflow-x-auto no-scrollbar rounded-[22px] shadow-sm border border-gray-100 w-full">
                 {TABS.map((tab, i) => {

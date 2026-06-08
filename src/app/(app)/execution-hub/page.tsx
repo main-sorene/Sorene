@@ -4273,7 +4273,7 @@ const LAUNCH_PILLARS = [
     { id: "benefit", label: "Benefit description" },
     { id: "offerings", label: "Offerings" },
     { id: "pricing", label: "Pricing packages" },
-    { id: "logo", label: "Logo concept" },
+    { id: "logo", label: "Logo" },
     { id: "brand_color", label: "Brand color palette" },
     { id: "domain", label: "Choose domain" },
     { id: "website", label: "Build website" },
@@ -4666,9 +4666,9 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
     placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
   },
   logo: {
-    hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling. Take this to a designer or tool like Looka or Canva.",
-    promptInstruction: `Generate 3 logo concept directions for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY a short concept title (3-5 words). The "reason" field contains the full 2-3 sentence visual description. Example: [{"text": "Minimal wordmark, deep teal", "reason": "Clean sans-serif type, no icon, conveys trust"}, ...]`,
-    placeholder: 'e.g. "Something more minimal and modern"',
+    hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling.",
+    promptInstruction: "",
+    placeholder: 'e.g. "Bold S, forward momentum — geometric lettermark"',
   },
   domain: {
     hint: "Your domain should match your business name closely. Check availability at namecheap.com or porkbun.com before registering.",
@@ -4726,6 +4726,112 @@ function LogoUploadArea({ title }: { title: string }) {
       )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// LogoConceptSection — list of saved logo concepts, add more
+// ─────────────────────────────────────────────
+
+function LogoConceptSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `brand-logo-concepts-${title}`;
+  const meta = BRAND_TEXT_META.logo;
+
+  const [concepts, setConcepts] = useState<string[]>([]);
+  const [input, setInput] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setConcepts(JSON.parse(raw));
+      else {
+        // Migrate from old single-value brand-logo-${title} key
+        const old = localStorage.getItem(`brand-logo-${title}`);
+        if (old) { setConcepts([old]); localStorage.setItem(storageKey, JSON.stringify([old])); }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const save = (list: string[]) => {
+    setConcepts(list);
+    try { localStorage.setItem(storageKey, JSON.stringify(list)); } catch { /* ignore */ }
+  };
+
+  const add = () => {
+    const v = input.trim();
+    if (!v) return;
+    save([...concepts, v]);
+    setInput("");
+  };
+
+  const remove = (i: number) => save(concepts.filter((_, idx) => idx !== i));
+
+  const startEdit = (i: number) => { setEditing(i); setEditValue(concepts[i]); };
+  const saveEdit = () => {
+    if (editing === null) return;
+    const v = editValue.trim();
+    if (v) { const updated = [...concepts]; updated[editing] = v; save(updated); }
+    setEditing(null);
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
+
+      {/* Saved concepts */}
+      {concepts.length > 0 && (
+        <div className="space-y-2">
+          {concepts.map((c, i) => (
+            <div key={i}>
+              {editing === i ? (
+                <div className="space-y-1.5">
+                  <textarea
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    rows={2}
+                    autoFocus
+                    className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+                    <button onClick={() => setEditing(null)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl group">
+                  <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
+                  <span className="text-[13px] text-[#151515] leading-snug flex-1">{c}</span>
+                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(i)} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Edit</button>
+                    <button onClick={() => remove(i)} className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">Remove</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add new concept */}
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+          placeholder={concepts.length === 0 ? meta.placeholder : "Add another concept…"}
+          className="flex-1 text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white placeholder-gray-300"
+        />
+        <button onClick={add} disabled={!input.trim()}
+          className="text-[11px] font-medium px-3 py-2 rounded-xl bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
+          Add
+        </button>
+      </div>
     </div>
   );
 }
@@ -5911,7 +6017,10 @@ function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: Pilla
                             {item.id === "pricing" && (
                               <PricingPackageSection project={project} />
                             )}
-                            {(item.id === "logo" || item.id === "domain" || item.id === "website") && (
+                            {item.id === "logo" && (
+                              <LogoConceptSection project={project} />
+                            )}
+                            {(item.id === "domain" || item.id === "website") && (
                               <BrandTextSection type={item.id as BrandTextType} project={project} />
                             )}
                             {item.id === "brand_color" && (

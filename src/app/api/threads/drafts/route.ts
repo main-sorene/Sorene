@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
   const batch = snap.data()?.threadsDraftBatch as DraftBatch | undefined;
-  console.log("[drafts GET]", user.uid, "drafts:", batch?.drafts?.length ?? 0, "savedAt:", batch?.savedAt);
+  console.log("[drafts GET] uid:", user.uid, "email:", user.email, "drafts:", batch?.drafts?.length ?? 0);
   return Response.json({ batch: batch ?? null });
 }
 

@@ -11,9 +11,12 @@ export async function POST(req: NextRequest) {
 
   let targetUid = uid;
   if (!targetUid && email) {
-    const snap = await db.collection("users").get();
-    for (const doc of snap.docs) {
-      if (doc.data().email === email) { targetUid = doc.id; break; }
+    try {
+      const { getAdminAuth } = await import("@/lib/firebaseAdmin");
+      const userRecord = await getAdminAuth()!.getUserByEmail(email);
+      targetUid = userRecord.uid;
+    } catch {
+      return Response.json({ error: "User not found" }, { status: 404 });
     }
   }
   if (!targetUid) return Response.json({ error: "User not found" }, { status: 404 });

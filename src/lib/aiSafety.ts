@@ -34,6 +34,28 @@ export function sanitizeName(name: string): string {
 }
 
 /**
+ * Masks PII in the freetext fields of a DnaScores object before they are
+ * embedded in prompts. Numeric score fields are returned unchanged.
+ */
+export function maskScores<T extends Record<string, unknown>>(scores: T): T {
+  const textFields = [
+    "energy_source",
+    "energy_drains",
+    "non_negotiable",
+    "success_feeling",
+    "motivation_driver",
+    "strengths_summary",
+  ] as const;
+  const masked = { ...scores };
+  for (const field of textFields) {
+    if (typeof masked[field] === "string") {
+      (masked as Record<string, unknown>)[field] = maskPii(masked[field] as string);
+    }
+  }
+  return masked;
+}
+
+/**
  * Masks every value in a key→value answer map.
  */
 export function maskAnswers(

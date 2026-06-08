@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
-import { assertTextCompletion, sanitizeName } from "@/lib/aiSafety";
+import { assertTextCompletion, sanitizeName, maskScores } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const safeName = sanitizeName(firstName);
+    const safeScores = maskScores(scores);
 
     const modelList = models
       .map((m, i) => `${i + 1}. ${m.model} (${m.compatibility}% compatibility)`)
@@ -34,8 +35,8 @@ DNA scores:
 - Energy stability: ${scores.energy_stability_score}/10
 - Structure preference: ${scores.structure_score}/10 (higher = solo)
 - Capacity: ${scores.constraint_score}/10
-- What energizes them: ${scores.energy_source}
-- Trade-off they chose: ${scores.non_negotiable}
+- What energizes them: ${safeScores.energy_source}
+- Trade-off they chose: ${safeScores.non_negotiable}
 
 For each model, write a concise 2-3 sentence summary (max 60 words) that:
 - Describes a concrete direction within that model

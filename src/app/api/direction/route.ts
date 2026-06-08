@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
-import { maskPii, maskAnswers, sanitizeName } from "@/lib/aiSafety";
+import { maskPii, maskAnswers, maskScores, sanitizeName } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -122,7 +122,11 @@ export async function POST(req: NextRequest) {
 
     const safeAnswers = maskAnswers(rawAnswers);
     const safeCvSummary = cvSummary ? maskPii(cvSummary) : undefined;
-    const userMessage = buildUserMessage(eligibility, firstName, safeAnswers, safeCvSummary);
+    const safeEligibility = {
+      ...eligibility,
+      scores: maskScores(eligibility.scores),
+    };
+    const userMessage = buildUserMessage(safeEligibility, firstName, safeAnswers, safeCvSummary);
 
     const stream = await client.messages.stream({
       model: "claude-sonnet-4-6",

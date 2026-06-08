@@ -43,10 +43,9 @@ export async function GET(req: NextRequest) {
       }),
     });
     if (!tokenRes.ok) throw new Error("Token exchange failed");
-    const { access_token: shortToken, user_id: threadsUserId } = await tokenRes.json() as {
-      access_token: string;
-      user_id: string;
-    };
+    const tokenData = await tokenRes.json() as { access_token: string; user_id: string | number };
+    const shortToken = tokenData.access_token;
+    const threadsUserId = String(tokenData.user_id);
 
     // Step 2 — upgrade to long-lived token (valid 60 days)
     const longRes = await fetch(

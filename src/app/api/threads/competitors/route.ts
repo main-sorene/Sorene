@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const key = projectTitle ? `threadsCompetitors__${slug(projectTitle)}` : "threadsCompetitors";
 
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const competitors = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
+  const competitors = (snap.data()?.[key] ?? []) as Competitor[];
   return Response.json({ competitors });
 }
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!username) return Response.json({ error: "Missing username" }, { status: 400 });
 
     const snap = await docRef.get();
-    const existing = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
+    const existing = (snap.data()?.[key] ?? []) as Competitor[];
     if (existing.find((c) => c.username === username)) {
       return Response.json({ error: "Already added" }, { status: 409 });
     }
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   if (body.action === "remove") {
     const username = body.username?.replace(/^@/, "").trim().toLowerCase();
     const snap = await docRef.get();
-    const existing = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
+    const existing = (snap.data()?.[key] ?? []) as Competitor[];
     const updated = existing.filter((c) => c.username !== username);
     await docRef.set({ [key]: updated }, { merge: true });
     return Response.json({ ok: true, competitors: updated });
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
   if (body.action === "analyze") {
     const snap = await docRef.get();
-    const competitors = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
+    const competitors = (snap.data()?.[key] ?? []) as Competitor[];
     if (competitors.length === 0) return Response.json({ error: "No competitors added" }, { status: 400 });
 
     // Get the user's Threads access token to fetch competitor posts

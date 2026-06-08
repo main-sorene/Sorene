@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   const db = getAdminFirestore();
   const userSnap = await db.collection("users").doc(user.uid).get();
   const userData = userSnap.data();
-  const watchlist = (userData?.[watchlistKey] ?? (projectTitle ? userData?.redditWatchlist : undefined)) as RedditWatchlist | undefined;
+  const watchlist = userData?.[watchlistKey] as RedditWatchlist | undefined;
   const approvedSubreddits = (watchlist?.subreddits ?? []).filter((s) => s.addedBy === "user" || s.approved);
 
   if (approvedSubreddits.length === 0 || !watchlist?.keywords?.length) {
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     watchlist.keywords.join(", "),
   ].filter(Boolean).join(" — ");
 
-  const existing = (userData?.[oppKey] ?? (projectTitle ? userData?.redditOpportunities : undefined) ?? []) as RedditOpportunity[];
+  const existing = (userData?.[oppKey] ?? []) as RedditOpportunity[];
   const seenIds = new Set(existing.map((o) => o.threadId));
   const newOpportunities: RedditOpportunity[] = [];
 

@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const account = snap.data() ?? null;
   const userData = userSnap.data();
   const dnaKey = projectTitle ? `threadsContentDNA__${slug(projectTitle)}` : "threadsContentDNA";
-  const dna = userData?.[dnaKey] ?? (projectTitle ? (userData?.threadsContentDNA ?? null) : null);
+  const dna = userData?.[dnaKey] ?? null;
 
   if (!account?.accessToken) return Response.json({ connected: false, dna });
   return Response.json({ connected: true, username: account.username, connectedAt: account.connectedAt, dna });

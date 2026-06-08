@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
   const data = snap.data();
-  const watchlist = (data?.[key] ?? (projectTitle ? data?.redditWatchlist : undefined)) as RedditWatchlist | undefined;
+  const watchlist = data?.[key] as RedditWatchlist | undefined;
   return Response.json({ watchlist: watchlist ?? { subreddits: [], keywords: [], updatedAt: 0 } });
 }
 

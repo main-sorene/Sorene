@@ -5738,12 +5738,6 @@ function AgentDetail({ agent }: { agent: AgentDef }) {
 function AgentsContent() {
   return (
     <div className="p-6 space-y-8">
-      <div>
-        <h3 className="text-[15px] font-semibold text-[#151515]">AI Agents</h3>
-        <p className="text-[13px] text-[#62646A] leading-relaxed mt-1">
-          Specialised agents that run parts of your execution so you can focus on the work only you can do. Built around your project&rsquo;s data.
-        </p>
-      </div>
       {AGENT_TIERS.map((tier) => (
         <section key={tier.tier}>
           <div className="flex items-baseline gap-3 mb-1">

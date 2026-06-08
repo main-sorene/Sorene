@@ -8219,6 +8219,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
   // Which draft has the slot editor open
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  const [postedOpen, setPostedOpen] = useState(false);
   // Pending date/time string while slot editor is open: draftId → { date, time }
   const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
 
@@ -8748,7 +8749,21 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
               placeholder={"e.g. Focus on our beta launch this week. Avoid talking about pricing. Target corporate professionals thinking about starting a business."}
               rows={3}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors resize-none" />
-            <p className="text-[11px] text-[#9A9A9A] mt-1">Guide the AI — topics to focus on, things to avoid, tone adjustments. Saved automatically.</p>
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-[11px] text-[#9A9A9A]">Guide the AI — topics, things to avoid, tone.</p>
+              <button onClick={async () => {
+                try {
+                  const { authFetch } = await import("@/lib/authFetch");
+                  await authFetch("/api/threads/drafts", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
+                  });
+                } catch { /* ignore */ }
+              }} className="text-[11px] px-3 py-1 rounded-lg bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
+                Save notes
+              </button>
+            </div>
           </div>
 
           <button onClick={generateWeek} disabled={generating}
@@ -8773,7 +8788,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             {successMsg && <span className="text-[11px] text-[#32C382] font-medium shrink-0">{successMsg}</span>}
           </div>
 
-          {weekDrafts.map((draft, i) => {
+          {weekDrafts.filter((d) => !d.posted).map((draft, i) => {
             const effectiveSlot = slotOverrides[draft.id] ?? scheduleSlots[i];
             const effectiveDate = effectiveSlot ? new Date(effectiveSlot) : null;
             const slotDateVal = effectiveDate ? effectiveDate.toLocaleDateString("en-CA") : ""; // YYYY-MM-DD
@@ -8907,7 +8922,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           })}
 
           {/* Approve and schedule */}
-          {accountStatus === "connected" && weekDrafts.some((d) => !d.frozen) && (
+          {accountStatus === "connected" && weekDrafts.some((d) => !d.frozen && !d.posted) && (
             <div className="space-y-2">
               {errorMsg && (
                 <p className="text-[12px] text-red-500 text-center px-2">{errorMsg}</p>
@@ -8916,8 +8931,43 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                 className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {approvingAll
                   ? <><Loader2 size={13} className="animate-spin" /> Scheduling…</>
-                  : <>Approve and schedule {weekDrafts.filter((d) => !d.frozen).length} posts</>}
+                  : <>Approve and schedule {weekDrafts.filter((d) => !d.frozen && !d.posted).length} posts</>}
               </button>
+            </div>
+          )}
+
+          {/* Posted section */}
+          {weekDrafts.some((d) => d.posted) && (
+            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+              <button onClick={() => setPostedOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={13} className="text-[#32C382]" />
+                  <p className="text-[12px] font-semibold text-[#151515]">Posted</p>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#E8FBF0] text-[#32C382] font-semibold">{weekDrafts.filter((d) => d.posted).length}</span>
+                </div>
+                <ChevronDown size={14} className={cn("text-[#9A9A9A] transition-transform", postedOpen && "rotate-180")} />
+              </button>
+              <AnimatePresence initial={false}>
+                {postedOpen && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                    className="overflow-hidden divide-y divide-[#ECEDEE]">
+                    {weekDrafts.filter((d) => d.posted).map((draft) => {
+                      const displayText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+                      return (
+                        <div key={draft.id} className="px-4 py-3 flex items-start gap-3">
+                          <p className="text-[12px] text-[#9A9A9A] leading-relaxed flex-1 line-clamp-2">{displayText}</p>
+                          <button onClick={() => setWeekDrafts((prev) => prev.filter((d) => d.id !== draft.id))}
+                            className="text-[#BCBCBC] hover:text-[#DF2E16] transition-colors shrink-0 mt-0.5">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>

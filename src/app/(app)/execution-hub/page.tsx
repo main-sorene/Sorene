@@ -8185,7 +8185,7 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; ctaComment?: string; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
 
@@ -8452,6 +8452,12 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 
       const system = `You are ghostwriting Threads posts for a founder. Your job is to sound like a real person — not a content creator, not a marketer, not an AI.
 
+OPENING LINE — every post MUST start with a short, punchy sentence in ALL CAPS. This is the hook that stops the scroll. Examples:
+"MOST PEOPLE GET THIS WRONG."
+"I ALMOST QUIT LAST TUESDAY."
+"NOBODY TALKS ABOUT THIS PART."
+Keep it under 8 words. Make it a bold claim, surprising truth, or pattern interrupt. Then continue in normal case.
+
 VOICE — this is the most important thing:
 - Write like someone typing a thought between meetings. Informal. Imperfect. Occasionally incomplete.
 - Use contractions always (don't, isn't, we've, I'm). Never "do not", "is not".
@@ -8497,7 +8503,16 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       if (res.ok) {
         const data = await res.json() as { reply?: string };
         const posts = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, count);
-        setWeekDrafts(posts.map((text, i) => ({ id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false })));
+        setWeekDrafts(posts.map((text, i) => {
+          const hasCta = text.includes("[ADD_LINK_IN_COMMENT]");
+          const cleanText = text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+          // Auto-generate comment: first sentence of post + link
+          const firstSentence = cleanText.split(/[.!?]/)[0]?.trim() ?? "";
+          const ctaComment = hasCta && ctaLink.trim()
+            ? `${firstSentence ? `Loved this post? ${firstSentence.length > 60 ? "Read more" : firstSentence.toLowerCase().replace(/^[a-z]/, c => c.toUpperCase())} →` : "More here →"} ${ctaLink.trim()}`
+            : undefined;
+          return { id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false, ...(ctaComment ? { ctaComment } : {}) };
+        }));
       }
     } catch { /* ignore */ }
     setGenerating(false);
@@ -8574,7 +8589,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           body: JSON.stringify({
             text: cleanText,
             scheduledAt,
-            ...(hasCta && ctaLink.trim() ? { ctaLink: ctaLink.trim() } : {}),
+            ...(hasCta && (draft.ctaComment ?? ctaLink).trim() ? { ctaLink: (draft.ctaComment ?? ctaLink).trim() } : {}),
           }),
         });
         if (res.ok) {
@@ -8852,14 +8867,21 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                   ) : (
                     <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{displayText}</p>
                   )}
-                  {hasCta && ctaLink && (
-                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
+                  {hasCta && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 space-y-1.5">
                       <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide">First comment (auto-posted)</p>
-                      <p className="text-[12px] text-blue-700">{ctaLink}</p>
+                      {ctaLink ? (
+                        <textarea
+                          value={draft.ctaComment ?? ctaLink}
+                          onChange={(e) => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, ctaComment: e.target.value } : d))}
+                          rows={2}
+                          className="w-full bg-transparent text-[12px] text-blue-700 resize-none focus:outline-none placeholder-blue-300"
+                          placeholder={ctaLink}
+                        />
+                      ) : (
+                        <p className="text-[11px] text-blue-400 italic">Add your CTA link above to enable</p>
+                      )}
                     </div>
-                  )}
-                  {hasCta && !ctaLink && (
-                    <p className="text-[11px] text-[#9A9A9A] italic">Link in comment — add your CTA link above to enable</p>
                   )}
                   {accountStatus === "connected" && !draft.frozen && (
                     <button onClick={async () => {

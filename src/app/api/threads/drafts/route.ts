@@ -13,6 +13,7 @@ export interface DraftBatch {
   ctaLink: string;
   cadence: 1 | 2;
   slotOverrides: Record<string, number>;
+  userNotes: string;
   savedAt: number;
 }
 
@@ -37,6 +38,7 @@ export async function PUT(req: NextRequest) {
     ctaLink: body.ctaLink ?? "",
     cadence: body.cadence ?? 1,
     slotOverrides: body.slotOverrides ?? {},
+    userNotes: (body as DraftBatch & { userNotes?: string }).userNotes ?? "",
     savedAt: Date.now(),
   };
 

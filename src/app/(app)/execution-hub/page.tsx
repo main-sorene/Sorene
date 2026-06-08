@@ -492,7 +492,7 @@ Return JSON with:
   );
 }
 
-function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
+function GoNoGoContent({ project, onConfirmLaunch }: { project: DirectionCardData | null; onConfirmLaunch?: () => void }) {
   const auto = useGoNoGoAutoDetect(project);
   const storageKey = `go-nogo-manual-${project?.title ?? ""}`;
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -777,14 +777,14 @@ Return a JSON object with exactly these keys:
   const confirmLaunch = async () => {
     if (!projectTitle) return;
     setConfirming(true);
-    // Write finalized profile to LaunchPad keys
     try {
       localStorage.setItem(`brand-benefit-${projectTitle}`, profile.benefits);
       localStorage.setItem(`brand-offerings-${projectTitle}`, profile.offerings);
       localStorage.setItem(`brand-pricing-${projectTitle}`, profile.pricing);
-      // Store structured launch profile for LaunchPad Brand sections to read
       localStorage.setItem(`launch-profile-confirmed-${projectTitle}`, JSON.stringify(profile));
       setConfirmed(true);
+      // Navigate to LaunchPad and open Brand & Digital Presence
+      setTimeout(() => onConfirmLaunch?.(), 800);
     } catch { /* ignore */ }
     setConfirming(false);
   };
@@ -5571,9 +5571,18 @@ const PILLAR_TAGLINES: Record<string, string> = {
   growth:      "Scale what works",
 };
 
-function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
+function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: PillarDef; project: DirectionCardData | null; onNameChosen?: (name: string) => void; autoOpen?: boolean }) {
   const title = project?.title ?? "";
-  const [isExpanded, setIsExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(autoOpen ?? false);
+
+  useEffect(() => {
+    if (autoOpen) {
+      setIsExpanded(true);
+      setTimeout(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
   const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
   const [tips, setTips] = useState<Record<string, string>>({});
   const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
@@ -5647,6 +5656,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
 
   return (
     <motion.div
+      ref={cardRef}
       layout
       transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
       className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col group cursor-pointer"
@@ -5791,11 +5801,13 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
 // LaunchPadContent — main component
 // ─────────────────────────────────────────────
 
-function LaunchPadContent({ project, onNameChosen }: { project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
+function LaunchPadContent({ project, onNameChosen, autoOpenPillarId }: { project: DirectionCardData | null; onNameChosen?: (name: string) => void; autoOpenPillarId?: string }) {
+  // autoOpenPillarId is consumed on first render only — PillarCard handles the scroll
   return (
     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
-        <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen} />
+        <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen}
+          autoOpen={autoOpenPillarId === pillar.id} />
       ))}
     </div>
   );
@@ -8423,6 +8435,7 @@ function ProjectSettings({
 export default function Page() {
   const authUser = useAtomValue(userAtom);
   const [activeTab, setActiveTab] = useState<Tab | null>("validation");
+  const [launchpadOpenPillar, setLaunchpadOpenPillar] = useState<string | undefined>(undefined);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const bumpOnboard = useSetAtom(executionOnboardTriggerAtom);
@@ -8585,7 +8598,11 @@ export default function Page() {
       title: "The Go / No-Go Check",
       tagline: "Launch readiness · Health check",
       description: `A crystal-clear assessment that tells you if you're ready to launch ${projectLabel} — measured across market validation, problem clarity, learning, and finance.`,
-      content: <GoNoGoContent project={selectedProject ?? null} />,
+      content: <GoNoGoContent project={selectedProject ?? null} onConfirmLaunch={() => {
+        setLaunchpadOpenPillar("brand_digital");
+        setActiveTab("launchpad");
+        setTimeout(() => setLaunchpadOpenPillar(undefined), 2000);
+      }} />,
       strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
   ];
@@ -8681,7 +8698,7 @@ export default function Page() {
                       {activeTab === "validation"
                         ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} />
                         : activeTab === "launchpad"
-                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} onNameChosen={(name) => {
+                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} autoOpenPillarId={launchpadOpenPillar} onNameChosen={(name) => {
                             const key = selectedProject?.title ?? "";
                             if (!key) return;
                             const updated = { ...customNames, [key]: name };

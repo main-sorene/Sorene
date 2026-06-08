@@ -8744,10 +8744,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
   const suggestSubreddits = async () => {
     setSuggestingReddit(true);
     try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const projectData = (await authFetch("/api/user").then((r) => r.json()).catch(() => ({}))) as { project?: { oneliner?: string; description?: string } };
-      const productContext = projectData?.project?.oneliner ?? projectData?.project?.description ?? "";
+      const productContext = project?.oneliner ?? project?.simple_positioning ?? project?.description ?? "";
       if (!productContext) { setSuggestingReddit(false); return; }
+      const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/reddit/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

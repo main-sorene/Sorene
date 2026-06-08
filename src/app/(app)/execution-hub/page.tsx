@@ -9305,7 +9305,7 @@ function ThreadsConnectCard() {
     const check = async () => {
       try {
         const { authFetch } = await import("@/lib/authFetch");
-        const res = await authFetch("/api/social/threads/status");
+        const res = await authFetch("/api/threads/account");
         if (res.ok) {
           const data = await res.json() as { connected: boolean; username?: string; profilePictureUrl?: string };
           if (data.connected) { setStatus("connected"); setProfile({ username: data.username ?? "", profilePictureUrl: data.profilePictureUrl ?? "" }); }
@@ -9323,7 +9323,7 @@ function ThreadsConnectCard() {
       url.searchParams.delete("threads_connected");
       window.history.replaceState({}, "", url.toString());
       import("@/lib/authFetch").then(({ authFetch }) =>
-        authFetch("/api/social/threads/status").then((r) => r.json()).then((data: { connected: boolean; username?: string; profilePictureUrl?: string }) => {
+        authFetch("/api/threads/account").then((r) => r.json()).then((data: { connected: boolean; username?: string; profilePictureUrl?: string }) => {
           if (data.connected) setProfile({ username: data.username ?? "", profilePictureUrl: data.profilePictureUrl ?? "" });
         })
       ).catch(() => { /* ignore */ });
@@ -9338,9 +9338,11 @@ function ThreadsConnectCard() {
   const handleConnect = async () => {
     setStatus("loading");
     try {
-      const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
-      if (!token) throw new Error("Not authenticated");
-      window.location.href = `/api/social/threads/connect?token=${encodeURIComponent(token)}`;
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/auth");
+      if (!res.ok) throw new Error("Failed to get auth URL");
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
     } catch { setStatus("idle"); }
   };
 
@@ -9348,7 +9350,7 @@ function ThreadsConnectCard() {
     setStatus("disconnecting");
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      await authFetch("/api/social/threads/disconnect", { method: "POST" });
+      await authFetch("/api/threads/account", { method: "DELETE" });
       setStatus("idle"); setProfile(null);
     } catch { setStatus("connected"); }
   };

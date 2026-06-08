@@ -9399,7 +9399,6 @@ function ThreadsConnectCard() {
 function ConnectContent() {
   return (
     <div className="p-3 sm:p-6 space-y-4">
-      <ThreadsConnectCard />
       <MessengerConnectCard />
       <CommunityCard />
     </div>

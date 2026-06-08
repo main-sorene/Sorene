@@ -8218,6 +8218,8 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
   // Which draft has the slot editor open
   const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  // Pending date/time string while slot editor is open: draftId → { date, time }
+  const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
 
   // Best posting times (local HH:MM strings)
   const bestTimes: string[] = dna?.bestHours?.slice(0, 2).map((utcH) => {
@@ -8716,12 +8718,12 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             const displayText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
             const isEditingSlot = editingSlot === draft.id;
 
-            const applySlotEdit = (dateStr: string, timeStr: string) => {
-              if (!dateStr || !timeStr) return;
-              const ts = new Date(`${dateStr}T${timeStr}`).getTime();
-              if (!isNaN(ts) && ts > Date.now()) {
-                setSlotOverrides((prev) => ({ ...prev, [draft.id]: ts }));
-              }
+            const pendingDate = pendingSlot[draft.id]?.date ?? slotDateVal;
+            const pendingTime = pendingSlot[draft.id]?.time ?? slotTimeVal;
+            const commitSlotEdit = () => {
+              if (!pendingDate || !pendingTime) return;
+              const ts = new Date(`${pendingDate}T${pendingTime}`).getTime();
+              if (!isNaN(ts)) setSlotOverrides((prev) => ({ ...prev, [draft.id]: ts }));
             };
 
             return (
@@ -8764,16 +8766,16 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                       className="overflow-hidden border-b border-[#ECEDEE]">
                       <div className="px-4 py-3 bg-white flex items-center gap-2 flex-wrap">
                         <p className="text-[11px] text-[#9A9A9A] font-medium">Change schedule:</p>
-                        <input type="date" defaultValue={slotDateVal}
+                        <input type="date" value={pendingDate}
                           min={new Date().toLocaleDateString("en-CA")}
-                          onChange={(e) => applySlotEdit(e.target.value, slotTimeVal)}
+                          onChange={(e) => setPendingSlot((prev) => ({ ...prev, [draft.id]: { date: e.target.value, time: pendingTime } }))}
                           className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
-                        <input type="time" defaultValue={slotTimeVal}
-                          onChange={(e) => applySlotEdit(slotDateVal, e.target.value)}
+                        <input type="time" value={pendingTime}
+                          onChange={(e) => setPendingSlot((prev) => ({ ...prev, [draft.id]: { date: pendingDate, time: e.target.value } }))}
                           className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
-                        <button onClick={() => setEditingSlot(null)}
+                        <button onClick={() => { commitSlotEdit(); setEditingSlot(null); }}
                           className="text-[11px] px-3 py-1.5 rounded-lg bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
-                          Done
+                          Save
                         </button>
                       </div>
                     </motion.div>

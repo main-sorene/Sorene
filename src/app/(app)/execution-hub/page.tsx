@@ -8616,8 +8616,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         editing: false,
         ...(scheduledIdMap[d.id] ? { scheduledId: scheduledIdMap[d.id] } : {}),
       }));
-      // Clear saved drafts from Firestore immediately
-      authFetch("/api/threads/drafts", { method: "DELETE" }).catch(() => {});
+      // Auto-save (triggered by setWeekDrafts above) will persist frozen drafts
       setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
     } catch { /* ignore */ }
     setApprovingAll(false);

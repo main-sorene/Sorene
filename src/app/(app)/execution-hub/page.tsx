@@ -8284,6 +8284,8 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   }, [authUser]);
 
   // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
+  // NOTE: draftsLoaded is intentionally excluded from deps — it's only a guard.
+  // Including it would fire a save with stale weekDrafts=[] right after load, deleting the batch.
   useEffect(() => {
     if (!draftsLoaded || !authUser) return;
     const timer = setTimeout(async () => {
@@ -8302,7 +8304,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     }, 1500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekDrafts, ctaLink, cadence, slotOverrides, userNotes, draftsLoaded]);
+  }, [weekDrafts, ctaLink, cadence, slotOverrides, userNotes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

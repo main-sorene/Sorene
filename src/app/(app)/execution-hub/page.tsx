@@ -4321,8 +4321,32 @@ const GROWTH_PILLAR = { id: "growth", label: "Growth", icon: BarChart3, items: [
   { id: "sales_playbook", label: "Sales playbook" },
   { id: "financial_model", label: "Financial model & projections" },
   { id: "growth_metrics", label: "Growth metrics / North Star" },
+  { id: "retention_playbook", label: "Customer retention / churn playbook" },
+  { id: "referral_strategy", label: "Referral & partnerships strategy" },
+  { id: "content_seo", label: "Content & SEO plan" },
   { id: "pitch_deck", label: "Pitch deck" },
+  { id: "hiring_plan", label: "Hiring plan" },
 ] } as const;
+
+const GROWTH_STORAGE_KEYS: Record<string, (title: string) => string> = {
+  business_plan: (t) => `growth-business-plan-${t}`,
+  marketing_plan: (t) => `growth-marketing-plan-${t}`,
+  gtm_strategy: (t) => `growth-gtm-strategy-${t}`,
+  sales_playbook: (t) => `growth-sales-playbook-${t}`,
+  financial_model: (t) => `growth-financial-model-${t}`,
+  growth_metrics: (t) => `growth-metrics-${t}`,
+  retention_playbook: (t) => `growth-retention-${t}`,
+  referral_strategy: (t) => `growth-referral-${t}`,
+  content_seo: (t) => `growth-content-seo-${t}`,
+  pitch_deck: (t) => `growth-pitch-deck-${t}`,
+  hiring_plan: (t) => `growth-hiring-${t}`,
+};
+
+const GROWTH_CLUSTERS: { label: string; ids: string[] }[] = [
+  { label: "PLAN", ids: ["business_plan", "marketing_plan", "gtm_strategy"] },
+  { label: "REVENUE", ids: ["sales_playbook", "financial_model", "growth_metrics", "retention_playbook", "referral_strategy", "content_seo"] },
+  { label: "FUNDRAISE & TEAM", ids: ["pitch_deck", "hiring_plan"] },
+];
 
 type PillarDef = typeof LAUNCH_PILLARS[number] | typeof GROWTH_PILLAR;
 type ChecklistStatus = "todo" | "progress" | "done";

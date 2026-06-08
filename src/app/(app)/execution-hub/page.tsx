@@ -9120,6 +9120,7 @@ function AgentsContent({ project }: { project: DirectionCardData | null }) {
                   tagline: agent.tagline,
                   description: agent.description,
                   content: <AgentDetail agent={agent} project={project} />,
+                  fullWidth: agent.id === "content_social",
                 }}
               />
             ))}
@@ -9655,6 +9656,7 @@ interface FolderDef {
   description: string;
   content: React.ReactNode;
   strengthTags?: string[];
+  fullWidth?: boolean;
 }
 
 function FolderCard({ folder }: { folder: FolderDef }) {
@@ -9665,7 +9667,7 @@ function FolderCard({ folder }: { folder: FolderDef }) {
     <motion.div
       layout
       transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col group cursor-pointer"
+      className={cn("relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col group cursor-pointer", folder.fullWidth && isExpanded && "md:col-span-2")}
       onClick={!isExpanded ? handleToggle : undefined}
     >
       {/* Gradient header — fills collapsed card on hover, always shown when expanded */}

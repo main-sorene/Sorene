@@ -374,13 +374,7 @@ export const DirectionSection = () => {
   };
 
   const removeCard = (id: string) => {
-    // Remove from hidden list
-    setHiddenIds((prev) => {
-      const updated = prev.filter((h) => h !== id);
-      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
-      return updated;
-    });
-    // If it's a recipe card, also delete it from the atom + localStorage
+    // For recipe cards: delete from atom + localStorage (they disappear everywhere)
     setRecipeDirections((prev) => {
       const updated = prev.filter((r) => r.id !== id);
       try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}

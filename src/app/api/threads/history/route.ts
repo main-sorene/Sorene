@@ -108,12 +108,13 @@ export async function GET(req: NextRequest) {
 Posts (text + engagement):
 ${postsForAnalysis.map((p, i) => `${i + 1}. "${p.text}" | views:${p.views} likes:${p.likes} replies:${p.replies} reposts:${p.reposts}`).join("\n")}
 
-Write exactly 3 paragraphs:
-1. **What's working** — which post types, formats, or topics get the most engagement (cite post numbers and real metrics).
-2. **What's not working** — patterns that underperform and why.
-3. **What to do next** — 2-3 specific, actionable things to do in the next week based on what the data shows. Start this paragraph with "**Next:**".
+Write exactly 3 short paragraphs. Start each on a new line with a blank line between them. Do NOT run them together.
 
-Use **bold** on key insights, numbers, and action items. Be concrete — reference actual patterns.`,
+Paragraph 1: Start with "**What's Working**" — which post types, formats, or topics get the most engagement (cite post numbers and real metrics).
+Paragraph 2: Start with "**What's Not Working**" — patterns that underperform and why.
+Paragraph 3: Start with "**Next:**" — 2-3 specific, actionable things to do this week.
+
+Use **bold** on key numbers and phrases. Keep each paragraph under 60 words. Output nothing else — just the 3 paragraphs separated by blank lines.`,
       }],
     });
 

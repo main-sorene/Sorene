@@ -5030,22 +5030,19 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     setChatLoading(false);
   };
 
-  const choose = (name: string) => {
-    setChosen(name);
-    setCollapsed(true);
-    try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
-  };
-
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
 
-  const startEdit = () => { setEditValue(chosen); setEditing(true); setCollapsed(false); };
+  const startEdit = (prefill?: string) => { setEditValue(prefill ?? chosen); setEditing(true); };
   const saveEdit = () => {
     const v = editValue.trim();
     if (v) { setChosen(v); try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } }
     setEditing(false);
     setCollapsed(!!v);
   };
+
+  // "Choose" from suggestions → open edit field for review before saving
+  const choose = (name: string) => { startEdit(name); };
 
   const [ownInput, setOwnInput] = useState("");
   const [ownEval, setOwnEval] = useState("");
@@ -5100,7 +5097,7 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      {!collapsed && (
+      {!chosen && !editing && (
         <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
       )}
 
@@ -5108,12 +5105,7 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
         <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
           <span className="text-[13px] font-medium text-[#151515] flex-1 leading-snug">{chosen}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={startEdit} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Edit</button>
-            <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">
-              {collapsed ? "Change" : "Collapse"}
-            </button>
-          </div>
+          <button onClick={() => startEdit()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors shrink-0">Edit</button>
         </div>
       )}
       {editing && (
@@ -5132,7 +5124,7 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
         </div>
       )}
 
-      {!collapsed && (
+      {!editing && (
         <>
           {stage === "idle" && (
             <button onClick={generateSuggestions} disabled={!title}
@@ -5225,73 +5217,6 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
                 <span className="text-[11px] font-medium text-[#9A9A9A]">{customInput.trim().toLowerCase()} is already taken.</span>
               )}
             </div>
-          )}
-          {stage === "done" && (
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              {chatHistory.length > 0 && (
-                <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
-                  {chatHistory.map((m, i) => (
-                    <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
-                      {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                  placeholder={meta.placeholder}
-                  className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none" />
-                <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading} className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
-                  {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-                </button>
-              </div>
-            </div>
-          )}
-          {type !== "domain" && type !== "website" && (
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or write your own</span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>
-              <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
-                <textarea
-                  value={ownInput}
-                  onChange={(e) => setOwnInput(e.target.value)}
-                  placeholder={`Type your ${type === "logo" ? "logo concept idea" : type === "benefit" ? "benefit description" : type === "offerings" ? "offering description" : "tagline"} here…`}
-                  rows={2}
-                  className="w-full text-[13px] text-[#151515] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382] resize-none placeholder:text-[#9CA3AF]"
-                />
-                <div className="flex items-center justify-between gap-2">
-                  {ownInput.trim() && (
-                    <button
-                      onClick={() => choose(ownInput.trim())}
-                      className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors"
-                    >
-                      Use this
-                    </button>
-                  )}
-                  <button
-                    onClick={evaluateOwn}
-                    disabled={!ownInput.trim() || ownLoading}
-                    className="flex items-center gap-1 text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 ml-auto"
-                  >
-                    {ownLoading ? <Loader2 size={10} className="animate-spin" /> : <img src="/figmaAssets/starfour.svg" className="w-2 h-2" alt="" />}
-                    Get feedback
-                  </button>
-                </div>
-                {ownEval && (
-                  <div className="rounded-lg bg-white border border-[#32C382]/20 px-3 py-2">
-                    <p className="text-[11px] text-[#62646A] leading-relaxed">
-                      <span className="text-[#32C382] font-semibold">Sorene: </span>{ownEval}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {type === "logo" && (
-            <LogoUploadArea title={title} />
           )}
         </>
       )}

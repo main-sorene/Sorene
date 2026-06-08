@@ -4672,54 +4672,6 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
   },
 };
 
-function LogoUploadArea({ title }: { title: string }) {
-  const storageKey = `brand-logo-upload-${title}`;
-  const [preview, setPreview] = useState<string>(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setPreview(dataUrl);
-      try { localStorage.setItem(storageKey, dataUrl); } catch { /* ignore — too large */ }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <div className="space-y-2 pt-1">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-px bg-gray-100" />
-        <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or upload your logo</span>
-        <div className="flex-1 h-px bg-gray-100" />
-      </div>
-      {preview ? (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#32C382]/30 bg-[#F5FFD9]">
-          <img src={preview} alt="Logo" className="w-10 h-10 object-contain rounded-lg border border-white" />
-          <span className="text-[12px] font-medium text-[#151515] flex-1">Logo saved</span>
-          <button onClick={() => { setPreview(""); try { localStorage.removeItem(storageKey); } catch {} }}
-            className="text-[10px] text-[#9CA3AF] hover:text-[#374151] transition-colors">Remove</button>
-        </div>
-      ) : (
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="w-full flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] hover:border-[#32C382]/50 hover:bg-[#F5FFD9]/30 transition-all"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V7M7 10l3-3 3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="2" width="16" height="16" rx="4" stroke="#9CA3AF" strokeWidth="1.5"/></svg>
-          <span className="text-[11px] text-[#9CA3AF]">Upload logo file</span>
-          <span className="text-[10px] text-[#C4C4C4]">PNG, JPG, SVG</span>
-        </button>
-      )}
-      <input ref={inputRef} type="file" accept="image/*" className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────
 // LogoConceptSection — list of saved logo concepts, add more
 // ─────────────────────────────────────────────
@@ -4845,9 +4797,6 @@ function BrandTextSection({ type, project }: { type: BrandTextType; project: Dir
   const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string; available?: boolean | null }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   useEffect(() => {
@@ -4989,47 +4938,6 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     } catch { setStage("idle"); }
   };
 
-  const sendChat = async () => {
-    const msg = chatInput.trim();
-    if (!msg || chatLoading) return;
-    setChatInput("");
-    const newHistory = [...chatHistory, { role: "user" as const, text: msg }];
-    setChatHistory(newHistory);
-    setChatLoading(true);
-    const ctx = buildContext();
-    const system = `You are Sorene, a startup brand coach. Return a JSON array where "text" is the actual copy and "reason" explains why it works: [{"text": "...", "reason": "..."}]. No markdown outside the JSON.`;
-    const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
-    const prompt = `${buildPrompt(ctx)}\n\nUser feedback: "${msg}". Generate 3 new options based on the feedback.`;
-    try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system, history }) });
-      if (res.ok) {
-        const data = await res.json();
-        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
-        if (match) {
-          const raw = JSON.parse(match[0]);
-          let parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
-          setSuggestions([]);
-          setTimeout(async () => {
-            setSuggestions(parsed);
-            setSuggestionKey((k) => k + 1);
-            if (type === "domain") {
-              parsed = await checkAndAnnotateDomains(parsed);
-              setCheckingAvailability(false);
-              setSuggestions(parsed);
-              setSuggestionKey((k) => k + 1);
-            }
-          }, 120);
-          try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
-        } else {
-          setChatHistory([...newHistory, { role: "ai", text: (data?.reply ?? "").trim() }]);
-        }
-      }
-    } catch { /* ignore */ }
-    setChatLoading(false);
-  };
-
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
 
@@ -5043,37 +4951,6 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
 
   // "Choose" from suggestions → open edit field for review before saving
   const choose = (name: string) => { startEdit(name); };
-
-  const [ownInput, setOwnInput] = useState("");
-  const [ownEval, setOwnEval] = useState("");
-  const [ownLoading, setOwnLoading] = useState(false);
-
-  const evaluateOwn = async () => {
-    const text = ownInput.trim();
-    if (!text || ownLoading) return;
-    setOwnLoading(true);
-    setOwnEval("");
-    const ctx = buildContext();
-    const evalPrompt = `The user has written their own ${type} for their business. Evaluate it briefly (2-3 sentences): what works well, what could be stronger, and give one concrete improvement suggestion. Be warm and specific.
-
-Project: "${title}"
-Their ${type}: "${text}"
-${ctx.chosenName ? `Business name: "${ctx.chosenName}"` : ""}
-${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
-    try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/execution-assist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: evalPrompt, system: "You are Sorene, a startup brand coach. Give warm, specific, actionable feedback in 2-3 sentences." }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOwnEval(data?.reply ?? "");
-      }
-    } catch { /* ignore */ }
-    setOwnLoading(false);
-  };
 
   const [customInput, setCustomInput] = useState("");
   const [customChecking, setCustomChecking] = useState(false);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 import { setCreditsLimit } from "@/lib/credits";
+import { getStripe } from "@/lib/stripe";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
@@ -29,6 +30,18 @@ export async function POST(req: NextRequest) {
   if (stripeCustomerId) updateData.stripeCustomerId = stripeCustomerId;
 
   await db.collection("users").doc(userKey).set(updateData, { merge: true });
+
+  // Also update Stripe subscription metadata so the status route (which reads
+  // Stripe as source of truth) returns the correct plan.
+  if (stripeSubscriptionId && stripeSubscriptionId !== "manual-grant") {
+    try {
+      await getStripe().subscriptions.update(stripeSubscriptionId, {
+        metadata: { email: userKey, plan, duration: String(duration) },
+      });
+    } catch (e) {
+      console.warn("[grant-subscription] failed to update Stripe metadata", e);
+    }
+  }
 
   await setCreditsLimit(userKey, plan, true);
 

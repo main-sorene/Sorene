@@ -6081,6 +6081,7 @@ function MarketingPlanCard({ title }: { title: string }) {
   const storageKey = `growth-marketing-plan-${title}`;
   const [stage, setStage] = useState<GrowthStage>("idle");
   const [data, setData] = useState<MktChannel[]>([]);
+  const [openCh, setOpenCh] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -6093,7 +6094,7 @@ function MarketingPlanCard({ title }: { title: string }) {
   const generate = async () => {
     setStage("loading");
     const ctx = readGrowthContext(title);
-    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a marketing plan as a JSON array of channels: [{"channel":"...","tactics":["..."],"priority":"high"|"medium"|"low"}]. Return 4-6 channels.`;
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a marketing plan as a JSON array of channels: [{"channel":"...","tactics":["..."],"priority":"high"|"medium"|"low"}]. Return 4-6 channels most relevant to this business.`;
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
@@ -6108,63 +6109,79 @@ function MarketingPlanCard({ title }: { title: string }) {
 
   const save = () => {
     try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
-    setStage("saved");
+    setStage("saved"); setOpenCh(null);
   };
 
   const priorityColor = (p: string) => p === "high" ? "bg-red-100 text-red-700" : p === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-[#62646A]";
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Channel-by-channel plan with priority-ranked tactics tailored to your audience and offer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate marketing plan
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your marketing plan…</div>
   );
 
-  const readOnly = stage === "saved";
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {data.map((ch, ci) => (
+        <div key={ci} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenCh(openCh === ci ? null : ci)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-semibold text-[#151515]">{ch.channel}</span>
+              <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", priorityColor(ch.priority))}>{ch.priority}</span>
+            </div>
+            {openCh === ci ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>
+            {openCh === ci && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                <div className="px-3 py-2.5 space-y-1 border-t border-gray-100">
+                  {ch.tactics.map((t, ti) => <div key={ti} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{t}</p></div>)}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       {data.map((ch, ci) => (
-        <div key={ci} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center justify-between">
-            {readOnly
-              ? <p className="text-[12px] font-semibold text-[#151515]">{ch.channel}</p>
-              : <input value={ch.channel} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, channel: e.target.value } : c))} className="text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none flex-1 mr-2" />
-            }
-            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", priorityColor(ch.priority))}>{ch.priority}</span>
-            {!readOnly && <button onClick={() => setData((prev) => prev.filter((_, i) => i !== ci))} className="ml-2 text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px]">✕</button>}
+        <div key={ci} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center justify-between">
+            <input value={ch.channel} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, channel: e.target.value } : c))} className="text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none flex-1 mr-2" />
+            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0", priorityColor(ch.priority))}>{ch.priority}</span>
+            <button onClick={() => setData((prev) => prev.filter((_, i) => i !== ci))} className="ml-2 text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px]">✕</button>
           </div>
           <div className="px-3 py-2.5 space-y-1.5">
             {ch.tactics.map((t, ti) => (
               <div key={ti} className="flex items-start gap-2">
-                <span className="text-[#32C382] text-[10px] mt-1">▸</span>
-                {readOnly
-                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{t}</p>
-                  : <input value={t} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.map((tt, j) => j === ti ? e.target.value : tt) } : c))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                }
-                {!readOnly && <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.filter((_, j) => j !== ti) } : c))} className="text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px] shrink-0">✕</button>}
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                <input value={t} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.map((tt, j) => j === ti ? e.target.value : tt) } : c))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.filter((_, j) => j !== ti) } : c))} className="text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px] shrink-0">✕</button>
               </div>
             ))}
-            {!readOnly && (
-              <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: [...c.tactics, ""] } : c))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add tactic</button>
-            )}
+            <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: [...c.tactics, ""] } : c))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add tactic</button>
           </div>
         </div>
       ))}
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <button onClick={() => setData((prev) => [...prev, { channel: "New channel", tactics: [""], priority: "medium" }])} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515]">+ Add channel</button>
-          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => [...prev, { channel: "New channel", tactics: [""], priority: "medium" }])} className="text-[11px] text-[#62646A] border border-dashed border-gray-300 rounded-full px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add channel</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
     </div>
   );
 }
@@ -6209,52 +6226,69 @@ function GtmStrategyCard({ title }: { title: string }) {
   const readOnly = stage === "saved";
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Week-by-week milestones covering your first 12 weeks — from setup through traction.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate GTM strategy
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Mapping your go-to-market timeline…</div>
   );
 
-  return (
-    <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
-      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-4">
+  if (readOnly) return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-3">
         {data.map((m, mi) => (
           <div key={mi} className="relative">
             <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-[#32C382] border-2 border-white flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>
-            <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
                 <span className="text-[10px] font-semibold text-[#32C382] shrink-0">{m.week}</span>
-                {readOnly
-                  ? <p className="text-[12px] font-semibold text-[#151515]">{m.milestone}</p>
-                  : <input value={m.milestone} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, milestone: e.target.value } : x))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
-                }
+                <p className="text-[12px] font-semibold text-[#151515]">{m.milestone}</p>
               </div>
-              <div className="px-3 py-2.5 space-y-1.5">
-                {m.actions.map((a, ai) => (
-                  <div key={ai} className="flex items-start gap-2">
-                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
-                    {readOnly
-                      ? <p className="text-[12px] text-[#151515] leading-relaxed">{a}</p>
-                      : <input value={a} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.map((aa, j) => j === ai ? e.target.value : aa) } : x))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                    }
-                    {!readOnly && <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.filter((_, j) => j !== ai) } : x))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
-                  </div>
-                ))}
-                {!readOnly && <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: [...x.actions, ""] } : x))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add action</button>}
+              <div className="px-3 py-2 space-y-1">
+                {m.actions.map((a, ai) => <div key={ai} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{a}</p></div>)}
               </div>
             </div>
           </div>
         ))}
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-3">
+        {data.map((m, mi) => (
+          <div key={mi} className="relative">
+            <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-[#32C382] border-2 border-white flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-[#32C382] shrink-0">{m.week}</span>
+                <input value={m.milestone} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, milestone: e.target.value } : x))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
+              </div>
+              <div className="px-3 py-2.5 space-y-1.5">
+                {m.actions.map((a, ai) => (
+                  <div key={ai} className="flex items-start gap-2">
+                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                    <input value={a} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.map((aa, j) => j === ai ? e.target.value : aa) } : x))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                    <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.filter((_, j) => j !== ai) } : x))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+                  </div>
+                ))}
+                <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: [...x.actions, ""] } : x))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add action</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6296,60 +6330,76 @@ function SalesPlaybookCard({ title }: { title: string }) {
     setStage("saved");
   };
 
+  const [openSP, setOpenSP] = useState<string | null>(null);
   const readOnly = stage === "saved";
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Your sales opener, pitch, and objection-handling scripts based on your validated offer and target customer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate sales playbook
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Writing your sales playbook…</div>
   );
 
+  if (readOnly) return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "opener", label: "Opener" }, { key: "pitch", label: "Pitch" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenSP(openSP === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openSP === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openSP === key && <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden"><p className="px-3 py-3 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap border-t border-gray-100">{data[key as "opener" | "pitch"]}</p></motion.div>}</AnimatePresence>
+        </div>
+      ))}
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-3">Objection Handler</p>
+      {data.objections.map((obj, oi) => (
+        <div key={oi} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenSP(openSP === `obj-${oi}` ? null : `obj-${oi}`)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] text-[#151515]">{obj.objection}</span>
+            {openSP === `obj-${oi}` ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openSP === `obj-${oi}` && <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden"><p className="px-3 py-3 text-[12px] text-[#32C382] leading-relaxed border-t border-gray-100">{obj.response}</p></motion.div>}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       {[{ key: "opener", label: "Opener" }, { key: "pitch", label: "Pitch" }].map(({ key, label }) => (
-        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
-          {readOnly
-            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key as "opener" | "pitch"]}</p>
-            : <textarea value={data[key as "opener" | "pitch"]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
-          }
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100"><p className="text-[12px] font-semibold text-[#151515]">{label}</p></div>
+          <textarea value={data[key as "opener" | "pitch"]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} placeholder={key === "opener" ? "How you start the conversation…" : "Your 30-second pitch…"} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-none placeholder:text-gray-300" />
         </div>
       ))}
-      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide mt-2">Objection Handler</p>
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-1">Objection Handler</p>
       {data.objections.map((obj, oi) => (
-        <div key={oi} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
-            <span className="text-[10px] font-semibold text-red-500 shrink-0">Objection</span>
-            {readOnly
-              ? <p className="text-[12px] text-[#151515] flex-1">{obj.objection}</p>
-              : <input value={obj.objection} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, objection: e.target.value } : o) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-            }
-            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, objections: prev.objections.filter((_, i) => i !== oi) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+        <div key={oi} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-red-400 shrink-0">Objection</span>
+            <input value={obj.objection} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, objection: e.target.value } : o) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" placeholder="What they say…" />
+            <button onClick={() => setData((prev) => ({ ...prev, objections: prev.objections.filter((_, i) => i !== oi) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
           </div>
-          <div className="px-3 py-2.5 flex items-start gap-2">
+          <div className="px-3 py-2 flex items-start gap-2">
             <span className="text-[10px] font-semibold text-[#32C382] shrink-0 mt-0.5">Response</span>
-            {readOnly
-              ? <p className="text-[12px] text-[#151515] leading-relaxed">{obj.response}</p>
-              : <textarea value={obj.response} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, response: e.target.value } : o) }))} rows={2} className="flex-1 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
-            }
+            <textarea value={obj.response} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, response: e.target.value } : o) }))} rows={2} className="flex-1 text-[12px] text-[#151515] bg-white focus:outline-none resize-none" placeholder="How you respond…" />
           </div>
         </div>
       ))}
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <button onClick={() => setData((prev) => ({ ...prev, objections: [...prev.objections, { objection: "", response: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add objection</button>
-          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => ({ ...prev, objections: [...prev.objections, { objection: "", response: "" }] }))} className="text-[11px] text-[#62646A] border border-dashed border-gray-300 rounded-full px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add objection</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
     </div>
   );
 }
@@ -6398,27 +6448,54 @@ function FinancialModelCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
+  const [openFM, setOpenFM] = useState<string | null>(null);
   const colHdr = ["", "Month 1", "Month 3", "Month 6", "Month 12"];
   const colKeys: (keyof FmRow)[] = ["label", "m1", "m3", "m6", "m12"];
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Editable revenue, cost, and runway projections across 1, 3, 6, and 12-month horizons.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate financial model
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your financial projections…</div>
   );
 
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {rows.map((row) => (
+        <div key={row.label} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenFM(openFM === row.label ? null : row.label)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{row.label}</span>
+            {openFM === row.label ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openFM === row.label && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="grid grid-cols-4 gap-0 border-t border-gray-100">
+                {(["m1", "m3", "m6", "m12"] as const).map((k, i) => (
+                  <div key={k} className={cn("px-3 py-2.5 text-center", i < 3 && "border-r border-gray-100")}>
+                    <p className="text-[10px] text-[#9A9A9A] mb-1">{["Mo 1","Mo 3","Mo 6","Mo 12"][i]}</p>
+                    <p className="text-[12px] font-semibold text-[#151515]">{row[k] || "—"}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       <div className="overflow-x-auto rounded-xl border border-[#ECEDEE]">
         <table className="w-full text-[12px]">
           <thead>
@@ -6431,7 +6508,7 @@ function FinancialModelCard({ title }: { title: string }) {
               <tr key={ri} className="border-b border-[#ECEDEE] last:border-0">
                 {colKeys.map((col, ci) => (
                   <td key={ci} className={cn("px-3 py-2", col === "label" ? "font-semibold text-[#151515] bg-[#FAFAFA] border-r border-[#ECEDEE]" : "text-[#151515]")}>
-                    {readOnly || col === "label"
+                    {col === "label"
                       ? <span>{row[col]}</span>
                       : <input value={row[col]} onChange={(e) => setRows((prev) => prev.map((r, i) => i === ri ? { ...r, [col]: e.target.value } : r))} className="w-full bg-transparent focus:outline-none min-w-[60px]" placeholder="$0" />
                     }
@@ -6442,7 +6519,7 @@ function FinancialModelCard({ title }: { title: string }) {
           </tbody>
         </table>
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6484,34 +6561,47 @@ function GrowthMetricsCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
-
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Your single most important metric and the supporting KPIs that tell you if you're on track.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate growth metrics
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Identifying your North Star metric…</div>
   );
 
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      <div className="rounded-xl border-2 border-[#32C382] bg-[#F5FFD9] px-3 py-3">
+        <p className="text-[10px] font-semibold text-[#32C382] uppercase tracking-wide mb-1">North Star Metric</p>
+        <p className="text-[14px] font-semibold text-[#151515]">{data.northStar}</p>
+      </div>
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-2">Supporting Metrics</p>
+      {data.supporting.map((m, i) => (
+        <div key={i} className="flex items-center gap-2 rounded-xl border border-gray-100 px-3 py-2">
+          <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-[#62646A] flex items-center justify-center shrink-0">{i + 1}</span>
+          <p className="text-[12px] text-[#151515] flex-1">{m}</p>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       <div className="rounded-xl border-2 border-[#32C382] bg-[#F5FFD9] overflow-hidden">
         <div className="px-3 py-2 border-b border-[#32C382]/30">
           <p className="text-[10px] font-semibold text-[#32C382] uppercase tracking-wide">North Star Metric</p>
         </div>
         <div className="px-3 py-3">
-          {readOnly
-            ? <p className="text-[14px] font-semibold text-[#151515]">{data.northStar}</p>
-            : <input value={data.northStar} onChange={(e) => setData((prev) => ({ ...prev, northStar: e.target.value }))} className="w-full text-[14px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="e.g. Weekly active users" />
-          }
+          <input value={data.northStar} onChange={(e) => setData((prev) => ({ ...prev, northStar: e.target.value }))} className="w-full text-[14px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="e.g. Weekly active users" />
         </div>
       </div>
       <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Supporting Metrics</p>
@@ -6519,18 +6609,15 @@ function GrowthMetricsCard({ title }: { title: string }) {
         {data.supporting.map((m, i) => (
           <div key={i} className="flex items-center gap-2 rounded-xl border border-[#ECEDEE] px-3 py-2">
             <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-[#62646A] flex items-center justify-center shrink-0">{i + 1}</span>
-            {readOnly
-              ? <p className="text-[12px] text-[#151515] flex-1">{m}</p>
-              : <input value={m} onChange={(e) => setData((prev) => ({ ...prev, supporting: prev.supporting.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-            }
-            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, supporting: prev.supporting.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+            <input value={m} onChange={(e) => setData((prev) => ({ ...prev, supporting: prev.supporting.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+            <button onClick={() => setData((prev) => ({ ...prev, supporting: prev.supporting.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
           </div>
         ))}
-        {!readOnly && data.supporting.length < 5 && (
+        {data.supporting.length < 5 && (
           <button onClick={() => setData((prev) => ({ ...prev, supporting: [...prev.supporting, ""] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 w-full text-left hover:border-[#151515] transition-colors">+ Add supporting metric</button>
         )}
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6572,52 +6659,74 @@ function PitchDeckCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
+  const [openPD, setOpenPD] = useState<number | null>(null);
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">A 10-slide pitch deck outline with AI-written bullets for each slide, ready to take into Canva or Figma.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate pitch deck
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your pitch deck outline…</div>
   );
 
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {slides.map((sl, si) => (
+        <div key={si} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenPD(openPD === si ? null : si)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{si + 1}</span>
+            <span className="text-[12px] font-semibold text-[#151515] flex-1">{sl.slide}</span>
+            {openPD === si ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openPD === si && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
+                {sl.bullets.map((b, bi) => (
+                  <div key={bi} className="flex items-start gap-2">
+                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">•</span>
+                    <p className="text-[12px] text-[#151515] leading-relaxed">{b}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       <div className="grid gap-3">
         {slides.map((sl, si) => (
           <div key={si} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
             <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{si + 1}</span>
-              {readOnly
-                ? <p className="text-[12px] font-semibold text-[#151515]">{sl.slide}</p>
-                : <input value={sl.slide} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, slide: e.target.value } : s))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
-              }
+              <input value={sl.slide} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, slide: e.target.value } : s))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
             </div>
             <div className="px-3 py-2.5 space-y-1.5">
               {sl.bullets.map((b, bi) => (
                 <div key={bi} className="flex items-start gap-2">
                   <span className="text-[#32C382] text-[10px] mt-1 shrink-0">•</span>
-                  {readOnly
-                    ? <p className="text-[12px] text-[#151515] leading-relaxed">{b}</p>
-                    : <input value={b} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.map((bb, j) => j === bi ? e.target.value : bb) } : s))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                  }
-                  {!readOnly && <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.filter((_, j) => j !== bi) } : s))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+                  <input value={b} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.map((bb, j) => j === bi ? e.target.value : bb) } : s))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                  <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.filter((_, j) => j !== bi) } : s))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
                 </div>
               ))}
-              {!readOnly && <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: [...s.bullets, ""] } : s))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add bullet</button>}
+              <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: [...s.bullets, ""] } : s))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add bullet</button>
             </div>
           </div>
         ))}
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6659,16 +6768,7 @@ function RetentionPlaybookCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
-
-  if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
-  );
-  if (stage === "loading") return (
-    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your retention playbook…</div>
-  );
+  const [openRP, setOpenRP] = useState<string | null>(null);
 
   const listSections: { key: keyof RetentionPlaybook; label: string }[] = [
     { key: "onboarding_steps", label: "Onboarding Steps" },
@@ -6676,14 +6776,50 @@ function RetentionPlaybookCard({ title }: { title: string }) {
     { key: "churn_signals", label: "Churn Signals" },
   ];
 
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Onboarding steps, check-in triggers, churn signals, and win-back tactics to keep customers longer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate retention playbook
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your retention playbook…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[...listSections, { key: "win_back" as keyof RetentionPlaybook, label: "Win-Back Strategy" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenRP(openRP === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openRP === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openRP === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key])
+                  ? (data[key] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       {listSections.map(({ key, label }) => (
         <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
           <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
@@ -6691,25 +6827,19 @@ function RetentionPlaybookCard({ title }: { title: string }) {
             {(data[key] as string[]).map((item, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
-                {readOnly
-                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{item}</p>
-                  : <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                }
-                {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+                <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
               </div>
             ))}
-            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>}
+            <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>
           </div>
         </div>
       ))}
       <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
         <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Win-Back Strategy</p></div>
-        {readOnly
-          ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data.win_back}</p>
-          : <textarea value={data.win_back} onChange={(e) => setData((prev) => ({ ...prev, win_back: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
-        }
+        <textarea value={data.win_back} onChange={(e) => setData((prev) => ({ ...prev, win_back: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6751,32 +6881,61 @@ function ReferralStrategyCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
+  const [openRS, setOpenRS] = useState<string | null>(null);
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Referral program design, partner types to target, and an outreach script to start conversations.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate referral strategy
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your referral strategy…</div>
   );
 
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[
+        { key: "referral_program", label: "Referral Program" },
+        { key: "partner_types", label: "Partner Types" },
+        { key: "outreach_script", label: "Outreach Script" },
+        { key: "incentive", label: "Incentive / Reward" },
+      ].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenRS(openRS === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openRS === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openRS === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key as keyof ReferralStrategy])
+                  ? (data[key as keyof ReferralStrategy] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key as keyof ReferralStrategy] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       {[{ key: "referral_program" as const, label: "Referral Program" }, { key: "outreach_script" as const, label: "Outreach Script" }, { key: "incentive" as const, label: "Incentive / Reward" }].map(({ key, label }) => (
         <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
           <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
-          {readOnly
-            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key]}</p>
-            : <textarea value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
-          }
+          <textarea value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
         </div>
       ))}
       <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
@@ -6785,17 +6944,14 @@ function ReferralStrategyCard({ title }: { title: string }) {
           {data.partner_types.map((pt, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
-              {readOnly
-                ? <p className="text-[12px] text-[#151515] leading-relaxed">{pt}</p>
-                : <input value={pt} onChange={(e) => setData((prev) => ({ ...prev, partner_types: prev.partner_types.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-              }
-              {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, partner_types: prev.partner_types.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+              <input value={pt} onChange={(e) => setData((prev) => ({ ...prev, partner_types: prev.partner_types.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+              <button onClick={() => setData((prev) => ({ ...prev, partner_types: prev.partner_types.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
             </div>
           ))}
-          {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, partner_types: [...prev.partner_types, ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add partner type</button>}
+          <button onClick={() => setData((prev) => ({ ...prev, partner_types: [...prev.partner_types, ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add partner type</button>
         </div>
       </div>
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6837,16 +6993,7 @@ function ContentSeoCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
-
-  if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
-  );
-  if (stage === "loading") return (
-    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your content & SEO plan…</div>
-  );
+  const [openCS, setOpenCS] = useState<string | null>(null);
 
   const listSections2: { key: keyof ContentSeo; label: string }[] = [
     { key: "keywords", label: "Target Keywords" },
@@ -6854,20 +7001,53 @@ function ContentSeoCard({ title }: { title: string }) {
     { key: "first_5_posts", label: "First 5 Post Ideas" },
   ];
 
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Keywords, content types, posting cadence, and your first 5 content ideas to build organic reach.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate content & SEO plan
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your content & SEO plan…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "posting_cadence", label: "Posting Cadence" }, ...listSections2].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenCS(openCS === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openCS === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openCS === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key as keyof ContentSeo])
+                  ? (data[key as keyof ContentSeo] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed">{data[key as keyof ContentSeo] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
         <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Posting Cadence</p></div>
-        {readOnly
-          ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data.posting_cadence}</p>
-          : <input value={data.posting_cadence} onChange={(e) => setData((prev) => ({ ...prev, posting_cadence: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" placeholder="e.g. 3x per week" />
-        }
+        <input value={data.posting_cadence} onChange={(e) => setData((prev) => ({ ...prev, posting_cadence: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" placeholder="e.g. 3x per week" />
       </div>
       {listSections2.map(({ key, label }) => (
         <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
@@ -6876,18 +7056,15 @@ function ContentSeoCard({ title }: { title: string }) {
             {(data[key] as string[]).map((item, i) => (
               <div key={i} className="flex items-start gap-2">
                 <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
-                {readOnly
-                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{item}</p>
-                  : <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                }
-                {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+                <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
               </div>
             ))}
-            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>}
+            <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>
           </div>
         </div>
       ))}
-      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }
@@ -6930,32 +7107,67 @@ function HiringPlanCard({ title }: { title: string }) {
     setStage("saved");
   };
 
-  const readOnly = stage === "saved";
+  const [openHP, setOpenHP] = useState<number | null>(null);
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">When to hire, which roles come first, and the rationale for each based on your stage and offer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate hiring plan
+      </button>
+    </div>
   );
   if (stage === "loading") return (
     <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Planning your hiring roadmap…</div>
   );
 
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenHP(openHP === -1 - (key === "timeline" ? 1 : 0) ? null : -1 - (key === "timeline" ? 1 : 0))} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            <ChevronDown size={13} className="text-[#9A9A9A]" />
+          </button>
+          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed border-t border-gray-100">{data[key]}</p>
+        </div>
+      ))}
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-2">Roles Roadmap</p>
+      {data.roles.map((role, ri) => (
+        <div key={ri} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenHP(openHP === ri ? null : ri)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{ri + 1}</span>
+            <span className="text-[12px] font-semibold text-[#151515] flex-1">{role.role}</span>
+            {openHP === ri ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openHP === ri && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-2">
+                {[{ k: "when" as const, l: "When" }, { k: "why" as const, l: "Why" }].map(({ k, l }) => (
+                  <div key={k} className="flex items-start gap-2">
+                    <span className="text-[10px] font-semibold text-[#9A9A9A] shrink-0 w-8 mt-0.5">{l}</span>
+                    <p className="text-[12px] text-[#151515] leading-relaxed">{role[k]}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {readOnly && (
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
-        </div>
-      )}
       {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
         <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
           <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
-          {readOnly
-            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data[key]}</p>
-            : <input value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" />
-          }
+          <input value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" />
         </div>
       ))}
       <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide mt-2">Roles Roadmap</p>
@@ -6963,31 +7175,23 @@ function HiringPlanCard({ title }: { title: string }) {
         <div key={ri} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
           <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{ri + 1}</span>
-            {readOnly
-              ? <p className="text-[12px] font-semibold text-[#151515] flex-1">{role.role}</p>
-              : <input value={role.role} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, role: e.target.value } : r) }))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="Role title" />
-            }
-            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, roles: prev.roles.filter((_, i) => i !== ri) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+            <input value={role.role} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, role: e.target.value } : r) }))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="Role title" />
+            <button onClick={() => setData((prev) => ({ ...prev, roles: prev.roles.filter((_, i) => i !== ri) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
           </div>
           <div className="px-3 py-2.5 space-y-1.5">
             {[{ key: "when" as const, label: "When" }, { key: "why" as const, label: "Why" }].map(({ key: rk, label: rl }) => (
               <div key={rk} className="flex items-start gap-2">
                 <span className="text-[10px] font-semibold text-[#9A9A9A] shrink-0 w-8 mt-0.5">{rl}</span>
-                {readOnly
-                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{role[rk]}</p>
-                  : <input value={role[rk]} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, [rk]: e.target.value } : r) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
-                }
+                <input value={role[rk]} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, [rk]: e.target.value } : r) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
               </div>
             ))}
           </div>
         </div>
       ))}
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <button onClick={() => setData((prev) => ({ ...prev, roles: [...prev.roles, { role: "", when: "", why: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add role</button>
-          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => ({ ...prev, roles: [...prev.roles, { role: "", when: "", why: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add role</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
     </div>
   );
 }

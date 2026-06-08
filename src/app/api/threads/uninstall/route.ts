@@ -1,23 +1,16 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
-import { FieldValue } from "firebase-admin/firestore";
 
-// Called by Meta when a user deauthorizes the app from their Threads settings.
+// Meta calls this when a user uninstalls the app from Threads settings.
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as { user_id?: string };
-    const threadsUserId = body?.user_id;
-    if (threadsUserId) {
-      const db = getAdminFirestore();
-      const snap = await db.collection("users")
-        .where("threadsAccount.userId", "==", String(threadsUserId))
-        .limit(1).get();
-      if (!snap.empty) {
-        await snap.docs[0].ref.update({ threadsAccount: FieldValue.delete() });
-      }
-    }
-  } catch (err) {
-    console.error("[threads uninstall]", err);
-  }
-  return new Response("OK", { status: 200 });
+    const threadsUserId = body.user_id;
+    if (!threadsUserId) return Response.json({ ok: true });
+    const db = getAdminFirestore();
+    const snap = await db.collectionGroup("integrations")
+      .where("threadsUserId", "==", threadsUserId).limit(1).get();
+    if (!snap.empty) await snap.docs[0].ref.delete();
+  } catch (err) { console.error("[threads/uninstall]", err); }
+  return Response.json({ ok: true });
 }

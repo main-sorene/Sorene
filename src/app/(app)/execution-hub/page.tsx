@@ -5437,8 +5437,8 @@ Return JSON: [{"id":"p1","name":"palette name","vibe":"2-word mood description",
               <div key={i} className="w-5 h-5 rounded-md border border-white/50 shadow-sm" style={{ backgroundColor: hex }} />
             ))}
           </div>
-          <span className="text-[12px] font-semibold text-[#151515] flex-1">{chosen.name}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">{collapsed ? "Change" : "Collapse"}</button>
+          <span className="text-[11px] font-semibold text-[#151515] flex-1 truncate">{chosen.name}</span>
+          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline shrink-0">{collapsed ? "Change" : "Collapse"}</button>
         </div>
       )}
 

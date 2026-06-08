@@ -4520,23 +4520,51 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
     onNameChosen(name);
   };
 
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = () => { setEditValue(chosen); setEditing(true); setCollapsed(false); };
+  const saveEdit = () => {
+    const v = editValue.trim();
+    if (v) { setChosen(v); try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } onNameChosen(v); }
+    setEditing(false);
+    setCollapsed(!!v);
+  };
+
   return (
     <div className="mt-2 ml-[26px] space-y-3">
       {/* Description hint */}
-      {!collapsed && (
+      {!collapsed && !editing && (
         <p className="text-[12px] text-[#62646A] leading-relaxed">
           A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
         </p>
       )}
 
       {/* Chosen name badge */}
-      {chosen && (
+      {chosen && !editing && (
         <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
           <span className="text-[13px] font-semibold text-[#151515]">{chosen}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] ml-auto hover:underline">
-            {collapsed ? "Change" : "Collapse"}
-          </button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            <button onClick={startEdit} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Edit</button>
+            <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">
+              {collapsed ? "Change" : "Collapse"}
+            </button>
+          </div>
+        </div>
+      )}
+      {editing && (
+        <div className="space-y-2">
+          <input
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            autoFocus
+            className="w-full text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+          />
+          <div className="flex gap-2">
+            <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+            <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+          </div>
         </div>
       )}
 
@@ -4912,6 +4940,17 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
   };
 
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = () => { setEditValue(chosen); setEditing(true); setCollapsed(false); };
+  const saveEdit = () => {
+    const v = editValue.trim();
+    if (v) { setChosen(v); try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } }
+    setEditing(false);
+    setCollapsed(!!v);
+  };
+
   const [ownInput, setOwnInput] = useState("");
   const [ownEval, setOwnEval] = useState("");
   const [ownLoading, setOwnLoading] = useState(false);
@@ -4969,13 +5008,31 @@ ${project?.oneliner ? `One-liner: "${project.oneliner}"` : ""}`;
         <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
       )}
 
-      {chosen && (
+      {chosen && !editing && (
         <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
           <span className="text-[13px] font-medium text-[#151515] flex-1 leading-snug">{chosen}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] shrink-0 hover:underline">
-            {collapsed ? "Change" : "Collapse"}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={startEdit} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Edit</button>
+            <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">
+              {collapsed ? "Change" : "Collapse"}
+            </button>
+          </div>
+        </div>
+      )}
+      {editing && (
+        <div className="space-y-2">
+          <textarea
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            rows={3}
+            autoFocus
+            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+          />
+          <div className="flex gap-2">
+            <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+            <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+          </div>
         </div>
       )}
 

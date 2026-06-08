@@ -1,6 +1,21 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
+// GET — list all users with scheduled posts (to find a uid)
+export async function GET(req: NextRequest) {
+  const secret = req.headers.get("x-admin-secret");
+  if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const db = getAdminFirestore();
+  const users = await db.collection("users").get();
+  const result: { uid: string; count: number }[] = [];
+  for (const doc of users.docs) {
+    const scheduled = await doc.ref.collection("threadsScheduled").get();
+    if (scheduled.size > 0) result.push({ uid: doc.id, count: scheduled.size });
+  }
+  return Response.json({ users: result });
+}
+
 // One-shot admin endpoint to deduplicate threadsScheduled for a given uid or email
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");

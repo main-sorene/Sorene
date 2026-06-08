@@ -778,12 +778,19 @@ Return a JSON object with exactly these keys:
     if (!projectTitle) return;
     setConfirming(true);
     try {
+      // Pre-fill LaunchPad Brand & Digital Presence fields
       localStorage.setItem(`brand-benefit-${projectTitle}`, profile.benefits);
       localStorage.setItem(`brand-offerings-${projectTitle}`, profile.offerings);
       localStorage.setItem(`brand-pricing-${projectTitle}`, profile.pricing);
+      // Target audience — write as { main: { label }, secondary: { label } } to match Validate stage format
+      const audienceObj: Record<string, { label: string }> = {};
+      if (profile.audienceMain.trim()) audienceObj.main = { label: profile.audienceMain.trim() };
+      if (profile.audienceSecondary.trim()) audienceObj.secondary = { label: profile.audienceSecondary.trim() };
+      if (Object.keys(audienceObj).length > 0) {
+        localStorage.setItem(`target-customers-${projectTitle}`, JSON.stringify(audienceObj));
+      }
       localStorage.setItem(`launch-profile-confirmed-${projectTitle}`, JSON.stringify(profile));
       setConfirmed(true);
-      // Navigate to LaunchPad and open Brand & Digital Presence
       setTimeout(() => onConfirmLaunch?.(), 800);
     } catch { /* ignore */ }
     setConfirming(false);
@@ -5801,8 +5808,21 @@ function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: Pilla
 // LaunchPadContent — main component
 // ─────────────────────────────────────────────
 
-function LaunchPadContent({ project, onNameChosen, autoOpenPillarId }: { project: DirectionCardData | null; onNameChosen?: (name: string) => void; autoOpenPillarId?: string }) {
-  // autoOpenPillarId is consumed on first render only — PillarCard handles the scroll
+function LaunchPadContent({ project, onNameChosen, autoOpenPillarId, onAutoOpenConsumed }: {
+  project: DirectionCardData | null;
+  onNameChosen?: (name: string) => void;
+  autoOpenPillarId?: string;
+  onAutoOpenConsumed?: () => void;
+}) {
+  useEffect(() => {
+    if (autoOpenPillarId) {
+      // Clear after one render so switching tabs doesn't re-trigger
+      const t = setTimeout(() => onAutoOpenConsumed?.(), 500);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenPillarId]);
+
   return (
     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
@@ -8601,7 +8621,6 @@ export default function Page() {
       content: <GoNoGoContent project={selectedProject ?? null} onConfirmLaunch={() => {
         setLaunchpadOpenPillar("brand_digital");
         setActiveTab("launchpad");
-        setTimeout(() => setLaunchpadOpenPillar(undefined), 2000);
       }} />,
       strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
@@ -8698,7 +8717,10 @@ export default function Page() {
                       {activeTab === "validation"
                         ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} />
                         : activeTab === "launchpad"
-                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} autoOpenPillarId={launchpadOpenPillar} onNameChosen={(name) => {
+                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null}
+                            autoOpenPillarId={launchpadOpenPillar}
+                            onAutoOpenConsumed={() => setLaunchpadOpenPillar(undefined)}
+                            onNameChosen={(name) => {
                             const key = selectedProject?.title ?? "";
                             if (!key) return;
                             const updated = { ...customNames, [key]: name };

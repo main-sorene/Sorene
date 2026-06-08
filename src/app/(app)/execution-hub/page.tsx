@@ -8224,25 +8224,38 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // Pending date/time string while slot editor is open: draftId → { date, time }
   const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
 
-  // Best posting times (local HH:MM strings)
-  const bestTimes: string[] = dna?.bestHours?.slice(0, 2).map((utcH) => {
+  // Best posting times (local HH:MM strings) — up to 3 slots
+  const bestTimes: string[] = dna?.bestHours?.slice(0, 3).map((utcH) => {
     const d = new Date();
     d.setUTCHours(utcH, 0, 0, 0);
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  }) ?? ["08:00", "19:00"];
+  }) ?? ["08:00", "13:00", "19:00"];
 
-  // Pre-compute schedule slots for the next 7 days at bestTimes
+  // Pre-compute schedule slots for the next 7 days
+  // - Picks 1/2/3 best time slots per day matching cadence
+  // - Adds a small per-day minute variation so posts don't land the same minute every day
+  // - Deduplicates same-day same-minute collisions
   const scheduleSlots = (() => {
     const slots: number[] = [];
     const today = new Date();
     today.setSeconds(0, 0);
     for (let day = 0; day < 7; day++) {
-      const times = cadence === 3 ? [...bestTimes, bestTimes[0]] : cadence === 2 ? bestTimes : [bestTimes[0]];
-      for (const t of times) {
+      // Pick how many time slots per day
+      const dayTimes = cadence === 2 ? bestTimes.slice(0, 2)
+        : cadence === 3 ? bestTimes.slice(0, 3)
+        : [bestTimes[0]]; // cadence === 1 or single
+      // Slight per-day variation: 0, 11, 22, 33, 44, 10, 21 min across the week
+      const minuteVariation = (day * 11) % 45;
+      const usedMs = new Set<number>();
+      for (const t of dayTimes) {
         const [h, m] = t.split(":").map(Number);
+        const rawMins = h * 60 + m + minuteVariation;
         const d = new Date(today);
         d.setDate(d.getDate() + day);
-        d.setHours(h, m, 0, 0);
+        d.setHours(Math.floor(rawMins / 60) % 24, rawMins % 60, 0, 0);
+        // Nudge forward 15 min if this exact ms is already taken this day
+        while (usedMs.has(d.getTime())) d.setMinutes(d.getMinutes() + 15);
+        usedMs.add(d.getTime());
         if (d.getTime() > Date.now() + 60_000) slots.push(d.getTime());
       }
     }
@@ -8827,10 +8840,10 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <p className="text-[12px] font-medium text-[#151515] mb-2">Generate posts</p>
             <div className="grid grid-cols-2 gap-2">
               {([
-                { mode: "single" as const, label: "1 post", sub: "Just one for now" },
-                { mode: 1 as const, label: "1 / day", sub: "7 posts · 1 week" },
-                { mode: 2 as const, label: "2 / day", sub: "14 posts · 1 week" },
-                { mode: 3 as const, label: "3 / day", sub: "21 posts · 1 week" },
+                { mode: "single" as const, label: "1 post", sub: `Best slot: ${bestTimes[0]}` },
+                { mode: 1 as const, label: "1 / day", sub: `${bestTimes[0]} · 7 posts` },
+                { mode: 2 as const, label: "2 / day", sub: `${bestTimes.slice(0, 2).join(" & ")} · 14 posts` },
+                { mode: 3 as const, label: "3 / day", sub: `${bestTimes.join(" & ")} · 21 posts` },
               ]).map(({ mode, label, sub }) => (
                 <button key={String(mode)} onClick={() => { setGenerateMode(mode); generateWeek(mode); }} disabled={generating}
                   className={cn(

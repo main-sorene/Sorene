@@ -1061,23 +1061,23 @@ function ValidationProgress({ project, onCreateProject, onConfirmLaunch }: { pro
 
   if (!project) {
     return (
-      <div className="p-8 flex flex-col items-center text-center gap-6">
-        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-          <Rocket size={24} className="text-[#9A9A9A]" />
+      <div className="p-5 flex flex-col items-center text-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+          <Rocket size={18} className="text-[#9A9A9A]" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <h3 className="text-body-medium-medium text-[#151515]">Start your validation journey</h3>
           <p className="text-label-medium text-[#62646A] max-w-sm leading-relaxed">
             Choose a direction Sorene has generated for you, or describe your own project to begin.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <a href="/direction"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
             Choose a Direction
           </a>
           <button onClick={onCreateProject}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
             Create My Project
           </button>
         </div>
@@ -1086,7 +1086,7 @@ function ValidationProgress({ project, onCreateProject, onConfirmLaunch }: { pro
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-4">
       {/* Progress Bar */}
       <div className="relative">
         {/* Connector line */}

@@ -136,70 +136,18 @@ function DeleteConfirmDialog({
   );
 }
 
-// ── Hero preview modal ────────────────────────────────────────────────────────
-function HeroPreviewModal({
-  card,
-  onRestore,
-  onClose,
-}: {
-  card: { id: string; title: string; description?: string; whyFitsYou?: { title: string; description: string }[]; keyRisks?: string[]; score?: string; cardData?: import("@/lib/directionTypes").DirectionCardData; rawContent?: string };
-  onRestore: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <DirectionCard
-          variant="hero"
-          title={card.title}
-          description={card.description ?? ""}
-          score={card.score ?? "—"}
-          whyFitsYou={card.whyFitsYou ?? []}
-          keyRisks={card.keyRisks ?? []}
-          isExpanded
-          onToggle={() => {}}
-          onHide={onClose}
-          cardData={card.cardData}
-          rawContent={card.rawContent}
-          actionText="Restore to board"
-        />
-        <div className="absolute top-4 right-4 flex gap-2">
-          <button
-            onClick={onRestore}
-            className="px-3 py-1.5 bg-white/90 rounded-lg text-xs font-medium text-[#151515] hover:bg-white shadow transition-colors"
-          >
-            Restore to board
-          </button>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center bg-white/90 rounded-lg hover:bg-white shadow transition-colors text-[#62646A]"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10.5 3.5L3.5 10.5M3.5 3.5l7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Hidden direction pills ────────────────────────────────────────────────────
 function HiddenCardsPills({ hiddenIds, allCards, onShow, onDelete }: {
   hiddenIds: string[];
-  allCards: { id: string; title: string; description?: string; whyFitsYou?: { title: string; description: string }[]; keyRisks?: string[]; score?: string; cardData?: import("@/lib/directionTypes").DirectionCardData; rawContent?: string }[];
+  allCards: { id: string; title: string }[];
   onShow: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const [previewId, setPreviewId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const hidden = allCards.filter((c) => hiddenIds.includes(c.id));
   if (hidden.length === 0) return null;
 
-  const previewCard = previewId ? hidden.find((c) => c.id === previewId) ?? null : null;
   const deleteCard = deleteId ? hidden.find((c) => c.id === deleteId) ?? null : null;
 
   return (
@@ -208,16 +156,16 @@ function HiddenCardsPills({ hiddenIds, allCards, onShow, onDelete }: {
         <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
         <div className="grid grid-cols-2 gap-2">
           {hidden.map((card) => (
-            <div key={card.id} className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] hover:bg-[#F1F3F5] transition-all min-w-0">
+            <div key={card.id} className="flex items-center rounded-full border border-[#ECEDEE] bg-[#F8F9FA] hover:bg-[#F1F3F5] transition-all min-w-0 overflow-hidden">
               <button
-                onClick={() => setPreviewId(card.id)}
-                className="flex-1 text-xs font-medium text-[#62646A] text-left truncate hover:text-[#151515] transition-colors"
+                onClick={() => onShow(card.id)}
+                className="flex-1 text-xs font-medium text-[#62646A] text-left truncate hover:text-[#151515] transition-colors px-3 py-1.5 min-w-0"
               >
                 {card.title}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteId(card.id); }}
-                className="shrink-0 text-[#9CA3AF] hover:text-red-500 transition-colors ml-1"
+                className="shrink-0 w-8 h-8 flex items-center justify-center text-[#9CA3AF] hover:text-red-500 hover:bg-red-50 transition-colors rounded-full"
                 aria-label="Delete"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9 3L3 9M3 3l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
@@ -226,14 +174,6 @@ function HiddenCardsPills({ hiddenIds, allCards, onShow, onDelete }: {
           ))}
         </div>
       </div>
-
-      {previewCard && (
-        <HeroPreviewModal
-          card={previewCard}
-          onRestore={() => { onShow(previewCard.id); setPreviewId(null); }}
-          onClose={() => setPreviewId(null)}
-        />
-      )}
 
       {deleteCard && (
         <DeleteConfirmDialog
@@ -379,6 +319,8 @@ export const DirectionSection = () => {
       try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
       return updated;
     });
+    // Auto-expand the restored card so users see it immediately
+    setExpandedId(id);
   };
 
   const removeCard = (id: string) => {
@@ -465,9 +407,9 @@ export const DirectionSection = () => {
     const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id && rd.id !== heroRecipe?.id);
 
     const allHidden = [
-      ...(hiddenIds.includes(heroPrimaryId) && !deletedIds.includes(heroPrimaryId) ? [{ id: heroPrimaryId, title: primaryCard.title, description: primaryCard.description, whyFitsYou: primaryCard.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: primaryCard.key_risks ?? [], score: String(primaryCard.compatibility ?? "—"), cardData: primaryCard }] : []),
-      ...altCards.filter((c) => hiddenIds.includes(c.title) && !deletedIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title, description: c.description, whyFitsYou: c.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: c.key_risks ?? [], score: String(c.compatibility ?? "—"), cardData: c })),
-      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+      ...(hiddenIds.includes(heroPrimaryId) && !deletedIds.includes(heroPrimaryId) ? [{ id: heroPrimaryId, title: primaryCard.title }] : []),
+      ...altCards.filter((c) => hiddenIds.includes(c.title) && !deletedIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title })),
+      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
     ];
 
     const hasOtherDirections = gridAltCards.length > 0 || gridRecipes.length > 0;
@@ -838,7 +780,7 @@ export const DirectionSection = () => {
             <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
               ...(!deletedIds.includes("__hero__") ? [{ id: "__hero__", title: model || "Your Direction" }] : []),
               ...otherDirections.filter((a) => !deletedIds.includes(a.model)).map((a) => ({ id: a.model, title: a.model })),
-              ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+              ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
             ]} onShow={showCard} onDelete={removeCard} />
           </section>
         )}
@@ -1022,7 +964,7 @@ export const DirectionSection = () => {
         <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
           ...(bestPickIdea && !deletedIds.includes(bestPickIdea.name) ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
           ...otherIdeas.filter((i) => !deletedIds.includes(i.name)).map((i) => ({ id: i.name, title: i.name })),
-          ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+          ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
         ]} onShow={showCard} onDelete={removeCard} />
       </section>
 

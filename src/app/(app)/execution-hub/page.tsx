@@ -4673,106 +4673,92 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
 };
 
 // ─────────────────────────────────────────────
-// LogoConceptSection — list of saved logo concepts, add more
+// LogoConceptSection — upload logo images (JPEG/PNG ≤ 5 MB)
 // ─────────────────────────────────────────────
+
+const MAX_LOGO_SIZE = 5 * 1024 * 1024; // 5 MB
 
 function LogoConceptSection({ project }: { project: DirectionCardData | null }) {
   const title = project?.title ?? "";
   const storageKey = `brand-logo-concepts-${title}`;
-  const meta = BRAND_TEXT_META.logo;
 
-  const [concepts, setConcepts] = useState<string[]>([]);
-  const [input, setInput] = useState("");
-  const [editing, setEditing] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [logos, setLogos] = useState<string[]>([]); // base64 data URLs
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!title) return;
     try {
       const raw = localStorage.getItem(storageKey);
-      if (raw) setConcepts(JSON.parse(raw));
-      else {
-        // Migrate from old single-value brand-logo-${title} key
-        const old = localStorage.getItem(`brand-logo-${title}`);
-        if (old) { setConcepts([old]); localStorage.setItem(storageKey, JSON.stringify([old])); }
-      }
+      if (raw) setLogos(JSON.parse(raw));
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title]);
 
-  const save = (list: string[]) => {
-    setConcepts(list);
+  const persist = (list: string[]) => {
+    setLogos(list);
     try { localStorage.setItem(storageKey, JSON.stringify(list)); } catch { /* ignore */ }
   };
 
-  const add = () => {
-    const v = input.trim();
-    if (!v) return;
-    save([...concepts, v]);
-    setInput("");
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError("");
+    const file = files[0];
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setError("Only JPEG or PNG files are supported.");
+      return;
+    }
+    if (file.size > MAX_LOGO_SIZE) {
+      setError("File must be under 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) persist([...logos, dataUrl]);
+    };
+    reader.readAsDataURL(file);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
-  const remove = (i: number) => save(concepts.filter((_, idx) => idx !== i));
-
-  const startEdit = (i: number) => { setEditing(i); setEditValue(concepts[i]); };
-  const saveEdit = () => {
-    if (editing === null) return;
-    const v = editValue.trim();
-    if (v) { const updated = [...concepts]; updated[editing] = v; save(updated); }
-    setEditing(null);
-  };
+  const remove = (i: number) => persist(logos.filter((_, idx) => idx !== i));
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Upload your logo files. JPEG or PNG, max 5 MB each.</p>
 
-      {/* Saved concepts */}
-      {concepts.length > 0 && (
-        <div className="space-y-2">
-          {concepts.map((c, i) => (
-            <div key={i}>
-              {editing === i ? (
-                <div className="space-y-1.5">
-                  <textarea
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    rows={2}
-                    autoFocus
-                    className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
-                    <button onClick={() => setEditing(null)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl group">
-                  <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
-                  <span className="text-[13px] text-[#151515] leading-snug flex-1">{c}</span>
-                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(i)} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">Edit</button>
-                    <button onClick={() => remove(i)} className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">Remove</button>
-                  </div>
-                </div>
-              )}
+      {logos.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {logos.map((src, i) => (
+            <div key={i} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-gray-200 bg-[#F9F9F9]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`Logo ${i + 1}`} className="w-full h-full object-contain p-1" />
+              <button
+                onClick={() => remove(i)}
+                className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-[11px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                Remove
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Add new concept */}
-      <div className="flex gap-2">
+      <div>
         <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-          placeholder={concepts.length === 0 ? meta.placeholder : "Add another concept…"}
-          className="flex-1 text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white placeholder-gray-300"
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png"
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
         />
-        <button onClick={add} disabled={!input.trim()}
-          className="text-[11px] font-medium px-3 py-2 rounded-xl bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors disabled:opacity-30">
-          Add
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="text-[12px] font-medium px-4 py-2 rounded-xl border border-dashed border-gray-300 text-[#62646A] hover:border-[#151515] hover:text-[#151515] transition-colors"
+        >
+          + Add logo
         </button>
+        {error && <p className="mt-1.5 text-[11px] text-[#DF2E16]">{error}</p>}
       </div>
     </div>
   );

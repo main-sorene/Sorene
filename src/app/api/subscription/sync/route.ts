@@ -3,8 +3,6 @@ import { getStripe } from "@/lib/stripe";
 import { getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 import { setCreditsLimit } from "@/lib/credits";
 
-// Called from the upgrade page after a successful checkout to guarantee
-// the subscription is registered in Firestore even if the webhook was delayed or failed.
 export async function POST(req: NextRequest) {
   try {
     const authedUser = await verifyAuth(req);
@@ -27,29 +25,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, synced: false, reason: "no_customer" });
     }
 
-    // Find the most recent active subscription for this customer
-    const subscriptions = await getStripe().subscriptions.list({
-      customer: customerId,
-      status: "active",
-      limit: 1,
-    });
-
-    const sub = subscriptions.data[0];
-    if (!sub) {
-      // Try trialing too
-      const trialing = await getStripe().subscriptions.list({
-        customer: customerId,
-        status: "trialing",
-        limit: 1,
-      });
-      if (!trialing.data[0]) {
-        return NextResponse.json({ ok: true, synced: false, reason: "no_active_subscription" });
-      }
+    // Find most recent active or trialing subscription for this customer
+    let activeSub = (await getStripe().subscriptions.list({ customer: customerId, status: "active", limit: 1 })).data[0];
+    if (!activeSub) {
+      activeSub = (await getStripe().subscriptions.list({ customer: customerId, status: "trialing", limit: 1 })).data[0];
     }
 
-    const activeSub = sub || (await getStripe().subscriptions.list({ customer: customerId, status: "trialing", limit: 1 })).data[0];
+    if (!activeSub) {
+      return NextResponse.json({ ok: true, synced: false, reason: "no_active_subscription" });
+    }
 
-    // Ensure metadata is populated
     const plan = activeSub.metadata?.plan || "starter";
     const duration = Number(activeSub.metadata?.duration || 1);
 

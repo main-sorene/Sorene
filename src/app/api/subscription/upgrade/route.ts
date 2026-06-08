@@ -28,6 +28,10 @@ export async function POST(req: NextRequest) {
 
     const priceId = getPriceId(plan, duration);
     const subscription = await getStripe().subscriptions.retrieve(stripeSubscriptionId);
+
+    if (!subscription.items.data.length) {
+      return NextResponse.json({ error: "Subscription has no items" }, { status: 400 });
+    }
     const itemId = subscription.items.data[0].id;
 
     // Resolve promo code string to a Stripe promotion_code id
@@ -47,10 +51,26 @@ export async function POST(req: NextRequest) {
       ...(promoCodeId ? { discounts: [{ promotion_code: promoCodeId }] } : {}),
     } as import("stripe").Stripe.SubscriptionUpdateParams);
 
-    // Use mergeFields to avoid wiping stripeSubscriptionId and other fields
+    // Use mergeFields — include stripeSubscriptionId so it's never lost after upgrade
     await db.collection("users").doc(userKey).set(
-      { subscription: { plan, duration, status: updated.status, active: updated.status === "active" || updated.status === "trialing" } },
-      { mergeFields: ["subscription.plan", "subscription.duration", "subscription.status", "subscription.active"] },
+      {
+        subscription: {
+          plan,
+          duration,
+          status: updated.status,
+          active: updated.status === "active" || updated.status === "trialing",
+          stripeSubscriptionId,
+        },
+      },
+      {
+        mergeFields: [
+          "subscription.plan",
+          "subscription.duration",
+          "subscription.status",
+          "subscription.active",
+          "subscription.stripeSubscriptionId",
+        ],
+      },
     );
 
     // Reset credits to new plan limit

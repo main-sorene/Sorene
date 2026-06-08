@@ -356,6 +356,14 @@ export const DirectionSection = () => {
     } catch { return []; }
   });
 
+  // Permanently deleted card IDs (primary/alt DNA cards that can't be removed from atom)
+  const [deletedIds, setDeletedIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("deletedDirectionIds");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
   const hideCard = (id: string) => {
     setHiddenIds((prev) => {
       const updated = [...prev, id];
@@ -374,10 +382,23 @@ export const DirectionSection = () => {
   };
 
   const removeCard = (id: string) => {
-    // For recipe cards: delete from atom + localStorage (they disappear everywhere)
+    // For recipe cards: remove from atom + localStorage
     setRecipeDirections((prev) => {
       const updated = prev.filter((r) => r.id !== id);
       try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // For all cards: add to permanently deleted list so they never show again
+    setDeletedIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
+      try { localStorage.setItem("deletedDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // Also remove from hiddenIds to keep that list clean
+    setHiddenIds((prev) => {
+      const updated = prev.filter((h) => h !== id);
+      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
       return updated;
     });
   };
@@ -424,9 +445,9 @@ export const DirectionSection = () => {
   // ── New structured cards path ─────────────────────────────────────────────
   if (primaryCard) {
     const heroPrimaryId = `__primary__`;
-    const primaryHidden = hiddenIds.includes(heroPrimaryId);
-    const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title));
-    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+    const primaryHidden = hiddenIds.includes(heroPrimaryId) || deletedIds.includes(heroPrimaryId);
+    const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title) && !deletedIds.includes(c.title));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id));
 
     // Newest button-generated alt card gets promoted to hero slot
     const heroDirectionAlt = heroDirectionTitle && heroDirectionTitle !== primaryCard.title
@@ -444,9 +465,9 @@ export const DirectionSection = () => {
     const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id && rd.id !== heroRecipe?.id);
 
     const allHidden = [
-      ...(primaryHidden ? [{ id: heroPrimaryId, title: primaryCard.title, description: primaryCard.description, whyFitsYou: primaryCard.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: primaryCard.key_risks ?? [], score: String(primaryCard.compatibility ?? "—"), cardData: primaryCard }] : []),
-      ...altCards.filter((c) => hiddenIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title, description: c.description, whyFitsYou: c.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: c.key_risks ?? [], score: String(c.compatibility ?? "—"), cardData: c })),
-      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+      ...(hiddenIds.includes(heroPrimaryId) && !deletedIds.includes(heroPrimaryId) ? [{ id: heroPrimaryId, title: primaryCard.title, description: primaryCard.description, whyFitsYou: primaryCard.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: primaryCard.key_risks ?? [], score: String(primaryCard.compatibility ?? "—"), cardData: primaryCard }] : []),
+      ...altCards.filter((c) => hiddenIds.includes(c.title) && !deletedIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title, description: c.description, whyFitsYou: c.why_fits_you?.map((w: string) => ({ title: w, description: "" })) ?? [], keyRisks: c.key_risks ?? [], score: String(c.compatibility ?? "—"), cardData: c })),
+      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
     ];
 
     const hasOtherDirections = gridAltCards.length > 0 || gridRecipes.length > 0;
@@ -685,9 +706,9 @@ export const DirectionSection = () => {
 
   // ── Legacy streamed text path ──────────────────────────────────────────────
   if (directionText) {
-    const heroHidden = hiddenIds.includes("__hero__");
-    const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));
-    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+    const heroHidden = hiddenIds.includes("__hero__") || deletedIds.includes("__hero__");
+    const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model) && !deletedIds.includes(a.model));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id));
     const legacyHeroRecipe = heroRecipeId ? visibleRecipes.find((rd) => rd.id === heroRecipeId) ?? null : null;
     // Pick the first visible card to promote when hero is hidden (native alts first, then recipes)
     const promotedAltModel: string | null = !legacyHeroRecipe && heroHidden && visibleAlts.length > 0 ? visibleAlts[0].model : null;
@@ -815,9 +836,9 @@ export const DirectionSection = () => {
               ))}
             </div>
             <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
-              { id: "__hero__", title: model || "Your Direction" },
-              ...otherDirections.map((a) => ({ id: a.model, title: a.model })),
-              ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+              ...(!deletedIds.includes("__hero__") ? [{ id: "__hero__", title: model || "Your Direction" }] : []),
+              ...otherDirections.filter((a) => !deletedIds.includes(a.model)).map((a) => ({ id: a.model, title: a.model })),
+              ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
             ]} onShow={showCard} onDelete={removeCard} />
           </section>
         )}
@@ -999,9 +1020,9 @@ export const DirectionSection = () => {
           ))}
         </div>
         <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
-          ...(bestPickIdea ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
-          ...otherIdeas.map((i) => ({ id: i.name, title: i.name })),
-          ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
+          ...(bestPickIdea && !deletedIds.includes(bestPickIdea.name) ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
+          ...otherIdeas.filter((i) => !deletedIds.includes(i.name)).map((i) => ({ id: i.name, title: i.name })),
+          ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title, description: rd.description, whyFitsYou: rd.whyFitsYou.map((w) => ({ title: w, description: "" })), keyRisks: rd.keyRisks, score: String(rd.score), cardData: rd.cardData, rawContent: rd.rawContent })),
         ]} onShow={showCard} onDelete={removeCard} />
       </section>
 

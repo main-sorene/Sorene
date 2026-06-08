@@ -1,8 +1,5 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
-import type * as FirebaseFirestore from "@google-cloud/firestore";
-
-const APP_SECRET = process.env.THREADS_APP_SECRET ?? "";
 
 // Refresh a long-lived token if it was issued more than 30 days ago (expires at 60)
 async function maybeRefreshToken(accessToken: string, connectedAt: number): Promise<string> {
@@ -81,37 +78,36 @@ export async function GET(req: NextRequest) {
   let failed = 0;
 
   try {
-    // Query all pending scheduled posts across all users using a collection group query
-    const duePostsSnap = await db.collectionGroup("threadsScheduled")
-      .where("status", "==", "pending")
-      .where("scheduledAt", "<=", now)
+    // Find all users who have a connected Threads account
+    const accountsSnap = await db.collectionGroup("integrations")
+      .where("accessToken", "!=", null)
       .get();
 
-    // Group by user (parent doc)
-    const byUser = new Map<string, { userRef: FirebaseFirestore.DocumentReference; posts: FirebaseFirestore.QueryDocumentSnapshot[] }>();
-    for (const postDoc of duePostsSnap.docs) {
-      const userRef = postDoc.ref.parent.parent!;
-      if (!byUser.has(userRef.id)) byUser.set(userRef.id, { userRef, posts: [] });
-      byUser.get(userRef.id)!.posts.push(postDoc);
-    }
+    const threadsDocs = accountsSnap.docs.filter((d) => d.id === "threads");
 
-    await Promise.all([...byUser.values()].map(async ({ userRef, posts }) => {
-      // Load account from correct subcollection path
-      const accountSnap = await userRef.collection("integrations").doc("threads").get();
-      const account = accountSnap.data() as {
+    await Promise.all(threadsDocs.map(async (accountDoc) => {
+      const account = accountDoc.data() as {
         accessToken: string;
         threadsUserId: string;
         connectedAt?: number;
-      } | undefined;
-      if (!account?.accessToken) return;
+      };
+      if (!account?.accessToken || !account.threadsUserId) return;
+
+      const userRef = accountDoc.ref.parent.parent!;
 
       // Refresh token if nearing expiry
       const freshToken = await maybeRefreshToken(account.accessToken, account.connectedAt ?? 0);
       if (freshToken !== account.accessToken) {
-        await accountSnap.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
+        await accountDoc.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
       }
 
-      for (const postDoc of posts) {
+      // Get due posts for this user — simple single-collection query, no composite index needed
+      const dueSnap = await userRef.collection("threadsScheduled")
+        .where("status", "==", "pending")
+        .where("scheduledAt", "<=", now)
+        .get();
+
+      for (const postDoc of dueSnap.docs) {
         const post = postDoc.data() as { text: string; id: string; ctaLink?: string };
         try {
           const postId = await publishPost(freshToken, account.threadsUserId, post.text);

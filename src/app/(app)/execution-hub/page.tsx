@@ -8185,7 +8185,7 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; }
 
@@ -8324,14 +8324,18 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         const { authFetch } = await import("@/lib/authFetch");
         const res = await authFetch("/api/threads/schedule");
         if (!res.ok) return;
-        const data = await res.json() as { posts: ScheduledPost[] };
+        const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
         const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
+        const failedTexts = new Set((data.failed ?? []).map((p) => p.text.trim()));
+        const publishedTexts = new Set((data.published ?? []).map((p) => p.text.trim()));
         const now = Date.now();
         setWeekDrafts((prev) => prev.map((d) => {
-          if (!d.frozen || d.posted) return d;
-          if ((d.frozenAt ?? 0) > now) return d; // not due yet
+          if (!d.frozen || d.posted || d.postFailed) return d;
+          if ((d.frozenAt ?? 0) > now) return d;
           const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-          if (!pendingTexts.has(cleanText)) return { ...d, posted: true };
+          if (failedTexts.has(cleanText)) return { ...d, postFailed: true };
+          if (publishedTexts.has(cleanText)) return { ...d, posted: true };
+          if (!pendingTexts.has(cleanText)) return { ...d, posted: true }; // fallback
           return d;
         }));
       } catch { /* ignore */ }
@@ -8770,6 +8774,12 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                     <div className="flex items-center gap-2">
                       {draft.posted ? (
                         <><CheckCircle2 size={11} className="text-[#32C382]" /><span className="text-[11px] text-[#32C382] font-medium">Posted</span></>
+                      ) : draft.postFailed ? (
+                        <><span className="text-[11px] text-red-500 font-medium">Failed to post</span>
+                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, postFailed: false, editing: false } : d))}
+                          className="text-[11px] text-red-400 hover:text-red-600 transition-colors font-medium underline underline-offset-2">
+                          Retry
+                        </button></>
                       ) : (
                         <><Lock size={11} className="text-[#9A9A9A]" /><span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
                         <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, editing: true } : d))}

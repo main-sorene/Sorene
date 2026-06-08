@@ -21,11 +21,13 @@ export async function GET(req: NextRequest) {
     .collection("threadsScheduled")
     .get();
 
-  const posts: ScheduledPost[] = snap.docs
-    .map((d) => d.data() as ScheduledPost)
+  const all = snap.docs.map((d) => d.data() as ScheduledPost);
+  const posts = all
     .filter((p) => p.status === "pending")
     .sort((a, b) => a.scheduledAt - b.scheduledAt);
-  return Response.json({ posts });
+  const failed = all.filter((p) => p.status === "failed");
+  const published = all.filter((p) => p.status === "published");
+  return Response.json({ posts, failed, published });
 }
 
 // POST — create scheduled post

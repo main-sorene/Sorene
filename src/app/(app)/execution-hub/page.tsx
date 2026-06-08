@@ -8514,7 +8514,7 @@ WHAT TO AVOID:
 - No hashtags, ever
 - No numbered lists or bullet points — prose only
 - No URLs in body. If CTA needed: [ADD_LINK_IN_COMMENT] at end
-- Max 500 characters. Short is better.
+- HARD LIMIT: every post MUST be under 500 characters (including spaces). Count carefully. If a draft is over 500 chars, cut it — never go over.
 
 FORMATS — use different ones across the week:
 hot take / genuine question / short story with a twist / thing I got wrong / observation nobody says out loud / something I'm trying / result or data point with context`;
@@ -8531,28 +8531,47 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, system, maxTokens: Math.max(1500, count * 200) }),
+        body: JSON.stringify({ prompt, system, maxTokens: Math.max(1500, count * 200), stream: true }),
       });
-      if (res.ok) {
-        const data = await res.json() as { reply?: string };
-        const posts = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, count);
-        setWeekDrafts(posts.map((text, i) => {
-          const hasCta = text.includes("[ADD_LINK_IN_COMMENT]");
-          // Extract AI-written CTA comment if present
-          const ctaCommentMatch = text.match(/\[CTA_COMMENT:\s*([\s\S]*?)\]/);
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let postIndex = 0;
+
+        const parseDraft = (raw: string, idx: number): ThreadsDraft => {
+          const hasCta = raw.includes("[ADD_LINK_IN_COMMENT]");
+          const ctaCommentMatch = raw.match(/\[CTA_COMMENT:\s*([\s\S]*?)\]/);
           const aiCtaComment = ctaCommentMatch?.[1]?.trim();
-          // Strip both markers from display text
-          const cleanText = text
+          const cleanText = raw
             .replace(/\[CTA_COMMENT:[\s\S]*?\]\s*/g, "")
             .replace(/\[ADD_LINK_IN_COMMENT\]\s*/g, "")
             .trim();
-          // Reconstruct text with only ADD_LINK_IN_COMMENT marker (used downstream)
           const storedText = hasCta ? `${cleanText}\n[ADD_LINK_IN_COMMENT]` : cleanText;
-          const ctaComment = hasCta && ctaLink.trim()
-            ? (aiCtaComment ?? `${ctaLink.trim()}`)
-            : undefined;
-          return { id: `${Date.now()}-${i}`, text: storedText, editing: false, schedulerOpen: false, ...(ctaComment ? { ctaComment } : {}) };
-        }));
+          const ctaComment = hasCta && ctaLink.trim() ? (aiCtaComment ?? ctaLink.trim()) : undefined;
+          return { id: `${Date.now()}-${idx}`, text: storedText, editing: false, schedulerOpen: false, ...(ctaComment ? { ctaComment } : {}) };
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // Extract completed posts separated by ---
+          const parts = buffer.split(/\n---\n|^---\n/m);
+          while (parts.length > 1 && postIndex < count) {
+            const raw = parts.shift()!.trim();
+            if (raw) {
+              const draft = parseDraft(raw, postIndex++);
+              setWeekDrafts((prev) => [...prev, draft]);
+            }
+          }
+          buffer = parts[0];
+        }
+        // Handle last post (no trailing ---)
+        const lastRaw = buffer.trim();
+        if (lastRaw && postIndex < count) {
+          setWeekDrafts((prev) => [...prev, parseDraft(lastRaw, postIndex)]);
+        }
       }
     } catch { /* ignore */ }
     setGenerating(false);

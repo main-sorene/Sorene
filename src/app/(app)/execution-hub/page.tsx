@@ -8189,6 +8189,8 @@ interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOp
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
 interface Competitor { username: string; addedAt: number; lastAnalyzedAt?: number; postCount?: number; insights?: string; }
+interface XDraft { id: string; text: string; editing: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; scheduledId?: string; }
+interface XScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
 
 function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
@@ -8232,6 +8234,25 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // Pending date/time string while slot editor is open: draftId → { date, time }
   const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
 
+  // ── X (Twitter) channel state ──
+  const [xStatus, setXStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+  const [xUsername, setXUsername] = useState("");
+  const [xKeyForm, setXKeyForm] = useState(false);
+  const [xKeys, setXKeys] = useState({ apiKey: "", apiSecret: "", accessToken: "", accessTokenSecret: "" });
+  const [xConnecting, setXConnecting] = useState(false);
+  const [xConnectError, setXConnectError] = useState("");
+  const [xDrafts, setXDrafts] = useState<XDraft[]>([]);
+  const [xScheduled, setXScheduled] = useState<XScheduledPost[]>([]);
+  const [xGenerating, setXGenerating] = useState(false);
+  const [xApprovingAll, setXApprovingAll] = useState(false);
+  const [xSuccessMsg, setXSuccessMsg] = useState("");
+  const [xErrorMsg, setXErrorMsg] = useState("");
+  const [xPostedOpen, setXPostedOpen] = useState(false);
+  const [xHelpInput, setXHelpInput] = useState("");
+  const [xHelpMessages, setXHelpMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [xHelpLoading, setXHelpLoading] = useState(false);
+  const [xSetupStep, setXSetupStep] = useState<"instructions" | "keys">("instructions");
+
   // Best posting times (local HH:MM strings) — up to 3 slots
   const bestTimes: string[] = dna?.bestHours?.slice(0, 3).map((utcH) => {
     const d = new Date();
@@ -8274,11 +8295,13 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
-    const [accountRes, scheduleRes, draftsRes, competitorsRes] = await Promise.all([
+    const [accountRes, scheduleRes, draftsRes, competitorsRes, xRes, xScheduleRes] = await Promise.all([
       authFetch("/api/threads/account"),
       authFetch("/api/threads/schedule"),
       authFetch("/api/threads/drafts"),
       authFetch("/api/threads/competitors"),
+      authFetch("/api/x/keys"),
+      authFetch("/api/x/schedule"),
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
@@ -8306,6 +8329,15 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     if (competitorsRes.ok) {
       const data = await competitorsRes.json() as { competitors: Competitor[] };
       setCompetitors(data.competitors ?? []);
+    }
+    if (xRes.ok) {
+      const data = await xRes.json() as { connected: boolean; username?: string };
+      if (data.connected) { setXStatus("connected"); setXUsername(data.username ?? ""); }
+      else setXStatus("disconnected");
+    } else { setXStatus("disconnected"); }
+    if (xScheduleRes.ok) {
+      const data = await xScheduleRes.json() as { posts: XScheduledPost[] };
+      setXScheduled(data.posts ?? []);
     }
     setDraftsLoaded(true);
   };
@@ -8450,6 +8482,161 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       else setCompetitorError(data.error ?? "Analysis failed");
     } catch { setCompetitorError("Analysis failed"); }
     setAnalyzingCompetitors(false);
+  };
+
+  const connectX = async () => {
+    setXConnecting(true);
+    setXConnectError("");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/x/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(xKeys),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; username?: string };
+      if (data.ok) {
+        setXStatus("connected");
+        setXUsername(data.username ?? "");
+        setXKeyForm(false);
+        setXKeys({ apiKey: "", apiSecret: "", accessToken: "", accessTokenSecret: "" });
+      } else {
+        setXConnectError(data.error ?? "Connection failed");
+      }
+    } catch { setXConnectError("Connection failed"); }
+    setXConnecting(false);
+  };
+
+  const disconnectX = async () => {
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/x/keys", { method: "DELETE" });
+      setXStatus("disconnected");
+      setXUsername("");
+      setXDrafts([]);
+    } catch { /* ignore */ }
+  };
+
+  const generateXWeek = async () => {
+    setXGenerating(true);
+    setXDrafts([]);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const count = 7;
+      const title = project?.title ?? "";
+      const brandName = title ? (localStorage.getItem(`business-name-${title}`) ?? "") : "";
+      const brandContext = brandName ? `Brand: ${brandName}` : (project?.oneliner ?? "");
+      const dnaContext = dna?.summary ? `\nContent DNA: ${dna.summary}` : "";
+
+      const system = `You are ghostwriting X (Twitter) posts for a founder. Write short, punchy, high-signal tweets.
+
+RULES:
+- Max 280 characters each — count carefully, never go over
+- Start with a hook: bold claim, surprising stat, or pattern interrupt
+- No hashtags. No emojis unless genuinely needed.
+- Vary formats: hot take / observation / question / data point / short story
+- Sound like a real person, not a marketer
+- No numbered lists in a single tweet — prose only`;
+
+      const prompt = `Write exactly ${count} X/Twitter posts for a 7-day schedule (1 per day).
+
+${brandContext}${dnaContext}
+
+Separate posts with exactly "---". No labels, no numbering, no intro. Just the ${count} posts.`;
+
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system, maxTokens: 1500, stream: true }),
+      });
+
+      if (res.ok && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let idx = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("---");
+          for (let i = 0; i < parts.length - 1; i++) {
+            const text = parts[i].trim();
+            if (text) {
+              setXDrafts((prev) => [...prev, { id: `x-${Date.now()}-${idx++}`, text, editing: false }]);
+            }
+          }
+          buffer = parts[parts.length - 1];
+        }
+        if (buffer.trim()) {
+          setXDrafts((prev) => [...prev, { id: `x-${Date.now()}-${idx}`, text: buffer.trim(), editing: false }]);
+        }
+      }
+    } catch { /* ignore */ }
+    setXGenerating(false);
+  };
+
+  const approveAllX = async () => {
+    if (xDrafts.length === 0) return;
+    setXApprovingAll(true);
+    setXErrorMsg("");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const pending = xDrafts.filter((d) => !d.frozen);
+      const now = Date.now();
+      const newScheduled: XScheduledPost[] = [];
+      const idMap: Record<string, string> = {};
+
+      for (let i = 0; i < pending.length; i++) {
+        const draft = pending[i];
+        const scheduledAt = now + (i + 1) * 24 * 60 * 60 * 1000;
+        const res = await authFetch("/api/x/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: draft.text, scheduledAt }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { post: XScheduledPost };
+          newScheduled.push(data.post);
+          idMap[draft.id] = data.post.id;
+        }
+      }
+
+      setXScheduled((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
+      const frozen = xDrafts.map((d, i) => d.frozen ? d : {
+        ...d, frozen: true, frozenAt: now + (i + 1) * 24 * 60 * 60 * 1000,
+        ...(idMap[d.id] ? { scheduledId: idMap[d.id] } : {}),
+      });
+      setXDrafts(frozen);
+      setXSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
+      setTimeout(() => setXSuccessMsg(""), 4000);
+    } catch { /* ignore */ }
+    setXApprovingAll(false);
+  };
+
+  const sendXHelp = async () => {
+    if (!xHelpInput.trim() || xHelpLoading) return;
+    const msg = xHelpInput.trim();
+    setXHelpInput("");
+    setXHelpLoading(true);
+    const newMessages: { role: "user" | "assistant"; content: string }[] = [...xHelpMessages, { role: "user", content: msg }];
+    setXHelpMessages(newMessages);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: msg,
+          system: `You are Sorene, helping a founder set up their X (Twitter) API keys to connect their account to Sorene for social media scheduling. Be concise and practical. Guide them step by step through the X developer portal. Key facts: they need to go to developer.twitter.com, create a project and app, enable OAuth 1.0a with read+write permissions, and get 4 keys: API Key, API Secret, Access Token, Access Token Secret. The Access Token must be generated with read+write permissions (not read-only). Common issues: wrong permission level, using OAuth 2.0 instead of 1.0a, regenerating tokens after changing permissions.`,
+          history: xHelpMessages,
+          maxTokens: 500,
+        }),
+      });
+      const data = await res.json() as { reply: string };
+      setXHelpMessages([...newMessages, { role: "assistant", content: data.reply }]);
+    } catch { /* ignore */ }
+    setXHelpLoading(false);
   };
 
   const connectThreads = async () => {
@@ -9256,32 +9443,219 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden self-start">
         <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
           <button onClick={() => toggleChannel("x")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
-              {X_ICON}
-            </div>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">{X_ICON}</div>
             <div>
               <p className="text-[13px] font-semibold text-[#151515]">X (Twitter)</p>
-              <p className="text-[11px] text-[#9A9A9A]">Coming soon · scheduling &amp; posting</p>
+              {xStatus === "connected"
+                ? <p className="text-[11px] text-[#32C382]">Connected{xUsername ? ` · @${xUsername}` : ""}</p>
+                : <p className="text-[11px] text-[#9A9A9A]">Bring your own API keys · free to connect</p>}
             </div>
           </button>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Soon</span>
+            {xStatus === "connected" && (
+              <button onClick={(e) => { e.stopPropagation(); disconnectX(); }}
+                className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors font-medium">Disconnect</button>
+            )}
+            {xStatus === "disconnected" && (
+              <button onClick={(e) => { e.stopPropagation(); setXKeyForm(true); toggleChannel("x"); }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+                Connect
+              </button>
+            )}
             <button onClick={() => toggleChannel("x")} className="text-[#9A9A9A] hover:text-[#151515] transition-colors ml-1">
               <ChevronDown size={14} className={cn("transition-transform", openChannels.has("x") && "rotate-180")} />
             </button>
           </div>
         </div>
+
         <AnimatePresence initial={false}>
           {openChannels.has("x") && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
-              <div className="p-5 space-y-4">
-                <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-4 text-center space-y-2">
-                  <p className="text-[13px] font-semibold text-[#151515]">X integration coming soon</p>
-                  <p className="text-[12px] text-[#9A9A9A] leading-relaxed">Generate and schedule posts for X/Twitter directly from Sorene — same workflow as Threads. Connect, generate a week of posts, approve and go.</p>
+
+              {/* Setup flow — disconnected */}
+              {xStatus === "disconnected" && (
+                <div className="p-5 space-y-4">
+                  {/* Tab switcher */}
+                  <div className="flex gap-1 p-1 bg-[#F5F5F5] rounded-xl">
+                    {(["instructions", "keys"] as const).map((tab) => (
+                      <button key={tab} onClick={() => setXSetupStep(tab)}
+                        className={cn("flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-colors",
+                          xSetupStep === tab ? "bg-white text-[#151515] shadow-sm" : "text-[#9A9A9A] hover:text-[#151515]")}>
+                        {tab === "instructions" ? "How to connect" : "Enter API keys"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {xSetupStep === "instructions" && (
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        {[
+                          { n: "1", text: "Go to developer.twitter.com and sign in with your X account" },
+                          { n: "2", text: 'Click "+ Create Project" — give it any name, select "Making a bot" as the use case' },
+                          { n: "3", text: 'Inside the project, create an App. Under "User authentication settings", enable OAuth 1.0a with Read and Write permissions' },
+                          { n: "4", text: 'Go to "Keys and Tokens" — copy your API Key and API Key Secret' },
+                          { n: "5", text: 'Under "Access Token and Secret", click Generate — copy both values. Make sure it shows "Read and Write" not "Read Only"' },
+                          { n: "6", text: 'Paste all 4 keys into the "Enter API keys" tab and hit Connect' },
+                        ].map(({ n, text }) => (
+                          <div key={n} className="flex gap-3">
+                            <span className="w-5 h-5 rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{n}</span>
+                            <p className="text-[12px] text-[#62646A] leading-relaxed">{text}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <a href="https://developer.twitter.com" target="_blank" rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors">
+                        Open X Developer Portal →
+                      </a>
+                      <button onClick={() => setXSetupStep("keys")}
+                        className="w-full py-2.5 rounded-xl border border-[#ECEDEE] text-[12px] font-semibold text-[#151515] hover:bg-[#FAFAFA] transition-colors">
+                        I have my keys →
+                      </button>
+                    </div>
+                  )}
+
+                  {xSetupStep === "keys" && (
+                    <div className="space-y-3">
+                      {[
+                        { key: "apiKey" as const, label: "API Key" },
+                        { key: "apiSecret" as const, label: "API Key Secret" },
+                        { key: "accessToken" as const, label: "Access Token" },
+                        { key: "accessTokenSecret" as const, label: "Access Token Secret" },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="space-y-1">
+                          <label className="text-[11px] font-semibold text-[#151515]">{label}</label>
+                          <input type="password" value={xKeys[key]}
+                            onChange={(e) => setXKeys((prev) => ({ ...prev, [key]: e.target.value }))}
+                            placeholder={`Paste your ${label}`}
+                            className="w-full text-[12px] px-3 py-2.5 rounded-xl border border-[#ECEDEE] bg-white focus:outline-none focus:border-[#151515] transition-colors placeholder:text-[#C4C4C4]" />
+                        </div>
+                      ))}
+                      {xConnectError && <p className="text-[11px] text-[#DF2E16]">{xConnectError}</p>}
+                      <button onClick={connectX} disabled={xConnecting || !xKeys.apiKey || !xKeys.apiSecret || !xKeys.accessToken || !xKeys.accessTokenSecret}
+                        className="w-full py-2.5 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                        {xConnecting ? <><Loader2 size={12} className="animate-spin" /> Verifying…</> : "Connect X account"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Inline help chat */}
+                  <div className="border-t border-[#ECEDEE] pt-4 space-y-3">
+                    <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Ask Sorene for help</p>
+                    {xHelpMessages.length > 0 && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {xHelpMessages.map((m, i) => (
+                          <div key={i} className={cn("px-3 py-2 rounded-xl text-[12px] leading-relaxed",
+                            m.role === "user" ? "bg-[#F5F5F5] text-[#151515]" : "bg-[#E8FBF0] text-[#151515]")}>
+                            {m.content}
+                          </div>
+                        ))}
+                        {xHelpLoading && <div className="px-3 py-2 rounded-xl bg-[#E8FBF0] text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin inline mr-1" />Thinking…</div>}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input value={xHelpInput} onChange={(e) => setXHelpInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && sendXHelp()}
+                        placeholder="e.g. Where do I find my Access Token?"
+                        className="flex-1 text-[12px] px-3 py-2 rounded-xl border border-[#ECEDEE] bg-white focus:outline-none focus:border-[#151515] transition-colors placeholder:text-[#C4C4C4]" />
+                      <button onClick={sendXHelp} disabled={!xHelpInput.trim() || xHelpLoading}
+                        className="px-3 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+                        Ask
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Connected — generate & schedule */}
+              {xStatus === "connected" && (
+                <div className="divide-y divide-[#ECEDEE]">
+                  {/* Generate section */}
+                  <div className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Plan your week</p>
+                        <p className="text-[11px] text-[#9A9A9A] mt-0.5">1 post/day · 7 days · 280 chars max</p>
+                      </div>
+                      <button onClick={generateXWeek} disabled={xGenerating}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-black text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+                        {xGenerating ? <><Loader2 size={12} className="animate-spin" />Generating…</> : "Generate week"}
+                      </button>
+                    </div>
+
+                    {/* Draft list */}
+                    {xDrafts.filter((d) => !d.posted).map((draft, i) => (
+                      <div key={draft.id} className={cn("rounded-2xl border overflow-hidden", draft.frozen ? "border-[#E8FBF0] bg-[#FAFFFE]" : "border-[#ECEDEE]")}>
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                          <p className="text-[11px] font-semibold text-[#9A9A9A]">Post {i + 1}</p>
+                          {draft.frozen ? (
+                            draft.postFailed
+                              ? <span className="text-[10px] text-[#DF2E16] font-semibold">Failed</span>
+                              : <span className="text-[10px] text-[#32C382] font-semibold flex items-center gap-1"><CheckCircle2 size={10} /> Scheduled</span>
+                          ) : (
+                            <button onClick={() => setXDrafts((prev) => prev.filter((d) => d.id !== draft.id))}
+                              className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">Remove</button>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          {draft.editing ? (
+                            <textarea value={draft.text} rows={3}
+                              onChange={(e) => setXDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, text: e.target.value } : d))}
+                              className="w-full text-[12px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent" />
+                          ) : (
+                            <p className={cn("text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap", draft.frozen && "opacity-60")}>{draft.text}</p>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className={cn("text-[10px] font-medium", draft.text.length > 280 ? "text-[#DF2E16]" : "text-[#9A9A9A]")}>{draft.text.length}/280</span>
+                            {!draft.frozen && (
+                              <button onClick={() => setXDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, editing: !d.editing } : d))}
+                                className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors">
+                                {draft.editing ? "Done" : "Edit"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {xSuccessMsg && <p className="text-[12px] text-[#32C382] font-semibold text-center">{xSuccessMsg}</p>}
+                    {xErrorMsg && <p className="text-[12px] text-[#DF2E16] text-center">{xErrorMsg}</p>}
+
+                    {xDrafts.some((d) => !d.frozen && !d.posted) && (
+                      <button onClick={approveAllX} disabled={xApprovingAll}
+                        className="w-full py-3 rounded-2xl bg-black text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                        {xApprovingAll ? <><Loader2 size={13} className="animate-spin" />Scheduling…</> : <>Approve and schedule {xDrafts.filter((d) => !d.frozen && !d.posted).length} posts</>}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Posted section */}
+                  {xDrafts.some((d) => d.posted) && (
+                    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+                      <button onClick={() => setXPostedOpen((v) => !v)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={13} className="text-[#32C382]" />
+                          <p className="text-[12px] font-semibold text-[#151515]">Posted</p>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#E8FBF0] text-[#32C382] font-semibold">{xDrafts.filter((d) => d.posted).length}</span>
+                        </div>
+                        <ChevronDown size={14} className={cn("text-[#9A9A9A] transition-transform", xPostedOpen && "rotate-180")} />
+                      </button>
+                      {xPostedOpen && (
+                        <div className="divide-y divide-[#ECEDEE]">
+                          {xDrafts.filter((d) => d.posted).map((draft) => (
+                            <div key={draft.id} className="px-4 py-3 flex items-start gap-3">
+                              <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
+                              <p className="text-[12px] text-[#9A9A9A] leading-relaxed flex-1 line-clamp-2">{draft.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

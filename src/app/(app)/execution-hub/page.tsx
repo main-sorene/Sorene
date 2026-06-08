@@ -8475,7 +8475,9 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         : "";
 
       const ctaNote = ctaLink.trim()
-        ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. Mark posts that should have a CTA link with [ADD_LINK_IN_COMMENT] at the very end.`
+        ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. For posts that naturally call for a CTA, add TWO lines at the very end:
+[ADD_LINK_IN_COMMENT]
+[CTA_COMMENT: write a short, natural first-comment here that flows from the post's specific angle — no generic phrases like "check this out" or "learn more". It should feel like a genuine continuation of the post that happens to mention the link. End with the URL: ${ctaLink.trim()}]`
         : "";
       const notesContext = userNotes.trim() ? `\nFounder's notes / guidance: ${userNotes.trim()}` : "";
 
@@ -8521,7 +8523,7 @@ hot take / genuine question / short story with a twist / thing I got wrong / obs
 
 ${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}${notesContext}
 
-Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Add [ADD_LINK_IN_COMMENT] to posts where a CTA feels natural — typically 3-4 out of ${count}. Never force it on every post.
+Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Add [ADD_LINK_IN_COMMENT] + [CTA_COMMENT: ...] to more than half the posts — at minimum ${Math.ceil(count * 0.55)} out of ${count}. Only skip the CTA on posts where it would feel truly forced (e.g. a raw vulnerable moment or a question post with no clear answer).
 
 Separate posts with exactly "---". No labels, no numbering, no intro text. Just the ${count} posts.`;
 
@@ -8535,13 +8537,20 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         const posts = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, count);
         setWeekDrafts(posts.map((text, i) => {
           const hasCta = text.includes("[ADD_LINK_IN_COMMENT]");
-          const cleanText = text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-          // Auto-generate comment: first sentence of post + link
-          const firstSentence = cleanText.split(/[.!?]/)[0]?.trim() ?? "";
+          // Extract AI-written CTA comment if present
+          const ctaCommentMatch = text.match(/\[CTA_COMMENT:\s*([\s\S]*?)\]/);
+          const aiCtaComment = ctaCommentMatch?.[1]?.trim();
+          // Strip both markers from display text
+          const cleanText = text
+            .replace(/\[CTA_COMMENT:[\s\S]*?\]\s*/g, "")
+            .replace(/\[ADD_LINK_IN_COMMENT\]\s*/g, "")
+            .trim();
+          // Reconstruct text with only ADD_LINK_IN_COMMENT marker (used downstream)
+          const storedText = hasCta ? `${cleanText}\n[ADD_LINK_IN_COMMENT]` : cleanText;
           const ctaComment = hasCta && ctaLink.trim()
-            ? `${firstSentence ? `Loved this post? ${firstSentence.length > 60 ? "Read more" : firstSentence.toLowerCase().replace(/^[a-z]/, c => c.toUpperCase())} →` : "More here →"} ${ctaLink.trim()}`
+            ? (aiCtaComment ?? `${ctaLink.trim()}`)
             : undefined;
-          return { id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false, ...(ctaComment ? { ctaComment } : {}) };
+          return { id: `${Date.now()}-${i}`, text: storedText, editing: false, schedulerOpen: false, ...(ctaComment ? { ctaComment } : {}) };
         }));
       }
     } catch { /* ignore */ }
@@ -8748,18 +8757,31 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                 <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Content DNA · {dna.postCount} posts analysed</p>
                 <div className="space-y-3">
                   {dna.summary
-                    // Split on blank lines OR on the known section headers
                     .split(/\n\n+|(?=\*\*What's Not Working\*\*|\*\*Next:\*\*|\*\*Next\*\*)/)
                     .map((s) => s.trim()).filter(Boolean)
-                    .map((para, i) => (
-                      <p key={i} className="text-[12px] text-[#62646A] leading-relaxed">
-                        {para.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+                    .map((para, i) => {
+                      // Detect numbered bullets like (1) ... (2) ... (3) and render as separate lines
+                      const bulletParts = para.split(/(?=\s*\(\d+\)\s)/).map((s) => s.trim()).filter(Boolean);
+                      const isNextPara = para.startsWith("**Next");
+                      const renderInline = (text: string) =>
+                        text.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
                           part.startsWith("**") && part.endsWith("**")
                             ? <strong key={j} className="font-semibold text-[#151515]">{part.slice(2, -2)}</strong>
                             : part
-                        )}
-                      </p>
-                    ))}
+                        );
+                      if (isNextPara && bulletParts.length > 1) {
+                        return (
+                          <div key={i} className="space-y-1.5">
+                            {bulletParts.map((bp, j) => (
+                              <p key={j} className="text-[12px] text-[#62646A] leading-relaxed">{renderInline(bp)}</p>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return (
+                        <p key={i} className="text-[12px] text-[#62646A] leading-relaxed">{renderInline(para)}</p>
+                      );
+                    })}
                 </div>
               </div>
             )}

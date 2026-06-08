@@ -8718,7 +8718,7 @@ export default function Page() {
             </div>
 
             {/* Tabs + inline accordion content */}
-            <div className="px-4 lg:px-6 pt-4 pb-24 space-y-3">
+            <div className="px-4 lg:px-6 pt-2 pb-24 space-y-2">
               {/* Tab strip */}
               <div className="flex overflow-x-auto no-scrollbar rounded-[22px] shadow-sm border border-gray-100 w-full">
                 {TABS.map((tab, i) => {

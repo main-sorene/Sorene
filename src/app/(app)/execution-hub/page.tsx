@@ -8670,14 +8670,20 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
       // Freeze pending drafts in place — show them as locked/waiting
       const now = Date.now();
-      setWeekDrafts((prev) => prev.map((d, i) => d.frozen ? d : {
+      const frozenDrafts = weekDrafts.map((d, i) => d.frozen ? d : {
         ...d,
         frozen: true,
         frozenAt: slotOverrides[d.id] ?? scheduleSlots[i] ?? now,
         editing: false,
         ...(scheduledIdMap[d.id] ? { scheduledId: scheduledIdMap[d.id] } : {}),
-      }));
-      // Auto-save (triggered by setWeekDrafts above) will persist frozen drafts
+      });
+      setWeekDrafts(frozenDrafts);
+      // Immediately persist frozen drafts — don't rely on debounced auto-save
+      authFetch("/api/threads/drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drafts: frozenDrafts, ctaLink, cadence, slotOverrides, userNotes }),
+      }).catch(() => {});
       setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
     } catch { /* ignore */ }
     setApprovingAll(false);

@@ -8649,6 +8649,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
 
   return (
     <div className="p-5 space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {/* ── Threads channel ── */}
       <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
         {/* Channel header — always visible */}
@@ -8990,7 +8991,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       </div>
 
       {/* ── X (Twitter) channel ── */}
-      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden self-start">
         <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
           <button onClick={() => toggleChannel("x")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
@@ -9023,6 +9024,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           )}
         </AnimatePresence>
       </div>
+
+      </div>{/* end 2-col grid */}
 
       {/* ── Reddit channel ── */}
       <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">

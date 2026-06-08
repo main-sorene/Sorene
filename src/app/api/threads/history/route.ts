@@ -41,11 +41,12 @@ export async function GET(req: NextRequest) {
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = getAdminFirestore();
-  const snap = await db.collection("users").doc(user.uid).get();
-  const account = snap.data()?.threadsAccount;
+  const snap = await db.doc(`users/${user.uid}/integrations/threads`).get();
+  const account = snap.data();
   if (!account?.accessToken) return Response.json({ error: "Not connected" }, { status: 400 });
 
-  const { accessToken, userId } = account as { accessToken: string; userId: string };
+  const accessToken = account.accessToken as string;
+  const userId = account.threadsUserId as string;
 
   try {
     // Fetch last 25 posts

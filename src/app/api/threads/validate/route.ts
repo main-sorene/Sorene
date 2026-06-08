@@ -6,9 +6,9 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const account = snap.data()?.threadsAccount as { accessToken?: string; userId?: string } | undefined;
-  if (!account?.accessToken || !account.userId) {
+  const snap = await getAdminFirestore().doc(`users/${user.uid}/integrations/threads`).get();
+  const account = snap.data();
+  if (!account?.accessToken || !account.threadsUserId) {
     return Response.json({ valid: false, reason: "not_connected" });
   }
 

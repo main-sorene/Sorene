@@ -8,11 +8,12 @@ export async function POST(req: NextRequest) {
   const { text } = await req.json() as { text: string };
   if (!text?.trim()) return Response.json({ error: "No text" }, { status: 400 });
 
-  const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const account = snap.data()?.threadsAccount;
+  const snap = await getAdminFirestore().doc(`users/${user.uid}/integrations/threads`).get();
+  const account = snap.data();
   if (!account?.accessToken) return Response.json({ error: "Threads not connected" }, { status: 400 });
 
-  const { accessToken, userId } = account as { accessToken: string; userId: string };
+  const accessToken = account.accessToken as string;
+  const userId = account.threadsUserId as string;
 
   try {
     // Step 1: Create text container

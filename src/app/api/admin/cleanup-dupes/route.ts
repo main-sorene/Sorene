@@ -1,13 +1,43 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
-// GET — list all users with scheduled posts (to find a uid)
+function dedupeScheduled(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
+  const byText: Record<string, FirebaseFirestore.QueryDocumentSnapshot[]> = {};
+  for (const doc of docs) {
+    const text = doc.data().text as string;
+    if (!byText[text]) byText[text] = [];
+    byText[text].push(doc);
+  }
+  const toDelete: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  for (const group of Object.values(byText)) {
+    if (group.length <= 1) continue;
+    group.sort((a, b) => (a.data().createdAt ?? 0) - (b.data().createdAt ?? 0));
+    toDelete.push(...group.slice(1));
+  }
+  return toDelete;
+}
+
+// GET — list all users with scheduled posts, or ?all=true to clean up all users
 export async function GET(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");
   if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = getAdminFirestore();
   const users = await db.collection("users").get();
+
+  if (new URL(req.url).searchParams.get("all") === "true") {
+    // Clean up duplicates for every user
+    const results: { uid: string; deleted: number }[] = [];
+    for (const userDoc of users.docs) {
+      const snap = await userDoc.ref.collection("threadsScheduled").get();
+      if (snap.empty) continue;
+      const toDelete = dedupeScheduled(snap.docs);
+      for (const doc of toDelete) await doc.ref.delete();
+      if (toDelete.length > 0) results.push({ uid: userDoc.id, deleted: toDelete.length });
+    }
+    return Response.json({ ok: true, results, totalDeleted: results.reduce((s, r) => s + r.deleted, 0) });
+  }
+
   const result: { uid: string; count: number }[] = [];
   for (const doc of users.docs) {
     const scheduled = await doc.ref.collection("threadsScheduled").get();
@@ -61,26 +91,9 @@ export async function POST(req: NextRequest) {
   }
   if (!targetUid) return Response.json({ error: "User not found", searched: email ?? uid }, { status: 404 });
 
-  const col = db.collection("users").doc(targetUid).collection("threadsScheduled");
-  const all = await col.get();
+  const snap = await db.collection("users").doc(targetUid).collection("threadsScheduled").get();
+  const toDelete = dedupeScheduled(snap.docs);
+  for (const doc of toDelete) await doc.ref.delete();
 
-  // Group by text, keep the earliest createdAt per text, delete the rest
-  const byText: Record<string, typeof all.docs> = {};
-  for (const doc of all.docs) {
-    const text = doc.data().text as string;
-    if (!byText[text]) byText[text] = [];
-    byText[text].push(doc);
-  }
-
-  let deleted = 0;
-  for (const docs of Object.values(byText)) {
-    if (docs.length <= 1) continue;
-    docs.sort((a, b) => (a.data().createdAt ?? 0) - (b.data().createdAt ?? 0));
-    for (const dup of docs.slice(1)) {
-      await dup.ref.delete();
-      deleted++;
-    }
-  }
-
-  return Response.json({ ok: true, deleted, uid: targetUid });
+  return Response.json({ ok: true, deleted: toDelete.length, uid: targetUid });
 }

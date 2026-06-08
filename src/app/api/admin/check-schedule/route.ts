@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
 export async function GET(req: NextRequest) {
-  // Temporarily open for debugging
+  const secret = req.headers.get("x-admin-secret");
+  if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const uid = new URL(req.url).searchParams.get("uid");
   if (!uid) return Response.json({ error: "Missing uid" }, { status: 400 });

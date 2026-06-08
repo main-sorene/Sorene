@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { Check, X } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAtomValue } from "jotai";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,21 +10,24 @@ import { userAtom } from "@/store/atoms";
 import { useToast } from "@/hooks/use-toast";
 import {
   createCheckoutSession,
-  upgradeSubscription,
+  syncSubscription,
 } from "@/lib/subscriptionApi";
 import {
   useRefetchSubscriptionStatus,
   useSubscriptionStatus,
 } from "@/hooks/useSubscriptionStatus";
+import { UpgradeConfirmModal } from "@/components/modals/UpgradeConfirmModal";
 
 import { plans, PLAN_WEIGHTS, type Plan } from "@/lib/plans";
 
 export function UpgradePage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "semiAnnual">(
     "monthly",
   );
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const searchParams = useSearchParams();
   const user = useAtomValue(userAtom);
   const refetchSubscriptionStatus = useRefetchSubscriptionStatus();
@@ -35,7 +38,32 @@ export function UpgradePage() {
 
   useEffect(() => {
     if (searchParams.get("checkout_success") !== "true") return;
-    refetchSubscriptionStatus();
+
+    toast({
+      title: "Payment successful!",
+      description: "Your subscription is being activated…",
+    });
+
+    // Sync subscription from Stripe directly — guaranteed fallback in case
+    // the webhook was delayed or failed. Retry up to 3 times (Stripe may need
+    // a moment to finalize the subscription after redirect).
+    const run = async () => {
+      let synced = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const result = await syncSubscription();
+          if (result.synced) { synced = true; break; }
+        } catch { /* non-fatal */ }
+      }
+      refetchSubscriptionStatus();
+      if (synced) {
+        toast({ title: "Subscription activated!", description: "Welcome to your new plan." });
+      }
+      const t = setTimeout(() => refetchSubscriptionStatus(), 5000);
+      return () => clearTimeout(t);
+    };
+    run();
   }, []);
 
   useEffect(() => {
@@ -46,48 +74,35 @@ export function UpgradePage() {
 
   async function handleUpgrade(plan: Plan, isCurrent: boolean) {
     if (isCurrent || loadingPlan) return;
-    const email = user?.email ?? user?.profile?.email;
+    const email = user?.email ?? user?.uid ?? user?.profile?.email;
     if (!email) {
-      toast({
-        title: "Error",
-        description: "User email not found. Please log in again.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "User email not found. Please log in again.", variant: "destructive" });
+      return;
+    }
+
+    const hasActiveSubscription = subscription?.active && subscription?.plan !== "free";
+
+    if (hasActiveSubscription) {
+      // Show confirmation modal with promo code option
+      setConfirmPlan(plan);
       return;
     }
 
     setLoadingPlan(plan.name);
     try {
-      const hasActiveSubscription =
-        subscription?.active && subscription?.plan !== "free";
-
-      if (hasActiveSubscription) {
-        await upgradeSubscription({
-          email,
-          plan: plan.id,
-          duration: billingCycle === "monthly" ? 1 : 6,
-          prorate: true,
-        });
-        await refetchSubscriptionStatus();
-        toast({
-          title: "Plan updated",
-          description: `Your plan has been updated to ${plan.name} (${billingCycle === "monthly" ? "Monthly" : "6 Months"}).`,
-        });
-      } else {
-        const result = await createCheckoutSession({
-          cancel_url: `${window.location.origin}/upgrade`,
-          success_url: `${window.location.origin}/upgrade?checkout_success=true`,
-          duration: billingCycle === "monthly" ? 1 : 6,
-          email,
-          plan: plan.id,
-        });
-        window.location.href = result.url;
-      }
+      const result = await createCheckoutSession({
+        cancel_url: `${window.location.origin}/upgrade`,
+        success_url: `${window.location.origin}/upgrade?checkout_success=true`,
+        duration: billingCycle === "monthly" ? 1 : 6,
+        email,
+        plan: plan.id,
+      });
+      window.location.href = result.url;
     } catch (err) {
       console.error(err);
       toast({
-        title: "Update failed",
-        description: "There was an error updating your plan. Please try again.",
+        title: "Checkout failed",
+        description: "There was an error starting checkout. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -95,23 +110,48 @@ export function UpgradePage() {
     }
   }
 
+  const confirmPlanPrice = confirmPlan
+    ? billingCycle === "monthly"
+      ? confirmPlan.id === "pro" ? "$49 / mo" : "$15 / mo"
+      : confirmPlan.id === "pro" ? "$265 / 6 mo" : "$81 / 6 mo"
+    : "";
+
   return (
-    <div className="min-h-screen bg-white relative overflow-y-auto px-4 py-8 md:py-10">
+    <>
+    {confirmPlan && (
+      <UpgradeConfirmModal
+        open={!!confirmPlan}
+        onClose={() => setConfirmPlan(null)}
+        onSuccess={() => { refetchSubscriptionStatus(); setTimeout(refetchSubscriptionStatus, 3000); }}
+        plan={confirmPlan.id}
+        planDisplayName={confirmPlan.name}
+        price={confirmPlanPrice}
+        duration={billingCycle === "monthly" ? 1 : 6}
+      />
+    )}
+    <div className="min-h-screen bg-white relative overflow-y-auto px-4 pt-14 pb-8 md:pt-10 md:pb-10">
+      {/* Close button — offset so it never overlaps the heading */}
+      <button
+        type="button"
+        onClick={() => router.push("/chat")}
+        className="absolute top-4 right-4 p-2 rounded-full hover:bg-[#F0F0F0] transition-colors z-10"
+        aria-label="Close"
+      >
+        <X className="w-5 h-5 text-[#62646A]" />
+      </button>
+
       {/* Header */}
-      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12">
-        <h1 className="text-2xl sm:text-3xl md:text-5xl font-medium text-[#1A1A1A] mb-4">
-          Upgrade your plan for <br className="hidden md:block" /> more features
+      <div className="max-w-4xl mx-auto text-center mb-8 md:mb-12 px-2 md:px-0">
+        <h1 className="text-[4.8vw] sm:text-2xl md:text-5xl font-medium text-[#1A1A1A] mb-4 leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
+          Upgrade your plan for more features
         </h1>
         <p className="text-[#62646A] text-base md:text-base mb-8">
           Choose the perfect plan to create, innovate,{" "}
-          <br className="hidden md:block" />
-          and accelerate your workflow or{" "}
-          <span className="font-medium text-[#151515] cursor-pointer">
-            custom plan
-          </span>
+          <br />
+          and accelerate your workflow.
         </p>
 
-        {/* Toggle */}
+        {/* Billing toggle */}
         <div className="inline-flex items-center bg-[#F7F7F7] p-1 rounded-lg border border-gray-100">
           <button
             onClick={() => setBillingCycle("monthly")}
@@ -127,14 +167,13 @@ export function UpgradePage() {
           <button
             onClick={() => setBillingCycle("semiAnnual")}
             className={cn(
-              "px-6 py-2 rounded-lg text-sm transition-all flex items-center gap-2",
+              "px-6 py-2 rounded-lg text-sm transition-all text-center",
               billingCycle === "semiAnnual"
                 ? "bg-white shadow-sm text-black"
-                : "text-gray-500 hover:text-black",
+                : "text-[#62646A] hover:text-black",
             )}
           >
-            6 Months
-            <span className="text-[#00C070] text-[12px]">Save upto 30%</span>
+            6 months (10% off)
           </button>
         </div>
       </div>
@@ -152,17 +191,17 @@ export function UpgradePage() {
           const currentWeight = PLAN_WEIGHTS[currentPlanId] ?? 0;
           const cardWeight = PLAN_WEIGHTS[plan.id] ?? 0;
 
-          let buttonText = "Upgrade plan";
+          let buttonText = "Upgrade";
           if (isCurrent) {
-            buttonText = "Current Plan";
+            buttonText = "Current plan";
+          } else if (plan.id === "free") {
+            buttonText = "Downgrade";
           } else if (cardWeight < currentWeight) {
-            buttonText = "Downgrade plan";
+            buttonText = "Downgrade";
           } else if (cardWeight > currentWeight) {
-            buttonText = "Upgrade plan";
+            buttonText = "Upgrade";
           } else {
-            // Same tier, different duration
-            buttonText =
-              uiDuration > currentDuration ? "Upgrade plan" : "Downgrade plan";
+            buttonText = uiDuration > currentDuration ? "Switch to 6 months" : "Switch to monthly";
           }
 
           return (
@@ -197,6 +236,11 @@ export function UpgradePage() {
                   </span>
                   <span className="text-gray-400 text-[13px]">/month</span>
                 </div>
+                {billingCycle === "semiAnnual" && plan.price.semiAnnual > 0 && (
+                  <p className="text-xs text-[#9B9B9B] -mt-1 mb-1">
+                    billed as ${Math.round(plan.price.semiAnnual * 6)} every 6 months
+                  </p>
+                )}
                 <p className="text-[#62646A] text-sm leading-relaxed min-h-[40px]">
                   {plan.description}
                 </p>
@@ -232,5 +276,6 @@ export function UpgradePage() {
         })}
       </div>
     </div>
+    </>
   );
 }

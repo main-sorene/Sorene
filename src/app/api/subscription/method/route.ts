@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const email = req.nextUrl.searchParams.get("email");
-    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    const authedUser = await verifyAuth(req);
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    // email param is optional — fall back to the verified token's identity so the
+    // lookup never fails when the client fires before its user state is populated.
+    const email =
+      req.nextUrl.searchParams.get("email") || authedUser.email || authedUser.uid;
 
     getAdminAuth();
     const db = getDb();
@@ -22,8 +26,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ has_payment_method: false });
     }
 
+    // Try attached payment methods first, then fall back to subscription's default
     const methods = await getStripe().customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
-    const card = methods.data[0]?.card;
+    let card = methods.data[0]?.card;
+
+    if (!card) {
+      // Payment method may be attached to the subscription instead of the customer directly
+      const userData = userDoc.data();
+      const subId: string = userData?.subscription?.stripeSubscriptionId;
+      if (subId && subId !== "manual-grant") {
+        const sub = await getStripe().subscriptions.retrieve(subId, { expand: ["default_payment_method"] });
+        const pm = sub.default_payment_method as import("stripe").Stripe.PaymentMethod | null;
+        card = pm?.card ?? undefined;
+      }
+    }
 
     if (!card) return NextResponse.json({ has_payment_method: false });
 

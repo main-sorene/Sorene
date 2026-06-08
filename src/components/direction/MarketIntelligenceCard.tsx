@@ -13,6 +13,7 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -43,11 +44,12 @@ const COST_COLORS: Record<string, { bg: string; text: string }> = {
   High: { bg: "#fef2f2", text: "#b91c1c" },
 };
 
-export function MarketIntelligenceCard() {
+export function MarketIntelligenceCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useMIE();
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedOpportunity, setExpandedOpportunity] = useState<string | null>(null);
-  const topOpportunity = report?.opportunities?.[0] ?? null;
+  const opportunities = report?.opportunities?.slice(0, 3) ?? [];
+  const topOpportunity = opportunities[0] ?? null;
 
   return (
     <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
@@ -121,7 +123,7 @@ export function MarketIntelligenceCard() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex gap-5 mt-5">
               <div className="flex items-center gap-1.5"><TrendingUp size={14} className="text-emerald-300" /><span className="text-white text-[13px] font-semibold">{report.rising_signals.length} Rising</span></div>
               <div className="flex items-center gap-1.5"><TrendingDown size={14} className="text-red-300" /><span className="text-white text-[13px] font-semibold">{report.falling_signals.length} Falling</span></div>
-              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunities</span></div>
+              <div className="flex items-center gap-1.5"><Sparkles size={14} className="text-yellow-300" /><span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunit{opportunities.length === 1 ? "y" : "ies"}</span></div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -227,9 +229,10 @@ export function MarketIntelligenceCard() {
               </ReportSection>
               <ReportSection title="Your Opportunities" icon={<Sparkles size={15} className="text-[#6366f1]" />}>
                 <div className="space-y-3">
-                  {report.opportunities.map((opp) => (
+                  {opportunities.map((opp) => (
                     <OpportunityCard key={opp.id} opportunity={opp} isExpanded={expandedOpportunity === opp.id}
-                      onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)} />
+                      onToggle={() => setExpandedOpportunity(expandedOpportunity === opp.id ? null : opp.id)}
+                      onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
                   ))}
                 </div>
               </ReportSection>
@@ -330,7 +333,7 @@ function SignalRow({ signal, variant }: { signal: MIESignal; variant: "rising" |
   );
 }
 
-function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void }) {
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: MIEOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   const v = VELOCITY_COLORS[opportunity.velocity_tier] ?? VELOCITY_COLORS.V2;
   const c = COST_COLORS[opportunity.startup_cost] ?? { bg: "#f3f4f6", text: "#374151" };
   const score = opportunity.dna_fit_score;
@@ -357,13 +360,17 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: M
         {isExpanded && (
           <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ type: "spring", stiffness: 400, damping: 40 }} className="overflow-hidden">
             <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-3">
-              <p className="text-[12px] text-[#62646A] leading-relaxed">{opportunity.description}</p>
+              <p className="text-[12px] text-[#62646A] leading-relaxed">{renderBold(opportunity.description)}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <DetailItem label="Why it fits you" value={opportunity.fit_explanation} highlight />
                 <DetailItem label="First 10 customers" value={opportunity.first_10_customers} />
                 <DetailItem label="Window risk" value={opportunity.window_risk} />
                 <DetailItem label="Underlying signal" value={opportunity.underlying_signal} />
               </div>
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
+              </button>
             </div>
           </motion.div>
         )}
@@ -372,11 +379,26 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: M
   );
 }
 
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
+function renderBold(text: string) {
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
 function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className={cn("rounded-lg p-3", highlight ? "bg-[#f5f3ff]" : "bg-gray-50")}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
-      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#4338ca]" : "text-[#62646A]")}>{value}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#4338ca]" : "text-[#62646A]")}>{renderBold(value)}</p>
     </div>
   );
 }

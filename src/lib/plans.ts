@@ -39,7 +39,7 @@ export const plans: Plan[] = [
     name: "Starter",
     price: {
       monthly: 15,
-      semiAnnual: 12.5,
+      semiAnnual: 13.5,
     },
     description:
       "For creators and businesses ready to launch with faster replies and more brainpower.",
@@ -62,7 +62,7 @@ export const plans: Plan[] = [
     name: "Professional",
     price: {
       monthly: 49,
-      semiAnnual: 34.33,
+      semiAnnual: 44.17,
     },
     description:
       "The complete Sorene AI workspace for teams, agencies, and enterprises...",

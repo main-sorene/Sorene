@@ -8,6 +8,7 @@ import {
   Search,
   RefreshCw,
   AlertCircle,
+  Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,9 @@ const BAR_HEIGHTS = [35, 60, 45, 80, 65, 40, 70, 50];
 const CONFIDENCE_COLOR = (score: number) =>
   score >= 80 ? "#16b364" : score >= 65 ? "#f59e0b" : "#0f766e";
 
-export function ProblemToSolveCard() {
+export function ProblemToSolveCard({ onGenerateDirection }: { onGenerateDirection: (concept: string) => void }) {
   const { status, report, lastRun, canGenerate, hasProfile, errorMessage, loadingStep, loadingSteps, generate } = useProblemScan();
+  const opportunities = report?.opportunities?.slice(0, 3) ?? [];
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -98,7 +100,7 @@ export function ProblemToSolveCard() {
         <AnimatePresence>
           {status === "complete" && report && !isExpanded && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5">
-              <span className="text-white text-[13px] font-semibold">{report.opportunities.length} Opportunities Found</span>
+              <span className="text-white text-[13px] font-semibold">{opportunities.length} Opportunities Found</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -176,13 +178,13 @@ export function ProblemToSolveCard() {
       <AnimatePresence>
         {status === "complete" && report && !isExpanded && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position" className="bg-white px-5 py-4 flex flex-col gap-4">
-            <TopOpportunityTeaser opportunity={report.opportunities[0]} />
+            <TopOpportunityTeaser opportunity={opportunities[0]} />
             <div className="flex items-center justify-between gap-3">
               <button onClick={generate} disabled={!canGenerate} className="flex items-center gap-1.5 text-[12px] text-[#62646A] hover:text-[#151515] transition-colors">
                 <RefreshCw size={12} /> Regenerate
               </button>
               <button onClick={() => setIsExpanded(true)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0f766e] text-white text-[13px] font-medium hover:bg-[#0d6660] transition-all shadow-sm shrink-0">
-                See All 5 <ArrowRight size={14} />
+                See All 3 <ArrowRight size={14} />
               </button>
             </div>
           </motion.div>
@@ -202,10 +204,11 @@ export function ProblemToSolveCard() {
               </div>
               <Separator className="bg-[#ECEDEE]" />
               <div className="space-y-3">
-                {report.opportunities.map((opp) => (
+                {opportunities.map((opp) => (
                   <OpportunityCard key={opp.id} opportunity={opp}
                     isExpanded={expandedId === opp.id}
-                    onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)} />
+                    onToggle={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
+                    onGenerateDirection={() => onGenerateDirection(`${opp.title}: ${opp.one_line}`)} />
                 ))}
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -263,7 +266,7 @@ function TopOpportunityTeaser({ opportunity }: { opportunity: ProblemOpportunity
   );
 }
 
-function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void }) {
+function OpportunityCard({ opportunity, isExpanded, onToggle, onGenerateDirection }: { opportunity: ProblemOpportunity; isExpanded: boolean; onToggle: () => void; onGenerateDirection: () => void }) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
       <button onClick={onToggle} className="w-full flex items-start gap-3 p-4 text-left hover:bg-gray-50 transition-colors">
@@ -291,6 +294,10 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: P
                 <DetailItem label="MVP Steps" value={opportunity.mvp_steps} />
                 <DetailItem label="Why It Fits You" value={opportunity.why_fits_you} highlight />
               </div>
+              <button onClick={onGenerateDirection}
+                className="flex items-center gap-2 w-full justify-center px-4 py-2.5 rounded-xl bg-black text-white text-[13px] font-medium hover:bg-[#2a2a2a] transition-all">
+                <Wand2 size={14} />Generate Direction
+              </button>
             </div>
           </motion.div>
         )}
@@ -299,11 +306,26 @@ function OpportunityCard({ opportunity, isExpanded, onToggle }: { opportunity: P
   );
 }
 
+function cap3(text: string): string {
+  if (!text) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
+  return sentences.slice(0, 3).join(" ").trim();
+}
+
+function renderBold(text: string) {
+  const parts = cap3(text).split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>
+  );
+}
+
 function DetailItem({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className={cn("rounded-lg p-3", highlight ? "bg-[#f0fdfa]" : "bg-gray-50")}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9A9A9A] mb-1">{label}</p>
-      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#0f766e]" : "text-[#62646A]")}>{value}</p>
+      <p className={cn("text-[12px] leading-relaxed", highlight ? "text-[#0f766e]" : "text-[#62646A]")}>{renderBold(value)}</p>
     </div>
   );
 }

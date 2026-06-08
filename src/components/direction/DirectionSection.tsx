@@ -1,6 +1,6 @@
 "use client";
 
-import { DirectionCard } from "./DirectionCard";
+import { DirectionCard, RecipeSkeletonCard } from "./DirectionCard";
 import { MarketIntelligenceCard } from "./MarketIntelligenceCard";
 import { ProblemToSolveCard } from "./ProblemToSolveCard";
 import { useDirectionResult } from "@/hooks/useDirectionResult";
@@ -14,7 +14,8 @@ import {
   userAtom,
   newRecipeCardIdAtom,
 } from "@/store/atoms";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams, useRouter as useNextRouter } from "next/navigation";
 import { cn } from "@/lib/utils"
 import { ResourcesConstraintsForm } from "./ResourcesConstraintsForm";
 import { useQueryClient } from "@tanstack/react-query";
@@ -95,28 +96,93 @@ const DEFAULT_IDEATION_DATA: IdeationData = {
   },
 };
 
-function HiddenCardsPills({ hiddenIds, allCards, onShow }: {
+// ── Delete confirmation dialog ────────────────────────────────────────────────
+function DeleteConfirmDialog({
+  title,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-[#151515] mb-2">Delete this direction?</h3>
+        <p className="text-sm text-[#62646A] mb-6">
+          <span className="font-medium text-[#151515]">&ldquo;{title}&rdquo;</span> will be permanently removed and cannot be recovered.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-[#ECEDEE] text-sm font-medium text-[#374151] hover:bg-[#F8F9FA] transition-colors"
+          >
+            No, keep it
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+          >
+            Yes, delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Hidden direction pills ────────────────────────────────────────────────────
+function HiddenCardsPills({ hiddenIds, allCards, onShow, onDelete }: {
   hiddenIds: string[];
   allCards: { id: string; title: string }[];
   onShow: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const hidden = allCards.filter((c) => hiddenIds.includes(c.id));
   if (hidden.length === 0) return null;
+
+  const deleteCard = deleteId ? hidden.find((c) => c.id === deleteId) ?? null : null;
+
   return (
-    <div className="mt-4 pt-4 border-t border-[#ECEDEE]">
-      <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
-      <div className="grid grid-cols-2 gap-2">
-        {hidden.map((card) => (
-          <button
-            key={card.id}
-            onClick={() => onShow(card.id)}
-            className="px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#62646A] hover:bg-[#F1F3F5] transition-all text-left truncate"
-          >
-            {card.title}
-          </button>
-        ))}
+    <>
+      <div className="mt-4 pt-4 border-t border-[#ECEDEE]">
+        <p className="text-xs text-[#9CA3AF] mb-2 px-1">Hidden directions</p>
+        <div className="grid grid-cols-2 gap-2">
+          {hidden.map((card) => (
+            <div key={card.id} className="flex items-center rounded-full border border-[#ECEDEE] bg-[#F8F9FA] hover:bg-[#F1F3F5] transition-all min-w-0 overflow-hidden">
+              <button
+                onClick={() => onShow(card.id)}
+                className="flex-1 text-xs font-medium text-[#62646A] text-left truncate hover:text-[#151515] transition-colors px-3 py-1.5 min-w-0"
+              >
+                {card.title}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setDeleteId(card.id); }}
+                className="shrink-0 w-8 h-8 flex items-center justify-center text-[#9CA3AF] hover:text-red-500 hover:bg-red-50 transition-colors rounded-full"
+                aria-label="Delete"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9 3L3 9M3 3l6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {deleteCard && (
+        <DeleteConfirmDialog
+          title={deleteCard.title}
+          onConfirm={() => { onDelete(deleteCard.id); setDeleteId(null); }}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
+    </>
   );
 }
 
@@ -150,6 +216,7 @@ export const DirectionSection = () => {
     loadingRecipeDetailFor,
     loadingRecipeSection3For,
     loadingRecipeSection4For,
+    generateRecipeCard,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [recipeDirections, setRecipeDirections] = useAtom(recipeDirectionsAtom);
@@ -161,6 +228,49 @@ export const DirectionSection = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [heroRecipeId, setHeroRecipeId] = useState<string | null>(null);
   const [heroDirectionTitle, setHeroDirectionTitle] = useState<string | null>(null);
+  // Track cards currently doing the reveal animation (just finished loading)
+  const [revealingIds, setRevealingIds] = useState<Set<string>>(new Set());
+  const prevLoadingIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const currentlyLoading = new Set(recipeDirections.filter((r) => r.loading).map((r) => r.id));
+    const justFinished = [...prevLoadingIds.current].filter((id) => !currentlyLoading.has(id));
+    if (justFinished.length > 0) {
+      setRevealingIds((prev) => { const next = new Set(prev); justFinished.forEach((id) => next.add(id)); return next; });
+      // Remove from revealing set after reveal animation completes (~2.5s)
+      setTimeout(() => {
+        setRevealingIds((prev) => { const next = new Set(prev); justFinished.forEach((id) => next.delete(id)); return next; });
+      }, 2500);
+    }
+    prevLoadingIds.current = currentlyLoading;
+  }, [recipeDirections]);
+
+  // When the user arrives from the Execution Hub onboarding ("Check Founder &
+  // Market Fit"), auto-generate a direction card once the profile is eligible.
+  const searchParams = useSearchParams();
+  const nextRouter = useNextRouter();
+  const autoGenRef = useRef(false);
+  useEffect(() => {
+    if (autoGenRef.current) return;
+    const urlFlagged = searchParams.get("autoGenerate") === "1";
+    let storageFlagged = false;
+    try { storageFlagged = sessionStorage.getItem("autoGenerateDirection") === "1"; } catch { /* ignore */ }
+    if (!urlFlagged && !storageFlagged) return;
+    if (!eligibility?.eligible || isGeneratingMore) return;
+    autoGenRef.current = true;
+    // Strip the param from the URL so a page refresh doesn't re-trigger generation
+    if (urlFlagged) nextRouter.replace("/direction", { scroll: false });
+    try { sessionStorage.removeItem("autoGenerateDirection"); } catch { /* ignore */ }
+
+    let concept = "";
+    try { concept = sessionStorage.getItem("onboardConcept") ?? ""; } catch { /* ignore */ }
+    try { sessionStorage.removeItem("onboardConcept"); } catch { /* ignore */ }
+
+    if (concept) {
+      generateRecipeCard(concept);
+    } else {
+      generateMore();
+    }
+  }, [eligibility, isGeneratingMore, generateMore, generateRecipeCard, searchParams, nextRouter]);
 
   // Promote a newly added recipe card to hero and auto-expand it
   useEffect(() => {
@@ -186,6 +296,14 @@ export const DirectionSection = () => {
     } catch { return []; }
   });
 
+  // Permanently deleted card IDs (primary/alt DNA cards that can't be removed from atom)
+  const [deletedIds, setDeletedIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("deletedDirectionIds");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+
   const hideCard = (id: string) => {
     setHiddenIds((prev) => {
       const updated = [...prev, id];
@@ -196,6 +314,30 @@ export const DirectionSection = () => {
   };
 
   const showCard = (id: string) => {
+    setHiddenIds((prev) => {
+      const updated = prev.filter((h) => h !== id);
+      try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // Auto-expand the restored card so users see it immediately
+    setExpandedId(id);
+  };
+
+  const removeCard = (id: string) => {
+    // For recipe cards: remove from atom + localStorage
+    setRecipeDirections((prev) => {
+      const updated = prev.filter((r) => r.id !== id);
+      try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // For all cards: add to permanently deleted list so they never show again
+    setDeletedIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
+      try { localStorage.setItem("deletedDirectionIds", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    // Also remove from hiddenIds to keep that list clean
     setHiddenIds((prev) => {
       const updated = prev.filter((h) => h !== id);
       try { localStorage.setItem("hiddenDirectionIds", JSON.stringify(updated)); } catch {}
@@ -214,8 +356,8 @@ export const DirectionSection = () => {
         )}
         <div className="flex flex-col gap-4">
           <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </div>
       </div>
     </div>
@@ -245,9 +387,9 @@ export const DirectionSection = () => {
   // ── New structured cards path ─────────────────────────────────────────────
   if (primaryCard) {
     const heroPrimaryId = `__primary__`;
-    const primaryHidden = hiddenIds.includes(heroPrimaryId);
-    const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title));
-    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+    const primaryHidden = hiddenIds.includes(heroPrimaryId) || deletedIds.includes(heroPrimaryId);
+    const visibleAltCards = altCards.filter((c) => !hiddenIds.includes(c.title) && !deletedIds.includes(c.title));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id));
 
     // Newest button-generated alt card gets promoted to hero slot
     const heroDirectionAlt = heroDirectionTitle && heroDirectionTitle !== primaryCard.title
@@ -265,9 +407,9 @@ export const DirectionSection = () => {
     const gridRecipes = visibleRecipes.filter((rd) => rd.id !== promotedRecipe?.id && rd.id !== heroRecipe?.id);
 
     const allHidden = [
-      ...(primaryHidden ? [{ id: heroPrimaryId, title: primaryCard.title }] : []),
-      ...altCards.filter((c) => hiddenIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title })),
-      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
+      ...(hiddenIds.includes(heroPrimaryId) && !deletedIds.includes(heroPrimaryId) ? [{ id: heroPrimaryId, title: primaryCard.title }] : []),
+      ...altCards.filter((c) => hiddenIds.includes(c.title) && !deletedIds.includes(c.title)).map((c) => ({ id: c.title, title: c.title })),
+      ...recipeDirections.filter((rd) => hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
     ];
 
     const hasOtherDirections = gridAltCards.length > 0 || gridRecipes.length > 0;
@@ -451,7 +593,19 @@ export const DirectionSection = () => {
                       isLoadingSection4={loadingSection4For === card.title}
                     />
                   ))}
-                  {gridOnlyRecipes.map((rd) => (
+                  {gridOnlyRecipes.map((rd) => (rd.loading || revealingIds.has(rd.id)) ? (
+                    <RecipeSkeletonCard
+                      key={rd.id}
+                      concept={rd.concept}
+                      revealData={revealingIds.has(rd.id) ? {
+                        title: rd.title,
+                        description: rd.description,
+                        whyFitsYou: rd.whyFitsYou,
+                        keyRisks: rd.keyRisks,
+                        score: rd.score,
+                      } : undefined}
+                    />
+                  ) : (
                     <DirectionCard
                       key={rd.id}
                       variant="standard"
@@ -480,13 +634,13 @@ export const DirectionSection = () => {
           );
         })()}
 
-        {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} />}
+        {allHidden.length > 0 && <HiddenCardsPills hiddenIds={hiddenIds} allCards={allHidden} onShow={showCard} onDelete={removeCard} />}
 
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
         <section className="space-y-3">
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </section>
       </div>
     );
@@ -494,9 +648,9 @@ export const DirectionSection = () => {
 
   // ── Legacy streamed text path ──────────────────────────────────────────────
   if (directionText) {
-    const heroHidden = hiddenIds.includes("__hero__");
-    const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model));
-    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id));
+    const heroHidden = hiddenIds.includes("__hero__") || deletedIds.includes("__hero__");
+    const visibleAlts = otherDirections.filter((a) => !hiddenIds.includes(a.model) && !deletedIds.includes(a.model));
+    const visibleRecipes = recipeDirections.filter((rd) => !hiddenIds.includes(rd.id) && !deletedIds.includes(rd.id));
     const legacyHeroRecipe = heroRecipeId ? visibleRecipes.find((rd) => rd.id === heroRecipeId) ?? null : null;
     // Pick the first visible card to promote when hero is hidden (native alts first, then recipes)
     const promotedAltModel: string | null = !legacyHeroRecipe && heroHidden && visibleAlts.length > 0 ? visibleAlts[0].model : null;
@@ -624,18 +778,18 @@ export const DirectionSection = () => {
               ))}
             </div>
             <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
-              { id: "__hero__", title: model || "Your Direction" },
-              ...otherDirections.map((a) => ({ id: a.model, title: a.model })),
-              ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
-            ]} onShow={showCard} />
+              ...(!deletedIds.includes("__hero__") ? [{ id: "__hero__", title: model || "Your Direction" }] : []),
+              ...otherDirections.filter((a) => !deletedIds.includes(a.model)).map((a) => ({ id: a.model, title: a.model })),
+              ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
+            ]} onShow={showCard} onDelete={removeCard} />
           </section>
         )}
 
         <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
         <section className="space-y-3">
-          <MarketIntelligenceCard />
-          <ProblemToSolveCard />
+          <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+          <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
         </section>
       </div>
     );
@@ -808,17 +962,17 @@ export const DirectionSection = () => {
           ))}
         </div>
         <HiddenCardsPills hiddenIds={hiddenIds} allCards={[
-          ...(bestPickIdea ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
-          ...otherIdeas.map((i) => ({ id: i.name, title: i.name })),
-          ...recipeDirections.map((rd) => ({ id: rd.id, title: rd.title })),
-        ]} onShow={showCard} />
+          ...(bestPickIdea && !deletedIds.includes(bestPickIdea.name) ? [{ id: bestPickIdea.name, title: bestPickIdea.name }] : []),
+          ...otherIdeas.filter((i) => !deletedIds.includes(i.name)).map((i) => ({ id: i.name, title: i.name })),
+          ...recipeDirections.filter((rd) => !deletedIds.includes(rd.id)).map((rd) => ({ id: rd.id, title: rd.title })),
+        ]} onShow={showCard} onDelete={removeCard} />
       </section>
 
       <ResourcesConstraintsForm generateMore={generateMore} isGeneratingMore={isGeneratingMore} canGenerateMore={canGenerateMore} directionCardsCount={directionCardsCount} />
 
       <section className="space-y-3">
-        <MarketIntelligenceCard />
-        <ProblemToSolveCard />
+        <MarketIntelligenceCard onGenerateDirection={generateRecipeCard} />
+        <ProblemToSolveCard onGenerateDirection={generateRecipeCard} />
       </section>
     </div>
   );

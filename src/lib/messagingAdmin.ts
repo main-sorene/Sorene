@@ -96,3 +96,26 @@ export async function updateExecutionProgress(uid: string, patch: Partial<Execut
   }
   await getDb().collection("users").doc(uid).set(update, { merge: true });
 }
+
+// WhatsApp credits — 1 credit per message exchange.
+// Stored as `whatsappCredits` on the user doc.
+// New users receive FREE_CREDITS automatically on first use.
+const FREE_CREDITS = 10;
+
+export async function getWhatsAppCredits(uid: string): Promise<number> {
+  const snap = await getDb().collection("users").doc(uid).get();
+  const data = snap.data();
+  if (!data) return 0;
+  if (typeof data.whatsappCredits === "number") return data.whatsappCredits;
+  await getDb().collection("users").doc(uid).set({ whatsappCredits: FREE_CREDITS }, { merge: true });
+  return FREE_CREDITS;
+}
+
+export async function deductWhatsAppCredit(uid: string): Promise<void> {
+  const ref = getDb().collection("users").doc(uid);
+  await getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const current = (snap.data()?.whatsappCredits as number) ?? 0;
+    tx.set(ref, { whatsappCredits: Math.max(0, current - 1) }, { merge: true });
+  });
+}

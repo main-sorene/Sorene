@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
 import type { ProblemScanReport, ProblemScanStatus } from "@/types/problemScan";
+import { friendlyApiError } from "@/lib/apiError";
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -71,8 +72,18 @@ export function useProblemScan() {
     if (cached) {
       setReport(cached);
       setStatus("complete");
+      return;
     }
-  }, [user?.uid]);
+    // No localStorage cache — try Firestore
+    getUserProfile(user.uid).then((profile) => {
+      if (profile?.problemScanReport) {
+        const report = profile.problemScanReport as ProblemScanReport;
+        saveToCache(user!.uid, report);
+        setReport(report);
+        setStatus("complete");
+      }
+    }).catch(() => {});
+  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasProfile = !!(profile?.dnaAssessmentComplete || profile?.dnaScores);
   const canGenerate = !!user?.uid && hasProfile && status !== "loading";
@@ -108,14 +119,16 @@ export function useProblemScan() {
       clearInterval(stepInterval);
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? "Generation failed");
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(friendlyApiError((errBody as { error?: string }).error ?? "Generation failed"));
       }
 
       const data = await res.json() as { report: ProblemScanReport };
       saveToCache(user.uid, data.report);
       setReport(data.report);
       setStatus("complete");
+      // Persist to Firestore so it survives browser data clears and cross-device
+      saveUserProfile(user.uid, { problemScanReport: data.report as unknown as Record<string, unknown>, problemScanReportGeneratedAt: new Date().toISOString() }).catch(() => {});
     } catch (err) {
       clearInterval(stepInterval);
       setErrorMessage(err instanceof Error ? err.message : "Something went wrong");

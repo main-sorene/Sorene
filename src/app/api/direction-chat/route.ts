@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const FULL_CARD_FORMAT = `
 **Direction: [specific business name, max 10 words]**
@@ -156,6 +157,8 @@ IKIGAI: Ensure the final direction card addresses all four Ikigai circles.
 Start now with turn 1.`,
 };
 
+export const maxDuration = 60;
+
 let _client: Anthropic | null = null;
 function getClient() {
   if (!_client) {
@@ -166,11 +169,22 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
   try {
-    const user = await verifyAuth(req);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const creditCheck = await checkCredits(userKey);
+    if (!creditCheck.ok) {
+      return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
     }
+  } catch (err) {
+    console.error("[direction-chat] credit check failed, allowing through:", err);
+  }
+
+  try {
 
     const { message, directionContext, recipeId, history, userProfile } = (await req.json()) as {
       message: string;
@@ -393,19 +407,37 @@ Sorene Direction Engine v1.1`;
       messages = [{ role: "user" as const, content: message }];
     }
 
-    const msg = await getClient().messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
+    // Use Haiku for recipe turns (short conversational turns); Sonnet for full direction generation
+    const isRecipeTurn = !!recipeId || !!history?.length;
+    const selectedModel = isRecipeTurn ? "claude-haiku-4-5-20251001" : "claude-sonnet-4-6";
+    const maxTokens = isRecipeTurn ? 1024 : 4096;
+
+    const anthropicStream = await getClient().messages.stream({
+      model: selectedModel,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages,
     });
 
-    const block = msg.content[0];
-    const reply = block && block.type === "text" ? block.text.trim() : "Sorry, I couldn't respond. Try again.";
+    const readable = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        for await (const chunk of anthropicStream) {
+          if (chunk.type === "content_block_delta" && chunk.delta.type === "text_delta") {
+            controller.enqueue(encoder.encode(chunk.delta.text));
+          }
+        }
+        const final = await anthropicStream.finalMessage();
+        await deductCredits(userKey, calculateCredits(selectedModel, final.usage.input_tokens, final.usage.output_tokens));
+        controller.close();
+      },
+    });
 
-    return NextResponse.json({ reply });
+    return new Response(readable, {
+      headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" },
+    });
   } catch (error) {
     console.error("[direction-chat] error:", error);
-    return NextResponse.json({ reply: "Sorry, I had trouble with that. Please try again." }, { status: 500 });
+    return Response.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

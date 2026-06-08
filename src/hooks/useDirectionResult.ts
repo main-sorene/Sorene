@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, recipeDirectionsAtom, type RecipeDirection } from "@/store/atoms";
+import { userAtom, recipeDirectionsAtom, resourcesConstraintsAtom, newRecipeCardIdAtom, type RecipeDirection } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
+import { friendlyApiError } from "@/lib/apiError";
 import { useQuery } from "@tanstack/react-query";
 import type { DirectionCardData } from "@/lib/directionTypes";
 import type { StructuralModel } from "@/lib/dnaEngine";
+
 
 export type DirectionAlternative = {
   model: string;
@@ -34,6 +36,8 @@ export function useDirectionResult() {
   // Recipe (brainstorm/check-my-idea) cards — shared via jotai so DirectionChat
   // and DirectionSection see the same list and lazy-load the same staged data.
   const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const setResourcesConstraints = useSetAtom(resourcesConstraintsAtom);
+  const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
   const [generatingRecipe, setGeneratingRecipe] = useState(false);
   const [loadingRecipeDetailFor, setLoadingRecipeDetailFor] = useState<string | null>(null);
   const [loadingRecipeSection3For, setLoadingRecipeSection3For] = useState<string | null>(null);
@@ -54,15 +58,23 @@ export function useDirectionResult() {
       setAlternatives(profile.directionAlternatives);
     }
 
+    // If Firestore has R&C but localStorage doesn't, sync it to localStorage + atom + intent flag.
+    // This covers users who filled the form on one device and visit on another.
+    const firestoreHasRC = !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+    if (firestoreHasRC && !localStorage.getItem("resourcesConstraints")) {
+      try {
+        localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints));
+        localStorage.setItem("rcGenerationRequested", "true");
+      } catch {}
+      setResourcesConstraints(profile.resourcesConstraints as unknown as Parameters<typeof setResourcesConstraints>[0]);
+    }
+
     // New path: structured direction cards
     // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
     const cachedCards = profile.directionCards;
-    const cardsAreUpToDate = cachedCards && cachedCards.length > 0 &&
-      ((cachedCards[0].title && cachedCards[0].constraint_check) ||
-       (cachedCards[0].why_fits_you && (cachedCards[0].ikigai_filters || cachedCards[0].four_filters)));
-    if (cardsAreUpToDate) {
-      // Show existing direction cards regardless of R&C status.
-      // The R&C card appears below direction cards in the layout, so users can fill it any time.
+    // Any non-empty cards array = show them. Old format cards (missing constraint_check
+    // or ikigai_filters) are still valid — no need to force regeneration.
+    if (cachedCards && cachedCards.length > 0 && cachedCards[0].title) {
       setDirectionCards(cachedCards);
       setHasStreamed(true);
       return;
@@ -129,8 +141,9 @@ export function useDirectionResult() {
         });
 
         if (!res1.ok) {
-          const detail = await res1.text().catch(() => "");
-          setGenerateError(`Generation failed (${res1.status}). ${detail || "Please try again."}`);
+          let errMsg = "Please try again.";
+          try { const j = await res1.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res1.text()); } catch {} }
+          setGenerateError(errMsg);
           // Clear the intent so the user lands back on the form, not a dead spinner
           try { localStorage.removeItem("rcGenerationRequested"); } catch {}
           setNeedsRC(true);
@@ -239,18 +252,32 @@ export function useDirectionResult() {
     const base = buildRecipeBasePayload();
     if (!base) return null;
     setGeneratingRecipe(true);
+    // Show a skeleton placeholder immediately so users see instant feedback
+    const placeholderId = `recipe-skeleton-${Date.now()}`;
+    persistRecipes((prev) => [...prev, {
+      id: placeholderId, title: concept?.split(":")[0]?.trim() ?? "Building your direction…",
+      description: "", whyFitsYou: [], keyRisks: [], firstStep: "", score: 0,
+      concept, loading: true,
+    }]);
+    setNewRecipeCardId(placeholderId);
     try {
       const res = await authFetch("/api/direction-cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...base, cardIndex: 0, phase: 1, concept }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
       const data = (await res.json()) as { cards?: DirectionCardData[] };
       const card = data.cards?.[0];
-      if (!card) return null;
+      if (!card) {
+        persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
       const recipe: RecipeDirection = {
-        id: `recipe-${Date.now()}`,
+        id: placeholderId,
         title: card.title,
         description: card.description,
         whyFitsYou: card.why_fits_you ?? [],
@@ -259,11 +286,15 @@ export function useDirectionResult() {
         score: card.compatibility ?? 85,
         cardData: card,
         concept,
+        loading: false,
       };
-      persistRecipes((prev) => [...prev, recipe]);
+      // Replace skeleton in-place
+      persistRecipes((prev) => prev.map((r) => r.id === placeholderId ? recipe : r));
+      setNewRecipeCardId(recipe.id);
       return recipe;
     } catch (err) {
       console.error("[generateRecipeCard] failed:", err);
+      persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
       return null;
     } finally {
       setGeneratingRecipe(false);
@@ -346,8 +377,9 @@ export function useDirectionResult() {
         body: JSON.stringify({ ...basePayload, phase: 1 }),
       });
       if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        setGenerateError(`Generation failed (${res.status}). ${detail || "Please try again."}`);
+        let errMsg = "Please try again.";
+        try { const j = await res.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res.text()); } catch {} }
+        setGenerateError(errMsg);
         return;
       }
       const data = (await res.json()) as { cards?: DirectionCardData[] };
@@ -515,13 +547,16 @@ export function useDirectionResult() {
     .slice(0, 2);
 
   // Show button whenever R&C is filled (no hard cap — user can always generate more)
+  // Fall back to Firestore copy for cross-device support
   const hasRCFilled = (() => {
     try {
       const stored = localStorage.getItem("resourcesConstraints");
-      if (!stored) return false;
-      const rc = JSON.parse(stored);
-      return Object.values(rc).some((v) => String(v ?? "").trim() !== "");
-    } catch { return false; }
+      if (stored) {
+        const rc = JSON.parse(stored);
+        if (Object.values(rc).some((v) => String(v ?? "").trim() !== "")) return true;
+      }
+    } catch {}
+    return !!(profile?.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
   })();
   const canGenerateMore = hasRCFilled;
 

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, getPriceId } from "@/lib/stripe";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
-import { getApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAdminAuth, getAdminFirestore, verifyAuth } from "@/lib/firebaseAdmin";
 
 function getDb() {
-  return getFirestore(getApps().length ? getApp() : undefined!);
+  return getAdminFirestore();
 }
 
 export async function POST(req: NextRequest) {
@@ -20,10 +18,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Cannot checkout free plan" }, { status: 400 });
     }
 
-    getAdminAuth(); // ensures firebase admin is initialised
+    const authedUser = await verifyAuth(req);
+    if (!authedUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Use the verified token identity as the canonical key — email param may
+    // not match if the token's email claim is empty for some auth providers.
+    const userKey = authedUser.uid;
+
+    getAdminAuth();
 
     const db = getDb();
-    const userDoc = await db.collection("users").doc(email).get();
+    const userDoc = await db.collection("users").doc(userKey).get();
     const userData = userDoc.data() || {};
 
     // Reuse existing Stripe customer if available
@@ -31,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (!customerId) {
       const customer = await getStripe().customers.create({ email });
       customerId = customer.id;
-      await db.collection("users").doc(email).set({ stripeCustomerId: customerId }, { merge: true });
+      await db.collection("users").doc(userKey).set({ stripeCustomerId: customerId }, { merge: true });
     }
 
     const priceId = getPriceId(plan, duration);
@@ -40,10 +47,11 @@ export async function POST(req: NextRequest) {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: true,
       success_url,
       cancel_url,
-      metadata: { email, plan, duration: String(duration) },
-      subscription_data: { metadata: { email, plan, duration: String(duration) } },
+      metadata: { email: userKey, plan, duration: String(duration) },
+      subscription_data: { metadata: { email: userKey, plan, duration: String(duration) } },
     });
 
     return NextResponse.json({ session_id: session.id, url: session.url });

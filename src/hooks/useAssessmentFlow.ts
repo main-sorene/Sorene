@@ -272,11 +272,15 @@ export function useAssessmentFlow() {
       });
 
       try {
-        const buf = await file.arrayBuffer();
-        let binary = "";
-        const bytes = new Uint8Array(buf);
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const fileBase64 = btoa(binary);
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve(dataUrl.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
         const res = await authFetch("/api/cv-summary", {
           method: "POST",
@@ -287,11 +291,48 @@ export function useAssessmentFlow() {
         let summary = "";
         let cvFirstName = firstName;
         let cvLastName = (authUser?.profile as any)?.lastName || "";
-        if (res.ok) {
-          const data = await res.json();
-          summary = (data?.summary || "").trim();
-          if (data?.firstName) cvFirstName = data.firstName;
-          if (data?.lastName !== undefined) cvLastName = data.lastName;
+
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let namesParsed = false;
+          let summaryBuffer = "";
+          const streamMsgId = `cv-context-stream-${Date.now()}`;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            if (!namesParsed) {
+              const newlineIdx = buffer.indexOf("\n");
+              if (newlineIdx !== -1) {
+                const firstLine = buffer.slice(0, newlineIdx);
+                buffer = buffer.slice(newlineIdx + 1);
+                namesParsed = true;
+                if (firstLine.startsWith("NAMES:")) {
+                  const parts = firstLine.slice(6).split("|");
+                  if (parts[0]?.trim()) cvFirstName = parts[0].trim();
+                  if (parts[1] !== undefined) cvLastName = parts[1].trim();
+                }
+                // Remaining buffer is start of summary — prefix with context intro
+                const prefix = "To do that well, I'd like to start with some context about your background and experience.\n\n";
+                summaryBuffer = prefix + buffer;
+                buffer = "";
+                addMessage({ id: streamMsgId, role: "assistant", content: summaryBuffer });
+              }
+            } else {
+              summaryBuffer += buffer;
+              buffer = "";
+              // Update the streaming message in place
+              setMessages((prev) =>
+                prev.map((m) => m.id === streamMsgId ? { ...m, content: summaryBuffer } : m)
+              );
+            }
+          }
+          const prefix = "To do that well, I'd like to start with some context about your background and experience.\n\n";
+          summary = summaryBuffer.startsWith(prefix) ? summaryBuffer.slice(prefix.length).trim() : summaryBuffer.trim();
         }
 
         const cvDataPayload = {
@@ -324,14 +365,7 @@ export function useAssessmentFlow() {
         pendingProfileRef.current.firstName = cvFirstName;
         pendingProfileRef.current.lastName = cvLastName;
 
-        // Show CV context (if we got a summary) + first energy question
-        if (summary) {
-          addMessage({
-            id: `cv-context-${Date.now()}`,
-            role: "assistant",
-            content: CV_CONTEXT_MESSAGE(summary),
-          });
-        }
+        // CV context was already streamed into chat progressively — no addMessage needed
         // After CV upload, confirm the full name we got from the CV
         const ctx: AssessmentContext = { profile: { firstName: cvFirstName, lastName: cvLastName }, answers: {}, hasCv: true };
         const confirmNode = getNode("onb_confirm_name")!;

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
-import { userAtom, isSettingsOpenAtom } from "@/store/atoms";
+import { userAtom, isSettingsOpenAtom, isCreditsExhaustedOpenAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
+import { useIsCreditsExhausted } from "@/hooks/useIsCreditsExhausted";
 import { Plus, X, ArrowUp, Loader2, Mic, Square } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDnaEdit } from "@/hooks/useDnaEdit";
@@ -42,6 +43,8 @@ function FormattedMessage({ content }: { content: string }) {
 export function DNAChat({ onClose }: { onClose?: () => void }) {
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
+  const creditsExhausted = useIsCreditsExhausted();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -237,49 +240,32 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Input Section */}
-      <div className="p-6 pt-0 shrink-0">
-        <div className="flex flex-col gap-3 p-4 rounded-3xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
-          {/* Suggestion chips — always visible, wrapped rows */}
-          <div className="flex flex-wrap gap-2">
+      <div className="px-3 pb-3 pt-0 shrink-0">
+        <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#F3F4F6] bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] focus-within:shadow-[0_10px_40px_rgb(0,0,0,0.07)] focus-within:border-[#E5E7EB] transition-all duration-200">
+          {/* Suggestion chips — 2-column grid */}
+          <div className="grid grid-cols-2 gap-1.5">
             {DNA_SUGGESTIONS.map((label) => (
               <button
                 key={label}
-                onClick={() => sendMessage(label)}
+                onClick={() => creditsExhausted ? setCreditsExhaustedOpen(true) : sendMessage(label)}
                 disabled={isProcessing}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-xs font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all whitespace-nowrap disabled:opacity-50"
+                className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50"
               >
-                <img src="/figmaAssets/starfour.svg" className="w-3 h-3 shrink-0" alt="" />
-                {label}
+                <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5 shrink-0" alt="" />
+                <span className="truncate">{label}</span>
               </button>
             ))}
           </div>
 
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything"
-            rows={1}
-            disabled={isProcessing}
-            className="w-full resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-36 overflow-y-auto disabled:opacity-50"
-            onInput={(e) => {
-              const el = e.currentTarget;
-              el.style.height = "auto";
-              el.style.height = `${el.scrollHeight}px`;
-            }}
-          />
-
-          {/* Bottom row: plus + icons + send */}
-          <div className="flex items-center justify-between">
+          {/* Textarea + actions inline */}
+          <div className="flex items-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploadingFile || isProcessing}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#111111] disabled:opacity-50"
+              className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-[#111111] disabled:opacity-50"
               title="Attach file (PDF or image)"
             >
-              {isUploadingFile ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+              {isUploadingFile ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
             </button>
             <input
               ref={fileInputRef}
@@ -288,26 +274,42 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }}
             />
-            <div className="flex items-center gap-1">
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => !creditsExhausted && setInputValue(e.target.value)}
+              onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : undefined}
+              onKeyDown={creditsExhausted ? (e) => { e.preventDefault(); setCreditsExhaustedOpen(true); } : handleKeyDown}
+              placeholder={creditsExhausted ? "Upgrade to keep chatting" : "Ask anything"}
+              rows={1}
+              disabled={isProcessing}
+              className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+            />
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={handleMicClick}
                 disabled={isProcessing}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${isRecording ? "bg-red-100 text-red-500 hover:bg-red-200" : "hover:bg-gray-100 text-[#111111]"} disabled:opacity-50`}
+                className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${isRecording ? "bg-red-100 text-red-500 hover:bg-red-200" : "hover:bg-gray-100 text-[#111111]"} disabled:opacity-50`}
                 title={isRecording ? "Stop recording" : "Record voice"}
               >
-                {isRecording ? <Square size={14} className="fill-current" /> : <Mic size={16} />}
+                {isRecording ? <Square size={12} className="fill-current" /> : <Mic size={14} />}
               </button>
               <button
-                onClick={handleSend}
+                onClick={creditsExhausted ? () => setCreditsExhaustedOpen(true) : handleSend}
                 disabled={!inputValue.trim() || isProcessing}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-black text-white hover:bg-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <ArrowUp size={16} />
+                <ArrowUp size={14} />
               </button>
             </div>
           </div>
         </div>
-        <p className="text-center text-xs text-[#9CA3AF] mt-3">
+        <p className="text-center text-[11px] sm:text-[12px] text-[#9CA3AF] mt-2">
           <a
             href="https://sorene.ai/responsible-ai"
             target="_blank"

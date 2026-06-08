@@ -8667,8 +8667,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         frozenAt: slotOverrides[d.id] ?? scheduleSlots[i] ?? now,
         editing: false,
       }));
-      // Clear saved drafts from Firestore immediately
-      authFetch("/api/threads/drafts", { method: "DELETE" }).catch(() => {});
+      // Auto-save will persist the frozen drafts + ctaLink + userNotes
       setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
     } catch { /* ignore */ }
     setApprovingAll(false);

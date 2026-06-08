@@ -8191,6 +8191,8 @@ interface ScheduledPost { id: string; text: string; scheduledAt: number; status:
 interface Competitor { username: string; addedAt: number; lastAnalyzedAt?: number; postCount?: number; insights?: string; }
 interface XDraft { id: string; text: string; editing: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; scheduledId?: string; }
 interface XScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
+interface WatchedSubreddit { name: string; addedBy: "user" | "sorene"; addedAt: number; approved?: boolean; reason?: string; }
+interface RedditOpportunity { id: string; subreddit: string; threadId: string; title: string; url: string; score: number; commentCount: number; createdAt: number; relevanceScore: number; draftReply: string; dismissed?: boolean; posted?: boolean; }
 
 function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
@@ -8253,6 +8255,22 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [xHelpLoading, setXHelpLoading] = useState(false);
   const [xSetupStep, setXSetupStep] = useState<"instructions" | "keys">("instructions");
 
+  // ── Reddit channel state ──
+  const [redditStatus, setRedditStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+  const [redditUsername, setRedditUsername] = useState("");
+  const [redditKarma, setRedditKarma] = useState(0);
+  const [watchedSubreddits, setWatchedSubreddits] = useState<WatchedSubreddit[]>([]);
+  const [redditKeywords, setRedditKeywords] = useState<string[]>([]);
+  const [redditOpportunities, setRedditOpportunities] = useState<RedditOpportunity[]>([]);
+  const [subInput, setSubInput] = useState("");
+  const [kwInput, setKwInput] = useState("");
+  const [suggestedSubs, setSuggestedSubs] = useState<{ name: string; reason: string }[]>([]);
+  const [suggestingReddit, setSuggestingReddit] = useState(false);
+  const [savingWatchlist, setSavingWatchlist] = useState(false);
+  const [scanningOpportunities, setScanningOpportunities] = useState(false);
+  const [redditSuccessMsg, setRedditSuccessMsg] = useState("");
+  const [redditTipsOpen, setRedditTipsOpen] = useState(false);
+
   // Best posting times (local HH:MM strings) — up to 3 slots
   const bestTimes: string[] = dna?.bestHours?.slice(0, 3).map((utcH) => {
     const d = new Date();
@@ -8295,13 +8313,16 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
-    const [accountRes, scheduleRes, draftsRes, competitorsRes, xRes, xScheduleRes] = await Promise.all([
+    const [accountRes, scheduleRes, draftsRes, competitorsRes, xRes, xScheduleRes, redditRes, redditWatchlistRes, redditOppRes] = await Promise.all([
       authFetch("/api/threads/account"),
       authFetch("/api/threads/schedule"),
       authFetch("/api/threads/drafts"),
       authFetch("/api/threads/competitors"),
       authFetch("/api/x/keys"),
       authFetch("/api/x/schedule"),
+      authFetch("/api/reddit/account"),
+      authFetch("/api/reddit/watchlist"),
+      authFetch("/api/reddit/opportunities"),
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
@@ -8338,6 +8359,20 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     if (xScheduleRes.ok) {
       const data = await xScheduleRes.json() as { posts: XScheduledPost[] };
       setXScheduled(data.posts ?? []);
+    }
+    if (redditRes.ok) {
+      const data = await redditRes.json() as { connected: boolean; username?: string; karma?: number };
+      if (data.connected) { setRedditStatus("connected"); setRedditUsername(data.username ?? ""); setRedditKarma(data.karma ?? 0); }
+      else setRedditStatus("disconnected");
+    } else { setRedditStatus("disconnected"); }
+    if (redditWatchlistRes.ok) {
+      const data = await redditWatchlistRes.json() as { watchlist: { subreddits: WatchedSubreddit[]; keywords: string[] } };
+      setWatchedSubreddits(data.watchlist?.subreddits ?? []);
+      setRedditKeywords(data.watchlist?.keywords ?? []);
+    }
+    if (redditOppRes.ok) {
+      const data = await redditOppRes.json() as { opportunities: RedditOpportunity[] };
+      setRedditOpportunities(data.opportunities ?? []);
     }
     setDraftsLoaded(true);
   };
@@ -8377,6 +8412,23 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     if (params.get("threads_error") === "1") {
       setAccountStatus("disconnected");
       window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
+    }
+    if (params.get("reddit_connected") === "1") {
+      setRedditStatus("connected");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reddit_connected");
+      window.history.replaceState({}, "", url.toString());
+      import("@/lib/authFetch").then(({ authFetch }) =>
+        authFetch("/api/reddit/account").then((r) => r.json()).then((data: { connected: boolean; username?: string; karma?: number }) => {
+          if (data.connected) { setRedditUsername(data.username ?? ""); setRedditKarma(data.karma ?? 0); }
+        })
+      ).catch(() => {});
+    }
+    if (params.get("reddit_error") === "1") {
+      setRedditStatus("disconnected");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reddit_error");
+      window.history.replaceState({}, "", url.toString());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -8637,6 +8689,142 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       setXHelpMessages([...newMessages, { role: "assistant", content: data.reply }]);
     } catch { /* ignore */ }
     setXHelpLoading(false);
+  };
+
+  // ── Reddit functions ──
+  const saveWatchlist = async (subs?: WatchedSubreddit[], kws?: string[]) => {
+    setSavingWatchlist(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/reddit/watchlist", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subreddits: subs ?? watchedSubreddits, keywords: kws ?? redditKeywords }),
+      });
+    } catch { /* ignore */ }
+    setSavingWatchlist(false);
+  };
+
+  const addSubreddit = () => {
+    const name = subInput.trim().replace(/^r\//, "");
+    if (!name || watchedSubreddits.some((s) => s.name.toLowerCase() === name.toLowerCase())) return;
+    const next = [...watchedSubreddits, { name, addedBy: "user" as const, addedAt: Date.now() }];
+    setWatchedSubreddits(next);
+    setSubInput("");
+    saveWatchlist(next, undefined);
+  };
+
+  const removeSubreddit = (name: string) => {
+    const next = watchedSubreddits.filter((s) => s.name !== name);
+    setWatchedSubreddits(next);
+    saveWatchlist(next, undefined);
+  };
+
+  const approveSubreddit = (name: string) => {
+    const next = watchedSubreddits.map((s) => s.name === name ? { ...s, approved: true } : s);
+    setWatchedSubreddits(next);
+    saveWatchlist(next, undefined);
+  };
+
+  const addKeyword = () => {
+    const kw = kwInput.trim();
+    if (!kw || redditKeywords.includes(kw)) return;
+    const next = [...redditKeywords, kw];
+    setRedditKeywords(next);
+    setKwInput("");
+    saveWatchlist(undefined, next);
+  };
+
+  const removeKeyword = (kw: string) => {
+    const next = redditKeywords.filter((k) => k !== kw);
+    setRedditKeywords(next);
+    saveWatchlist(undefined, next);
+  };
+
+  const suggestSubreddits = async () => {
+    setSuggestingReddit(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const projectData = (await authFetch("/api/user").then((r) => r.json()).catch(() => ({}))) as { project?: { oneliner?: string; description?: string } };
+      const productContext = projectData?.project?.oneliner ?? projectData?.project?.description ?? "";
+      if (!productContext) { setSuggestingReddit(false); return; }
+      const res = await authFetch("/api/reddit/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productContext }),
+      });
+      const data = await res.json() as { suggestions: { name: string; reason: string }[] };
+      const filtered = (data.suggestions ?? []).filter((s) => !watchedSubreddits.some((w) => w.name.toLowerCase() === s.name.toLowerCase()));
+      setSuggestedSubs(filtered);
+    } catch { /* ignore */ }
+    setSuggestingReddit(false);
+  };
+
+  const acceptSuggestedSub = (name: string, reason: string) => {
+    const next = [...watchedSubreddits, { name, addedBy: "sorene" as const, addedAt: Date.now(), approved: true, reason }];
+    setWatchedSubreddits(next);
+    setSuggestedSubs((prev) => prev.filter((s) => s.name !== name));
+    saveWatchlist(next, undefined);
+  };
+
+  const dismissSuggestedSub = (name: string) => setSuggestedSubs((prev) => prev.filter((s) => s.name !== name));
+
+  const scanOpportunities = async () => {
+    setScanningOpportunities(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/reddit/opportunities", { method: "POST" });
+      const data = await res.json() as { ok: boolean; found: number; opportunities: RedditOpportunity[]; error?: string };
+      if (data.ok) {
+        setRedditOpportunities((prev) => {
+          const existing = new Set(prev.map((o) => o.id));
+          return [...prev, ...data.opportunities.filter((o) => !existing.has(o.id))];
+        });
+        if (data.found > 0) setRedditSuccessMsg(`Found ${data.found} new opportunit${data.found === 1 ? "y" : "ies"}!`);
+        else setRedditSuccessMsg("No new threads found — try again later.");
+        setTimeout(() => setRedditSuccessMsg(""), 3000);
+      }
+    } catch { /* ignore */ }
+    setScanningOpportunities(false);
+  };
+
+  const dismissOpportunity = async (id: string) => {
+    setRedditOpportunities((prev) => prev.filter((o) => o.id !== id));
+    const { authFetch } = await import("@/lib/authFetch");
+    await authFetch("/api/reddit/opportunities", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "dismiss" }),
+    }).catch(() => {});
+  };
+
+  const postOpportunity = async (opp: RedditOpportunity) => {
+    setRedditOpportunities((prev) => prev.map((o) => o.id === opp.id ? { ...o, posted: true } : o));
+    const { authFetch } = await import("@/lib/authFetch");
+    await authFetch("/api/reddit/opportunities", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: opp.id, action: "post" }),
+    }).catch(() => {});
+  };
+
+  const updateOpportunityDraft = async (id: string, draftReply: string) => {
+    setRedditOpportunities((prev) => prev.map((o) => o.id === id ? { ...o, draftReply } : o));
+    const { authFetch } = await import("@/lib/authFetch");
+    await authFetch("/api/reddit/opportunities", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "update_draft", draftReply }),
+    }).catch(() => {});
+  };
+
+  const connectReddit = async () => {
+    const { authFetch } = await import("@/lib/authFetch");
+    const res = await authFetch("/api/reddit/auth");
+    if (res.ok) {
+      const data = await res.json() as { url: string };
+      if (data.url) window.location.href = data.url;
+    }
   };
 
   const connectThreads = async () => {
@@ -9664,7 +9852,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       </div>{/* end 2-col grid */}
 
       {/* ── Reddit channel ── */}
-      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="col-span-1 md:col-span-2 rounded-2xl border border-[#ECEDEE] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
           <button onClick={() => toggleChannel("reddit")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[#FF4500]">
@@ -9672,11 +9860,17 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             </div>
             <div>
               <p className="text-[13px] font-semibold text-[#151515]">Reddit</p>
-              <p className="text-[11px] text-[#9A9A9A]">Coming soon · subreddit posting</p>
+              <p className="text-[11px] text-[#9A9A9A]">
+                {redditStatus === "connected" ? `u/${redditUsername} · community engagement agent` : "Subreddit monitoring · reply drafting · community growth"}
+              </p>
             </div>
           </button>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Soon</span>
+            {redditStatus === "connected" && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E8FBF0] text-[#32C382] font-semibold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#32C382]" />Connected
+              </span>
+            )}
             <button onClick={() => toggleChannel("reddit")} className="text-[#9A9A9A] hover:text-[#151515] transition-colors ml-1">
               <ChevronDown size={14} className={cn("transition-transform", openChannels.has("reddit") && "rotate-180")} />
             </button>
@@ -9687,11 +9881,201 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
-              <div className="p-5">
-                <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-4 text-center space-y-2">
-                  <p className="text-[13px] font-semibold text-[#151515]">Reddit integration coming soon</p>
-                  <p className="text-[12px] text-[#9A9A9A] leading-relaxed">Post to subreddits, track engagement, and build community presence — all from Sorene.</p>
+              <div className="p-5 space-y-5">
+
+                {/* Reddit Tips (collapsible) */}
+                <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+                  <button onClick={() => setRedditTipsOpen((v) => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors text-left">
+                    <p className="text-[12px] font-semibold text-[#151515]">Reddit Tips — Do&apos;s &amp; Don&apos;ts</p>
+                    <ChevronDown size={13} className={cn("text-[#9A9A9A] transition-transform", redditTipsOpen && "rotate-180")} />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {redditTipsOpen && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                        className="overflow-hidden">
+                        <div className="px-4 pb-4 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-semibold text-[#32C382] uppercase tracking-wide mb-2">Do</p>
+                            {["Answer the question genuinely before mentioning your product", "Be a helpful community member first — build karma over time", "Mention your product only when it&apos;s directly relevant", "Disclose your affiliation when it makes sense (\"I built this\")", "Reply to comments on your replies — engagement matters", "Post in smaller, niche subreddits where you can add real value", "Read each subreddit&apos;s rules before posting anything"].map((tip) => (
+                              <p key={tip} className="text-[11px] text-[#62646A] leading-relaxed flex gap-1.5"><span className="text-[#32C382] shrink-0">✓</span>{tip.replace(/&apos;/g, "'")}</p>
+                            ))}
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-semibold text-[#DF2E16] uppercase tracking-wide mb-2">Don&apos;t</p>
+                            {["Drop links without context — auto-moderators will remove it", "Use the same reply template in multiple subreddits", "Post only self-promotional content — 9:1 rule (give:take)", "DM users to pitch your product after replying", "Create fake accounts or upvote rings", "Spam subreddits with frequent posts about your product", "Ignore subreddit rules — bans are hard to reverse"].map((tip) => (
+                              <p key={tip} className="text-[11px] text-[#62646A] leading-relaxed flex gap-1.5"><span className="text-[#DF2E16] shrink-0">✗</span>{tip.replace(/&apos;/g, "'")}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
+
+                {/* Connect Reddit */}
+                {redditStatus === "disconnected" && (
+                  <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] p-4 space-y-3">
+                    <p className="text-[13px] font-semibold text-[#151515]">Connect your Reddit account</p>
+                    <p className="text-[12px] text-[#9A9A9A] leading-relaxed">Sorene monitors subreddits for conversations where your product is relevant, drafts helpful replies, and lets you post with one click.</p>
+                    <button onClick={connectReddit}
+                      className="px-4 py-2.5 rounded-xl bg-[#FF4500] text-white text-[12px] font-semibold hover:opacity-90 transition-opacity">
+                      Connect Reddit
+                    </button>
+                  </div>
+                )}
+
+                {redditStatus === "loading" && (
+                  <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-[#9A9A9A]" /></div>
+                )}
+
+                {redditStatus === "connected" && (
+                  <div className="space-y-5">
+                    {/* Account info + disconnect */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#151515]">u/{redditUsername}</p>
+                        {redditKarma > 0 && <p className="text-[11px] text-[#9A9A9A]">{redditKarma.toLocaleString()} karma</p>}
+                      </div>
+                      <button onClick={async () => { const { authFetch } = await import("@/lib/authFetch"); await authFetch("/api/reddit/account", { method: "DELETE" }); setRedditStatus("disconnected"); setRedditUsername(""); setRedditKarma(0); }}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">Disconnect</button>
+                    </div>
+
+                    {/* Subreddit Watchlist */}
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Subreddit Watchlist</p>
+                      <p className="text-[11px] text-[#9A9A9A]">Sorene monitors these subreddits for keyword matches and surfaces relevant threads to reply to.</p>
+
+                      {/* Sorene suggestions */}
+                      {suggestedSubs.length > 0 && (
+                        <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-2">
+                          <p className="text-[11px] font-semibold text-orange-700">Sorene suggests</p>
+                          {suggestedSubs.map((s) => (
+                            <div key={s.name} className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-[#151515]">r/{s.name}</p>
+                                <p className="text-[11px] text-[#62646A] leading-snug">{s.reason}</p>
+                              </div>
+                              <div className="flex gap-1.5 shrink-0">
+                                <button onClick={() => acceptSuggestedSub(s.name, s.reason)}
+                                  className="text-[11px] px-2.5 py-1 rounded-lg bg-[#151515] text-white font-semibold hover:bg-[#2a2a2a] transition-colors">Add</button>
+                                <button onClick={() => dismissSuggestedSub(s.name)}
+                                  className="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#ECEDEE] text-[#9A9A9A] hover:text-[#DF2E16] hover:border-[#DF2E16] transition-colors">✕</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* User watchlist */}
+                      {watchedSubreddits.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {watchedSubreddits.map((s) => (
+                            <div key={s.name} className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border", s.addedBy === "sorene" && !s.approved ? "border-orange-300 bg-orange-50 text-orange-700" : "border-[#ECEDEE] bg-[#FAFAFA] text-[#151515]")}>
+                              <span>r/{s.name}</span>
+                              {s.addedBy === "sorene" && !s.approved && (
+                                <button onClick={() => approveSubreddit(s.name)} className="text-orange-600 hover:text-orange-800 transition-colors font-semibold">Approve</button>
+                              )}
+                              <button onClick={() => removeSubreddit(s.name)} className="text-[#C4C4C4] hover:text-[#DF2E16] transition-colors ml-0.5">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add subreddit input */}
+                      <div className="flex gap-2">
+                        <input value={subInput} onChange={(e) => setSubInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && addSubreddit()}
+                          placeholder="r/entrepreneur"
+                          className="flex-1 text-[12px] px-3 py-2 rounded-xl border border-[#ECEDEE] bg-white focus:outline-none focus:border-[#151515] transition-colors placeholder:text-[#C4C4C4]" />
+                        <button onClick={addSubreddit} disabled={!subInput.trim()}
+                          className="px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">Add</button>
+                        <button onClick={suggestSubreddits} disabled={suggestingReddit}
+                          className="px-3.5 py-2 rounded-xl border border-[#ECEDEE] text-[#151515] text-[12px] font-semibold hover:bg-[#FAFAFA] transition-colors disabled:opacity-40 flex items-center gap-1.5">
+                          {suggestingReddit ? <Loader2 size={11} className="animate-spin" /> : null}
+                          Ask Sorene
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Keyword Alerts */}
+                    <div className="space-y-3">
+                      <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Keyword Alerts</p>
+                      <p className="text-[11px] text-[#9A9A9A]">Sorene alerts you when these keywords appear in monitored subreddits.</p>
+                      {redditKeywords.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {redditKeywords.map((kw) => (
+                            <div key={kw} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border border-[#ECEDEE] bg-[#FAFAFA] text-[#151515]">
+                              <span>{kw}</span>
+                              <button onClick={() => removeKeyword(kw)} className="text-[#C4C4C4] hover:text-[#DF2E16] transition-colors">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input value={kwInput} onChange={(e) => setKwInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+                          placeholder="e.g. landing page, conversion rate"
+                          className="flex-1 text-[12px] px-3 py-2 rounded-xl border border-[#ECEDEE] bg-white focus:outline-none focus:border-[#151515] transition-colors placeholder:text-[#C4C4C4]" />
+                        <button onClick={addKeyword} disabled={!kwInput.trim()}
+                          className="px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">Add</button>
+                      </div>
+                    </div>
+
+                    {/* Opportunities feed */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Opportunities</p>
+                        <button onClick={scanOpportunities} disabled={scanningOpportunities || watchedSubreddits.filter((s) => s.addedBy === "user" || s.approved).length === 0 || redditKeywords.length === 0}
+                          className="text-[11px] px-3 py-1.5 rounded-xl bg-[#151515] text-white font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 flex items-center gap-1.5">
+                          {scanningOpportunities ? <><Loader2 size={11} className="animate-spin" />Scanning…</> : "Scan now"}
+                        </button>
+                      </div>
+                      {redditSuccessMsg && <p className="text-[12px] text-[#32C382] font-semibold">{redditSuccessMsg}</p>}
+                      {(watchedSubreddits.filter((s) => s.addedBy === "user" || s.approved).length === 0 || redditKeywords.length === 0) && (
+                        <p className="text-[11px] text-[#9A9A9A]">Add subreddits and keywords above, then scan for threads to reply to.</p>
+                      )}
+                      {redditOpportunities.filter((o) => !o.dismissed && !o.posted).length > 0 && (
+                        <div className="space-y-3">
+                          {redditOpportunities.filter((o) => !o.dismissed && !o.posted).map((opp) => (
+                            <div key={opp.id} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+                              <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[10px] font-semibold text-[#FF4500]">r/{opp.subreddit}</span>
+                                  <span className="text-[10px] text-[#9A9A9A] truncate">{opp.title}</span>
+                                </div>
+                                <button onClick={() => dismissOpportunity(opp.id)} className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors shrink-0 ml-2">Dismiss</button>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                <textarea
+                                  defaultValue={opp.draftReply}
+                                  onBlur={(e) => updateOpportunityDraft(opp.id, e.target.value)}
+                                  rows={4}
+                                  className="w-full text-[12px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent border border-[#ECEDEE] rounded-lg px-3 py-2 focus:border-[#151515] transition-colors"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => postOpportunity(opp)}
+                                    className="px-3.5 py-2 rounded-xl bg-[#FF4500] text-white text-[11px] font-semibold hover:opacity-90 transition-opacity">Post reply</button>
+                                  <a href={opp.url} target="_blank" rel="noopener noreferrer"
+                                    className="px-3.5 py-2 rounded-xl border border-[#ECEDEE] text-[11px] text-[#151515] font-semibold hover:bg-[#FAFAFA] transition-colors flex items-center gap-1">
+                                    View thread <ArrowRight size={10} />
+                                  </a>
+                                  <span className="text-[10px] text-[#9A9A9A] ml-auto">{opp.relevanceScore} keyword{opp.relevanceScore !== 1 ? "s" : ""} matched</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Posted */}
+                      {redditOpportunities.some((o) => o.posted) && (
+                        <p className="text-[11px] text-[#9A9A9A]">{redditOpportunities.filter((o) => o.posted).length} replies posted</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
               </div>
             </motion.div>
           )}

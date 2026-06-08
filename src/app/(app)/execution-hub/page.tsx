@@ -4528,14 +4528,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      {/* Description hint */}
-      {!editing && !chosen && (
-        <p className="text-[12px] text-[#62646A] leading-relaxed">
-          A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
-        </p>
-      )}
-
-      {/* Chosen name badge */}
+      {/* Chosen name badge — shown when name saved and not editing */}
       {chosen && !editing && (
         <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
@@ -4543,24 +4536,34 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
           <button onClick={() => startEdit()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto shrink-0">Edit</button>
         </div>
       )}
-      {editing && (
-        <div className="space-y-2">
-          <input
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            autoFocus
-            className="w-full text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
-          />
-          <div className="flex gap-2">
-            <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
-            <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
 
-      {/* Generate / suggestions — always visible (no collapse toggle) */}
-      {!editing && (
+      {/* Edit field — shown when editing OR no name chosen yet */}
+      {(editing || !chosen) && (
         <>
+          {/* Hint only when no name yet */}
+          {!chosen && !editing && (
+            <p className="text-[12px] text-[#62646A] leading-relaxed">
+              A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
+            </p>
+          )}
+
+          {editing && (
+            <div className="space-y-2">
+              <input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                autoFocus
+                placeholder="Type or choose a name below…"
+                className="w-full text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+              />
+              <div className="flex gap-2">
+                <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+                <button onClick={() => { setEditing(false); }} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Generate / suggestions */}
           {stage === "idle" && (
             <button onClick={generateSuggestions} disabled={!title}
               className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
@@ -4575,20 +4578,13 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
           {stage === "done" && suggestions.length > 0 && (
             <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
               {suggestions.map((s, i) => (
-                <div key={i} className={cn(
-                  "rounded-xl border p-3 transition-all",
-                  chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
-                )}>
+                <div key={i} className="rounded-xl border p-3 transition-all border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold text-[#151515]">{s.name}</span>
-                    {chosen !== s.name ? (
-                      <button onClick={() => chooseName(s.name)}
-                        className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
-                        Choose
-                      </button>
-                    ) : (
-                      <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
-                    )}
+                    <button onClick={() => chooseName(s.name)}
+                      className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                      Choose
+                    </button>
                   </div>
                   <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
                 </div>
@@ -4600,7 +4596,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
             </motion.div>
           )}
 
-          {/* Chat for more options */}
+          {/* Chat for more ideas */}
           {stage === "done" && (
             <div className="border border-gray-100 rounded-xl overflow-hidden">
               {chatHistory.length > 0 && (

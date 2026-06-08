@@ -6583,10 +6583,390 @@ function PitchDeckCard({ title }: { title: string }) {
   );
 }
 
-// ── GrowthItemCard — expandable wrapper ────────
+// ── Retention Playbook ─────────────────────────
+type RetentionPlaybook = { onboarding_steps: string[]; check_in_triggers: string[]; churn_signals: string[]; win_back: string };
+
+function RetentionPlaybookCard({ title }: { title: string }) {
+  const storageKey = `growth-retention-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<RetentionPlaybook>({ onboarding_steps: [], check_in_triggers: [], churn_signals: [], win_back: "" });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a customer retention and churn prevention playbook. Return JSON: {"onboarding_steps":["..."],"check_in_triggers":["..."],"churn_signals":["..."],"win_back":"..."}. Include 4-5 items per list.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your retention playbook…</div>
+  );
+
+  const listSections: { key: keyof RetentionPlaybook; label: string }[] = [
+    { key: "onboarding_steps", label: "Onboarding Steps" },
+    { key: "check_in_triggers", label: "Check-in Triggers" },
+    { key: "churn_signals", label: "Churn Signals" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      {listSections.map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {(data[key] as string[]).map((item, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                {readOnly
+                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{item}</p>
+                  : <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                }
+                {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+              </div>
+            ))}
+            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>}
+          </div>
+        </div>
+      ))}
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Win-Back Strategy</p></div>
+        {readOnly
+          ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data.win_back}</p>
+          : <textarea value={data.win_back} onChange={(e) => setData((prev) => ({ ...prev, win_back: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+        }
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Referral Strategy ──────────────────────────
+type ReferralStrategy = { referral_program: string; partner_types: string[]; outreach_script: string; incentive: string };
+
+function ReferralStrategyCard({ title }: { title: string }) {
+  const storageKey = `growth-referral-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<ReferralStrategy>({ referral_program: "", partner_types: [], outreach_script: "", incentive: "" });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a referral and partnerships strategy. Return JSON: {"referral_program":"...","partner_types":["..."],"outreach_script":"...","incentive":"..."}. Include 3-5 partner types.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your referral strategy…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      {[{ key: "referral_program" as const, label: "Referral Program" }, { key: "outreach_script" as const, label: "Outreach Script" }, { key: "incentive" as const, label: "Incentive / Reward" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          {readOnly
+            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key]}</p>
+            : <textarea value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+          }
+        </div>
+      ))}
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Partner Types</p></div>
+        <div className="px-3 py-2.5 space-y-1.5">
+          {data.partner_types.map((pt, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+              {readOnly
+                ? <p className="text-[12px] text-[#151515] leading-relaxed">{pt}</p>
+                : <input value={pt} onChange={(e) => setData((prev) => ({ ...prev, partner_types: prev.partner_types.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+              }
+              {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, partner_types: prev.partner_types.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+            </div>
+          ))}
+          {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, partner_types: [...prev.partner_types, ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add partner type</button>}
+        </div>
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Content & SEO Plan ─────────────────────────
+type ContentSeo = { keywords: string[]; content_types: string[]; posting_cadence: string; first_5_posts: string[] };
+
+function ContentSeoCard({ title }: { title: string }) {
+  const storageKey = `growth-content-seo-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<ContentSeo>({ keywords: [], content_types: [], posting_cadence: "", first_5_posts: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a content and SEO plan. Return JSON: {"keywords":["..."],"content_types":["..."],"posting_cadence":"...","first_5_posts":["..."]}. Include 5-8 keywords, 3-5 content types, and 5 post ideas.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your content & SEO plan…</div>
+  );
+
+  const listSections2: { key: keyof ContentSeo; label: string }[] = [
+    { key: "keywords", label: "Target Keywords" },
+    { key: "content_types", label: "Content Types" },
+    { key: "first_5_posts", label: "First 5 Post Ideas" },
+  ];
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Posting Cadence</p></div>
+        {readOnly
+          ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data.posting_cadence}</p>
+          : <input value={data.posting_cadence} onChange={(e) => setData((prev) => ({ ...prev, posting_cadence: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" placeholder="e.g. 3x per week" />
+        }
+      </div>
+      {listSections2.map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {(data[key] as string[]).map((item, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                {readOnly
+                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{item}</p>
+                  : <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                }
+                {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+              </div>
+            ))}
+            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>}
+          </div>
+        </div>
+      ))}
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Hiring Plan ────────────────────────────────
+type HiringRole = { role: string; when: string; why: string };
+type HiringPlan = { first_hire: string; timeline: string; roles: HiringRole[] };
+
+function HiringPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-hiring-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<HiringPlan>({ first_hire: "", timeline: "", roles: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a hiring plan. Return JSON: {"first_hire":"...","timeline":"...","roles":[{"role":"...","when":"...","why":"..."}]}. Include 3-5 roles in order of priority.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Planning your hiring roadmap…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          {readOnly
+            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data[key]}</p>
+            : <input value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" />
+          }
+        </div>
+      ))}
+      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide mt-2">Roles Roadmap</p>
+      {data.roles.map((role, ri) => (
+        <div key={ri} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{ri + 1}</span>
+            {readOnly
+              ? <p className="text-[12px] font-semibold text-[#151515] flex-1">{role.role}</p>
+              : <input value={role.role} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, role: e.target.value } : r) }))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="Role title" />
+            }
+            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, roles: prev.roles.filter((_, i) => i !== ri) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+          </div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {[{ key: "when" as const, label: "When" }, { key: "why" as const, label: "Why" }].map(({ key: rk, label: rl }) => (
+              <div key={rk} className="flex items-start gap-2">
+                <span className="text-[10px] font-semibold text-[#9A9A9A] shrink-0 w-8 mt-0.5">{rl}</span>
+                {readOnly
+                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{role[rk]}</p>
+                  : <input value={role[rk]} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, [rk]: e.target.value } : r) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                }
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setData((prev) => ({ ...prev, roles: [...prev.roles, { role: "", when: "", why: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add role</button>
+          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── GrowthItemCard — expandable row ────────────
 function GrowthItemCard({ id, label, project }: { id: string; label: string; project: DirectionCardData | null }) {
   const title = project?.title ?? "";
   const [open, setOpen] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const keyFn = GROWTH_STORAGE_KEYS[id];
+      if (keyFn && title) {
+        setHasSaved(!!localStorage.getItem(keyFn(title)));
+      }
+    } catch { /* ignore */ }
+  }, [id, title]);
 
   const renderContent = () => {
     if (id === "business_plan") return <BusinessPlanCard title={title} />;
@@ -6596,23 +6976,39 @@ function GrowthItemCard({ id, label, project }: { id: string; label: string; pro
     if (id === "financial_model") return <FinancialModelCard title={title} />;
     if (id === "growth_metrics") return <GrowthMetricsCard title={title} />;
     if (id === "pitch_deck") return <PitchDeckCard title={title} />;
+    if (id === "retention_playbook") return <RetentionPlaybookCard title={title} />;
+    if (id === "referral_strategy") return <ReferralStrategyCard title={title} />;
+    if (id === "content_seo") return <ContentSeoCard title={title} />;
+    if (id === "hiring_plan") return <HiringPlanCard title={title} />;
     return null;
   };
 
   return (
-    <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+    <div className="border-t border-gray-50 first:border-t-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-[#FAFAFA] transition-colors text-left"
       >
-        <span className="text-[14px] font-semibold text-[#151515]">{label}</span>
+        {hasSaved
+          ? <CheckCircle2 size={14} className="text-[#32C382] shrink-0" />
+          : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0" />
+        }
+        <span className="text-[13px] text-[#151515] flex-1">{label}</span>
         {open ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
       </button>
-      {open && (
-        <div className="px-4 py-4 border-t border-[#ECEDEE]">
-          {renderContent()}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { duration: 0.25 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-4 border-t border-gray-50">
+              {renderContent()}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -6622,10 +7018,38 @@ function GrowthItemCard({ id, label, project }: { id: string; label: string; pro
 
 function GrowthContent({ project }: { project: DirectionCardData | null }) {
   const pillar = GROWTH_PILLAR;
+  const itemsMap = Object.fromEntries(pillar.items.map((i) => [i.id, i.label]));
   return (
-    <div className="p-6 space-y-3">
-      {pillar.items.map((item) => (
-        <GrowthItemCard key={item.id} id={item.id} label={item.label} project={project} />
+    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
+      {/* Gradient header */}
+      <div
+        className="px-6 py-5"
+        style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+            <BarChart3 size={15} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold text-white">Growth</h3>
+            <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide">Build your growth engine</p>
+          </div>
+        </div>
+      </div>
+      {/* Clusters */}
+      {GROWTH_CLUSTERS.map((cluster) => (
+        <div key={cluster.label}>
+          <div className="px-5 py-2 bg-[#FAFAFA] border-t border-gray-100">
+            <span className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest">{cluster.label}</span>
+          </div>
+          {cluster.ids.map((itemId) => {
+            const label = itemsMap[itemId];
+            if (!label) return null;
+            return (
+              <GrowthItemCard key={itemId} id={itemId} label={label} project={project} />
+            );
+          })}
+        </div>
       ))}
     </div>
   );

@@ -8205,7 +8205,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     );
   }
 
-  return <ContentSocialAgentUIInner project={project} authUser={authUser} />;
+  return <ContentSocialAgentUIInner key={project.title} project={project} authUser={authUser} />;
 }
 
 function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCardData; authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
@@ -8395,7 +8395,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     if (!authUser) return;
     loadAccount().catch(() => { setAccountStatus("disconnected"); setDraftsLoaded(true); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUser]);
+  }, [authUser, project.title]);
 
   // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
   // NOTE: draftsLoaded is intentionally excluded from deps — it's only a guard.

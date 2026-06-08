@@ -8205,6 +8205,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [generateMode, setGenerateMode] = useState<"single" | 1 | 2 | 3 | null>(null);
   const [ctaLink, setCtaLink] = useState("");
   const [userNotes, setUserNotes] = useState("");
+  const [notesSaved, setNotesSaved] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [weekDrafts, setWeekDrafts] = useState<ThreadsDraft[]>([]);
   const [draftsLoaded, setDraftsLoaded] = useState(false);
@@ -8850,9 +8851,11 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
                   });
+                  setNotesSaved(true);
+                  setTimeout(() => setNotesSaved(false), 2500);
                 } catch { /* ignore */ }
-              }} className="text-[11px] px-3 py-1 rounded-lg bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
-                Save notes
+              }} className={cn("text-[11px] px-3 py-1 rounded-lg font-medium transition-all", notesSaved ? "bg-[#32C382] text-white" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+                {notesSaved ? "Saved ✓" : "Save notes"}
               </button>
             </div>
           </div>

@@ -5,11 +5,15 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const snap = await getAdminFirestore().doc(`users/${user.uid}/integrations/threads`).get();
+  const [snap, userSnap] = await Promise.all([
+    getAdminFirestore().doc(`users/${user.uid}/integrations/threads`).get(),
+    getAdminFirestore().doc(`users/${user.uid}`).get(),
+  ]);
   const account = snap.data() ?? null;
+  const dna = userSnap.data()?.threadsContentDNA ?? null;
 
-  if (!account?.accessToken) return Response.json({ connected: false });
-  return Response.json({ connected: true, username: account.username, connectedAt: account.connectedAt });
+  if (!account?.accessToken) return Response.json({ connected: false, dna });
+  return Response.json({ connected: true, username: account.username, connectedAt: account.connectedAt, dna });
 }
 
 export async function DELETE(req: NextRequest) {

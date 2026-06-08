@@ -8257,9 +8257,10 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       authFetch("/api/threads/drafts"),
     ]);
     if (accountRes.ok) {
-      const data = await accountRes.json() as { connected: boolean; username?: string };
+      const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
       if (data.connected) { setAccountStatus("connected"); setUsername(data.username ?? ""); }
       else setAccountStatus("disconnected");
+      if (data.dna) setDna(data.dna);
     } else { setAccountStatus("disconnected"); }
     if (scheduleRes.ok) {
       const data = await scheduleRes.json() as { posts: ScheduledPost[] };
@@ -8457,7 +8458,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         : "";
 
       const dnaContext = dna?.summary
-        ? `\nContent DNA (what resonates with this audience): ${dna.summary}`
+        ? `\nContent DNA — analysis of this account's top-performing posts (apply these patterns): ${dna.summary}`
         : "";
 
       const ctaNote = ctaLink.trim()

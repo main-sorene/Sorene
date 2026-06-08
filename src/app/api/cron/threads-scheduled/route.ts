@@ -78,50 +78,39 @@ export async function GET(req: NextRequest) {
   let failed = 0;
 
   try {
-    // Find all users who have a connected Threads account
-    const accountsSnap = await db.collectionGroup("integrations")
-      .where("accessToken", "!=", null)
-      .get();
+    // Fetch all users, then per-user load Threads account + scheduled posts — no indexes needed
+    const usersSnap = await db.collection("users").get();
 
-    const threadsDocs = accountsSnap.docs.filter((d) => d.id === "threads");
+    await Promise.all(usersSnap.docs.map(async (userDoc) => {
+      const accountSnap = await userDoc.ref.collection("integrations").doc("threads").get();
+      if (!accountSnap.exists) return;
 
-    await Promise.all(threadsDocs.map(async (accountDoc) => {
-      const account = accountDoc.data() as {
-        accessToken: string;
-        threadsUserId: string;
-        connectedAt?: number;
-      };
+      const account = accountSnap.data() as { accessToken: string; threadsUserId: string; connectedAt?: number };
       if (!account?.accessToken || !account.threadsUserId) return;
 
-      const userRef = accountDoc.ref.parent.parent!;
-
-      // Refresh token if nearing expiry
       const freshToken = await maybeRefreshToken(account.accessToken, account.connectedAt ?? 0);
       if (freshToken !== account.accessToken) {
-        await accountDoc.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
+        await accountSnap.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
       }
 
-      // Get due posts for this user — simple single-collection query, no composite index needed
-      const dueSnap = await userRef.collection("threadsScheduled")
-        .where("status", "==", "pending")
-        .where("scheduledAt", "<=", now)
-        .get();
+      // Fetch all scheduled posts for this user and filter in memory — no composite index
+      const allPostsSnap = await userDoc.ref.collection("threadsScheduled").get();
+      const duePosts = allPostsSnap.docs.filter((d) => {
+        const p = d.data();
+        return p.status === "pending" && p.scheduledAt <= now;
+      });
 
-      for (const postDoc of dueSnap.docs) {
+      for (const postDoc of duePosts) {
         const post = postDoc.data() as { text: string; id: string; ctaLink?: string };
         try {
           const postId = await publishPost(freshToken, account.threadsUserId, post.text);
           await postDoc.ref.update({ status: "published", publishedAt: now, postId });
-          await userRef.collection("threadsPosts").doc(postId).set({
-            id: postId, text: post.text, postedAt: now,
-          });
-          if (post.ctaLink) {
-            await postReply(freshToken, account.threadsUserId, postId, post.ctaLink);
-          }
+          await userDoc.ref.collection("threadsPosts").doc(postId).set({ id: postId, text: post.text, postedAt: now });
+          if (post.ctaLink) await postReply(freshToken, account.threadsUserId, postId, post.ctaLink);
           processed++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[threads-cron] failed user=${userRef.id} post=${post.id}:`, msg);
+          console.error(`[threads-cron] failed user=${userDoc.id} post=${post.id}:`, msg);
           await postDoc.ref.update({ status: "failed", failReason: msg });
           failed++;
         }

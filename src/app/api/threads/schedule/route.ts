@@ -19,11 +19,12 @@ export async function GET(req: NextRequest) {
   const snap = await getAdminFirestore()
     .collection("users").doc(user.uid)
     .collection("threadsScheduled")
-    .where("status", "==", "pending")
-    .orderBy("scheduledAt", "asc")
     .get();
 
-  const posts: ScheduledPost[] = snap.docs.map((d) => d.data() as ScheduledPost);
+  const posts: ScheduledPost[] = snap.docs
+    .map((d) => d.data() as ScheduledPost)
+    .filter((p) => p.status === "pending")
+    .sort((a, b) => a.scheduledAt - b.scheduledAt);
   return Response.json({ posts });
 }
 

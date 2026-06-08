@@ -4267,7 +4267,8 @@ function BuildDemoStage3({
 
 const LAUNCH_PILLARS = [
   { id: "brand_digital", label: "Brand & Digital Presence", icon: Rocket, items: [
-    { id: "biz_name", label: "Finalise business name" },
+    { id: "biz_name", label: "Business name" },
+    { id: "target_customers", label: "Target customers" },
     { id: "tagline", label: "Tagline" },
     { id: "benefit", label: "Benefit description" },
     { id: "offerings", label: "Offerings" },
@@ -4324,6 +4325,80 @@ const GROWTH_PILLAR = { id: "growth", label: "Growth", icon: BarChart3, items: [
 
 type PillarDef = typeof LAUNCH_PILLARS[number] | typeof GROWTH_PILLAR;
 type ChecklistStatus = "todo" | "progress" | "done";
+
+// ─────────────────────────────────────────────
+// TargetCustomersSection — auto-prefill from validation / launching strategy
+// ─────────────────────────────────────────────
+
+function TargetCustomersSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `target-customers-${title}`;
+
+  const [main, setMain] = useState("");
+  const [secondary, setSecondary] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        setMain(obj?.main?.label ?? "");
+        setSecondary(obj?.secondary?.label ?? "");
+        setSaved(true);
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const save = () => {
+    if (!title) return;
+    const obj: Record<string, { label: string }> = {};
+    if (main.trim()) obj.main = { label: main.trim() };
+    if (secondary.trim()) obj.secondary = { label: secondary.trim() };
+    try { localStorage.setItem(storageKey, JSON.stringify(obj)); } catch { /* ignore */ }
+    setSaved(true);
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {!main && !secondary && (
+        <p className="text-[11px] text-[#9A9A9A] italic">
+          Complete Launching Strategy in Validation to auto-fill this.
+        </p>
+      )}
+      <div className="space-y-2">
+        <div>
+          <p className="text-[11px] font-semibold text-[#9A9A9A] mb-1">Primary</p>
+          <textarea
+            value={main}
+            onChange={(e) => { setMain(e.target.value); setSaved(false); }}
+            rows={2}
+            placeholder="e.g. Solo founders building their first product"
+            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white"
+          />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[#9A9A9A] mb-1">Secondary</p>
+          <textarea
+            value={secondary}
+            onChange={(e) => { setSecondary(e.target.value); setSaved(false); }}
+            rows={2}
+            placeholder="e.g. Early-stage startup teams"
+            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white"
+          />
+        </div>
+      </div>
+      <button
+        onClick={save}
+        disabled={saved || (!main.trim() && !secondary.trim())}
+        className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-[#32C382]/40 text-[#32C382] hover:bg-[#F5FFD9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+        {saved ? "Saved" : "Save"}
+      </button>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────
 // BusinessNameSection — special item for biz_name
@@ -5726,7 +5801,7 @@ function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: Pilla
                   const status = statuses[item.id] ?? "todo";
                   const tip = tips[item.id];
                   const hasContent = pillar.id === "brand_digital" && [
-                    "biz_name", "tagline", "benefit", "offerings", "pricing",
+                    "biz_name", "target_customers", "tagline", "benefit", "offerings", "pricing",
                     "logo", "domain", "website", "brand_color", "social",
                   ].includes(item.id);
                   const open = !!openItems[item.id];
@@ -5770,6 +5845,9 @@ function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: Pilla
                                 onNameChosen?.(name);
                               }} />
                             )}
+                            {item.id === "target_customers" && (
+                              <TargetCustomersSection project={project} />
+                            )}
                             {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && (
                               <BrandTextSection type={item.id as BrandTextType} project={project} />
                             )}
@@ -5788,7 +5866,7 @@ function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: Pilla
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "brand_color" && item.id !== "social" && (
+                      {tip && item.id !== "biz_name" && item.id !== "target_customers" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           {tip}
                         </p>

@@ -650,6 +650,118 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
     }
   };
 
+  // Launching Strategy
+  const strategyKey = projectTitle ? `launch-strategy-${projectTitle}` : null;
+  type SStage = "idle" | "loading" | "done";
+  const [strategyStage, setStrategyStage] = useState<SStage>("idle");
+  const [strategyItems, setStrategyItems] = useState<{ id: string; text: string; editing: boolean }[]>([]);
+  const [strategyError, setStrategyError] = useState("");
+  const [strategyFeedback, setStrategyFeedback] = useState("");
+  const [revisingStrategy, setRevisingStrategy] = useState(false);
+
+  useEffect(() => {
+    if (!strategyKey) return;
+    try {
+      const raw = localStorage.getItem(strategyKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as string[];
+        setStrategyItems(parsed.map((text, i) => ({ id: `s-${i}`, text, editing: false })));
+        setStrategyStage("done");
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const saveStrategy = (items: { text: string }[]) => {
+    if (!strategyKey) return;
+    try { localStorage.setItem(strategyKey, JSON.stringify(items.map((i) => i.text))); } catch { /* ignore */ }
+  };
+
+  const generateStrategy = async (feedback?: string) => {
+    if (!projectTitle) return;
+    setStrategyError("");
+    feedback ? setRevisingStrategy(true) : setStrategyStage("loading");
+
+    // Collect context
+    const brandName   = localStorage.getItem(`business-name-${projectTitle}`) ?? "";
+    const tagline     = localStorage.getItem(`brand-tagline-${projectTitle}`) ?? "";
+    const benefit     = localStorage.getItem(`brand-benefit-${projectTitle}`) ?? "";
+    const offerings   = localStorage.getItem(`brand-offerings-${projectTitle}`) ?? "";
+    const targetCustomersRaw = localStorage.getItem(`target-customers-${projectTitle}`) ?? "";
+    let targetCustomer = "";
+    try { const tc = JSON.parse(targetCustomersRaw); targetCustomer = tc?.main?.label ?? ""; } catch { /* ignore */ }
+    const runway        = localStorage.getItem(`finance-runway-${projectTitle}`) ?? "";
+    const revenueTarget = localStorage.getItem(`finance-revenue_target-${projectTitle}`) ?? "";
+    const fundingPath   = localStorage.getItem(`finance-funding_path-${projectTitle}`) ?? "";
+    const analysisText  = analysisKey ? (localStorage.getItem(analysisKey) ?? "") : "";
+
+    const currentItems = feedback && strategyItems.length > 0
+      ? `\nCurrent strategy:\n${strategyItems.map((s, i) => `${i + 1}. ${s.text}`).join("\n")}`
+      : "";
+    const feedbackLine = feedback ? `\nFounder feedback: "${feedback}"` : "";
+
+    const system = `You are Sorene, a sharp launch strategist. Return exactly 6 specific, actionable launch strategy items as a JSON array of strings. No intro, no commentary — just the JSON array. Example: ["Item 1", "Item 2", ...]`;
+    const prompt = `Generate a launching strategy for this founder — 6 specific, actionable items that will guide their Brand & Digital Presence setup in Launchpad.
+
+Project: "${projectTitle}"
+${targetCustomer ? `Target customer: ${targetCustomer}` : ""}
+${brandName ? `Brand name: ${brandName}` : ""}
+${tagline ? `Tagline: ${tagline}` : ""}
+${benefit ? `Core benefit: ${benefit}` : ""}
+${offerings ? `Offerings: ${offerings}` : ""}
+${runway ? `Runway: ${runway}` : ""}
+${revenueTarget ? `Revenue target: ${revenueTarget}` : ""}
+${fundingPath ? `Funding path: ${fundingPath}` : ""}
+${analysisText ? `Readiness verdict: ${analysisText.slice(0, 400)}` : ""}
+${currentItems}${feedbackLine}
+
+Each item should be a concrete action (e.g. "Launch a waitlist page on [brand].com targeting [customer] with the headline: [tagline]"). Cover: online presence, first channel, content strategy, community, outreach, and one quick win. Make them specific to this founder's project, brand, and target customer.
+
+Return ONLY a valid JSON array of 6 strings. No markdown, no code blocks.`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { reply?: string };
+        const raw = (data.reply ?? "").trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+        const parsed = JSON.parse(raw) as string[];
+        const items = parsed.slice(0, 6).map((text, i) => ({ id: `s-${Date.now()}-${i}`, text, editing: false }));
+        setStrategyItems(items);
+        setStrategyStage("done");
+        saveStrategy(items);
+        setStrategyFeedback("");
+      } else {
+        setStrategyStage(strategyItems.length > 0 ? "done" : "idle");
+        setStrategyError("Generation failed. Please try again.");
+      }
+    } catch {
+      setStrategyStage(strategyItems.length > 0 ? "done" : "idle");
+      setStrategyError("Network error. Please try again.");
+    }
+    setRevisingStrategy(false);
+  };
+
+  const updateStrategyItem = (id: string, text: string) => {
+    setStrategyItems((prev) => {
+      const updated = prev.map((s) => s.id === id ? { ...s, text } : s);
+      saveStrategy(updated);
+      return updated;
+    });
+  };
+  const toggleStrategyEdit = (id: string) =>
+    setStrategyItems((prev) => prev.map((s) => s.id === id ? { ...s, editing: !s.editing } : s));
+  const removeStrategyItem = (id: string) =>
+    setStrategyItems((prev) => { const u = prev.filter((s) => s.id !== id); saveStrategy(u); return u; });
+  const addStrategyItem = () => {
+    const item = { id: `s-${Date.now()}`, text: "", editing: true };
+    setStrategyItems((prev) => { const u = [...prev, item]; saveStrategy(u); return u; });
+  };
+
   return (
     <div className="p-6 space-y-8">
 
@@ -768,6 +880,98 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
             {analysisStage === "done" && analysis && (
               <div className="text-[14px] text-[#151515] leading-[1.75] space-y-3 [&_strong]:font-semibold [&_strong]:text-[#151515]">
                 <MarkdownText text={analysis} />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Launching Strategy */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-base font-medium text-[#151515]">Launching Strategy</h4>
+          {strategyStage === "done" && !revisingStrategy && (
+            <button onClick={() => generateStrategy()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
+          )}
+        </div>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+            <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+              <Rocket size={14} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Your launch playbook</p>
+              <p className="text-[11px] text-[#9A9A9A]">6 actions to guide your Brand & Digital Presence setup — edit or give feedback to revise</p>
+            </div>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            {strategyError && <p className="text-[11px] text-[#DF2E16]">{strategyError}</p>}
+
+            {strategyStage === "idle" && (
+              <button onClick={() => generateStrategy()} disabled={!projectTitle}
+                className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                {projectTitle ? "Generate my launching strategy" : "Select a project first"}
+              </button>
+            )}
+
+            {strategyStage === "loading" && (
+              <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+                <Loader2 size={13} className="animate-spin" /> Building your launch playbook…
+              </div>
+            )}
+
+            {strategyStage === "done" && (
+              <div className="space-y-2">
+                {strategyItems.map((item, i) => (
+                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl border border-[#ECEDEE] bg-white group hover:border-gray-300 transition-colors">
+                    <span className="text-[11px] font-semibold text-[#9A9A9A] mt-0.5 w-4 shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      {item.editing ? (
+                        <textarea value={item.text}
+                          onChange={(e) => updateStrategyItem(item.id, e.target.value)}
+                          rows={2}
+                          className="w-full text-[13px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent border-b border-[#151515]"
+                          autoFocus
+                          onBlur={() => toggleStrategyEdit(item.id)} />
+                      ) : (
+                        <p className="text-[13px] text-[#151515] leading-relaxed">{item.text}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button onClick={() => toggleStrategyEdit(item.id)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                        {item.editing ? "Done" : "Edit"}
+                      </button>
+                      <button onClick={() => removeStrategyItem(item.id)}
+                        className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add item */}
+                <button onClick={addStrategyItem}
+                  className="w-full py-2 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors flex items-center justify-center gap-1.5">
+                  <Plus size={12} /> Add item
+                </button>
+
+                {/* Feedback to revise */}
+                <div className="pt-2 border-t border-[#ECEDEE]">
+                  <p className="text-[11px] text-[#9A9A9A] mb-2">Not quite right? Give feedback and Sorene will revise.</p>
+                  <div className="flex gap-2">
+                    <input value={strategyFeedback} onChange={(e) => setStrategyFeedback(e.target.value)}
+                      placeholder="e.g. focus more on organic content, less on paid ads"
+                      onKeyDown={(e) => { if (e.key === "Enter" && strategyFeedback.trim()) generateStrategy(strategyFeedback); }}
+                      className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                    <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
+                      className="px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                      {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
+                      Revise
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

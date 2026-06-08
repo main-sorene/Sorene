@@ -36,9 +36,13 @@ async function fetchPostInsights(postId: string, token: string): Promise<Partial
   }
 }
 
+const slug = (t: string) => t.replace(/[.\[\]#$\/]/g, "_").slice(0, 80);
+
 export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const projectTitle = req.nextUrl.searchParams.get("project");
 
   const db = getAdminFirestore();
   const snap = await db.doc(`users/${user.uid}/integrations/threads`).get();
@@ -128,7 +132,8 @@ Use **bold** on key numbers and phrases. Keep each paragraph under 60 words. Out
       topScore: scored[0]?.score ?? 0,
     };
 
-    await db.collection("users").doc(user.uid).set({ threadsContentDNA: dna }, { merge: true });
+    const dnaKey = projectTitle ? `threadsContentDNA__${slug(projectTitle)}` : "threadsContentDNA";
+    await db.collection("users").doc(user.uid).set({ [dnaKey]: dna }, { merge: true });
 
     return Response.json({ dna });
   } catch (err) {

@@ -9,6 +9,7 @@ export interface ScheduledPost {
   scheduledAt: number;
   status: "pending" | "published" | "failed";
   createdAt: number;
+  projectTitle?: string;
 }
 
 // GET — list scheduled posts
@@ -16,10 +17,17 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const snap = await getAdminFirestore()
+  const projectTitle = req.nextUrl.searchParams.get("project");
+
+  let query: FirebaseFirestore.Query = getAdminFirestore()
     .collection("users").doc(user.uid)
-    .collection("threadsScheduled")
-    .get();
+    .collection("threadsScheduled");
+
+  if (projectTitle) {
+    query = query.where("projectTitle", "==", projectTitle);
+  }
+
+  const snap = await query.get();
 
   const all = snap.docs.map((d) => d.data() as ScheduledPost);
   const posts = all
@@ -35,6 +43,7 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
   const { text, scheduledAt, ctaLink } = await req.json() as { text: string; scheduledAt: number; ctaLink?: string };
   if (!text?.trim() || !scheduledAt) return Response.json({ error: "Missing fields" }, { status: 400 });
 
@@ -42,7 +51,9 @@ export async function POST(req: NextRequest) {
   const col = db.collection("users").doc(user.uid).collection("threadsScheduled");
 
   // Deduplicate: if an identical pending post already exists, return it instead of creating a duplicate
-  const existing = await col.where("status", "==", "pending").where("text", "==", text.trim()).limit(1).get();
+  let dedupeQuery: FirebaseFirestore.Query = col.where("status", "==", "pending").where("text", "==", text.trim());
+  if (projectTitle) dedupeQuery = dedupeQuery.where("projectTitle", "==", projectTitle);
+  const existing = await dedupeQuery.limit(1).get();
   if (!existing.empty) {
     return Response.json({ ok: true, post: existing.docs[0].data() as ScheduledPost });
   }
@@ -55,6 +66,7 @@ export async function POST(req: NextRequest) {
     status: "pending",
     createdAt: Date.now(),
     ...(ctaLink?.trim() ? { ctaLink: ctaLink.trim() } : {}),
+    ...(projectTitle ? { projectTitle } : {}),
   };
 
   await col.doc(id).set(post);

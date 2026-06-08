@@ -8326,16 +8326,17 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
+    const p = encodeURIComponent(project.title);
     const [accountRes, scheduleRes, draftsRes, competitorsRes, xRes, xScheduleRes, redditRes, redditWatchlistRes, redditOppRes] = await Promise.all([
-      authFetch("/api/threads/account"),
-      authFetch("/api/threads/schedule"),
-      authFetch("/api/threads/drafts"),
-      authFetch("/api/threads/competitors"),
+      authFetch(`/api/threads/account?project=${p}`),
+      authFetch(`/api/threads/schedule?project=${p}`),
+      authFetch(`/api/threads/drafts?project=${p}`),
+      authFetch(`/api/threads/competitors?project=${p}`),
       authFetch("/api/x/keys"),
-      authFetch("/api/x/schedule"),
+      authFetch(`/api/x/schedule?project=${p}`),
       authFetch("/api/reddit/account"),
-      authFetch("/api/reddit/watchlist"),
-      authFetch("/api/reddit/opportunities"),
+      authFetch(`/api/reddit/watchlist?project=${p}`),
+      authFetch(`/api/reddit/opportunities?project=${p}`),
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
@@ -8404,7 +8405,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     const timer = setTimeout(async () => {
       try {
         const { authFetch } = await import("@/lib/authFetch");
-        await authFetch("/api/threads/drafts", {
+        await authFetch(`/api/threads/drafts?project=${encodeURIComponent(project.title)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
@@ -8453,7 +8454,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       if (!frozen.length || !authUser) return;
       try {
         const { authFetch } = await import("@/lib/authFetch");
-        const res = await authFetch("/api/threads/schedule");
+        const res = await authFetch(`/api/threads/schedule?project=${encodeURIComponent(project.title)}`);
         if (!res.ok) return;
         const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
         const pendingIds = new Set(data.posts.map((p) => p.id));
@@ -8493,7 +8494,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     setScanningHistory(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/history");
+      const res = await authFetch(`/api/threads/history?project=${encodeURIComponent(project.title)}`);
       if (res.ok) {
         const data = await res.json() as { dna?: ContentDNA };
         if (data.dna) setDna(data.dna);
@@ -8508,7 +8509,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     setCompetitorError("");
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/competitors", {
+      const res = await authFetch(`/api/threads/competitors?project=${encodeURIComponent(project.title)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "add", username }),
@@ -8522,7 +8523,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const removeCompetitor = async (username: string) => {
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/competitors", {
+      const res = await authFetch(`/api/threads/competitors?project=${encodeURIComponent(project.title)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "remove", username }),
@@ -8537,7 +8538,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     setCompetitorError("");
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/competitors", {
+      const res = await authFetch(`/api/threads/competitors?project=${encodeURIComponent(project.title)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "analyze" }),
@@ -8655,7 +8656,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       for (let i = 0; i < pending.length; i++) {
         const draft = pending[i];
         const scheduledAt = now + (i + 1) * 24 * 60 * 60 * 1000;
-        const res = await authFetch("/api/x/schedule", {
+        const res = await authFetch(`/api/x/schedule?project=${encodeURIComponent(project.title)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: draft.text, scheduledAt }),
@@ -8709,7 +8710,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     setSavingWatchlist(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      await authFetch("/api/reddit/watchlist", {
+      await authFetch(`/api/reddit/watchlist?project=${encodeURIComponent(project.title)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subreddits: subs ?? watchedSubreddits, keywords: kws ?? redditKeywords }),
@@ -8785,7 +8786,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     setScanningOpportunities(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/reddit/opportunities", { method: "POST" });
+      const res = await authFetch(`/api/reddit/opportunities?project=${encodeURIComponent(project.title)}`, { method: "POST" });
       const data = await res.json() as { ok: boolean; found: number; opportunities: RedditOpportunity[]; error?: string };
       if (data.ok) {
         setRedditOpportunities((prev) => {
@@ -8803,7 +8804,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
   const dismissOpportunity = async (id: string) => {
     setRedditOpportunities((prev) => prev.filter((o) => o.id !== id));
     const { authFetch } = await import("@/lib/authFetch");
-    await authFetch("/api/reddit/opportunities", {
+    await authFetch(`/api/reddit/opportunities?project=${encodeURIComponent(project.title)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action: "dismiss" }),
@@ -8813,7 +8814,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
   const postOpportunity = async (opp: RedditOpportunity) => {
     setRedditOpportunities((prev) => prev.map((o) => o.id === opp.id ? { ...o, posted: true } : o));
     const { authFetch } = await import("@/lib/authFetch");
-    await authFetch("/api/reddit/opportunities", {
+    await authFetch(`/api/reddit/opportunities?project=${encodeURIComponent(project.title)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: opp.id, action: "post" }),
@@ -8823,7 +8824,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
   const updateOpportunityDraft = async (id: string, draftReply: string) => {
     setRedditOpportunities((prev) => prev.map((o) => o.id === id ? { ...o, draftReply } : o));
     const { authFetch } = await import("@/lib/authFetch");
-    await authFetch("/api/reddit/opportunities", {
+    await authFetch(`/api/reddit/opportunities?project=${encodeURIComponent(project.title)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action: "update_draft", draftReply }),
@@ -8896,7 +8897,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     // Auto-save link/notes before generating
     try {
       const { authFetch: af } = await import("@/lib/authFetch");
-      await af("/api/threads/drafts", {
+      await af(`/api/threads/drafts?project=${encodeURIComponent(project.title)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ drafts: [], ctaLink, cadence: newCadence, slotOverrides, userNotes }),
@@ -9103,7 +9104,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         const scheduledAt = slotOverrides[draft.id] ?? scheduleSlots[globalIdx] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
         const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
         const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-        const res = await authFetch("/api/threads/schedule", {
+        const res = await authFetch(`/api/threads/schedule?project=${encodeURIComponent(project.title)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -9130,7 +9131,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       });
       setWeekDrafts(frozenDrafts);
       // Immediately persist frozen drafts — don't rely on debounced auto-save
-      authFetch("/api/threads/drafts", {
+      authFetch(`/api/threads/drafts?project=${encodeURIComponent(project.title)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ drafts: frozenDrafts, ctaLink, cadence, slotOverrides, userNotes }),
@@ -9410,7 +9411,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
               <button onClick={async () => {
                 try {
                   const { authFetch } = await import("@/lib/authFetch");
-                  await authFetch("/api/threads/drafts", {
+                  await authFetch(`/api/threads/drafts?project=${encodeURIComponent(project.title)}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),

@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
 
 export interface WatchedSubreddit {
   name: string;           // e.g. "entrepreneur"
@@ -22,8 +23,12 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const key = projectTitle ? `redditWatchlist__${slug(projectTitle)}` : "redditWatchlist";
+
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const watchlist = snap.data()?.redditWatchlist as RedditWatchlist | undefined;
+  const data = snap.data();
+  const watchlist = (data?.[key] ?? (projectTitle ? data?.redditWatchlist : undefined)) as RedditWatchlist | undefined;
   return Response.json({ watchlist: watchlist ?? { subreddits: [], keywords: [], updatedAt: 0 } });
 }
 
@@ -31,13 +36,16 @@ export async function PUT(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const key = projectTitle ? `redditWatchlist__${slug(projectTitle)}` : "redditWatchlist";
+
   const body = await req.json() as Partial<RedditWatchlist>;
   const watchlist: RedditWatchlist = {
     subreddits: body.subreddits ?? [],
     keywords: body.keywords ?? [],
     updatedAt: Date.now(),
   };
-  await getAdminFirestore().collection("users").doc(user.uid).set({ redditWatchlist: watchlist }, { merge: true });
+  await getAdminFirestore().collection("users").doc(user.uid).set({ [key]: watchlist }, { merge: true });
   return Response.json({ ok: true, watchlist });
 }
 

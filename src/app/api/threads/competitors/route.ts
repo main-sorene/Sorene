@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { verifyAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
 
 export interface Competitor {
   username: string;
@@ -17,8 +18,11 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const key = projectTitle ? `threadsCompetitors__${slug(projectTitle)}` : "threadsCompetitors";
+
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const competitors = (snap.data()?.threadsCompetitors ?? []) as Competitor[];
+  const competitors = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
   return Response.json({ competitors });
 }
 
@@ -26,6 +30,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const key = projectTitle ? `threadsCompetitors__${slug(projectTitle)}` : "threadsCompetitors";
 
   const body = await req.json() as { action: "add" | "analyze" | "remove"; username?: string };
   const db = getAdminFirestore();
@@ -36,27 +43,27 @@ export async function POST(req: NextRequest) {
     if (!username) return Response.json({ error: "Missing username" }, { status: 400 });
 
     const snap = await docRef.get();
-    const existing = (snap.data()?.threadsCompetitors ?? []) as Competitor[];
+    const existing = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
     if (existing.find((c) => c.username === username)) {
       return Response.json({ error: "Already added" }, { status: 409 });
     }
     const updated = [...existing, { username, addedAt: Date.now() }];
-    await docRef.set({ threadsCompetitors: updated }, { merge: true });
+    await docRef.set({ [key]: updated }, { merge: true });
     return Response.json({ ok: true, competitors: updated });
   }
 
   if (body.action === "remove") {
     const username = body.username?.replace(/^@/, "").trim().toLowerCase();
     const snap = await docRef.get();
-    const existing = (snap.data()?.threadsCompetitors ?? []) as Competitor[];
+    const existing = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
     const updated = existing.filter((c) => c.username !== username);
-    await docRef.set({ threadsCompetitors: updated }, { merge: true });
+    await docRef.set({ [key]: updated }, { merge: true });
     return Response.json({ ok: true, competitors: updated });
   }
 
   if (body.action === "analyze") {
     const snap = await docRef.get();
-    const competitors = (snap.data()?.threadsCompetitors ?? []) as Competitor[];
+    const competitors = (snap.data()?.[key] ?? (projectTitle ? snap.data()?.threadsCompetitors : undefined) ?? []) as Competitor[];
     if (competitors.length === 0) return Response.json({ error: "No competitors added" }, { status: 400 });
 
     // Get the user's Threads access token to fetch competitor posts
@@ -126,7 +133,7 @@ Keep each paragraph under 70 words. Output nothing else.`,
       }
     }
 
-    await docRef.set({ threadsCompetitors: updated }, { merge: true });
+    await docRef.set({ [key]: updated }, { merge: true });
     return Response.json({ ok: true, competitors: updated });
   }
 

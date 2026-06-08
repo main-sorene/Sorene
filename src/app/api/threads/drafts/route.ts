@@ -17,14 +17,20 @@ export interface DraftBatch {
   savedAt: number;
 }
 
+const slug = (t: string) => t.replace(/[.\[\]#$\/]/g, "_").slice(0, 80);
+
 // GET — load saved draft batch
 export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const batchKey = projectTitle ? `threadsDraftBatch__${slug(projectTitle)}` : "threadsDraftBatch";
+
   const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const batch = snap.data()?.threadsDraftBatch as DraftBatch | undefined;
-  console.log("[drafts GET] uid:", user.uid, "email:", user.email, "drafts:", batch?.drafts?.length ?? 0);
+  const userData = snap.data();
+  const batch = (userData?.[batchKey] ?? (projectTitle ? userData?.threadsDraftBatch : undefined)) as DraftBatch | undefined;
+  console.log("[drafts GET] uid:", user.uid, "email:", user.email, "key:", batchKey, "drafts:", batch?.drafts?.length ?? 0);
   return Response.json({ batch: batch ?? null });
 }
 
@@ -32,6 +38,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const batchKey = projectTitle ? `threadsDraftBatch__${slug(projectTitle)}` : "threadsDraftBatch";
 
   const body = await req.json() as Partial<DraftBatch>;
   const batch: DraftBatch = {
@@ -43,9 +52,9 @@ export async function PUT(req: NextRequest) {
     savedAt: Date.now(),
   };
 
-  console.log("[drafts PUT]", user.uid, "drafts:", batch.drafts.length, "frozen:", batch.drafts.filter((d: DraftPost & { frozen?: boolean }) => d.frozen).length);
+  console.log("[drafts PUT]", user.uid, "key:", batchKey, "drafts:", batch.drafts.length, "frozen:", batch.drafts.filter((d: DraftPost & { frozen?: boolean }) => d.frozen).length);
   await getAdminFirestore().collection("users").doc(user.uid).set(
-    { threadsDraftBatch: batch },
+    { [batchKey]: batch },
     { merge: true }
   );
 
@@ -57,9 +66,12 @@ export async function DELETE(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const batchKey = projectTitle ? `threadsDraftBatch__${slug(projectTitle)}` : "threadsDraftBatch";
+
   const { FieldValue } = await import("firebase-admin/firestore");
   await getAdminFirestore().collection("users").doc(user.uid).update({
-    threadsDraftBatch: FieldValue.delete(),
+    [batchKey]: FieldValue.delete(),
   });
 
   return Response.json({ ok: true });

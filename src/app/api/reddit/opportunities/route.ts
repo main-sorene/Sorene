@@ -4,6 +4,7 @@ import { verifyAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 import type { RedditWatchlist } from "../watchlist/route";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
 
 export interface RedditOpportunity {
   id: string;
@@ -49,9 +50,13 @@ export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const key = projectTitle ? `redditOpportunities__${slug(projectTitle)}` : "redditOpportunities";
+
   const db = getAdminFirestore();
   const snap = await db.collection("users").doc(user.uid).get();
-  const opportunities = (snap.data()?.redditOpportunities ?? []) as RedditOpportunity[];
+  const data = snap.data();
+  const opportunities = (data?.[key] ?? (projectTitle ? data?.redditOpportunities : undefined) ?? []) as RedditOpportunity[];
   return Response.json({ opportunities: opportunities.filter((o) => !o.dismissed) });
 }
 
@@ -60,16 +65,21 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const oppKey = projectTitle ? `redditOpportunities__${slug(projectTitle)}` : "redditOpportunities";
+  const watchlistKey = projectTitle ? `redditWatchlist__${slug(projectTitle)}` : "redditWatchlist";
+
   const db = getAdminFirestore();
   const userSnap = await db.collection("users").doc(user.uid).get();
-  const watchlist = userSnap.data()?.redditWatchlist as RedditWatchlist | undefined;
+  const userData = userSnap.data();
+  const watchlist = (userData?.[watchlistKey] ?? (projectTitle ? userData?.redditWatchlist : undefined)) as RedditWatchlist | undefined;
   const approvedSubreddits = (watchlist?.subreddits ?? []).filter((s) => s.addedBy === "user" || s.approved);
 
   if (approvedSubreddits.length === 0 || !watchlist?.keywords?.length) {
     return Response.json({ error: "Add subreddits and keywords first" }, { status: 400 });
   }
 
-  let accessToken = userSnap.data()?.integrations?.reddit?.accessToken;
+  let accessToken = userData?.integrations?.reddit?.accessToken;
   if (!accessToken) {
     const integSnap = await db.doc(`users/${user.uid}/integrations/reddit`).get();
     accessToken = integSnap.data()?.accessToken;
@@ -78,11 +88,11 @@ export async function POST(req: NextRequest) {
   if (!accessToken) return Response.json({ error: "Reddit not connected" }, { status: 400 });
 
   const productContext = [
-    userSnap.data()?.project?.oneliner ?? "",
+    userData?.project?.oneliner ?? "",
     watchlist.keywords.join(", "),
   ].filter(Boolean).join(" — ");
 
-  const existing = (userSnap.data()?.redditOpportunities ?? []) as RedditOpportunity[];
+  const existing = (userData?.[oppKey] ?? (projectTitle ? userData?.redditOpportunities : undefined) ?? []) as RedditOpportunity[];
   const seenIds = new Set(existing.map((o) => o.threadId));
   const newOpportunities: RedditOpportunity[] = [];
 
@@ -142,7 +152,7 @@ Write a helpful reply. If the product is directly relevant to their problem, men
 
   if (newOpportunities.length > 0) {
     const updated = [...existing, ...newOpportunities].slice(-50); // keep last 50
-    await db.collection("users").doc(user.uid).set({ redditOpportunities: updated }, { merge: true });
+    await db.collection("users").doc(user.uid).set({ [oppKey]: updated }, { merge: true });
   }
 
   return Response.json({ ok: true, found: newOpportunities.length, opportunities: newOpportunities });
@@ -153,10 +163,14 @@ export async function PATCH(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const oppKey = projectTitle ? `redditOpportunities__${slug(projectTitle)}` : "redditOpportunities";
+
   const { id, action, draftReply } = await req.json() as { id: string; action: "dismiss" | "post" | "update_draft"; draftReply?: string };
   const db = getAdminFirestore();
   const snap = await db.collection("users").doc(user.uid).get();
-  const opportunities = (snap.data()?.redditOpportunities ?? []) as RedditOpportunity[];
+  const data = snap.data();
+  const opportunities = (data?.[oppKey] ?? (projectTitle ? data?.redditOpportunities : undefined) ?? []) as RedditOpportunity[];
 
   const updated = opportunities.map((o) => {
     if (o.id !== id) return o;
@@ -166,7 +180,7 @@ export async function PATCH(req: NextRequest) {
     return o;
   });
 
-  await db.collection("users").doc(user.uid).set({ redditOpportunities: updated }, { merge: true });
+  await db.collection("users").doc(user.uid).set({ [oppKey]: updated }, { merge: true });
 
   // If posting, submit to Reddit
   if (action === "post") {

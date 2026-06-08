@@ -46,6 +46,28 @@ export async function GET(req: NextRequest) {
   return Response.json({ users: result });
 }
 
+// DELETE — keep only the latest N pending posts for a user, remove the rest
+export async function DELETE(req: NextRequest) {
+  const secret = req.headers.get("x-admin-secret");
+  if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { uid, keep = 21 } = await req.json() as { uid: string; keep?: number };
+  if (!uid) return Response.json({ error: "Missing uid" }, { status: 400 });
+
+  const db = getAdminFirestore();
+  const snap = await db.collection("users").doc(uid).collection("threadsScheduled").get();
+
+  // Sort pending posts by createdAt descending, keep the latest `keep`, delete the rest
+  const pending = snap.docs
+    .filter((d) => d.data().status === "pending")
+    .sort((a, b) => (b.data().createdAt ?? 0) - (a.data().createdAt ?? 0));
+
+  const toDelete = pending.slice(keep);
+  for (const doc of toDelete) await doc.ref.delete();
+
+  return Response.json({ ok: true, deleted: toDelete.length, kept: Math.min(pending.length, keep), uid });
+}
+
 // One-shot admin endpoint to deduplicate threadsScheduled for a given uid or email
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");

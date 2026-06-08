@@ -11,7 +11,7 @@ export interface DraftPost {
 export interface DraftBatch {
   drafts: DraftPost[];
   ctaLink: string;
-  cadence: 1 | 2;
+  cadence: 1 | 2 | 3;
   slotOverrides: Record<string, number>;
   userNotes: string;
   savedAt: number;

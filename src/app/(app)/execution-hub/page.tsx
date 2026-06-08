@@ -8201,7 +8201,8 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   const [scanningHistory, setScanningHistory] = useState(false);
 
   // Weekly batch
-  const [cadence, setCadence] = useState<1 | 2>(1);
+  const [cadence, setCadence] = useState<1 | 2 | 3>(1);
+  const [generateMode, setGenerateMode] = useState<"single" | 1 | 2 | 3 | null>(null);
   const [ctaLink, setCtaLink] = useState("");
   const [userNotes, setUserNotes] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -8236,7 +8237,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     const today = new Date();
     today.setSeconds(0, 0);
     for (let day = 0; day < 7; day++) {
-      const times = cadence === 2 ? bestTimes : [bestTimes[0]];
+      const times = cadence === 3 ? [...bestTimes, bestTimes[0]] : cadence === 2 ? bestTimes : [bestTimes[0]];
       for (const t of times) {
         const [h, m] = t.split(":").map(Number);
         const d = new Date(today);
@@ -8265,7 +8266,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       setScheduledPosts(data.posts ?? []);
     }
     if (draftsRes.ok) {
-      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2; slotOverrides: Record<string, number>; userNotes?: string } | null };
+      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2 | 3; slotOverrides: Record<string, number>; userNotes?: string } | null };
       if (data.batch && data.batch.drafts.length > 0) {
         setWeekDrafts(data.batch.drafts);
         setCtaLink(data.batch.ctaLink ?? "");
@@ -8415,12 +8416,25 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     setDisconnecting(false);
   };
 
-  const generateWeek = async () => {
+  const generateWeek = async (mode?: "single" | 1 | 2 | 3) => {
+    const activeMode = mode ?? generateMode ?? 1;
+    const isSingle = activeMode === "single";
+    const newCadence: 1 | 2 | 3 = isSingle ? 1 : (activeMode as 1 | 2 | 3);
+    if (!isSingle) setCadence(newCadence);
     setGenerating(true);
     setWeekDrafts([]);
+    // Auto-save link/notes before generating
+    try {
+      const { authFetch: af } = await import("@/lib/authFetch");
+      await af("/api/threads/drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ drafts: [], ctaLink, cadence: newCadence, slotOverrides, userNotes }),
+      });
+    } catch { /* ignore */ }
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const count = cadence * 7;
+      const count = isSingle ? 1 : newCadence * 7;
 
       // Pull brand context from Launchpad localStorage
       const title = project?.title ?? "";
@@ -8488,7 +8502,8 @@ WHAT TO AVOID:
 FORMATS — use different ones across the week:
 hot take / genuine question / short story with a twist / thing I got wrong / observation nobody says out loud / something I'm trying / result or data point with context`;
 
-      const prompt = `Write exactly ${count} Threads posts for a 7-day schedule (${cadence} post${cadence > 1 ? "s" : ""} per day).
+      const scheduleNote = isSingle ? "1 standalone post" : `a 7-day schedule (${newCadence} post${newCadence > 1 ? "s" : ""} per day)`;
+      const prompt = `Write exactly ${count} Threads post${count > 1 ? "s" : ""} for ${scheduleNote}.
 
 ${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}${notesContext}
 
@@ -8745,22 +8760,21 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           </div>
         </div>
         <div className="p-5 space-y-4">
-          {/* Cadence */}
-          <div>
-            <p className="text-[12px] font-medium text-[#151515] mb-2">Posts per day</p>
-            <div className="flex gap-2">
-              {([1, 2] as const).map((n) => (
-                <button key={n} onClick={() => setCadence(n)}
-                  className={cn("flex-1 py-2.5 rounded-xl text-[12px] font-semibold border transition-colors",
-                    cadence === n ? "bg-[#151515] text-white border-[#151515]" : "bg-white text-[#62646A] border-gray-200 hover:border-[#151515] hover:text-[#151515]")}>
-                  {n === 1 ? "1 post / day" : "2 posts / day"}
-                </button>
-              ))}
+          {/* Best posting times */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Best posting times</p>
+              <p className="text-[12px] text-[#151515] font-medium mt-0.5">{bestTimes.join(" & ")}</p>
             </div>
-            <p className="text-[11px] text-[#9A9A9A] mt-1.5">
-              Best times: <span className="font-medium text-[#151515]">{bestTimes.join(" & ")}</span>
-              {dna ? " · from your history" : " · general best practice"}
-            </p>
+            <div className="text-right">
+              {dna ? (
+                <p className="text-[11px] text-[#32C382]">Optimised from your history · updates with each scan</p>
+              ) : (
+                <button onClick={scanHistory} disabled={scanningHistory} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline underline-offset-2 decoration-dotted">
+                  {scanningHistory ? "Scanning…" : "Scan history to personalise →"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* CTA link */}
@@ -8796,10 +8810,31 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             </div>
           </div>
 
-          <button onClick={generateWeek} disabled={generating}
-            className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-            {generating ? <><Loader2 size={13} className="animate-spin" /> Writing {cadence * 7} posts…</> : `Generate ${cadence * 7} posts for the week →`}
-          </button>
+          {/* Generate options */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-2">Generate posts</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { mode: "single" as const, label: "1 post", sub: "Just one for now" },
+                { mode: 1 as const, label: "1 / day", sub: "7 posts · 1 week" },
+                { mode: 2 as const, label: "2 / day", sub: "14 posts · 1 week" },
+                { mode: 3 as const, label: "3 / day", sub: "21 posts · 1 week" },
+              ]).map(({ mode, label, sub }) => (
+                <button key={String(mode)} onClick={() => { setGenerateMode(mode); generateWeek(mode); }} disabled={generating}
+                  className={cn(
+                    "flex flex-col items-start px-3.5 py-3 rounded-xl border text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                    generateMode === mode && generating
+                      ? "bg-[#151515] border-[#151515] text-white"
+                      : "bg-white border-gray-200 hover:border-[#151515] hover:bg-[#FAFAFA]"
+                  )}>
+                  <span className={cn("text-[13px] font-semibold", generateMode === mode && generating ? "text-white" : "text-[#151515]")}>
+                    {generateMode === mode && generating ? <span className="flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Writing…</span> : label}
+                  </span>
+                  <span className={cn("text-[11px] mt-0.5", generateMode === mode && generating ? "text-white/70" : "text-[#9A9A9A]")}>{sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

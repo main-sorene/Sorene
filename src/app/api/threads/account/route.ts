@@ -22,9 +22,10 @@ export async function GET(req: NextRequest) {
   const dnaKey = projectTitle ? `threadsContentDNA__${slug(projectTitle)}` : "threadsContentDNA";
   let dna = userData?.[dnaKey] ?? null;
 
-  // Legacy fallback: only for the project designated as the legacy owner
+  // Legacy fallback: only for the project designated as the legacy owner — also migrate lazily
   if (!dna && projectTitle && userData?.threadsContentDNA && userData?.legacyProjectTitle === projectTitle) {
     dna = userData.threadsContentDNA;
+    db.doc(`users/${user.uid}`).set({ [dnaKey]: dna }, { merge: true }).catch(() => {});
   }
 
   if (!account?.accessToken) return Response.json({ connected: false, dna });

@@ -26,9 +26,10 @@ export async function GET(req: NextRequest) {
   const userData = snap.data();
   let competitors = (userData?.[key] ?? []) as Competitor[];
 
-  // Legacy fallback: only for the project designated as the legacy owner
+  // Legacy fallback: only for the project designated as the legacy owner — also migrate lazily
   if (competitors.length === 0 && projectTitle && userData?.threadsCompetitors?.length && userData?.legacyProjectTitle === projectTitle) {
     competitors = userData.threadsCompetitors as Competitor[];
+    db.collection("users").doc(user.uid).set({ [key]: competitors }, { merge: true }).catch(() => {});
   }
 
   return Response.json({ competitors });

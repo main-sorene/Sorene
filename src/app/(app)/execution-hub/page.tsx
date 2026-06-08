@@ -9158,7 +9158,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
     setCancellingId(null);
   };
 
-  const [openChannels, setOpenChannels] = useState<Set<string>>(new Set(["threads"]));
+  const [openChannels, setOpenChannels] = useState<Set<string>>(new Set());
   const toggleChannel = (id: string) => setOpenChannels((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);

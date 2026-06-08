@@ -32,9 +32,10 @@ export async function GET(req: NextRequest) {
   const userData = snap.data();
   let batch = userData?.[batchKey] as DraftBatch | undefined;
 
-  // Legacy fallback: only for the project designated as the legacy owner
+  // Legacy fallback: only for the project designated as the legacy owner — also migrate lazily
   if (!batch && projectTitle && userData?.threadsDraftBatch && userData?.legacyProjectTitle === projectTitle) {
     batch = userData.threadsDraftBatch as DraftBatch;
+    db.collection("users").doc(user.uid).set({ [batchKey]: batch }, { merge: true }).catch(() => {});
   }
 
   console.log("[drafts GET] uid:", user.uid, "email:", user.email, "key:", batchKey, "drafts:", batch?.drafts?.length ?? 0);

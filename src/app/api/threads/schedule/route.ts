@@ -28,11 +28,14 @@ export async function GET(req: NextRequest) {
   if (projectTitle) {
     const tagged = await col.where("projectTitle", "==", projectTitle).get();
     if (isLegacyOwner) {
-      // Also include old posts that were created before project namespacing
+      // Also include old posts without projectTitle — stamp them lazily
       const allDocs = await col.get();
       const untagged = allDocs.docs.filter((d) => !d.data().projectTitle);
-      const combined = new Map<string, FirebaseFirestore.DocumentData>();
-      [...tagged.docs, ...untagged].forEach((d) => combined.set(d.id, d.data()));
+      if (untagged.length > 0) {
+        const writeBatch = db.batch();
+        untagged.forEach((d) => writeBatch.update(d.ref, { projectTitle }));
+        writeBatch.commit().catch(() => {});
+      }
       snap = { docs: [...tagged.docs, ...untagged].filter((d, i, arr) => arr.findIndex((x) => x.id === d.id) === i) } as unknown as FirebaseFirestore.QuerySnapshot;
     } else {
       snap = tagged;

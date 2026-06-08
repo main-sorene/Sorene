@@ -8188,6 +8188,7 @@ const THREADS_ICON = (
 interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; ctaComment?: string; scheduledId?: string; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
+interface Competitor { username: string; addedAt: number; lastAnalyzedAt?: number; postCount?: number; insights?: string; }
 
 function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
@@ -8199,6 +8200,12 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // Content DNA
   const [dna, setDna] = useState<ContentDNA | null>(null);
   const [scanningHistory, setScanningHistory] = useState(false);
+
+  // Competitor analysis
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [competitorInput, setCompetitorInput] = useState("");
+  const [analyzingCompetitors, setAnalyzingCompetitors] = useState(false);
+  const [competitorError, setCompetitorError] = useState("");
 
   // Weekly batch
   const [cadence, setCadence] = useState<1 | 2 | 3>(1);
@@ -8267,10 +8274,11 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
-    const [accountRes, scheduleRes, draftsRes] = await Promise.all([
+    const [accountRes, scheduleRes, draftsRes, competitorsRes] = await Promise.all([
       authFetch("/api/threads/account"),
       authFetch("/api/threads/schedule"),
       authFetch("/api/threads/drafts"),
+      authFetch("/api/threads/competitors"),
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
@@ -8294,6 +8302,10 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
           setSlotOverrides(data.batch.slotOverrides ?? {});
         }
       }
+    }
+    if (competitorsRes.ok) {
+      const data = await competitorsRes.json() as { competitors: Competitor[] };
+      setCompetitors(data.competitors ?? []);
     }
     setDraftsLoaded(true);
   };
@@ -8393,6 +8405,53 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     setScanningHistory(false);
   };
 
+  const addCompetitor = async () => {
+    const username = competitorInput.replace(/^@/, "").trim().toLowerCase();
+    if (!username) return;
+    setCompetitorError("");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/competitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", username }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; competitors?: Competitor[] };
+      if (data.ok) { setCompetitors(data.competitors ?? []); setCompetitorInput(""); }
+      else setCompetitorError(data.error ?? "Failed to add");
+    } catch { setCompetitorError("Failed to add"); }
+  };
+
+  const removeCompetitor = async (username: string) => {
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/competitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", username }),
+      });
+      const data = await res.json() as { competitors?: Competitor[] };
+      setCompetitors(data.competitors ?? []);
+    } catch { /* ignore */ }
+  };
+
+  const analyzeCompetitors = async () => {
+    setAnalyzingCompetitors(true);
+    setCompetitorError("");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/competitors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "analyze" }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; competitors?: Competitor[] };
+      if (data.ok) setCompetitors(data.competitors ?? []);
+      else setCompetitorError(data.error ?? "Analysis failed");
+    } catch { setCompetitorError("Analysis failed"); }
+    setAnalyzingCompetitors(false);
+  };
+
   const connectThreads = async () => {
     setConnecting(true);
     try {
@@ -8484,6 +8543,11 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         ? `\nContent DNA — analysis of this account's top-performing posts (apply these patterns): ${dna.summary}`
         : "";
 
+      const analyzedCompetitors = competitors.filter((c) => c.insights && !c.insights.startsWith("Could not") && !c.insights.startsWith("No public") && !c.insights.startsWith("Analysis failed"));
+      const competitorContext = analyzedCompetitors.length > 0
+        ? `\nCompetitor intelligence — patterns from high-performing accounts in this space (steal the tactics, not the content):\n${analyzedCompetitors.map((c) => `@${c.username}: ${c.insights}`).join("\n\n")}`
+        : "";
+
       const ctaNote = ctaLink.trim()
         ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. For posts that naturally call for a CTA, add TWO lines at the very end:
 [ADD_LINK_IN_COMMENT]
@@ -8531,7 +8595,7 @@ hot take / genuine question / short story with a twist / thing I got wrong / obs
       const scheduleNote = isSingle ? "1 standalone post" : `a 7-day schedule (${newCadence} post${newCadence > 1 ? "s" : ""} per day)`;
       const prompt = `Write exactly ${count} Threads post${count > 1 ? "s" : ""} for ${scheduleNote}.
 
-${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}${notesContext}
+${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${competitorContext}${ctaNote}${notesContext}
 
 Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Add [ADD_LINK_IN_COMMENT] + [CTA_COMMENT: ...] to more than half the posts — at minimum ${Math.ceil(count * 0.55)} out of ${count}. Only skip the CTA on posts where it would feel truly forced (e.g. a raw vulnerable moment or a question post with no clear answer).
 
@@ -8826,6 +8890,83 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
               <button onClick={scanHistory} className="text-[12px] text-[#9A9A9A] hover:text-[#151515] transition-colors">
                 Scan your post history → Sorene learns what works for your audience
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Competitor Intelligence */}
+        {accountStatus === "connected" && (
+          <div className="px-5 py-4 border-b border-[#ECEDEE] space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Competitor Intelligence</p>
+              {competitors.some((c) => c.insights) && (
+                <button onClick={analyzeCompetitors} disabled={analyzingCompetitors}
+                  className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium flex items-center gap-1">
+                  {analyzingCompetitors ? <Loader2 size={11} className="animate-spin" /> : null}
+                  Re-analyze
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-[#9A9A9A]">Add accounts posting similar content — Sorene learns their patterns to improve your posts.</p>
+
+            {/* Add input */}
+            <div className="flex gap-2">
+              <input
+                value={competitorInput}
+                onChange={(e) => setCompetitorInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCompetitor()}
+                placeholder="@username"
+                className="flex-1 text-[12px] px-3 py-2 rounded-xl border border-[#ECEDEE] bg-white focus:outline-none focus:border-[#151515] transition-colors placeholder:text-[#C4C4C4]"
+              />
+              <button onClick={addCompetitor} disabled={!competitorInput.trim()}
+                className="px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+                Add
+              </button>
+            </div>
+            {competitorError && <p className="text-[11px] text-[#DF2E16]">{competitorError}</p>}
+
+            {/* Competitor list */}
+            {competitors.length > 0 && (
+              <div className="space-y-2">
+                {competitors.map((c) => (
+                  <div key={c.username} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-[#FAFAFA]">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-semibold text-[#151515]">@{c.username}</span>
+                        {c.lastAnalyzedAt && (
+                          <span className="text-[10px] text-[#32C382] font-medium">{c.postCount} posts analysed</span>
+                        )}
+                        {!c.lastAnalyzedAt && (
+                          <span className="text-[10px] text-[#9A9A9A]">Not yet analysed</span>
+                        )}
+                      </div>
+                      <button onClick={() => removeCompetitor(c.username)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                        Remove
+                      </button>
+                    </div>
+                    {c.insights && (
+                      <div className="px-3 py-2.5 space-y-1.5">
+                        {c.insights.split(/\n\n+/).map((para, i) => (
+                          <p key={i} className="text-[11px] text-[#62646A] leading-relaxed">
+                            {para.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+                              part.startsWith("**") && part.endsWith("**")
+                                ? <strong key={j} className="font-semibold text-[#151515]">{part.slice(2, -2)}</strong>
+                                : part
+                            )}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {!competitors.every((c) => c.lastAnalyzedAt) || competitors.some((c) => !c.insights) ? (
+                  <button onClick={analyzeCompetitors} disabled={analyzingCompetitors}
+                    className="w-full py-2.5 rounded-xl border border-[#ECEDEE] text-[12px] font-semibold text-[#151515] hover:bg-[#FAFAFA] transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                    {analyzingCompetitors ? <><Loader2 size={12} className="animate-spin" /> Analysing…</> : "Analyse all accounts →"}
+                  </button>
+                ) : null}
+              </div>
             )}
           </div>
         )}

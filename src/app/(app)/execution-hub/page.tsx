@@ -8196,6 +8196,19 @@ interface RedditOpportunity { id: string; subreddit: string; threadId: string; t
 
 function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
+
+  if (!project) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-[13px] text-[#9A9A9A]">Select a project from your Hub first to use this agent.</p>
+      </div>
+    );
+  }
+
+  return <ContentSocialAgentUIInner project={project} authUser={authUser} />;
+}
+
+function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCardData; authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
   const [accountStatus, setAccountStatus] = useState<"loading" | "disconnected" | "connected">("loading");
   const [username, setUsername] = useState("");
   const [connecting, setConnecting] = useState(false);

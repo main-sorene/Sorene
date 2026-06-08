@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   const redirectUri = process.env.REDDIT_REDIRECT_URI ?? `${process.env.NEXT_PUBLIC_APP_URL}/api/reddit/callback`;
   if (!clientId) return Response.json({ error: "Reddit OAuth not configured" }, { status: 500 });
 
-  const state = Buffer.from(JSON.stringify({ uid: user.uid })).toString("base64url");
+  const project = req.nextUrl.searchParams.get("project") ?? "";
+  const state = Buffer.from(JSON.stringify({ uid: user.uid, project })).toString("base64url");
   const scope = "identity read submit";
   const url = `https://www.reddit.com/api/v1/authorize?client_id=${clientId}&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}&duration=permanent&scope=${encodeURIComponent(scope)}`;
 

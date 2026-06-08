@@ -22,9 +22,14 @@ export interface RedditOpportunity {
   postedAt?: number;
 }
 
-async function refreshToken(uid: string): Promise<string | null> {
+async function refreshToken(uid: string, projectTitle?: string | null): Promise<string | null> {
   const db = getAdminFirestore();
-  const snap = await db.doc(`users/${uid}/integrations/reddit`).get();
+  const docId = projectTitle ? `reddit__${slug(projectTitle)}` : "reddit";
+  let snap = await db.doc(`users/${uid}/integrations/${docId}`).get();
+  // Fall back to legacy doc for backwards compat
+  if (!snap.data()?.refreshToken && projectTitle) {
+    snap = await db.doc(`users/${uid}/integrations/reddit`).get();
+  }
   const data = snap.data();
   if (!data?.refreshToken) return null;
 
@@ -79,12 +84,18 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Add subreddits and keywords first" }, { status: 400 });
   }
 
+  const integDocId = projectTitle ? `reddit__${slug(projectTitle)}` : "reddit";
   let accessToken = userData?.integrations?.reddit?.accessToken;
   if (!accessToken) {
-    const integSnap = await db.doc(`users/${user.uid}/integrations/reddit`).get();
+    const integSnap = await db.doc(`users/${user.uid}/integrations/${integDocId}`).get();
     accessToken = integSnap.data()?.accessToken;
+    // Fall back to legacy doc
+    if (!accessToken && projectTitle) {
+      const legacySnap = await db.doc(`users/${user.uid}/integrations/reddit`).get();
+      accessToken = legacySnap.data()?.accessToken;
+    }
   }
-  if (!accessToken) accessToken = await refreshToken(user.uid);
+  if (!accessToken) accessToken = await refreshToken(user.uid, projectTitle);
   if (!accessToken) return Response.json({ error: "Reddit not connected" }, { status: 400 });
 
   const productContext = [
@@ -187,8 +198,12 @@ export async function PATCH(req: NextRequest) {
     const opp = opportunities.find((o) => o.id === id);
     if (opp) {
       try {
-        const integSnap = await db.doc(`users/${user.uid}/integrations/reddit`).get();
-        const accessToken = integSnap.data()?.accessToken;
+        const patchIntegDocId = projectTitle ? `reddit__${slug(projectTitle)}` : "reddit";
+        let patchIntegSnap = await db.doc(`users/${user.uid}/integrations/${patchIntegDocId}`).get();
+        if (!patchIntegSnap.data()?.accessToken && projectTitle) {
+          patchIntegSnap = await db.doc(`users/${user.uid}/integrations/reddit`).get();
+        }
+        const accessToken = patchIntegSnap.data()?.accessToken;
         if (accessToken) {
           await fetch("https://oauth.reddit.com/api/comment", {
             method: "POST",

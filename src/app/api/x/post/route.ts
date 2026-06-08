@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { verifyAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
 import type { XKeys } from "../keys/route";
 
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
+
 export async function postTweet(apiKey: string, apiSecret: string, accessToken: string, accessTokenSecret: string, text: string): Promise<string> {
   const OAuth = (await import("oauth-1.0a")).default;
   const crypto = await import("crypto");
@@ -32,11 +34,19 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
   const { text } = await req.json() as { text: string };
   if (!text?.trim()) return Response.json({ error: "Missing text" }, { status: 400 });
 
-  const snap = await getAdminFirestore().doc(`users/${user.uid}/integrations/x`).get();
-  const keys = snap.data() as XKeys | undefined;
+  const db = getAdminFirestore();
+  const docId = projectTitle ? `x__${slug(projectTitle)}` : "x";
+  const snap = await db.doc(`users/${user.uid}/integrations/${docId}`).get();
+  let keys = snap.data() as XKeys | undefined;
+  // Fall back to legacy doc for backwards compat
+  if (!keys?.apiKey && projectTitle) {
+    const legacy = await db.doc(`users/${user.uid}/integrations/x`).get();
+    keys = legacy.data() as XKeys | undefined;
+  }
   if (!keys?.apiKey) return Response.json({ error: "X not connected" }, { status: 400 });
 
   try {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
@@ -13,7 +15,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { uid } = JSON.parse(Buffer.from(state, "base64url").toString()) as { uid: string };
+    const decoded = JSON.parse(Buffer.from(state, "base64url").toString()) as { uid: string; project?: string };
+    const uid = decoded.uid;
+    const project = decoded.project ?? "";
     const clientId = process.env.REDDIT_CLIENT_ID!;
     const clientSecret = process.env.REDDIT_CLIENT_SECRET!;
     const redirectUri = process.env.REDDIT_REDIRECT_URI ?? `${appUrl}/api/reddit/callback`;
@@ -36,7 +40,8 @@ export async function GET(req: NextRequest) {
     });
     const me = await meRes.json() as { name?: string; total_karma?: number };
 
-    await getAdminFirestore().doc(`users/${uid}/integrations/reddit`).set({
+    const docId = project ? `reddit__${slug(project)}` : "reddit";
+    await getAdminFirestore().doc(`users/${uid}/integrations/${docId}`).set({
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       username: me.name ?? "",
@@ -44,7 +49,9 @@ export async function GET(req: NextRequest) {
       connectedAt: Date.now(),
     });
 
-    return NextResponse.redirect(`${appUrl}/execution-hub?tab=agents&reddit_connected=1`);
+    const redirectParams = new URLSearchParams({ tab: "agents", reddit_connected: "1" });
+    if (project) redirectParams.set("project", project);
+    return NextResponse.redirect(`${appUrl}/execution-hub?${redirectParams}`);
   } catch (err) {
     console.error("[reddit/callback]", err);
     return NextResponse.redirect(`${appUrl}/execution-hub?tab=agents&reddit_error=1`);

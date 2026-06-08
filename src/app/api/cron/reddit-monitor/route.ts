@@ -47,25 +47,37 @@ export async function GET(req: NextRequest) {
 
   for (const userDoc of usersSnap.docs) {
     try {
-      const integSnap = await userDoc.ref.collection("integrations").doc("reddit").get();
-      if (!integSnap.exists) continue;
+      // Get all integration docs for this user, find those starting with "reddit"
+      const allIntegSnaps = await userDoc.ref.collection("integrations").get();
+      const redditIntegDocs = allIntegSnaps.docs.filter(
+        (d) => d.id === "reddit" || d.id.startsWith("reddit__")
+      );
+      if (redditIntegDocs.length === 0) continue;
 
-      const watchlist = userDoc.data()?.redditWatchlist as { subreddits?: WatchedSubreddit[]; keywords?: string[] } | undefined;
-      const approvedSubs = (watchlist?.subreddits ?? []).filter((s) => s.addedBy === "user" || s.approved);
-      if (!approvedSubs.length || !watchlist?.keywords?.length) continue;
+      // Extract project slug from doc id (e.g. "reddit__MyProject" -> "MyProject", "reddit" -> "")
+      const userData = userDoc.data();
 
-      let accessToken = integSnap.data()?.accessToken;
-      if (!accessToken) accessToken = await refreshToken(userDoc.id);
-      if (!accessToken) continue;
+      for (const integDoc of redditIntegDocs) {
+        const projectSlug = integDoc.id.startsWith("reddit__") ? integDoc.id.slice("reddit__".length) : "";
+        const watchlistKey = projectSlug ? `redditWatchlist__${projectSlug}` : "redditWatchlist";
+        const oppKey = projectSlug ? `redditOpportunities__${projectSlug}` : "redditOpportunities";
 
-      const productContext = [
-        userDoc.data()?.project?.oneliner ?? "",
-        watchlist.keywords.join(", "),
-      ].filter(Boolean).join(" — ");
+        const watchlist = userData?.[watchlistKey] as { subreddits?: WatchedSubreddit[]; keywords?: string[] } | undefined;
+        const approvedSubs = (watchlist?.subreddits ?? []).filter((s) => s.addedBy === "user" || s.approved);
+        if (!approvedSubs.length || !watchlist?.keywords?.length) continue;
 
-      const existing = (userDoc.data()?.redditOpportunities ?? []) as RedditOpportunity[];
-      const seenIds = new Set(existing.map((o) => o.threadId));
-      const newOpps: RedditOpportunity[] = [];
+        let accessToken = integDoc.data()?.accessToken;
+        if (!accessToken) accessToken = await refreshToken(userDoc.id);
+        if (!accessToken) continue;
+
+        const productContext = [
+          userData?.project?.oneliner ?? "",
+          watchlist.keywords.join(", "),
+        ].filter(Boolean).join(" — ");
+
+        const existing = (userData?.[oppKey] ?? []) as RedditOpportunity[];
+        const seenIds = new Set(existing.map((o) => o.threadId));
+        const newOpps: RedditOpportunity[] = [];
 
       for (const sub of approvedSubs.slice(0, 3)) {
         const res = await fetch(`https://oauth.reddit.com/r/${sub.name}/new?limit=25`, {
@@ -99,12 +111,13 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (newOpps.length > 0) {
-        const updated = [...existing, ...newOpps].slice(-50);
-        await userDoc.ref.set({ redditOpportunities: updated }, { merge: true });
-        found += newOpps.length;
+        if (newOpps.length > 0) {
+          const updated = [...existing, ...newOpps].slice(-50);
+          await userDoc.ref.set({ [oppKey]: updated }, { merge: true });
+          found += newOpps.length;
+        }
+        scanned++;
       }
-      scanned++;
     } catch (err) {
       console.error("[reddit-monitor] uid:", userDoc.id, err);
     }

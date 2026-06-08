@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
+
 // Refresh a long-lived token if it was issued more than 30 days ago (expires at 60)
 async function maybeRefreshToken(accessToken: string, connectedAt: number): Promise<string> {
   const ageDays = (Date.now() - connectedAt) / (1000 * 60 * 60 * 24);
@@ -82,17 +84,6 @@ export async function GET(req: NextRequest) {
     const usersSnap = await db.collection("users").get();
 
     await Promise.all(usersSnap.docs.map(async (userDoc) => {
-      const accountSnap = await userDoc.ref.collection("integrations").doc("threads").get();
-      if (!accountSnap.exists) return;
-
-      const account = accountSnap.data() as { accessToken: string; threadsUserId: string; connectedAt?: number };
-      if (!account?.accessToken || !account.threadsUserId) return;
-
-      const freshToken = await maybeRefreshToken(account.accessToken, account.connectedAt ?? 0);
-      if (freshToken !== account.accessToken) {
-        await accountSnap.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
-      }
-
       // Fetch all scheduled posts for this user and filter in memory — no composite index
       const allPostsSnap = await userDoc.ref.collection("threadsScheduled").get();
       const duePosts = allPostsSnap.docs.filter((d) => {
@@ -104,19 +95,48 @@ export async function GET(req: NextRequest) {
         return false;
       });
 
+      if (duePosts.length === 0) return;
+
+      // Group due posts by projectTitle so we can look up the right account per project
+      type PostData = { text: string; id: string; ctaLink?: string; projectTitle?: string };
+      const groups = new Map<string, typeof duePosts>();
       for (const postDoc of duePosts) {
-        const post = postDoc.data() as { text: string; id: string; ctaLink?: string };
-        try {
-          const postId = await publishPost(freshToken, account.threadsUserId, post.text);
-          await postDoc.ref.update({ status: "published", publishedAt: now, postId });
-          await userDoc.ref.collection("threadsPosts").doc(postId).set({ id: postId, text: post.text, postedAt: now });
-          if (post.ctaLink) await postReply(freshToken, account.threadsUserId, postId, post.ctaLink);
-          processed++;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[threads-cron] failed user=${userDoc.id} post=${post.id}:`, msg);
-          await postDoc.ref.update({ status: "failed", failReason: msg });
-          failed++;
+        const p = postDoc.data() as PostData;
+        const key = p.projectTitle ?? "";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(postDoc);
+      }
+
+      for (const [projectTitle, posts] of groups) {
+        // Look up the namespaced account first, fall back to legacy
+        const namespacedDocId = projectTitle ? `threads__${slug(projectTitle)}` : "threads";
+        const accountSnap = await userDoc.ref.collection("integrations").doc(namespacedDocId).get();
+        const accountData = accountSnap.exists
+          ? accountSnap.data()
+          : (await userDoc.ref.collection("integrations").doc("threads").get()).data();
+
+        if (!accountData?.accessToken || !accountData.threadsUserId) continue;
+
+        const account = accountData as { accessToken: string; threadsUserId: string; connectedAt?: number };
+        const freshToken = await maybeRefreshToken(account.accessToken, account.connectedAt ?? 0);
+        if (freshToken !== account.accessToken) {
+          await accountSnap.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
+        }
+
+        for (const postDoc of posts) {
+          const post = postDoc.data() as PostData;
+          try {
+            const postId = await publishPost(freshToken, account.threadsUserId, post.text);
+            await postDoc.ref.update({ status: "published", publishedAt: now, postId });
+            await userDoc.ref.collection("threadsPosts").doc(postId).set({ id: postId, text: post.text, postedAt: now });
+            if (post.ctaLink) await postReply(freshToken, account.threadsUserId, postId, post.ctaLink);
+            processed++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[threads-cron] failed user=${userDoc.id} post=${post.id}:`, msg);
+            await postDoc.ref.update({ status: "failed", failReason: msg });
+            failed++;
+          }
         }
       }
     }));

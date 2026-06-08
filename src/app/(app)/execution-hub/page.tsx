@@ -8332,9 +8332,9 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       authFetch(`/api/threads/schedule?project=${p}`),
       authFetch(`/api/threads/drafts?project=${p}`),
       authFetch(`/api/threads/competitors?project=${p}`),
-      authFetch("/api/x/keys"),
+      authFetch(`/api/x/keys?project=${p}`),
       authFetch(`/api/x/schedule?project=${p}`),
-      authFetch("/api/reddit/account"),
+      authFetch(`/api/reddit/account?project=${p}`),
       authFetch(`/api/reddit/watchlist?project=${p}`),
       authFetch(`/api/reddit/opportunities?project=${p}`),
     ]);
@@ -8431,12 +8431,15 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       setRedditStatus("connected");
       const url = new URL(window.location.href);
       url.searchParams.delete("reddit_connected");
+      const connectedProject = params.get("project") ?? "";
+      if (connectedProject) url.searchParams.delete("project");
       window.history.replaceState({}, "", url.toString());
-      import("@/lib/authFetch").then(({ authFetch }) =>
-        authFetch("/api/reddit/account").then((r) => r.json()).then((data: { connected: boolean; username?: string; karma?: number }) => {
+      import("@/lib/authFetch").then(({ authFetch }) => {
+        const projectParam = connectedProject ? `?project=${encodeURIComponent(connectedProject)}` : "";
+        return authFetch(`/api/reddit/account${projectParam}`).then((r) => r.json()).then((data: { connected: boolean; username?: string; karma?: number }) => {
           if (data.connected) { setRedditUsername(data.username ?? ""); setRedditKarma(data.karma ?? 0); }
-        })
-      ).catch(() => {});
+        });
+      }).catch(() => {});
     }
     if (params.get("reddit_error") === "1") {
       setRedditStatus("disconnected");
@@ -8555,7 +8558,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     setXConnectError("");
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/x/keys", {
+      const res = await authFetch(`/api/x/keys?project=${encodeURIComponent(project.title)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(xKeys),
@@ -8576,7 +8579,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const disconnectX = async () => {
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      await authFetch("/api/x/keys", { method: "DELETE" });
+      await authFetch(`/api/x/keys?project=${encodeURIComponent(project.title)}`, { method: "DELETE" });
       setXStatus("disconnected");
       setXUsername("");
       setXDrafts([]);
@@ -8833,7 +8836,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
 
   const connectReddit = async () => {
     const { authFetch } = await import("@/lib/authFetch");
-    const res = await authFetch("/api/reddit/auth");
+    const res = await authFetch(`/api/reddit/auth?project=${encodeURIComponent(project.title)}`);
     if (res.ok) {
       const data = await res.json() as { url: string };
       if (data.url) window.location.href = data.url;
@@ -8844,7 +8847,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     setConnecting(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/threads/auth");
+      const res = await authFetch(`/api/threads/auth?project=${encodeURIComponent(project.title)}`);
       if (res.ok) {
         const data = await res.json() as { url?: string };
         if (data.url) {
@@ -8853,7 +8856,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
           const poll = setInterval(async () => {
             try {
               const { authFetch: af } = await import("@/lib/authFetch");
-              const r = await af("/api/threads/account");
+              const r = await af(`/api/threads/account?project=${encodeURIComponent(project.title)}`);
               if (r.ok) {
                 const d = await r.json() as { connected: boolean; username?: string };
                 if (d.connected) {
@@ -8878,7 +8881,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
     setDisconnecting(true);
     try {
       const { authFetch } = await import("@/lib/authFetch");
-      await authFetch("/api/threads/account", { method: "DELETE" });
+      await authFetch(`/api/threads/account?project=${encodeURIComponent(project.title)}`, { method: "DELETE" });
       setAccountStatus("disconnected");
       setUsername("");
       setWeekDrafts([]);
@@ -9951,7 +9954,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                         <p className="text-[12px] font-semibold text-[#151515]">u/{redditUsername}</p>
                         {redditKarma > 0 && <p className="text-[11px] text-[#9A9A9A]">{redditKarma.toLocaleString()} karma</p>}
                       </div>
-                      <button onClick={async () => { const { authFetch } = await import("@/lib/authFetch"); await authFetch("/api/reddit/account", { method: "DELETE" }); setRedditStatus("disconnected"); setRedditUsername(""); setRedditKarma(0); }}
+                      <button onClick={async () => { const { authFetch } = await import("@/lib/authFetch"); await authFetch(`/api/reddit/account?project=${encodeURIComponent(project.title)}`, { method: "DELETE" }); setRedditStatus("disconnected"); setRedditUsername(""); setRedditKarma(0); }}
                         className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">Disconnect</button>
                     </div>
 

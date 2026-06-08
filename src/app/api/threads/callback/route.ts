@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
 
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
+
 // Meta redirects here after the user approves the Threads OAuth dialog.
 // Exchanges the code for a short-lived token, then upgrades to a long-lived token,
-// and stores it in Firestore under users/{uid}/integrations/threads.
+// and stores it in Firestore under users/{uid}/integrations/threads__{slug(project)}.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
@@ -17,9 +19,11 @@ export async function GET(req: NextRequest) {
   }
 
   let uid: string;
+  let project = "";
   try {
     const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
     uid = decoded.uid;
+    project = decoded.project ?? "";
     if (!uid) throw new Error("missing uid");
   } catch {
     return Response.redirect(`${appUrl}/execution-hub?threads_error=1`);
@@ -70,9 +74,10 @@ export async function GET(req: NextRequest) {
       ? await profileRes.json() as { id: string; username: string; threads_profile_picture_url?: string }
       : { id: threadsUserId, username: "", threads_profile_picture_url: undefined };
 
-    // Step 4 — persist to Firestore
+    // Step 4 — persist to Firestore (namespaced by project)
+    const docId = project ? `threads__${slug(project)}` : "threads";
     const db = getAdminFirestore();
-    await db.doc(`users/${uid}/integrations/threads`).set({
+    await db.doc(`users/${uid}/integrations/${docId}`).set({
       accessToken: longToken,
       threadsUserId,
       username: profile.username ?? "",
@@ -81,7 +86,9 @@ export async function GET(req: NextRequest) {
       connectedAt: Date.now(),
     });
 
-    return Response.redirect(`${appUrl}/execution-hub?threads_connected=1`);
+    const redirectParams = new URLSearchParams({ threads_connected: "1" });
+    if (project) redirectParams.set("project", project);
+    return Response.redirect(`${appUrl}/execution-hub?${redirectParams}`);
   } catch (err) {
     console.error("[threads/callback]", err);
     return Response.redirect(`${appUrl}/execution-hub?threads_error=1`);

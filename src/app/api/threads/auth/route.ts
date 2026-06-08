@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Threads not configured" }, { status: 500 });
   }
 
-  const state = Buffer.from(JSON.stringify({ uid: user.uid, ts: Date.now() })).toString("base64url");
+  const project = req.nextUrl.searchParams.get("project") ?? "";
+  const state = Buffer.from(JSON.stringify({ uid: user.uid, project, ts: Date.now() })).toString("base64url");
 
   const params = new URLSearchParams({
     client_id: THREADS_APP_ID,

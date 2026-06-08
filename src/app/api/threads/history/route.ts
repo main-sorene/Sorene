@@ -45,8 +45,11 @@ export async function GET(req: NextRequest) {
   const projectTitle = req.nextUrl.searchParams.get("project");
 
   const db = getAdminFirestore();
-  const snap = await db.doc(`users/${user.uid}/integrations/threads`).get();
-  const account = snap.data();
+  const docId = projectTitle ? `threads__${slug(projectTitle)}` : "threads";
+  const snap = await db.doc(`users/${user.uid}/integrations/${docId}`).get();
+  // Fall back to legacy doc for backwards compat
+  const accountData = snap.data() ?? (projectTitle ? (await db.doc(`users/${user.uid}/integrations/threads`).get()).data() : undefined);
+  const account = accountData;
   if (!account?.accessToken) return Response.json({ error: "Not connected" }, { status: 400 });
 
   const accessToken = account.accessToken as string;

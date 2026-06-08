@@ -10,13 +10,23 @@ export interface XKeys {
   username?: string;
 }
 
+const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
+
 // GET — check if X keys are saved
 export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const snap = await getAdminFirestore().doc(`users/${user.uid}/integrations/x`).get();
-  const keys = snap.data() as XKeys | undefined;
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const docId = projectTitle ? `x__${slug(projectTitle)}` : "x";
+  const db = getAdminFirestore();
+  const snap = await db.doc(`users/${user.uid}/integrations/${docId}`).get();
+  let keys = snap.data() as XKeys | undefined;
+  // Fall back to legacy doc for backwards compat
+  if (!keys?.apiKey && projectTitle) {
+    const legacy = await db.doc(`users/${user.uid}/integrations/x`).get();
+    keys = legacy.data() as XKeys | undefined;
+  }
   if (!keys?.apiKey) return Response.json({ connected: false });
   return Response.json({ connected: true, username: keys.username, connectedAt: keys.connectedAt });
 }
@@ -26,6 +36,7 @@ export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  const projectTitle = req.nextUrl.searchParams.get("project");
   const { apiKey, apiSecret, accessToken, accessTokenSecret } = await req.json() as Partial<XKeys>;
   if (!apiKey?.trim() || !apiSecret?.trim() || !accessToken?.trim() || !accessTokenSecret?.trim()) {
     return Response.json({ error: "All four keys are required" }, { status: 400 });
@@ -65,7 +76,8 @@ export async function POST(req: NextRequest) {
       username: data.data.username,
     };
 
-    await getAdminFirestore().doc(`users/${user.uid}/integrations/x`).set(keys);
+    const docId = projectTitle ? `x__${slug(projectTitle)}` : "x";
+    await getAdminFirestore().doc(`users/${user.uid}/integrations/${docId}`).set(keys);
     return Response.json({ ok: true, username: data.data.username });
   } catch (err) {
     console.error("[x/keys POST]", err);
@@ -78,6 +90,8 @@ export async function DELETE(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  await getAdminFirestore().doc(`users/${user.uid}/integrations/x`).delete();
+  const projectTitle = req.nextUrl.searchParams.get("project");
+  const docId = projectTitle ? `x__${slug(projectTitle)}` : "x";
+  await getAdminFirestore().doc(`users/${user.uid}/integrations/${docId}`).delete();
   return Response.json({ ok: true });
 }

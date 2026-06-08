@@ -89,11 +89,8 @@ function computeScores(answers: RawAnswers): DnaScores {
   if (q5.includes("Within 3 months")) constraintBase -= 3;
   else if (q5.includes("12+ months") || q5.includes("Income isn't")) constraintBase += 3;
 
-  const constraint_score = (Math.max(3, Math.min(9, constraintBase)) === 3
-    ? 3
-    : Math.max(3, Math.min(9, constraintBase)) <= 6
-    ? 6
-    : 9) as 3 | 6 | 9;
+  const clampedConstraint = Math.max(3, Math.min(9, constraintBase));
+  const constraint_score = (clampedConstraint === 3 ? 3 : clampedConstraint <= 6 ? 6 : 9) as 3 | 6 | 9;
 
   // readiness_score
   let readiness_score: 3 | 5 | 8 = 5;

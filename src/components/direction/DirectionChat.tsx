@@ -21,7 +21,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
   const [, setInputValue] = useAtom(inputValueAtom);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const userName = authUser?.displayName?.split(" ")[0] || "Justin";
+  const userName = authUser?.displayName?.split(" ")[0] || "there";
   const hasMessages = conversation && conversation.messages.length > 0;
 
   const { suggestionLabels, handleRecipeClick } = useRecipePreset({
@@ -73,7 +73,7 @@ export function DirectionChat({ onClose }: { onClose?: () => void }) {
             <img
               src={
                 authUser?.profile?.photoUrl ||
-                "https://i.pravatar.cc/150?u=justin"
+                `https://i.pravatar.cc/150?u=${authUser?.uid ?? "user"}`
               }
               alt="User Avatar"
               className="w-full h-full object-cover"

@@ -73,7 +73,7 @@ export function DNAChat({ onClose }: { onClose?: () => void }) {
             <img
               src={
                 authUser?.profile?.photoUrl ||
-                "https://i.pravatar.cc/150?u=justin"
+                `https://i.pravatar.cc/150?u=${authUser?.uid ?? "user"}`
               }
               alt="User Avatar"
               className="w-full h-full object-cover"

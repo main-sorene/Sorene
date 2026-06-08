@@ -31,6 +31,7 @@ import {
   Archive,
   AlertTriangle,
   CalendarDays,
+  Clock,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
@@ -9645,6 +9646,35 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           )}
         </div>
       )}
+
+      {/* Legacy scheduled posts — posts that exist in Firestore but don't have a matching weekDraft */}
+      {(() => {
+        const frozenTexts = new Set(weekDrafts.filter((d) => d.frozen).map((d) => d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim()));
+        const orphaned = scheduledPosts.filter((p) => !frozenTexts.has(p.text.trim()));
+        if (orphaned.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock size={13} className="text-[#9A9A9A]" />
+              <p className="text-[12px] font-semibold text-[#151515]">Scheduled Queue</p>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[#9A9A9A] font-semibold">{orphaned.length}</span>
+            </div>
+            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden divide-y divide-[#ECEDEE]">
+              {orphaned.map((post) => (
+                <div key={post.id} className="px-4 py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] text-[#151515] leading-relaxed line-clamp-2">{post.text}</p>
+                    <p className="text-[10px] text-[#9A9A9A] mt-1">{new Date(post.scheduledAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                  <button onClick={() => cancelScheduled(post.id)} className="text-[#BCBCBC] hover:text-[#DF2E16] transition-colors shrink-0 mt-0.5">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
             </motion.div>
           )}

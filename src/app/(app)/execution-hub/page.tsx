@@ -4981,10 +4981,6 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      {!chosen && !editing && (
-        <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
-      )}
-
       {chosen && !editing && (
         <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
@@ -4992,24 +4988,29 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
           <button onClick={() => startEdit()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors shrink-0">Edit</button>
         </div>
       )}
-      {editing && (
-        <div className="space-y-2">
-          <textarea
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            rows={3}
-            autoFocus
-            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
-          />
-          <div className="flex gap-2">
-            <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
-            <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
-          </div>
-        </div>
-      )}
 
-      {!editing && (
+      {/* Suggestions + edit field — shown when no value saved yet, or when editing */}
+      {(!chosen || editing) && (
         <>
+          {!chosen && !editing && (
+            <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
+          )}
+          {editing && (
+            <div className="space-y-2">
+              <textarea
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="Type or choose an option below…"
+                className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+              />
+              <div className="flex gap-2">
+                <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+                <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+              </div>
+            </div>
+          )}
           {stage === "idle" && (
             <button onClick={generateSuggestions} disabled={!title}
               className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">

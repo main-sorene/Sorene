@@ -5870,7 +5870,7 @@ function LaunchPadContent({ project, onNameChosen, autoOpenPillarId, onAutoOpenC
   }, [autoOpenPillarId]);
 
   return (
-    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="p-6 flex flex-col gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
         <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen}
           autoOpen={autoOpenPillarId === pillar.id} />

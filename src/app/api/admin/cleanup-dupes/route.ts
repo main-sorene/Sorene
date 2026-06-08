@@ -11,19 +11,37 @@ export async function POST(req: NextRequest) {
 
   let targetUid = uid;
   if (!targetUid && email) {
-    // Try Firebase Auth first
+    // Try Firebase Auth getUserByEmail
     try {
       const { getAdminAuth } = await import("@/lib/firebaseAdmin");
-      const userRecord = await getAdminAuth()!.getUserByEmail(email);
-      targetUid = userRecord.uid;
-    } catch { /* fall through to Firestore scan */ }
-    // Fall back to scanning Firestore user docs
+      const auth = getAdminAuth();
+      if (auth) {
+        const userRecord = await auth.getUserByEmail(email);
+        targetUid = userRecord.uid;
+      }
+    } catch (e) { console.log("[cleanup-dupes] auth lookup failed:", e) }
+    // Fall back: scan Firestore user docs for any email field
     if (!targetUid) {
       const snap = await db.collection("users").get();
       for (const doc of snap.docs) {
         const d = doc.data();
-        if (d.email === email || d.emailAddress === email) { targetUid = doc.id; break; }
+        if (d.email === email || d.emailAddress === email || d.userEmail === email) {
+          targetUid = doc.id;
+          break;
+        }
       }
+    }
+    // Last resort: list Firebase Auth users
+    if (!targetUid) {
+      try {
+        const { getAdminAuth } = await import("@/lib/firebaseAdmin");
+        const auth = getAdminAuth();
+        if (auth) {
+          const list = await auth.listUsers(1000);
+          const found = list.users.find((u) => u.email === email);
+          if (found) targetUid = found.uid;
+        }
+      } catch (e) { console.log("[cleanup-dupes] listUsers failed:", e) }
     }
   }
   if (!targetUid) return Response.json({ error: "User not found", searched: email ?? uid }, { status: 404 });

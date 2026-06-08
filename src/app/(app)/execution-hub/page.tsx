@@ -8185,9 +8185,9 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
-interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; }
+interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
 
 function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
   const authUser = useAtomValue(userAtom);
@@ -8326,14 +8326,14 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         if (!res.ok) return;
         const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
         const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
-        const failedTexts = new Set((data.failed ?? []).map((p) => p.text.trim()));
         const publishedTexts = new Set((data.published ?? []).map((p) => p.text.trim()));
         const now = Date.now();
         setWeekDrafts((prev) => prev.map((d) => {
           if (!d.frozen || d.posted || d.postFailed) return d;
           if ((d.frozenAt ?? 0) > now) return d;
           const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-          if (failedTexts.has(cleanText)) return { ...d, postFailed: true };
+          const failedPost = (data.failed ?? []).find((p) => p.text.trim() === cleanText);
+          if (failedPost) return { ...d, postFailed: true, failReason: failedPost.failReason };
           if (publishedTexts.has(cleanText)) return { ...d, posted: true };
           if (!pendingTexts.has(cleanText)) return { ...d, posted: true }; // fallback
           return d;
@@ -8775,8 +8775,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                       {draft.posted ? (
                         <><CheckCircle2 size={11} className="text-[#32C382]" /><span className="text-[11px] text-[#32C382] font-medium">Posted</span></>
                       ) : draft.postFailed ? (
-                        <><span className="text-[11px] text-red-500 font-medium">Failed to post</span>
-                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, postFailed: false, editing: false } : d))}
+                        <><span className="text-[11px] text-red-500 font-medium">Failed to post{draft.failReason ? `: ${draft.failReason}` : ""}</span>
+                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, postFailed: false, failReason: undefined, editing: false } : d))}
                           className="text-[11px] text-red-400 hover:text-red-600 transition-colors font-medium underline underline-offset-2">
                           Retry
                         </button></>

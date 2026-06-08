@@ -97,7 +97,8 @@ export async function GET(req: NextRequest) {
       const allPostsSnap = await userDoc.ref.collection("threadsScheduled").get();
       const duePosts = allPostsSnap.docs.filter((d) => {
         const p = d.data();
-        return p.status === "pending" && p.scheduledAt <= now;
+        // Retry failed posts whose scheduled time has passed (picks up posts stuck from previous broken cron)
+        return (p.status === "pending" || p.status === "failed") && p.scheduledAt <= now;
       });
 
       for (const postDoc of duePosts) {

@@ -788,12 +788,12 @@ export function SettingsModal() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[#151515]">
-                      {pct >= 100 ? "You've used all your free credits" : "You're almost out of credits"}
+                      {pct >= 100 ? "You've reached your usage limit" : "You're almost at your usage limit"}
                     </p>
                     <p className="text-xs text-[#62646A] mt-0.5 leading-relaxed">
                       {pct >= 100
                         ? "Upgrade to continue using Sorene. Your DNA and Direction results are saved."
-                        : `${effectiveLimit - used} credits left. Upgrade to keep your momentum going.`}
+                        : "Upgrade to keep your momentum going."}
                     </p>
                   </div>
                 </div>

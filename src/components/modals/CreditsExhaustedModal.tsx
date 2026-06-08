@@ -6,7 +6,6 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
-import { PLAN_CREDITS } from "@/lib/credits";
 
 export function CreditsExhaustedModal() {
   const [isOpen, setIsOpen] = useAtom(isCreditsExhaustedOpenAtom);
@@ -16,13 +15,6 @@ export function CreditsExhaustedModal() {
   const isPaidPlan = subscription?.active && plan !== "free";
   const isProPlan = plan === "pro";
   const isStarterPlan = plan === "starter";
-
-  const used = subscription?.credits?.used ?? 0;
-  const limit = (subscription?.credits?.limit ?? PLAN_CREDITS.free) + (subscription?.credits?.extra ?? 0);
-
-  const starterCredits = PLAN_CREDITS.starter.toLocaleString();
-  const proCredits = PLAN_CREDITS.pro.toLocaleString();
-  const freeCredits = PLAN_CREDITS.free.toLocaleString();
 
   const handleUpgrade = () => {
     setIsOpen(false);
@@ -44,39 +36,33 @@ export function CreditsExhaustedModal() {
             </div>
             <div>
               <h2 className="text-lg font-semibold text-[#151515]">
-                You&apos;ve used all your credits
+                You&apos;ve reached your usage limit
               </h2>
               <p className="text-sm text-[#62646A] mt-1 leading-relaxed">
                 {isProPlan
-                  ? `You've used all ${limit.toLocaleString()} of your monthly credits. Wait for your monthly reset or contact support.`
+                  ? "You've reached your monthly limit. Your usage will reset at the start of your next billing cycle."
                   : isStarterPlan
-                  ? `You've used all ${limit.toLocaleString()} of your monthly credits. Upgrade to Professional for ${proCredits} credits/month.`
-                  : `You've used all ${limit.toLocaleString()} of your free credits. Upgrade to keep using Sorene.`}
+                  ? "You've reached your monthly limit. Upgrade to Professional for more usage."
+                  : "You've reached your free usage limit. Upgrade to keep using Sorene."}
               </p>
             </div>
           </div>
 
-          {/* Plan comparison — shown for free and starter users */}
+          {/* Plan options — free and starter only */}
           {!isProPlan && (
             <div className="space-y-2">
               {!isPaidPlan && (
                 <div className="flex items-center justify-between p-3 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA]">
-                  <div>
-                    <p className="text-sm font-medium text-[#151515]">Starter</p>
-                    <p className="text-xs text-[#62646A]">{starterCredits} credits / month</p>
-                  </div>
+                  <p className="text-sm font-medium text-[#151515]">Starter</p>
                   <p className="text-sm font-semibold text-[#151515]">$15 / mo</p>
                 </div>
               )}
               <div className="flex items-center justify-between p-3 rounded-xl border border-[#FDC24C] bg-[#FFFBF0]">
-                <div>
-                  <p className="text-sm font-medium text-[#151515]">
-                    Professional
-                    <span className="ml-2 text-xs text-[#F99207] font-semibold bg-[#FFF1C6] px-2 py-0.5 rounded-full">
-                      Most popular
-                    </span>
-                  </p>
-                  <p className="text-xs text-[#62646A]">{proCredits} credits / month</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-[#151515]">Professional</p>
+                  <span className="text-xs text-[#F99207] font-semibold bg-[#FFF1C6] px-2 py-0.5 rounded-full">
+                    Most popular
+                  </span>
                 </div>
                 <p className="text-sm font-semibold text-[#151515]">$49 / mo</p>
               </div>

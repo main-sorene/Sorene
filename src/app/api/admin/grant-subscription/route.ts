@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await setCreditsLimit(userKey, plan, true);
+  // false = preserve existing usage; only update limit and reset_at
+  await setCreditsLimit(userKey, plan, false);
 
   const snap = await db.collection("users").doc(userKey).get();
   const data = snap.data();

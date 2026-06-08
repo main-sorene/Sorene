@@ -987,17 +987,18 @@ Return a JSON object with exactly these keys:
               <div className="rounded-2xl border border-[#ECEDEE] p-4 space-y-2">
                 <p className="text-[12px] font-medium text-[#151515]">Not quite right?</p>
                 <p className="text-[11px] text-[#9A9A9A]">Give feedback and Sorene will revise based on your validation history.</p>
-                <div className="flex gap-2 mt-2">
-                  <input value={strategyFeedback} onChange={(e) => setStrategyFeedback(e.target.value)}
-                    placeholder="e.g. the pricing should be higher, audience is more senior"
-                    onKeyDown={(e) => { if (e.key === "Enter" && strategyFeedback.trim()) generateStrategy(strategyFeedback); }}
-                    className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
-                  <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
-                    className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-[12px] font-semibold text-[#151515] hover:border-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
-                    {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
-                    Revise
-                  </button>
-                </div>
+                <textarea
+                  value={strategyFeedback}
+                  onChange={(e) => setStrategyFeedback(e.target.value)}
+                  placeholder="e.g. the pricing should be higher, audience is more senior"
+                  rows={3}
+                  className="w-full mt-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[13px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors resize-none"
+                />
+                <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
+                  className="w-full py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                  {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
+                  Revise
+                </button>
               </div>
 
               {/* Confirm to launch */}

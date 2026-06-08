@@ -73,19 +73,43 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch cancel_at date from Stripe if subscription is pending cancellation
+    // Verify plan against Stripe as source of truth when a real subscription ID exists.
+    // This prevents stale/incorrect Firestore data from showing the wrong plan.
+    let truePlan = sub.plan;
+    let trueStatus = sub.status;
     let cancelAt: number | null = null;
-    if (sub.cancel_at_period_end && sub.stripeSubscriptionId && sub.stripeSubscriptionId !== "manual-grant") {
+    const stripeSubId: string = sub.stripeSubscriptionId;
+
+    if (stripeSubId && stripeSubId !== "manual-grant") {
       try {
-        const stripeSub = await getStripe().subscriptions.retrieve(sub.stripeSubscriptionId);
-        cancelAt = (stripeSub as unknown as { current_period_end?: number }).current_period_end ?? null;
-      } catch { /* non-fatal */ }
+        const stripeSub = await getStripe().subscriptions.retrieve(stripeSubId);
+        const stripeMetaPlan = stripeSub.metadata?.plan;
+        if (stripeMetaPlan) truePlan = stripeMetaPlan;
+        trueStatus = stripeSub.status;
+        const trueActive = trueStatus === "active" || trueStatus === "trialing";
+
+        // Sync back to Firestore if plan or status drifted
+        if (stripeMetaPlan && (stripeMetaPlan !== sub.plan || trueStatus !== sub.status)) {
+          const docKey = Object.keys(subOwner).length ? keys[datas.indexOf(subOwner)] : uid;
+          await db.collection("users").doc(docKey || uid).set(
+            { subscription: { plan: truePlan, status: trueStatus, active: trueActive } },
+            { mergeFields: ["subscription.plan", "subscription.status", "subscription.active"] },
+          );
+        }
+
+        if (stripeSub.cancel_at_period_end) {
+          cancelAt = (stripeSub as unknown as { current_period_end?: number }).current_period_end ?? null;
+        }
+      } catch { /* non-fatal — fall back to Firestore data */ }
+    } else if (sub.cancel_at_period_end) {
+      // manual-grant: no Stripe to check
+      cancelAt = null;
     }
 
     return NextResponse.json({
       active: sub.active,
-      plan: sub.plan,
-      status: sub.status,
+      plan: truePlan,
+      status: trueStatus,
       duration: sub.duration,
       cancel_at_period_end: sub.cancel_at_period_end ?? false,
       cancel_at: cancelAt,

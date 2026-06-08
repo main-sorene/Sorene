@@ -8203,6 +8203,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // Weekly batch
   const [cadence, setCadence] = useState<1 | 2>(1);
   const [ctaLink, setCtaLink] = useState("");
+  const [userNotes, setUserNotes] = useState("");
   const [generating, setGenerating] = useState(false);
   const [weekDrafts, setWeekDrafts] = useState<ThreadsDraft[]>([]);
   const [draftsLoaded, setDraftsLoaded] = useState(false);
@@ -8263,12 +8264,13 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       setScheduledPosts(data.posts ?? []);
     }
     if (draftsRes.ok) {
-      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2; slotOverrides: Record<string, number> } | null };
+      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2; slotOverrides: Record<string, number>; userNotes?: string } | null };
       if (data.batch && data.batch.drafts.length > 0) {
         setWeekDrafts(data.batch.drafts);
         setCtaLink(data.batch.ctaLink ?? "");
         setCadence(data.batch.cadence ?? 1);
         setSlotOverrides(data.batch.slotOverrides ?? {});
+        setUserNotes(data.batch.userNotes ?? "");
       }
     }
     setDraftsLoaded(true);
@@ -8292,14 +8294,14 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
           await authFetch("/api/threads/drafts", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides }),
+            body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
           });
         }
       } catch { /* ignore */ }
     }, 1500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekDrafts, ctaLink, cadence, slotOverrides, draftsLoaded]);
+  }, [weekDrafts, ctaLink, cadence, slotOverrides, userNotes, draftsLoaded]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -8446,6 +8448,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       const ctaNote = ctaLink.trim()
         ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. Mark posts that should have a CTA link with [ADD_LINK_IN_COMMENT] at the very end.`
         : "";
+      const notesContext = userNotes.trim() ? `\nFounder's notes / guidance: ${userNotes.trim()}` : "";
 
       const system = `You are ghostwriting Threads posts for a founder. Your job is to sound like a real person — not a content creator, not a marketer, not an AI.
 
@@ -8480,7 +8483,7 @@ hot take / genuine question / short story with a twist / thing I got wrong / obs
 
       const prompt = `Write exactly ${count} Threads posts for a 7-day schedule (${cadence} post${cadence > 1 ? "s" : ""} per day).
 
-${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}
+${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}${notesContext}
 
 Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Add [ADD_LINK_IN_COMMENT] to posts where a CTA feels natural — typically 3-4 out of ${count}. Never force it on every post.
 
@@ -8721,6 +8724,16 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
               placeholder="e.g. https://sorene.ai/waitlist"
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
             <p className="text-[11px] text-[#9A9A9A] mt-1">Links go in the first comment, not the post — Threads suppresses link reach.</p>
+          </div>
+
+          {/* Guidance notes */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-1.5">Your notes <span className="text-[#9A9A9A] font-normal">(optional)</span></p>
+            <textarea value={userNotes} onChange={(e) => setUserNotes(e.target.value)}
+              placeholder={"e.g. Focus on our beta launch this week. Avoid talking about pricing. Target corporate professionals thinking about starting a business."}
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors resize-none" />
+            <p className="text-[11px] text-[#9A9A9A] mt-1">Guide the AI — topics to focus on, things to avoid, tone adjustments. Saved automatically.</p>
           </div>
 
           <button onClick={generateWeek} disabled={generating}

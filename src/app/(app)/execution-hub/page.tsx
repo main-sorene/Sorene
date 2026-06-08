@@ -8236,11 +8236,13 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // - Picks 1/2/3 best time slots per day matching cadence
   // - Adds a small per-day minute variation so posts don't land the same minute every day
   // - Deduplicates same-day same-minute collisions
+  // - Loops up to 10 days so today's already-past slots don't leave Day 7 without a time
   const scheduleSlots = (() => {
     const slots: number[] = [];
     const today = new Date();
     today.setSeconds(0, 0);
-    for (let day = 0; day < 7; day++) {
+    const neededSlots = cadence * 7;
+    for (let day = 0; day < 10 && slots.length < neededSlots; day++) {
       // Pick how many time slots per day
       const dayTimes = cadence === 2 ? bestTimes.slice(0, 2)
         : cadence === 3 ? bestTimes.slice(0, 3)

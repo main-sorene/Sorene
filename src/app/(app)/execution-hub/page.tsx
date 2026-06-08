@@ -8628,12 +8628,33 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
     setCancellingId(null);
   };
 
+  const [openChannels, setOpenChannels] = useState<Set<string>>(new Set(["threads"]));
+  const toggleChannel = (id: string) => setOpenChannels((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const X_ICON = (
+    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-white">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+
+  const REDDIT_ICON = (
+    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+      <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+    </svg>
+  );
+
   return (
-    <div className="p-5 space-y-5">
-      {/* Threads connection */}
+    <div className="p-5 space-y-3">
+      {/* ── Threads channel ── */}
       <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-          <div className="flex items-center gap-3">
+        {/* Channel header — always visible */}
+        {/* Threads channel header */}
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
+          <button onClick={() => toggleChannel("threads")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
                 <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.064c0-3.518.85-6.372 2.495-8.423C5.845 1.277 8.599.095 12.18.071h.014c2.746.018 5.143.808 7.137 2.35 1.89 1.46 3.19 3.51 3.867 6.105l-2.012.54c-.55-2.07-1.586-3.696-3.078-4.832-1.584-1.213-3.564-1.826-5.889-1.82-2.94.02-5.086.92-6.37 2.67C4.568 6.89 3.937 9.19 3.937 12.004v.064c0 2.814.63 5.114 1.912 6.92 1.284 1.75 3.43 2.65 6.37 2.67 2.497.017 4.253-.557 5.5-1.752 1.392-1.332 2.094-3.31 2.086-5.876a7.2 7.2 0 0 0-.085-1.136h-7.558v-2.33h9.756c.112.573.168 1.176.168 1.793v.003c.013 3.363-.962 5.937-2.9 7.647-1.72 1.515-4.08 2.284-6.999 2.268Z" />
@@ -8645,31 +8666,40 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                 ? <p className="text-[11px] text-[#32C382]">Connected{username ? ` · @${username}` : ""}</p>
                 : <p className="text-[11px] text-[#9A9A9A]">Connect to generate and post directly</p>}
             </div>
-          </div>
-          <div className="flex items-center gap-3">
+          </button>
+          <div className="flex items-center gap-3 shrink-0">
             {accountStatus === "loading" && <Loader2 size={14} className="animate-spin text-[#9A9A9A]" />}
             {accountStatus === "connected" && (
               <>
-                <button onClick={scanHistory} disabled={scanningHistory}
+                <button onClick={(e) => { e.stopPropagation(); scanHistory(); }} disabled={scanningHistory}
                   className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium flex items-center gap-1">
                   {scanningHistory ? <Loader2 size={11} className="animate-spin" /> : null}
                   {dna ? "Re-scan" : "Scan history"}
                 </button>
-                <button onClick={disconnectThreads} disabled={disconnecting}
+                <button onClick={(e) => { e.stopPropagation(); disconnectThreads(); }} disabled={disconnecting}
                   className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors font-medium">
                   Disconnect
                 </button>
               </>
             )}
             {accountStatus === "disconnected" && (
-              <button onClick={connectThreads} disabled={connecting}
+              <button onClick={(e) => { e.stopPropagation(); connectThreads(); }} disabled={connecting}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-50">
                 {connecting ? <Loader2 size={12} className="animate-spin" /> : null}
                 Connect
               </button>
             )}
+            <button onClick={() => toggleChannel("threads")} className="text-[#9A9A9A] hover:text-[#151515] transition-colors ml-1">
+              <ChevronDown size={14} className={cn("transition-transform", openChannels.has("threads") && "rotate-180")} />
+            </button>
           </div>
         </div>
+
+        <AnimatePresence initial={false}>
+          {openChannels.has("threads") && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+              className="overflow-hidden border-t border-[#ECEDEE]">
         {accountStatus === "disconnected" && (
           <div className="px-5 py-4 text-center">
             <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate, schedule, and post directly from here.</p>
@@ -8677,7 +8707,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         )}
         {/* Content DNA */}
         {accountStatus === "connected" && (
-          <div className="px-5 py-4 border-t border-[#ECEDEE]">
+          <div className="px-5 py-4 border-b border-[#ECEDEE]">
             {scanningHistory && (
               <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
                 <Loader2 size={12} className="animate-spin" /> Scanning your post history…
@@ -8699,10 +8729,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             )}
           </div>
         )}
-      </div>
 
-      {/* Plan a week */}
-      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        {/* Plan a week */}
+        <div className="border-t border-[#ECEDEE] overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
           <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
             <CalendarDays size={14} className="text-white" />
@@ -8972,6 +9001,81 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
           )}
         </div>
       )}
+
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── X (Twitter) channel ── */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
+          <button onClick={() => toggleChannel("x")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
+              {X_ICON}
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">X (Twitter)</p>
+              <p className="text-[11px] text-[#9A9A9A]">Coming soon · scheduling &amp; posting</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Soon</span>
+            <button onClick={() => toggleChannel("x")} className="text-[#9A9A9A] hover:text-[#151515] transition-colors ml-1">
+              <ChevronDown size={14} className={cn("transition-transform", openChannels.has("x") && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+        <AnimatePresence initial={false}>
+          {openChannels.has("x") && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+              className="overflow-hidden border-t border-[#ECEDEE]">
+              <div className="p-5 space-y-4">
+                <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-4 text-center space-y-2">
+                  <p className="text-[13px] font-semibold text-[#151515]">X integration coming soon</p>
+                  <p className="text-[12px] text-[#9A9A9A] leading-relaxed">Generate and schedule posts for X/Twitter directly from Sorene — same workflow as Threads. Connect, generate a week of posts, approve and go.</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Reddit channel ── */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA]">
+          <button onClick={() => toggleChannel("reddit")} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[#FF4500]">
+              {REDDIT_ICON}
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Reddit</p>
+              <p className="text-[11px] text-[#9A9A9A]">Coming soon · subreddit posting</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-[#9A9A9A] font-medium">Soon</span>
+            <button onClick={() => toggleChannel("reddit")} className="text-[#9A9A9A] hover:text-[#151515] transition-colors ml-1">
+              <ChevronDown size={14} className={cn("transition-transform", openChannels.has("reddit") && "rotate-180")} />
+            </button>
+          </div>
+        </div>
+        <AnimatePresence initial={false}>
+          {openChannels.has("reddit") && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+              className="overflow-hidden border-t border-[#ECEDEE]">
+              <div className="p-5">
+                <div className="rounded-xl border border-[#ECEDEE] bg-[#FAFAFA] px-4 py-4 text-center space-y-2">
+                  <p className="text-[13px] font-semibold text-[#151515]">Reddit integration coming soon</p>
+                  <p className="text-[12px] text-[#9A9A9A] leading-relaxed">Post to subreddits, track engagement, and build community presence — all from Sorene.</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

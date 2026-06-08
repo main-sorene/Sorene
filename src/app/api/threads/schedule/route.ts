@@ -30,13 +30,22 @@ export async function GET(req: NextRequest) {
   return Response.json({ posts, failed, published });
 }
 
-// POST — create scheduled post
+// POST — create scheduled post (deduplicates by text — skips if already pending)
 export async function POST(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { text, scheduledAt, ctaLink } = await req.json() as { text: string; scheduledAt: number; ctaLink?: string };
   if (!text?.trim() || !scheduledAt) return Response.json({ error: "Missing fields" }, { status: 400 });
+
+  const db = getAdminFirestore();
+  const col = db.collection("users").doc(user.uid).collection("threadsScheduled");
+
+  // Deduplicate: if an identical pending post already exists, return it instead of creating a duplicate
+  const existing = await col.where("status", "==", "pending").where("text", "==", text.trim()).limit(1).get();
+  if (!existing.empty) {
+    return Response.json({ ok: true, post: existing.docs[0].data() as ScheduledPost });
+  }
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const post: ScheduledPost = {
@@ -48,10 +57,7 @@ export async function POST(req: NextRequest) {
     ...(ctaLink?.trim() ? { ctaLink: ctaLink.trim() } : {}),
   };
 
-  await getAdminFirestore()
-    .collection("users").doc(user.uid)
-    .collection("threadsScheduled").doc(id)
-    .set(post);
+  await col.doc(id).set(post);
 
   return Response.json({ ok: true, post });
 }

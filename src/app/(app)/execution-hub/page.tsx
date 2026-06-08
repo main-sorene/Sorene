@@ -6954,17 +6954,30 @@ function HiringPlanCard({ title }: { title: string }) {
 }
 
 // ── GrowthItemCard — expandable row ────────────
+const GROWTH_ITEM_META: Record<string, { gradient: string; tagline: string; description: string }> = {
+  business_plan:      { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #6366F1 35%, #8B5CF6 100%)", tagline: "Strategy · Vision", description: "A concise plan covering your market, business model, revenue streams, and 90-day execution roadmap." },
+  marketing_plan:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F38744 35%, #EF4444 100%)", tagline: "Channels · Tactics", description: "Channel-by-channel marketing plan with priority tactics tailored to your audience and offer." },
+  gtm_strategy:       { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #06B6D4 35%, #3B82F6 100%)", tagline: "Launch · Timeline", description: "Week-by-week go-to-market milestones to take your product from built to gaining traction." },
+  sales_playbook:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #10B981 35%, #059669 100%)", tagline: "Script · Objections", description: "Your sales opener, pitch, and objection-handling scripts based on your validated offer." },
+  financial_model:    { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F59E0B 35%, #D97706 100%)", tagline: "Revenue · Runway", description: "Editable revenue, cost, and runway projections across 1, 3, 6, and 12-month horizons." },
+  growth_metrics:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #A3E635 35%, #16B364 100%)", tagline: "North Star · KPIs", description: "Your single most important metric and the supporting KPIs that tell you if you're on track." },
+  retention_playbook: { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #EC4899 35%, #8B5CF6 100%)", tagline: "Onboarding · Churn", description: "Onboarding steps, check-in triggers, churn signals, and win-back tactics to keep customers longer." },
+  referral_strategy:  { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F59E0B 35%, #EF4444 100%)", tagline: "Referrals · Partners", description: "Referral program design, partner types to target, and an outreach script to start conversations." },
+  content_seo:        { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #06B6D4 35%, #10B981 100%)", tagline: "Content · SEO", description: "Keywords, content types, posting cadence, and your first 5 content ideas to build organic reach." },
+  pitch_deck:         { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #0A0A0A 35%, #374151 100%)", tagline: "Slides · Story", description: "A 10-slide pitch deck outline with AI-written bullets for each slide, ready to take into Canva or Figma." },
+  hiring_plan:        { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #6366F1 35%, #EC4899 100%)", tagline: "First hires · Roles", description: "When to hire, which roles come first, and the rationale for each based on your stage and offer." },
+};
+
 function GrowthItemCard({ id, label, project }: { id: string; label: string; project: DirectionCardData | null }) {
   const title = project?.title ?? "";
-  const [open, setOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
+  const meta = GROWTH_ITEM_META[id] ?? { gradient: "linear-gradient(135deg,#6366F1,#8B5CF6)", tagline: "", description: "" };
 
   useEffect(() => {
     try {
       const keyFn = GROWTH_STORAGE_KEYS[id];
-      if (keyFn && title) {
-        setHasSaved(!!localStorage.getItem(keyFn(title)));
-      }
+      if (keyFn && title) setHasSaved(!!localStorage.getItem(keyFn(title)));
     } catch { /* ignore */ }
   }, [id, title]);
 
@@ -6984,32 +6997,68 @@ function GrowthItemCard({ id, label, project }: { id: string; label: string; pro
   };
 
   return (
-    <div className="border-t border-gray-50 first:border-t-0">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-[#FAFAFA] transition-colors text-left"
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[28px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
+      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-5")}
+        style={{ background: meta.gradient }}
       >
-        {hasSaved
-          ? <CheckCircle2 size={14} className="text-[#32C382] shrink-0" />
-          : <div className="w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0" />
-        }
-        <span className="text-[13px] text-[#151515] flex-1">{label}</span>
-        {open ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            transition={{ height: { duration: 0.25 }, opacity: { duration: 0.2 } }}
-            className="overflow-hidden"
-          >
-            <div className="px-5 pb-4 border-t border-gray-50">
-              {renderContent()}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.2)_0%,transparent_70%)] pointer-events-none" />
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-[12px] font-medium mb-5 w-fit relative z-10"
+            >
+              <ChevronLeft size={16} /> Back
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-between items-start relative z-10">
+          <div>
+            <h3 className="text-[14px] font-semibold text-white leading-snug">{label}</h3>
+            {!isExpanded && <p className="text-[10px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{meta.tagline}</p>}
+          </div>
+          {!isExpanded && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {hasSaved && <CheckCircle2 size={13} className="text-white/80" />}
+              <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/20 text-white text-[12px] font-medium border border-white/30 backdrop-blur-sm">
+                Open <ArrowRight size={12} />
+              </div>
             </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Collapsed description */}
+      <AnimatePresence>
+        {!isExpanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
+            className="px-5 py-4">
+            <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.description}</p>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+
+      {/* Expanded content */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">{renderContent()}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -7020,36 +7069,20 @@ function GrowthContent({ project }: { project: DirectionCardData | null }) {
   const pillar = GROWTH_PILLAR;
   const itemsMap = Object.fromEntries(pillar.items.map((i) => [i.id, i.label]));
   return (
-    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
-      {/* Gradient header */}
-      <div
-        className="px-6 py-5"
-        style={{ background: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-            <BarChart3 size={15} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-[14px] font-semibold text-white">Growth</h3>
-            <p className="text-[11px] text-white/60 font-medium uppercase tracking-wide">Build your growth engine</p>
-          </div>
-        </div>
-      </div>
-      {/* Clusters */}
+    <div className="p-5 space-y-6">
       {GROWTH_CLUSTERS.map((cluster) => (
-        <div key={cluster.label}>
-          <div className="px-5 py-2 bg-[#FAFAFA] border-t border-gray-100">
-            <span className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest">{cluster.label}</span>
+        <section key={cluster.label}>
+          <div className="flex items-baseline gap-3 mb-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-[#151515]">{cluster.label}</h4>
           </div>
-          {cluster.ids.map((itemId) => {
-            const label = itemsMap[itemId];
-            if (!label) return null;
-            return (
-              <GrowthItemCard key={itemId} id={itemId} label={label} project={project} />
-            );
-          })}
-        </div>
+          <div className="grid grid-cols-1 gap-4">
+            {cluster.ids.map((itemId) => {
+              const label = itemsMap[itemId];
+              if (!label) return null;
+              return <GrowthItemCard key={itemId} id={itemId} label={label} project={project} />;
+            })}
+          </div>
+        </section>
       ))}
     </div>
   );

@@ -8927,24 +8927,6 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                       )}
                     </div>
                   )}
-                  {accountStatus === "connected" && !draft.frozen && (
-                    <button onClick={async () => {
-                      const postedAt = Date.now();
-                      setSlotOverrides((prev) => ({ ...prev, [draft.id]: postedAt }));
-                      const ok = await publishNow(draft);
-                      if (ok) {
-                        setWeekDrafts((prev) => prev.map((d) => d.id === draft.id
-                          ? { ...d, frozen: true, frozenAt: postedAt, editing: false }
-                          : d));
-                      } else {
-                        setSlotOverrides((prev) => { const n = { ...prev }; delete n[draft.id]; return n; });
-                      }
-                    }} disabled={!!publishing || displayText.length > 500}
-                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-                      {publishing === draft.id ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
-                      Post now instead →
-                    </button>
-                  )}
                 </div>
               </div>
             );

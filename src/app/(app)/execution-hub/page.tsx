@@ -8281,12 +8281,15 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     }
     if (draftsRes.ok) {
       const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2 | 3; slotOverrides: Record<string, number>; userNotes?: string } | null };
-      if (data.batch && data.batch.drafts.length > 0) {
-        setWeekDrafts(data.batch.drafts);
+      if (data.batch) {
+        // Always restore notes/ctaLink/cadence regardless of whether drafts exist
         setCtaLink(data.batch.ctaLink ?? "");
         setCadence(data.batch.cadence ?? 1);
-        setSlotOverrides(data.batch.slotOverrides ?? {});
         setUserNotes(data.batch.userNotes ?? "");
+        if (data.batch.drafts.length > 0) {
+          setWeekDrafts(data.batch.drafts);
+          setSlotOverrides(data.batch.slotOverrides ?? {});
+        }
       }
     }
     setDraftsLoaded(true);
@@ -8298,21 +8301,18 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
-  // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
+  // Auto-save drafts + settings to Firestore whenever they change (debounced 1.5s)
+  // Always PUT — notes/ctaLink must persist even when there are no drafts
   useEffect(() => {
     if (!draftsLoaded || !authUser) return;
     const timer = setTimeout(async () => {
       try {
         const { authFetch } = await import("@/lib/authFetch");
-        if (weekDrafts.length === 0) {
-          await authFetch("/api/threads/drafts", { method: "DELETE" });
-        } else {
-          await authFetch("/api/threads/drafts", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
-          });
-        }
+        await authFetch("/api/threads/drafts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides, userNotes }),
+        });
       } catch { /* ignore */ }
     }, 1500);
     return () => clearTimeout(timer);

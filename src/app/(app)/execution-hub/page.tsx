@@ -7130,11 +7130,8 @@ function HiringPlanCard({ title }: { title: string }) {
       </div>
       {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
         <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
-          <button onClick={() => setOpenHP(openHP === -1 - (key === "timeline" ? 1 : 0) ? null : -1 - (key === "timeline" ? 1 : 0))} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
-            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
-            <ChevronDown size={13} className="text-[#9A9A9A]" />
-          </button>
-          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed border-t border-gray-100">{data[key]}</p>
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data[key]}</p>
         </div>
       ))}
       <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-2">Roles Roadmap</p>

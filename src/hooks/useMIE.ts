@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { authFetch } from "@/lib/authFetch";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
 import type { MIEReport, MIEStatus } from "@/types/mie";
 
@@ -73,15 +73,25 @@ export function useMIE() {
   // Merge: atom profile wins for flags, firestoreProfile for full assessment data
   const profile = firestoreProfile ?? (atomProfile as any);
 
-  // Load cached report on mount
+  // Load cached report on mount — localStorage first (instant), then Firestore fallback
   useEffect(() => {
     if (!user?.uid) return;
     const cached = loadFromCache(user.uid);
     if (cached) {
       setReport(cached);
       setStatus("complete");
+      return;
     }
-  }, [user?.uid]);
+    // No localStorage cache — try Firestore
+    getUserProfile(user.uid).then((profile) => {
+      if (profile?.mieReport) {
+        const report = profile.mieReport as MIEReport;
+        saveToCache(user!.uid, report);
+        setReport(report);
+        setStatus("complete");
+      }
+    }).catch(() => {});
+  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Use atom profile for the gate so it reflects real-time state
   const hasProfile = !!(atomProfile?.dnaAssessmentComplete || atomProfile?.dnaScores || firestoreProfile?.dnaAssessmentComplete || firestoreProfile?.dnaScores);
@@ -126,6 +136,8 @@ export function useMIE() {
       saveToCache(user.uid, data.report);
       setReport(data.report);
       setStatus("complete");
+      // Persist to Firestore so it survives browser data clears and cross-device
+      saveUserProfile(user.uid, { mieReport: data.report as unknown as Record<string, unknown>, mieReportGeneratedAt: new Date().toISOString() }).catch(() => {});
     } catch (err) {
       clearInterval(stepInterval);
       setErrorMessage(err instanceof Error ? err.message : "Something went wrong");

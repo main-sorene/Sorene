@@ -69,6 +69,10 @@ export interface UserProfile {
   }[];
   directionCards?: DirectionCardData[];
   resourcesConstraints?: Record<string, string>;
+  mieReport?: unknown;
+  mieReportGeneratedAt?: string;
+  problemScanReport?: unknown;
+  problemScanReportGeneratedAt?: string;
 }
 
 function getDb() {

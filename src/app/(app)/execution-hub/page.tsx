@@ -8185,7 +8185,7 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; ctaComment?: string; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; ctaComment?: string; scheduledId?: string; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
 
@@ -8304,8 +8304,9 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
-  // Auto-save drafts + settings to Firestore whenever they change (debounced 1.5s)
-  // Always PUT — notes/ctaLink must persist even when there are no drafts
+  // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
+  // NOTE: draftsLoaded is intentionally excluded from deps — it's only a guard.
+  // Including it would fire a save with stale weekDrafts=[] right after load, deleting the batch.
   useEffect(() => {
     if (!draftsLoaded || !authUser) return;
     const timer = setTimeout(async () => {
@@ -8320,7 +8321,7 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     }, 1500);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekDrafts, ctaLink, cadence, slotOverrides, userNotes, draftsLoaded]);
+  }, [weekDrafts, ctaLink, cadence, slotOverrides, userNotes]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -8346,6 +8347,9 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
         const res = await authFetch("/api/threads/schedule");
         if (!res.ok) return;
         const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
+        const pendingIds = new Set(data.posts.map((p) => p.id));
+        const failedIds = new Set((data.failed ?? []).map((p) => p.id));
+        const publishedIds = new Set((data.published ?? []).map((p) => p.id));
         const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
         const failedTexts = new Set((data.failed ?? []).map((p) => p.text.trim()));
         const publishedTexts = new Set((data.published ?? []).map((p) => p.text.trim()));
@@ -8354,15 +8358,18 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
           if (!d.frozen || d.posted) return d;
           if ((d.frozenAt ?? 0) > now) return d;
           const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
-          // If cron retried and published successfully, clear postFailed and mark posted
-          if (publishedTexts.has(cleanText)) return { ...d, posted: true, postFailed: false, failReason: undefined };
-          // If still in failed list, update reason
-          if (failedTexts.has(cleanText)) {
-            const failedPost = (data.failed ?? []).find((p) => p.text.trim() === cleanText);
+          const sid = d.scheduledId;
+          // Prefer ID-based matching; fall back to text matching for older drafts
+          const isPublished = sid ? publishedIds.has(sid) : publishedTexts.has(cleanText);
+          const isFailed = sid ? failedIds.has(sid) : failedTexts.has(cleanText);
+          const isPending = sid ? pendingIds.has(sid) : pendingTexts.has(cleanText);
+          if (isPublished) return { ...d, posted: true, postFailed: false, failReason: undefined };
+          if (isFailed) {
+            const failedPost = (data.failed ?? []).find((p) => (sid ? p.id === sid : p.text.trim() === cleanText));
             return { ...d, postFailed: true, failReason: failedPost?.failReason };
           }
           // No longer in any list — treat as posted
-          if (!pendingTexts.has(cleanText)) return { ...d, posted: true, postFailed: false };
+          if (!isPending) return { ...d, posted: true, postFailed: false };
           return d;
         }));
       } catch { /* ignore */ }
@@ -8638,6 +8645,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
 
       const pendingDrafts = weekDrafts.filter((d) => !d.frozen);
       const newScheduled: ScheduledPost[] = [];
+      const scheduledIdMap: Record<string, string> = {};
       for (let i = 0; i < pendingDrafts.length; i++) {
         const draft = pendingDrafts[i];
         const globalIdx = weekDrafts.indexOf(draft);
@@ -8656,6 +8664,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         if (res.ok) {
           const data = await res.json() as { post: ScheduledPost };
           newScheduled.push(data.post);
+          scheduledIdMap[draft.id] = data.post.id;
         }
       }
       setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
@@ -8666,8 +8675,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         frozen: true,
         frozenAt: slotOverrides[d.id] ?? scheduleSlots[i] ?? now,
         editing: false,
+        ...(scheduledIdMap[d.id] ? { scheduledId: scheduledIdMap[d.id] } : {}),
       }));
-      // Auto-save will persist the frozen drafts + ctaLink + userNotes
+      // Auto-save (triggered by setWeekDrafts above) will persist frozen drafts
       setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
     } catch { /* ignore */ }
     setApprovingAll(false);

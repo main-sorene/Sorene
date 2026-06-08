@@ -650,31 +650,43 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
     }
   };
 
-  // Launching Strategy
+  // Launching Strategy — structured finalized profile
+  interface LaunchProfile {
+    audienceMain: string;
+    audienceSecondary: string;
+    problem: string;
+    solution: string;
+    benefits: string;
+    offerings: string;
+    pricing: string;
+  }
   const strategyKey = projectTitle ? `launch-strategy-${projectTitle}` : null;
   type SStage = "idle" | "loading" | "done";
   const [strategyStage, setStrategyStage] = useState<SStage>("idle");
-  const [strategyItems, setStrategyItems] = useState<{ id: string; text: string; editing: boolean }[]>([]);
+  const [profile, setProfile] = useState<LaunchProfile>({ audienceMain: "", audienceSecondary: "", problem: "", solution: "", benefits: "", offerings: "", pricing: "" });
+  const [editingField, setEditingField] = useState<keyof LaunchProfile | null>(null);
   const [strategyError, setStrategyError] = useState("");
   const [strategyFeedback, setStrategyFeedback] = useState("");
   const [revisingStrategy, setRevisingStrategy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (!strategyKey) return;
     try {
       const raw = localStorage.getItem(strategyKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as string[];
-        setStrategyItems(parsed.map((text, i) => ({ id: `s-${i}`, text, editing: false })));
-        setStrategyStage("done");
-      }
+      if (raw) { setProfile(JSON.parse(raw) as LaunchProfile); setStrategyStage("done"); }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectTitle]);
 
-  const saveStrategy = (items: { text: string }[]) => {
+  const saveProfile = (p: LaunchProfile) => {
     if (!strategyKey) return;
-    try { localStorage.setItem(strategyKey, JSON.stringify(items.map((i) => i.text))); } catch { /* ignore */ }
+    try { localStorage.setItem(strategyKey, JSON.stringify(p)); } catch { /* ignore */ }
+  };
+
+  const updateField = (field: keyof LaunchProfile, value: string) => {
+    setProfile((prev) => { const updated = { ...prev, [field]: value }; saveProfile(updated); return updated; });
   };
 
   const generateStrategy = async (feedback?: string) => {
@@ -682,42 +694,58 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
     setStrategyError("");
     feedback ? setRevisingStrategy(true) : setStrategyStage("loading");
 
-    // Collect context
-    const brandName   = localStorage.getItem(`business-name-${projectTitle}`) ?? "";
-    const tagline     = localStorage.getItem(`brand-tagline-${projectTitle}`) ?? "";
-    const benefit     = localStorage.getItem(`brand-benefit-${projectTitle}`) ?? "";
-    const offerings   = localStorage.getItem(`brand-offerings-${projectTitle}`) ?? "";
-    const targetCustomersRaw = localStorage.getItem(`target-customers-${projectTitle}`) ?? "";
-    let targetCustomer = "";
-    try { const tc = JSON.parse(targetCustomersRaw); targetCustomer = tc?.main?.label ?? ""; } catch { /* ignore */ }
-    const runway        = localStorage.getItem(`finance-runway-${projectTitle}`) ?? "";
-    const revenueTarget = localStorage.getItem(`finance-revenue_target-${projectTitle}`) ?? "";
-    const fundingPath   = localStorage.getItem(`finance-funding_path-${projectTitle}`) ?? "";
-    const analysisText  = analysisKey ? (localStorage.getItem(analysisKey) ?? "") : "";
+    // Collect full validation history
+    let convSummary = "";
+    try { const c = JSON.parse(localStorage.getItem(`convlog-${projectTitle}`) ?? "[]"); convSummary = c.length > 0 ? `${c.length} customer conversations logged` : ""; } catch { /* ignore */ }
+    const patternSummary     = localStorage.getItem(`pattern-summary-${projectTitle}`) ?? "";
+    const painkillerVerdict  = localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "";
+    const confidenceLevel    = localStorage.getItem(`confidence-level-${projectTitle}`) ?? "";
+    const offer              = localStorage.getItem(`mvo-defined-${projectTitle}`) ?? "";
+    const offerOfferings     = ["one_sentence_offer","price_range","best_format","offer_clarity","first_pitch"].map((k) => localStorage.getItem(`mvo-offering-${k}-${projectTitle}`) ?? "").filter(Boolean).join(" | ");
+    const revenueTarget      = localStorage.getItem(`finance-revenue_target-${projectTitle}`) ?? "";
+    const runway             = localStorage.getItem(`finance-runway-${projectTitle}`) ?? "";
+    const fundingPath        = localStorage.getItem(`finance-funding_path-${projectTitle}`) ?? "";
+    const analysisText       = analysisKey ? (localStorage.getItem(analysisKey) ?? "") : "";
+    let targetCustomer = ""; let secondaryCustomer = "";
+    try { const tc = JSON.parse(localStorage.getItem(`target-customers-${projectTitle}`) ?? "{}"); targetCustomer = tc?.main?.label ?? ""; secondaryCustomer = tc?.secondary?.label ?? ""; } catch { /* ignore */ }
+    let experimentSummary = "";
+    try {
+      const customers = JSON.parse(localStorage.getItem(`experiment-customers-${projectTitle}`) ?? "[]");
+      if (customers.length) { const yes = customers.filter((c: { response: string }) => c.response === "yes").length; experimentSummary = `${customers.length} outreach: ${yes} paid`; }
+    } catch { /* ignore */ }
 
-    const currentItems = feedback && strategyItems.length > 0
-      ? `\nCurrent strategy:\n${strategyItems.map((s, i) => `${i + 1}. ${s.text}`).join("\n")}`
-      : "";
+    const currentProfile = feedback ? `\nCurrent profile:\n${JSON.stringify(profile, null, 2)}` : "";
     const feedbackLine = feedback ? `\nFounder feedback: "${feedback}"` : "";
 
-    const system = `You are Sorene, a sharp launch strategist. Return exactly 6 specific, actionable launch strategy items as a JSON array of strings. No intro, no commentary — just the JSON array. Example: ["Item 1", "Item 2", ...]`;
-    const prompt = `Generate a launching strategy for this founder — 6 specific, actionable items that will guide their Brand & Digital Presence setup in Launchpad.
+    const system = `You are Sorene. Based on the founder's full validation history, synthesize their finalized business profile. Return ONLY valid JSON — no markdown, no commentary.`;
+    const prompt = `Synthesize the finalized launch profile for this founder based on their complete validation journey.
 
 Project: "${projectTitle}"
-${targetCustomer ? `Target customer: ${targetCustomer}` : ""}
-${brandName ? `Brand name: ${brandName}` : ""}
-${tagline ? `Tagline: ${tagline}` : ""}
-${benefit ? `Core benefit: ${benefit}` : ""}
-${offerings ? `Offerings: ${offerings}` : ""}
-${runway ? `Runway: ${runway}` : ""}
+${targetCustomer ? `Primary customer discovered: ${targetCustomer}` : ""}
+${secondaryCustomer ? `Secondary customer: ${secondaryCustomer}` : ""}
+${convSummary ? `Validation: ${convSummary}` : ""}
+${patternSummary ? `Pattern summary: ${patternSummary.slice(0, 300)}` : ""}
+${painkillerVerdict ? `Core problem identified: ${painkillerVerdict}` : ""}
+${confidenceLevel ? `Problem confidence: ${confidenceLevel}` : ""}
+${offer ? `Offer defined: ${offer}` : ""}
+${offerOfferings ? `Offering details: ${offerOfferings.slice(0, 300)}` : ""}
+${experimentSummary ? `Experiment results: ${experimentSummary}` : ""}
 ${revenueTarget ? `Revenue target: ${revenueTarget}` : ""}
-${fundingPath ? `Funding path: ${fundingPath}` : ""}
+${runway ? `Runway: ${runway}` : ""}
+${fundingPath ? `Funding: ${fundingPath}` : ""}
 ${analysisText ? `Readiness verdict: ${analysisText.slice(0, 400)}` : ""}
-${currentItems}${feedbackLine}
+${currentProfile}${feedbackLine}
 
-Each item should be a concrete action (e.g. "Launch a waitlist page on [brand].com targeting [customer] with the headline: [tagline]"). Cover: online presence, first channel, content strategy, community, outreach, and one quick win. Make them specific to this founder's project, brand, and target customer.
-
-Return ONLY a valid JSON array of 6 strings. No markdown, no code blocks.`;
+Return a JSON object with exactly these keys:
+{
+  "audienceMain": "1-2 sentences: primary target audience — who they are, their role/situation",
+  "audienceSecondary": "1-2 sentences: secondary audience, or empty string if none",
+  "problem": "1-2 sentences: the core problem this solves, grounded in validation findings",
+  "solution": "1-2 sentences: what the product/service does to solve it",
+  "benefits": "2-3 key benefits as a short paragraph — outcomes the customer gets",
+  "offerings": "What's included — main product/service tiers or packages",
+  "pricing": "Pricing model and specific numbers if known, or recommended range"
+}`;
 
     try {
       const { authFetch } = await import("@/lib/authFetch");
@@ -729,37 +757,36 @@ Return ONLY a valid JSON array of 6 strings. No markdown, no code blocks.`;
       if (res.ok) {
         const data = await res.json() as { reply?: string };
         const raw = (data.reply ?? "").trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-        const parsed = JSON.parse(raw) as string[];
-        const items = parsed.slice(0, 6).map((text, i) => ({ id: `s-${Date.now()}-${i}`, text, editing: false }));
-        setStrategyItems(items);
+        const parsed = JSON.parse(raw) as LaunchProfile;
+        setProfile(parsed);
+        saveProfile(parsed);
         setStrategyStage("done");
-        saveStrategy(items);
         setStrategyFeedback("");
+        setConfirmed(false);
       } else {
-        setStrategyStage(strategyItems.length > 0 ? "done" : "idle");
+        setStrategyStage(strategyStage === "done" ? "done" : "idle");
         setStrategyError("Generation failed. Please try again.");
       }
     } catch {
-      setStrategyStage(strategyItems.length > 0 ? "done" : "idle");
+      setStrategyStage(strategyStage === "done" ? "done" : "idle");
       setStrategyError("Network error. Please try again.");
     }
     setRevisingStrategy(false);
   };
 
-  const updateStrategyItem = (id: string, text: string) => {
-    setStrategyItems((prev) => {
-      const updated = prev.map((s) => s.id === id ? { ...s, text } : s);
-      saveStrategy(updated);
-      return updated;
-    });
-  };
-  const toggleStrategyEdit = (id: string) =>
-    setStrategyItems((prev) => prev.map((s) => s.id === id ? { ...s, editing: !s.editing } : s));
-  const removeStrategyItem = (id: string) =>
-    setStrategyItems((prev) => { const u = prev.filter((s) => s.id !== id); saveStrategy(u); return u; });
-  const addStrategyItem = () => {
-    const item = { id: `s-${Date.now()}`, text: "", editing: true };
-    setStrategyItems((prev) => { const u = [...prev, item]; saveStrategy(u); return u; });
+  const confirmLaunch = async () => {
+    if (!projectTitle) return;
+    setConfirming(true);
+    // Write finalized profile to LaunchPad keys
+    try {
+      localStorage.setItem(`brand-benefit-${projectTitle}`, profile.benefits);
+      localStorage.setItem(`brand-offerings-${projectTitle}`, profile.offerings);
+      localStorage.setItem(`brand-pricing-${projectTitle}`, profile.pricing);
+      // Store structured launch profile for LaunchPad Brand sections to read
+      localStorage.setItem(`launch-profile-confirmed-${projectTitle}`, JSON.stringify(profile));
+      setConfirmed(true);
+    } catch { /* ignore */ }
+    setConfirming(false);
   };
 
   return (
@@ -895,87 +922,92 @@ Return ONLY a valid JSON array of 6 strings. No markdown, no code blocks.`;
           )}
         </div>
         <Separator className="bg-[#D8D9DB] mb-4" />
-        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-            <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
-              <Rocket size={14} className="text-white" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-[#151515]">Your launch playbook</p>
-              <p className="text-[11px] text-[#9A9A9A]">6 actions to guide your Brand & Digital Presence setup — edit or give feedback to revise</p>
-            </div>
+
+        {strategyStage === "idle" && (
+          <button onClick={() => generateStrategy()} disabled={!projectTitle}
+            className="w-full py-3 rounded-2xl border border-dashed border-gray-200 text-[13px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            {projectTitle ? "Generate my launching strategy →" : "Select a project first"}
+          </button>
+        )}
+
+        {strategyStage === "loading" && (
+          <div className="flex items-center gap-2 text-[13px] text-[#9A9A9A] py-4">
+            <Loader2 size={14} className="animate-spin" /> Synthesising your validation history…
           </div>
-          <div className="px-5 py-4 space-y-3">
-            {strategyError && <p className="text-[11px] text-[#DF2E16]">{strategyError}</p>}
+        )}
 
-            {strategyStage === "idle" && (
-              <button onClick={() => generateStrategy()} disabled={!projectTitle}
-                className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                {projectTitle ? "Generate my launching strategy" : "Select a project first"}
-              </button>
-            )}
+        {strategyError && <p className="text-[12px] text-[#DF2E16] mt-2">{strategyError}</p>}
 
-            {strategyStage === "loading" && (
-              <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
-                <Loader2 size={13} className="animate-spin" /> Building your launch playbook…
-              </div>
-            )}
-
-            {strategyStage === "done" && (
-              <div className="space-y-2">
-                {strategyItems.map((item, i) => (
-                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl border border-[#ECEDEE] bg-white group hover:border-gray-300 transition-colors">
-                    <span className="text-[11px] font-semibold text-[#9A9A9A] mt-0.5 w-4 shrink-0">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      {item.editing ? (
-                        <textarea value={item.text}
-                          onChange={(e) => updateStrategyItem(item.id, e.target.value)}
-                          rows={2}
-                          className="w-full text-[13px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent border-b border-[#151515]"
-                          autoFocus
-                          onBlur={() => toggleStrategyEdit(item.id)} />
-                      ) : (
-                        <p className="text-[13px] text-[#151515] leading-relaxed">{item.text}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button onClick={() => toggleStrategyEdit(item.id)}
-                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
-                        {item.editing ? "Done" : "Edit"}
-                      </button>
-                      <button onClick={() => removeStrategyItem(item.id)}
-                        className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Add item */}
-                <button onClick={addStrategyItem}
-                  className="w-full py-2 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors flex items-center justify-center gap-1.5">
-                  <Plus size={12} /> Add item
-                </button>
-
-                {/* Feedback to revise */}
-                <div className="pt-2 border-t border-[#ECEDEE]">
-                  <p className="text-[11px] text-[#9A9A9A] mb-2">Not quite right? Give feedback and Sorene will revise.</p>
-                  <div className="flex gap-2">
-                    <input value={strategyFeedback} onChange={(e) => setStrategyFeedback(e.target.value)}
-                      placeholder="e.g. focus more on organic content, less on paid ads"
-                      onKeyDown={(e) => { if (e.key === "Enter" && strategyFeedback.trim()) generateStrategy(strategyFeedback); }}
-                      className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
-                    <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
-                      className="px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
-                      {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
-                      Revise
+        {strategyStage === "done" && (() => {
+          const FIELDS: { key: keyof LaunchProfile; label: string; rows: number }[] = [
+            { key: "audienceMain",      label: "Target Audience — Primary",   rows: 2 },
+            { key: "audienceSecondary", label: "Target Audience — Secondary",  rows: 2 },
+            { key: "problem",           label: "Problem",                      rows: 2 },
+            { key: "solution",          label: "Solution",                     rows: 2 },
+            { key: "benefits",          label: "Benefits",                     rows: 3 },
+            { key: "offerings",         label: "Product Offerings",            rows: 3 },
+            { key: "pricing",           label: "Pricing",                      rows: 2 },
+          ];
+          return (
+            <div className="space-y-3">
+              {FIELDS.map(({ key, label, rows }) => (
+                <div key={key} className="rounded-2xl border border-[#ECEDEE] overflow-hidden group">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                    <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">{label}</p>
+                    <button onClick={() => setEditingField(editingField === key ? null : key)}
+                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium opacity-0 group-hover:opacity-100">
+                      {editingField === key ? "Done" : "Edit"}
                     </button>
                   </div>
+                  <div className="px-4 py-3">
+                    {editingField === key ? (
+                      <textarea value={profile[key]}
+                        onChange={(e) => updateField(key, e.target.value)}
+                        rows={rows}
+                        autoFocus
+                        className="w-full text-[13px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent" />
+                    ) : (
+                      <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">
+                        {profile[key] || <span className="text-[#9A9A9A] italic">Not specified</span>}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Feedback to revise */}
+              <div className="rounded-2xl border border-[#ECEDEE] p-4 space-y-2">
+                <p className="text-[12px] font-medium text-[#151515]">Not quite right?</p>
+                <p className="text-[11px] text-[#9A9A9A]">Give feedback and Sorene will revise based on your validation history.</p>
+                <div className="flex gap-2 mt-2">
+                  <input value={strategyFeedback} onChange={(e) => setStrategyFeedback(e.target.value)}
+                    placeholder="e.g. the pricing should be higher, audience is more senior"
+                    onKeyDown={(e) => { if (e.key === "Enter" && strategyFeedback.trim()) generateStrategy(strategyFeedback); }}
+                    className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                  <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
+                    className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-[12px] font-semibold text-[#151515] hover:border-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5">
+                    {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
+                    Revise
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* Confirm to launch */}
+              {confirmed ? (
+                <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#F0FBF5] border border-[#32C382]">
+                  <CheckCircle2 size={14} className="text-[#32C382]" />
+                  <p className="text-[13px] font-semibold text-[#32C382]">Confirmed — Brand & Digital Presence in LaunchPad is now pre-filled.</p>
+                </div>
+              ) : (
+                <button onClick={confirmLaunch} disabled={confirming}
+                  className="w-full py-3.5 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {confirming ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
+                  Confirm to launch
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </section>
     </div>
   );

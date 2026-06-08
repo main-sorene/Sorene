@@ -8482,7 +8482,7 @@ hot take / genuine question / short story with a twist / thing I got wrong / obs
 
 ${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}
 
-Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Vary which posts get the CTA marker (max 2 of the ${count}).
+Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Add [ADD_LINK_IN_COMMENT] to posts where a CTA feels natural — typically 3-4 out of ${count}. Never force it on every post.
 
 Separate posts with exactly "---". No labels, no numbering, no intro text. Just the ${count} posts.`;
 
@@ -8840,9 +8840,13 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                     <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{displayText}</p>
                   )}
                   {hasCta && ctaLink && (
-                    <p className="text-[11px] text-blue-500 flex items-center gap-1">
-                      <span>💬</span> First comment will include: {ctaLink}
-                    </p>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 space-y-1">
+                      <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide">First comment (auto-posted)</p>
+                      <p className="text-[12px] text-blue-700">{ctaLink}</p>
+                    </div>
+                  )}
+                  {hasCta && !ctaLink && (
+                    <p className="text-[11px] text-[#9A9A9A] italic">Link in comment — add your CTA link above to enable</p>
                   )}
                   {accountStatus === "connected" && !draft.frozen && (
                     <button onClick={async () => {

@@ -7,7 +7,8 @@ const slug = (t: string) => t.replace(/[.[\]#$/]/g, "_").slice(0, 80);
 // Body: { email: string, legacyProjectTitle: string }
 // This sets legacyProjectTitle on the user doc and migrates the Threads integration doc
 export async function POST(req: NextRequest) {
-  // Temporary: auth disabled for one-time migration run
+  const secret = req.headers.get("x-admin-secret");
+  if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { email, legacyProjectTitle } = await req.json() as { email: string; legacyProjectTitle: string };
   if (!email || !legacyProjectTitle) return Response.json({ error: "email and legacyProjectTitle required" }, { status: 400 });

@@ -5962,6 +5962,7 @@ function BusinessPlanCard({ title }: { title: string }) {
   type Sections = Record<string, string>;
   const [stage, setStage] = useState<GrowthStage>("idle");
   const [data, setData] = useState<Sections>({});
+  const [openSection, setOpenSection] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -5974,7 +5975,17 @@ function BusinessPlanCard({ title }: { title: string }) {
   const generate = async () => {
     setStage("loading");
     const ctx = readGrowthContext(title);
-    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a business plan with these sections. Return JSON: {"executive_summary":"...","problem_solution":"...","target_market":"...","business_model":"...","revenue_streams":"...","plan_90_day":"..."}`;
+    const prompt = `${ctxLines(ctx, title)}
+
+Generate a concise business plan. Return JSON with exactly these keys:
+{
+  "executive_summary": "2-3 sentences: what the business is, who it's for, what it does",
+  "problem_solution": "The validated pain (2 sentences) followed by how the offer solves it (2 sentences)",
+  "target_market": "Primary customer description and secondary if applicable. Include context on their situation.",
+  "business_model": "How you make money — pricing model and delivery method in 1-2 sentences",
+  "revenue_streams": "Specific packages or tiers with projected numbers if known. One per line.",
+  "plan_90_day": "Three milestones — Month 1: [build/setup actions], Month 2: [first sales actions], Month 3: [scale actions]. Use bullet points."
+}`;
     try {
       const { authFetch } = await import("@/lib/authFetch");
       const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
@@ -5990,28 +6001,46 @@ function BusinessPlanCard({ title }: { title: string }) {
   const save = () => {
     try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
     setStage("saved");
+    setOpenSection(null);
   };
 
   if (stage === "idle") return (
-    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
-      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
-    </button>
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">AI will draft all 6 sections using your validation data — target customer, painkiller, offer, and pricing. Review and edit each section before saving.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate business plan
+      </button>
+    </div>
   );
 
   if (stage === "loading") return (
-    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Generating your business plan…</div>
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Drafting your business plan…</div>
   );
 
   if (stage === "saved") return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
-        <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
       </div>
       {BP_SECTIONS.map((s) => (
-        <div key={s.id} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{s.label}</p></div>
-          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[s.id] ?? ""}</p>
+        <div key={s.id} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button
+            onClick={() => setOpenSection(openSection === s.id ? null : s.id)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left"
+          >
+            <span className="text-[12px] font-semibold text-[#151515]">{s.label}</span>
+            {openSection === s.id ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>
+            {openSection === s.id && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                transition={{ duration: 0.2 }} className="overflow-hidden">
+                <p className="px-3 py-3 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap border-t border-gray-100">{data[s.id] ?? ""}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       ))}
     </div>
@@ -6020,17 +6049,27 @@ function BusinessPlanCard({ title }: { title: string }) {
   return (
     <div className="space-y-3">
       {BP_SECTIONS.map((s) => (
-        <div key={s.id} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
-          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{s.label}</p></div>
+        <div key={s.id} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2.5 bg-[#FAFAFA] border-b border-gray-100">
+            <p className="text-[12px] font-semibold text-[#151515]">{s.label}</p>
+          </div>
           <textarea
             value={data[s.id] ?? ""}
             onChange={(e) => setData((prev) => ({ ...prev, [s.id]: e.target.value }))}
-            rows={4}
-            className="w-full px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed bg-white focus:outline-none resize-y"
+            rows={s.id === "plan_90_day" ? 5 : 3}
+            placeholder={
+              s.id === "executive_summary" ? "What the business is, who it's for, what it does…" :
+              s.id === "problem_solution" ? "The pain you validated + how your offer solves it…" :
+              s.id === "target_market" ? "Primary customer and secondary audience…" :
+              s.id === "business_model" ? "How you make money — pricing model and delivery…" :
+              s.id === "revenue_streams" ? "Packages, tiers, and projected numbers…" :
+              "Month 1: build / Month 2: sell / Month 3: scale…"
+            }
+            className="w-full px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed bg-white focus:outline-none resize-none placeholder:text-gray-300"
           />
         </div>
       ))}
-      <button onClick={save} className="px-4 py-2 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
     </div>
   );
 }

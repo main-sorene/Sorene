@@ -8185,7 +8185,7 @@ const THREADS_ICON = (
   </svg>
 );
 
-interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; }
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; }
 interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
 interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; }
 
@@ -8314,6 +8314,33 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll every 60s to mark frozen drafts as posted once their scheduled time has passed
+  useEffect(() => {
+    const check = async () => {
+      const frozen = weekDrafts.filter((d) => d.frozen && !d.posted);
+      if (!frozen.length || !authUser) return;
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        const res = await authFetch("/api/threads/schedule");
+        if (!res.ok) return;
+        const data = await res.json() as { posts: ScheduledPost[] };
+        const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
+        const now = Date.now();
+        setWeekDrafts((prev) => prev.map((d) => {
+          if (!d.frozen || d.posted) return d;
+          if ((d.frozenAt ?? 0) > now) return d; // not due yet
+          const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+          if (!pendingTexts.has(cleanText)) return { ...d, posted: true };
+          return d;
+        }));
+      } catch { /* ignore */ }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDrafts, authUser]);
 
   const scanHistory = async () => {
     setScanningHistory(true);
@@ -8741,12 +8768,15 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                   </div>
                   {draft.frozen ? (
                     <div className="flex items-center gap-2">
-                      <Lock size={11} className="text-[#9A9A9A]" />
-                      <span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
-                      <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, editing: true } : d))}
-                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium underline underline-offset-2">
-                        Edit
-                      </button>
+                      {draft.posted ? (
+                        <><CheckCircle2 size={11} className="text-[#32C382]" /><span className="text-[11px] text-[#32C382] font-medium">Posted</span></>
+                      ) : (
+                        <><Lock size={11} className="text-[#9A9A9A]" /><span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
+                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, editing: true } : d))}
+                          className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium underline underline-offset-2">
+                          Edit
+                        </button></>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 shrink-0">
@@ -8763,7 +8793,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                 </div>
 
                 <AnimatePresence initial={false}>
-                  {isEditingSlot && (
+                  {isEditingSlot && !draft.posted && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                       transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
                       className="overflow-hidden border-b border-[#ECEDEE]">
@@ -8785,8 +8815,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                   )}
                 </AnimatePresence>
 
-                <div className="p-4 space-y-3">
-                  {draft.editing ? (
+                <div className={cn("p-4 space-y-3", draft.posted && "opacity-40")}>
+                  {draft.editing && !draft.posted ? (
                     <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
                       rows={4} maxLength={500}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />

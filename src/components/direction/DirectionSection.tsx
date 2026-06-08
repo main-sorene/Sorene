@@ -366,8 +366,11 @@ export const DirectionSection = () => {
   // R&C gate — show both cards before any directions exist
   if (needsRC) return initialStateScreen;
 
-  // Generating spinner
-  if ((isDirectionLoading || isGeneratingMore) && !directionText && !primaryCard) {
+  // Generating spinner — only show when actively generating (isGeneratingMore),
+  // or when loading with no cached data in atom profile. Skip it if the user
+  // already has direction cards saved (atom profile is the fastest source).
+  const atomHasCards = !!(user?.profile?.directionCards?.length || user?.profile?.directionText);
+  if ((isGeneratingMore || (isDirectionLoading && !atomHasCards)) && !directionText && !primaryCard) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-4 pb-24 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4 text-center">

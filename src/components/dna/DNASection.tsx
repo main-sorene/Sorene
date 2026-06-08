@@ -646,7 +646,10 @@ export const DNASection = () => {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  if (isLoading) {
+  // Skip spinner if atom profile already shows DNA is complete — avoids re-running
+  // the loading animation every time the user navigates back to the DNA section.
+  const atomDnaComplete = !!(authUser?.profile?.dnaAssessmentComplete || authUser?.profile?.dnaScores);
+  if (isLoading && !atomDnaComplete) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">

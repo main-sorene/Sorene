@@ -48,6 +48,9 @@ export function useDirectionResult() {
     queryFn: () => getUserProfile(user!.uid),
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
+    // Use atom profile as placeholder so the spinner never shows on re-navigation
+    placeholderData: user?.profile ?? undefined,
+    gcTime: 30 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -155,7 +158,8 @@ export function useDirectionResult() {
 
         if (phase1Card) {
           setDirectionCards([phase1Card]);
-          // Save to Firestore immediately so refresh doesn't re-generate
+          // Save to Firestore and clear intent flag so re-navigation never re-generates
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
           if (user?.uid) {
             await saveUserProfile(user.uid, { directionCards: [phase1Card], directionText: "" });
           }

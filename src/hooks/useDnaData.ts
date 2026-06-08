@@ -26,5 +26,10 @@ export function useDnaData() {
     },
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
+    // Use the already-loaded atom profile as placeholder so the spinner never
+    // shows when navigating back to the DNA section.
+    placeholderData: user?.profile ? { ...user.profile, externalProfile: null } : undefined,
+    // Keep cache alive for 30 minutes so re-navigation doesn't re-fetch.
+    gcTime: 30 * 60 * 1000,
   });
 }

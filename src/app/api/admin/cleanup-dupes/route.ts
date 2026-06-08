@@ -11,15 +11,22 @@ export async function POST(req: NextRequest) {
 
   let targetUid = uid;
   if (!targetUid && email) {
+    // Try Firebase Auth first
     try {
       const { getAdminAuth } = await import("@/lib/firebaseAdmin");
       const userRecord = await getAdminAuth()!.getUserByEmail(email);
       targetUid = userRecord.uid;
-    } catch {
-      return Response.json({ error: "User not found" }, { status: 404 });
+    } catch { /* fall through to Firestore scan */ }
+    // Fall back to scanning Firestore user docs
+    if (!targetUid) {
+      const snap = await db.collection("users").get();
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        if (d.email === email || d.emailAddress === email) { targetUid = doc.id; break; }
+      }
     }
   }
-  if (!targetUid) return Response.json({ error: "User not found" }, { status: 404 });
+  if (!targetUid) return Response.json({ error: "User not found", searched: email ?? uid }, { status: 404 });
 
   const col = db.collection("users").doc(targetUid).collection("threadsScheduled");
   const all = await col.get();

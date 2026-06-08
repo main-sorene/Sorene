@@ -6,13 +6,23 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { PLAN_CREDITS } from "@/lib/credits";
 
 export function CreditsExhaustedModal() {
   const [isOpen, setIsOpen] = useAtom(isCreditsExhaustedOpenAtom);
   const { data: subscription } = useSubscriptionStatus();
 
-  const isPaidPlan = subscription?.active && subscription.plan !== "free";
-  const isProPlan = subscription?.plan === "pro";
+  const plan = subscription?.plan ?? "free";
+  const isPaidPlan = subscription?.active && plan !== "free";
+  const isProPlan = plan === "pro";
+  const isStarterPlan = plan === "starter";
+
+  const used = subscription?.credits?.used ?? 0;
+  const limit = (subscription?.credits?.limit ?? PLAN_CREDITS.free) + (subscription?.credits?.extra ?? 0);
+
+  const starterCredits = PLAN_CREDITS.starter.toLocaleString();
+  const proCredits = PLAN_CREDITS.pro.toLocaleString();
+  const freeCredits = PLAN_CREDITS.free.toLocaleString();
 
   const handleUpgrade = () => {
     setIsOpen(false);
@@ -25,11 +35,9 @@ export function CreditsExhaustedModal() {
         showCloseButton={false}
         className="sm:max-w-[400px] p-0 rounded-2xl overflow-hidden"
       >
-        {/* Top accent */}
         <div className="w-full h-1.5 bg-[#FDC24C]" />
 
         <div className="p-6 space-y-5">
-          {/* Icon + heading */}
           <div className="flex flex-col items-center text-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-[#FFF8E6] flex items-center justify-center">
               <Zap className="w-6 h-6 text-[#FDC24C]" />
@@ -39,25 +47,27 @@ export function CreditsExhaustedModal() {
                 You&apos;ve used all your credits
               </h2>
               <p className="text-sm text-[#62646A] mt-1 leading-relaxed">
-                {isPaidPlan
-                  ? isProPlan
-                    ? "You've used all your monthly credits. Buy more to keep going, or wait for your monthly reset."
-                    : "You've used all your monthly credits. Buy more credits or upgrade to Professional for 5,000 credits/month."
-                  : "Upgrade to keep using Sorene — unlock more AI conversations, direction refinements, and DNA updates."}
+                {isProPlan
+                  ? `You've used all ${limit.toLocaleString()} of your monthly credits. Wait for your monthly reset or contact support.`
+                  : isStarterPlan
+                  ? `You've used all ${limit.toLocaleString()} of your monthly credits. Upgrade to Professional for ${proCredits} credits/month.`
+                  : `You've used all ${limit.toLocaleString()} of your free credits. Upgrade to keep using Sorene.`}
               </p>
             </div>
           </div>
 
-          {/* Options for free users: plan comparison */}
-          {!isPaidPlan && (
+          {/* Plan comparison — shown for free and starter users */}
+          {!isProPlan && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between p-3 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA]">
-                <div>
-                  <p className="text-sm font-medium text-[#151515]">Starter</p>
-                  <p className="text-xs text-[#62646A]">1,500 credits / month</p>
+              {!isPaidPlan && (
+                <div className="flex items-center justify-between p-3 rounded-xl border border-[#ECEDEE] bg-[#FAFAFA]">
+                  <div>
+                    <p className="text-sm font-medium text-[#151515]">Starter</p>
+                    <p className="text-xs text-[#62646A]">{starterCredits} credits / month</p>
+                  </div>
+                  <p className="text-sm font-semibold text-[#151515]">$15 / mo</p>
                 </div>
-                <p className="text-sm font-semibold text-[#151515]">$15 / mo</p>
-              </div>
+              )}
               <div className="flex items-center justify-between p-3 rounded-xl border border-[#FDC24C] bg-[#FFFBF0]">
                 <div>
                   <p className="text-sm font-medium text-[#151515]">
@@ -66,27 +76,28 @@ export function CreditsExhaustedModal() {
                       Most popular
                     </span>
                   </p>
-                  <p className="text-xs text-[#62646A]">5,000 credits / month</p>
+                  <p className="text-xs text-[#62646A]">{proCredits} credits / month</p>
                 </div>
                 <p className="text-sm font-semibold text-[#151515]">$49 / mo</p>
               </div>
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex flex-col gap-2">
-            <Button
-              onClick={handleUpgrade}
-              className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
-            >
-              {isPaidPlan && !isProPlan ? "Upgrade to Professional" : "See upgrade plans"}
-            </Button>
+            {!isProPlan && (
+              <Button
+                onClick={handleUpgrade}
+                className="w-full h-11 rounded-xl bg-[#111111] hover:bg-[#222222] text-white text-sm font-medium"
+              >
+                {isStarterPlan ? "Upgrade to Professional" : "See upgrade plans"}
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={() => setIsOpen(false)}
               className="w-full h-11 rounded-xl text-[#62646A] text-sm"
             >
-              Maybe later
+              {isProPlan ? "OK, I'll wait for reset" : "Maybe later"}
             </Button>
           </div>
         </div>

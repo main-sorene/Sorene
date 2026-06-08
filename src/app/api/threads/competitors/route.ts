@@ -26,10 +26,9 @@ export async function GET(req: NextRequest) {
   const userData = snap.data();
   let competitors = (userData?.[key] ?? []) as Competitor[];
 
-  // One-time migration: if no namespaced competitors but old flat-key data exists, migrate it
-  if (competitors.length === 0 && projectTitle && userData?.threadsCompetitors?.length && !userData?.threadsCompetitorsMigrated) {
+  // Legacy fallback: only for the project designated as the legacy owner
+  if (competitors.length === 0 && projectTitle && userData?.threadsCompetitors?.length && userData?.legacyProjectTitle === projectTitle) {
     competitors = userData.threadsCompetitors as Competitor[];
-    await db.collection("users").doc(user.uid).set({ [key]: competitors, threadsCompetitorsMigrated: true }, { merge: true });
   }
 
   return Response.json({ competitors });

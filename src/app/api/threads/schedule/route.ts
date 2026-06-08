@@ -21,28 +21,26 @@ export async function GET(req: NextRequest) {
   const db = getAdminFirestore();
   const col = db.collection("users").doc(user.uid).collection("threadsScheduled");
 
-  // One-time migration: stamp existing posts without projectTitle if user hasn't migrated yet
+  const userSnap = await db.doc(`users/${user.uid}`).get();
+  const isLegacyOwner = projectTitle && userSnap.data()?.legacyProjectTitle === projectTitle;
+
+  let snap: FirebaseFirestore.QuerySnapshot;
   if (projectTitle) {
-    const userSnap = await db.doc(`users/${user.uid}`).get();
-    if (!userSnap.data()?.threadsScheduleMigrated) {
-      // Catch docs where projectTitle field doesn't exist — fetch all and filter
+    const tagged = await col.where("projectTitle", "==", projectTitle).get();
+    if (isLegacyOwner) {
+      // Also include old posts that were created before project namespacing
       const allDocs = await col.get();
-      const needsTag = allDocs.docs.filter((d) => !d.data().projectTitle);
-      if (needsTag.length > 0) {
-        const batch = db.batch();
-        needsTag.forEach((d) => batch.update(d.ref, { projectTitle }));
-        await batch.commit();
-      }
-      await db.doc(`users/${user.uid}`).set({ threadsScheduleMigrated: true }, { merge: true });
+      const untagged = allDocs.docs.filter((d) => !d.data().projectTitle);
+      const combined = new Map<string, FirebaseFirestore.DocumentData>();
+      [...tagged.docs, ...untagged].forEach((d) => combined.set(d.id, d.data()));
+      snap = { docs: [...tagged.docs, ...untagged].filter((d, i, arr) => arr.findIndex((x) => x.id === d.id) === i) } as unknown as FirebaseFirestore.QuerySnapshot;
+    } else {
+      snap = tagged;
     }
+  } else {
+    snap = await col.get();
   }
 
-  let query: FirebaseFirestore.Query = col;
-  if (projectTitle) {
-    query = query.where("projectTitle", "==", projectTitle);
-  }
-
-  const snap = await query.get();
   const all = snap.docs.map((d) => d.data() as ScheduledPost);
   const posts = all
     .filter((p) => p.status === "pending")

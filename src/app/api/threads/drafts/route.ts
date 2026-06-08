@@ -32,10 +32,9 @@ export async function GET(req: NextRequest) {
   const userData = snap.data();
   let batch = userData?.[batchKey] as DraftBatch | undefined;
 
-  // One-time migration: if no namespaced data but old flat-key data exists, migrate it to this project
-  if (!batch && projectTitle && userData?.threadsDraftBatch && !userData?.threadsDataMigrated) {
+  // Legacy fallback: only for the project designated as the legacy owner
+  if (!batch && projectTitle && userData?.threadsDraftBatch && userData?.legacyProjectTitle === projectTitle) {
     batch = userData.threadsDraftBatch as DraftBatch;
-    await db.collection("users").doc(user.uid).set({ [batchKey]: batch, threadsDataMigrated: true }, { merge: true });
   }
 
   console.log("[drafts GET] uid:", user.uid, "email:", user.email, "key:", batchKey, "drafts:", batch?.drafts?.length ?? 0);

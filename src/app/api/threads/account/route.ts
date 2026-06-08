@@ -22,10 +22,9 @@ export async function GET(req: NextRequest) {
   const dnaKey = projectTitle ? `threadsContentDNA__${slug(projectTitle)}` : "threadsContentDNA";
   let dna = userData?.[dnaKey] ?? null;
 
-  // One-time migration: if no namespaced DNA but old flat-key DNA exists, migrate it
-  if (!dna && projectTitle && userData?.threadsContentDNA && !userData?.threadsDNAMigrated) {
+  // Legacy fallback: only for the project designated as the legacy owner
+  if (!dna && projectTitle && userData?.threadsContentDNA && userData?.legacyProjectTitle === projectTitle) {
     dna = userData.threadsContentDNA;
-    await db.doc(`users/${user.uid}`).set({ [dnaKey]: dna, threadsDNAMigrated: true }, { merge: true });
   }
 
   if (!account?.accessToken) return Response.json({ connected: false, dna });

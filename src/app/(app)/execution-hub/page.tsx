@@ -5273,7 +5273,7 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
           )}
         </>
       )}
-      <div className="space-y-2 pt-1">
+      {!collapsed && <div className="space-y-2 pt-1">
         <div className="flex items-center gap-2">
           <div className="flex-1 h-px bg-gray-100" />
           <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or describe your own</span>
@@ -5309,7 +5309,7 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
             </p>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

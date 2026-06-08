@@ -4682,7 +4682,8 @@ function LogoConceptSection({ project }: { project: DirectionCardData | null }) 
   const title = project?.title ?? "";
   const storageKey = `brand-logo-concepts-${title}`;
 
-  const [logos, setLogos] = useState<string[]>([]); // base64 data URLs
+  const [logos, setLogos] = useState<string[]>([]); // saved base64 data URLs
+  const [pending, setPending] = useState<string | null>(null); // awaiting Save
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -4715,11 +4716,19 @@ function LogoConceptSection({ project }: { project: DirectionCardData | null }) 
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      if (dataUrl) persist([...logos, dataUrl]);
+      if (dataUrl) setPending(dataUrl);
     };
     reader.readAsDataURL(file);
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  const savePending = () => {
+    if (!pending) return;
+    persist([...logos, pending]);
+    setPending(null);
+  };
+
+  const cancelPending = () => { setPending(null); setError(""); };
 
   const remove = (i: number) => persist(logos.filter((_, idx) => idx !== i));
 
@@ -4744,22 +4753,38 @@ function LogoConceptSection({ project }: { project: DirectionCardData | null }) 
         </div>
       )}
 
-      <div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png"
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="text-[12px] font-medium px-4 py-2 rounded-xl border border-dashed border-gray-300 text-[#62646A] hover:border-[#151515] hover:text-[#151515] transition-colors"
-        >
-          + Add logo
-        </button>
-        {error && <p className="mt-1.5 text-[11px] text-[#DF2E16]">{error}</p>}
-      </div>
+      {/* Pending preview — waiting for Save */}
+      {pending && (
+        <div className="space-y-2">
+          <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-dashed border-[#151515] bg-[#F9F9F9]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pending} alt="Preview" className="w-full h-full object-contain p-1" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={savePending} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+            <button onClick={cancelPending} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {!pending && (
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="text-[12px] font-medium px-4 py-2 rounded-xl border border-dashed border-gray-300 text-[#62646A] hover:border-[#151515] hover:text-[#151515] transition-colors"
+          >
+            + Add logo
+          </button>
+          {error && <p className="mt-1.5 text-[11px] text-[#DF2E16]">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

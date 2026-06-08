@@ -30,10 +30,11 @@ import {
   Settings,
   Archive,
   AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAtomValue, useAtom, useSetAtom } from "jotai";
-import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom } from "@/store/atoms";
+import { userAtom, selectedExecutionProjectAtom, executionOnboardTriggerAtom, executionNavigateTabAtom, executionStartValidateAtom } from "@/store/atoms";
 import { auth } from "@/lib/firebase";
 import { ExecutionHubChat } from "@/components/executionHub/ExecutionHubChat";
 import { getUserProfile } from "@/lib/firestore";
@@ -491,7 +492,7 @@ Return JSON with:
   );
 }
 
-function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
+function GoNoGoContent({ project, onConfirmLaunch }: { project: DirectionCardData | null; onConfirmLaunch?: () => void }) {
   const auto = useGoNoGoAutoDetect(project);
   const storageKey = `go-nogo-manual-${project?.title ?? ""}`;
   const [manual, setManual] = useState<Record<string, boolean>>({});
@@ -528,7 +529,8 @@ function GoNoGoContent({ project }: { project: DirectionCardData | null }) {
 
   // AI readiness analysis
   type AStage = "idle" | "loading" | "done";
-  const projectTitle  = project?.title ?? "";
+  const projectTitle = project?.title ?? "";
+
   const analysisKey   = projectTitle ? `go-nogo-analysis-${projectTitle}` : null;
   const [analysisStage, setAnalysisStage] = useState<AStage>("idle");
   const [analysis, setAnalysis] = useState("");
@@ -647,6 +649,152 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
       setAnalysisError("Network error. Please try again.");
       console.error("generateAnalysis error:", err);
     }
+  };
+
+  // Launching Strategy — structured finalized profile
+  interface LaunchProfile {
+    audienceMain: string;
+    audienceSecondary: string;
+    problem: string;
+    solution: string;
+    benefits: string;
+    offerings: string;
+    pricing: string;
+  }
+  const strategyKey = projectTitle ? `launch-strategy-${projectTitle}` : null;
+  type SStage = "idle" | "loading" | "done";
+  const [strategyStage, setStrategyStage] = useState<SStage>("idle");
+  const [profile, setProfile] = useState<LaunchProfile>({ audienceMain: "", audienceSecondary: "", problem: "", solution: "", benefits: "", offerings: "", pricing: "" });
+  const [editingField, setEditingField] = useState<keyof LaunchProfile | null>(null);
+  const [strategyError, setStrategyError] = useState("");
+  const [strategyFeedback, setStrategyFeedback] = useState("");
+  const [revisingStrategy, setRevisingStrategy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (!strategyKey) return;
+    try {
+      const raw = localStorage.getItem(strategyKey);
+      if (raw) { setProfile(JSON.parse(raw) as LaunchProfile); setStrategyStage("done"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTitle]);
+
+  const saveProfile = (p: LaunchProfile) => {
+    if (!strategyKey) return;
+    try { localStorage.setItem(strategyKey, JSON.stringify(p)); } catch { /* ignore */ }
+  };
+
+  const updateField = (field: keyof LaunchProfile, value: string) => {
+    setProfile((prev) => { const updated = { ...prev, [field]: value }; saveProfile(updated); return updated; });
+  };
+
+  const generateStrategy = async (feedback?: string) => {
+    if (!projectTitle) return;
+    setStrategyError("");
+    feedback ? setRevisingStrategy(true) : setStrategyStage("loading");
+
+    // Collect full validation history
+    let convSummary = "";
+    try { const c = JSON.parse(localStorage.getItem(`convlog-${projectTitle}`) ?? "[]"); convSummary = c.length > 0 ? `${c.length} customer conversations logged` : ""; } catch { /* ignore */ }
+    const patternSummary     = localStorage.getItem(`pattern-summary-${projectTitle}`) ?? "";
+    const painkillerVerdict  = localStorage.getItem(`painkiller-verdict-${projectTitle}`) ?? "";
+    const confidenceLevel    = localStorage.getItem(`confidence-level-${projectTitle}`) ?? "";
+    const offer              = localStorage.getItem(`mvo-defined-${projectTitle}`) ?? "";
+    const offerOfferings     = ["one_sentence_offer","price_range","best_format","offer_clarity","first_pitch"].map((k) => localStorage.getItem(`mvo-offering-${k}-${projectTitle}`) ?? "").filter(Boolean).join(" | ");
+    const revenueTarget      = localStorage.getItem(`finance-revenue_target-${projectTitle}`) ?? "";
+    const runway             = localStorage.getItem(`finance-runway-${projectTitle}`) ?? "";
+    const fundingPath        = localStorage.getItem(`finance-funding_path-${projectTitle}`) ?? "";
+    const analysisText       = analysisKey ? (localStorage.getItem(analysisKey) ?? "") : "";
+    let targetCustomer = ""; let secondaryCustomer = "";
+    try { const tc = JSON.parse(localStorage.getItem(`target-customers-${projectTitle}`) ?? "{}"); targetCustomer = tc?.main?.label ?? ""; secondaryCustomer = tc?.secondary?.label ?? ""; } catch { /* ignore */ }
+    let experimentSummary = "";
+    try {
+      const customers = JSON.parse(localStorage.getItem(`experiment-customers-${projectTitle}`) ?? "[]");
+      if (customers.length) { const yes = customers.filter((c: { response: string }) => c.response === "yes").length; experimentSummary = `${customers.length} outreach: ${yes} paid`; }
+    } catch { /* ignore */ }
+
+    const currentProfile = feedback ? `\nCurrent profile:\n${JSON.stringify(profile, null, 2)}` : "";
+    const feedbackLine = feedback ? `\nFounder feedback: "${feedback}"` : "";
+
+    const system = `You are Sorene. Based on the founder's full validation history, synthesize their finalized business profile. Return ONLY valid JSON — no markdown, no commentary.`;
+    const prompt = `Synthesize the finalized launch profile for this founder based on their complete validation journey.
+
+Project: "${projectTitle}"
+${targetCustomer ? `Primary customer discovered: ${targetCustomer}` : ""}
+${secondaryCustomer ? `Secondary customer: ${secondaryCustomer}` : ""}
+${convSummary ? `Validation: ${convSummary}` : ""}
+${patternSummary ? `Pattern summary: ${patternSummary.slice(0, 300)}` : ""}
+${painkillerVerdict ? `Core problem identified: ${painkillerVerdict}` : ""}
+${confidenceLevel ? `Problem confidence: ${confidenceLevel}` : ""}
+${offer ? `Offer defined: ${offer}` : ""}
+${offerOfferings ? `Offering details: ${offerOfferings.slice(0, 300)}` : ""}
+${experimentSummary ? `Experiment results: ${experimentSummary}` : ""}
+${revenueTarget ? `Revenue target: ${revenueTarget}` : ""}
+${runway ? `Runway: ${runway}` : ""}
+${fundingPath ? `Funding: ${fundingPath}` : ""}
+${analysisText ? `Readiness verdict: ${analysisText.slice(0, 400)}` : ""}
+${currentProfile}${feedbackLine}
+
+Return a JSON object with exactly these keys:
+{
+  "audienceMain": "1-2 sentences: primary target audience — who they are, their role/situation",
+  "audienceSecondary": "1-2 sentences: secondary audience, or empty string if none",
+  "problem": "1-2 sentences: the core problem this solves, grounded in validation findings",
+  "solution": "1-2 sentences: what the product/service does to solve it",
+  "benefits": "2-3 key benefits as a short paragraph — outcomes the customer gets",
+  "offerings": "What's included — main product/service tiers or packages",
+  "pricing": "Pricing model and specific numbers if known, or recommended range"
+}`;
+
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { reply?: string };
+        const raw = (data.reply ?? "").trim().replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+        const parsed = JSON.parse(raw) as LaunchProfile;
+        setProfile(parsed);
+        saveProfile(parsed);
+        setStrategyStage("done");
+        setStrategyFeedback("");
+        setConfirmed(false);
+      } else {
+        setStrategyStage(strategyStage === "done" ? "done" : "idle");
+        setStrategyError("Generation failed. Please try again.");
+      }
+    } catch {
+      setStrategyStage(strategyStage === "done" ? "done" : "idle");
+      setStrategyError("Network error. Please try again.");
+    }
+    setRevisingStrategy(false);
+  };
+
+  const confirmLaunch = async () => {
+    if (!projectTitle) return;
+    setConfirming(true);
+    try {
+      // Pre-fill LaunchPad Brand & Digital Presence fields
+      localStorage.setItem(`brand-benefit-${projectTitle}`, profile.benefits);
+      localStorage.setItem(`brand-offerings-${projectTitle}`, profile.offerings);
+      localStorage.setItem(`brand-pricing-${projectTitle}`, profile.pricing);
+      // Target audience — write as { main: { label }, secondary: { label } } to match Validate stage format
+      const audienceObj: Record<string, { label: string }> = {};
+      if (profile.audienceMain.trim()) audienceObj.main = { label: profile.audienceMain.trim() };
+      if (profile.audienceSecondary.trim()) audienceObj.secondary = { label: profile.audienceSecondary.trim() };
+      if (Object.keys(audienceObj).length > 0) {
+        localStorage.setItem(`target-customers-${projectTitle}`, JSON.stringify(audienceObj));
+      }
+      localStorage.setItem(`launch-profile-confirmed-${projectTitle}`, JSON.stringify(profile));
+      setConfirmed(true);
+    } catch { /* ignore */ }
+    setConfirming(false);
+    onConfirmLaunch?.();
   };
 
   return (
@@ -772,6 +920,104 @@ Use **bold** for the most important 2-4 words in each paragraph. Plain prose onl
           </div>
         </div>
       </section>
+
+      {/* Launching Strategy */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-base font-medium text-[#151515]">Launching Strategy</h4>
+          {strategyStage === "done" && !revisingStrategy && (
+            <button onClick={() => generateStrategy()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
+          )}
+        </div>
+        <Separator className="bg-[#D8D9DB] mb-4" />
+
+        {strategyStage === "idle" && (
+          <button onClick={() => generateStrategy()} disabled={!projectTitle}
+            className="w-full py-3 rounded-2xl border border-dashed border-gray-200 text-[13px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            {projectTitle ? "Generate my launching strategy →" : "Select a project first"}
+          </button>
+        )}
+
+        {strategyStage === "loading" && (
+          <div className="flex items-center gap-2 text-[13px] text-[#9A9A9A] py-4">
+            <Loader2 size={14} className="animate-spin" /> Synthesising your validation history…
+          </div>
+        )}
+
+        {strategyError && <p className="text-[12px] text-[#DF2E16] mt-2">{strategyError}</p>}
+
+        {strategyStage === "done" && (() => {
+          const FIELDS: { key: keyof LaunchProfile; label: string; rows: number }[] = [
+            { key: "audienceMain",      label: "Target Audience — Primary",   rows: 2 },
+            { key: "audienceSecondary", label: "Target Audience — Secondary",  rows: 2 },
+            { key: "problem",           label: "Problem",                      rows: 2 },
+            { key: "solution",          label: "Solution",                     rows: 2 },
+            { key: "benefits",          label: "Benefits",                     rows: 3 },
+            { key: "offerings",         label: "Product Offerings",            rows: 3 },
+            { key: "pricing",           label: "Pricing",                      rows: 2 },
+          ];
+          return (
+            <div className="space-y-3">
+              {FIELDS.map(({ key, label, rows }) => (
+                <div key={key} className="rounded-2xl border border-[#ECEDEE] overflow-hidden group">
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                    <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">{label}</p>
+                    <button onClick={() => setEditingField(editingField === key ? null : key)}
+                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium opacity-0 group-hover:opacity-100">
+                      {editingField === key ? "Done" : "Edit"}
+                    </button>
+                  </div>
+                  <div className="px-4 py-3">
+                    {editingField === key ? (
+                      <textarea value={profile[key]}
+                        onChange={(e) => updateField(key, e.target.value)}
+                        rows={rows}
+                        autoFocus
+                        className="w-full text-[13px] text-[#151515] leading-relaxed resize-none focus:outline-none bg-transparent" />
+                    ) : (
+                      <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">
+                        {profile[key] || <span className="text-[#9A9A9A] italic">Not specified</span>}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Feedback to revise */}
+              <div className="rounded-2xl border border-[#ECEDEE] p-4 space-y-2">
+                <p className="text-[12px] font-medium text-[#151515]">Not quite right?</p>
+                <p className="text-[11px] text-[#9A9A9A]">Give feedback and Sorene will revise based on your validation history.</p>
+                <textarea
+                  value={strategyFeedback}
+                  onChange={(e) => setStrategyFeedback(e.target.value)}
+                  placeholder="e.g. the pricing should be higher, audience is more senior"
+                  rows={3}
+                  className="w-full mt-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-[13px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors resize-none"
+                />
+                <button onClick={() => generateStrategy(strategyFeedback)} disabled={!strategyFeedback.trim() || revisingStrategy}
+                  className="w-full py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                  {revisingStrategy ? <Loader2 size={12} className="animate-spin" /> : null}
+                  Revise
+                </button>
+              </div>
+
+              {/* Confirm to launch */}
+              {confirmed ? (
+                <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#F0FBF5] border border-[#32C382]">
+                  <CheckCircle2 size={14} className="text-[#32C382]" />
+                  <p className="text-[13px] font-semibold text-[#32C382]">Confirmed — Brand & Digital Presence in LaunchPad is now pre-filled.</p>
+                </div>
+              ) : (
+                <button onClick={confirmLaunch} disabled={confirming}
+                  className="w-full py-3.5 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {confirming ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
+                  Confirm to launch
+                </button>
+              )}
+            </div>
+          );
+        })()}
+      </section>
     </div>
   );
 }
@@ -788,7 +1034,7 @@ const VALIDATION_STAGES = [
   { id: 5, label: "Launch Readiness", shortLabel: "LR" },
 ];
 
-function ValidationProgress({ project, onCreateProject }: { project: DirectionCardData | null; onCreateProject: () => void }) {
+function ValidationProgress({ project, onCreateProject, onConfirmLaunch }: { project: DirectionCardData | null; onCreateProject: () => void; onConfirmLaunch?: () => void }) {
   const stageKey = `validation-stage-${project?.title ?? ""}`;
   const [activeStage, setActiveStageRaw] = useState<number>(() => {
     if (!project?.title) return 1;
@@ -815,23 +1061,23 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
 
   if (!project) {
     return (
-      <div className="p-8 flex flex-col items-center text-center gap-6">
-        <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-          <Rocket size={24} className="text-[#9A9A9A]" />
+      <div className="p-5 flex flex-col items-center text-center gap-4">
+        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+          <Rocket size={18} className="text-[#9A9A9A]" />
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <h3 className="text-body-medium-medium text-[#151515]">Start your validation journey</h3>
           <p className="text-label-medium text-[#62646A] max-w-sm leading-relaxed">
             Choose a direction Sorene has generated for you, or describe your own project to begin.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <a href="/direction"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors">
             Choose a Direction
           </a>
           <button onClick={onCreateProject}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-[#151515] text-sm font-medium hover:bg-gray-50 transition-colors">
             Create My Project
           </button>
         </div>
@@ -840,7 +1086,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-4">
       {/* Progress Bar */}
       <div className="relative">
         {/* Connector line */}
@@ -889,7 +1135,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
           {activeStage <= 4 ? (
             <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} onAdvance={() => setActiveStage((s) => Math.min(s + 1, 5))} />
           ) : (
-            <GoNoGoContent project={project} />
+            <GoNoGoContent project={project} onConfirmLaunch={onConfirmLaunch} />
           )}
         </motion.div>
       </AnimatePresence>
@@ -4022,16 +4268,16 @@ function BuildDemoStage3({
 
 const LAUNCH_PILLARS = [
   { id: "brand_digital", label: "Brand & Digital Presence", icon: Rocket, items: [
-    { id: "biz_name", label: "Finalise business name" },
+    { id: "biz_name", label: "Business name" },
+    { id: "target_customers", label: "Target customers" },
     { id: "tagline", label: "Tagline" },
     { id: "benefit", label: "Benefit description" },
     { id: "offerings", label: "Offerings" },
     { id: "pricing", label: "Pricing packages" },
-    { id: "logo", label: "Logo concept" },
+    { id: "logo", label: "Logo" },
     { id: "brand_color", label: "Brand color palette" },
     { id: "domain", label: "Choose domain" },
     { id: "website", label: "Build website" },
-    { id: "hosting", label: "Get web hosting" },
     { id: "social", label: "Set up social media profiles" },
   ]},
   { id: "tools", label: "Tools Stack", icon: BarChart3, items: [
@@ -4075,11 +4321,109 @@ const GROWTH_PILLAR = { id: "growth", label: "Growth", icon: BarChart3, items: [
   { id: "sales_playbook", label: "Sales playbook" },
   { id: "financial_model", label: "Financial model & projections" },
   { id: "growth_metrics", label: "Growth metrics / North Star" },
+  { id: "retention_playbook", label: "Customer retention / churn playbook" },
+  { id: "referral_strategy", label: "Referral & partnerships strategy" },
+  { id: "content_seo", label: "Content & SEO plan" },
   { id: "pitch_deck", label: "Pitch deck" },
+  { id: "hiring_plan", label: "Hiring plan" },
 ] } as const;
+
+const GROWTH_STORAGE_KEYS: Record<string, (title: string) => string> = {
+  business_plan: (t) => `growth-business-plan-${t}`,
+  marketing_plan: (t) => `growth-marketing-plan-${t}`,
+  gtm_strategy: (t) => `growth-gtm-strategy-${t}`,
+  sales_playbook: (t) => `growth-sales-playbook-${t}`,
+  financial_model: (t) => `growth-financial-model-${t}`,
+  growth_metrics: (t) => `growth-metrics-${t}`,
+  retention_playbook: (t) => `growth-retention-${t}`,
+  referral_strategy: (t) => `growth-referral-${t}`,
+  content_seo: (t) => `growth-content-seo-${t}`,
+  pitch_deck: (t) => `growth-pitch-deck-${t}`,
+  hiring_plan: (t) => `growth-hiring-${t}`,
+};
+
+const GROWTH_CLUSTERS: { label: string; ids: string[] }[] = [
+  { label: "PLAN", ids: ["business_plan", "marketing_plan", "gtm_strategy"] },
+  { label: "REVENUE", ids: ["sales_playbook", "financial_model", "growth_metrics", "retention_playbook", "referral_strategy", "content_seo"] },
+  { label: "FUNDRAISE & TEAM", ids: ["pitch_deck", "hiring_plan"] },
+];
 
 type PillarDef = typeof LAUNCH_PILLARS[number] | typeof GROWTH_PILLAR;
 type ChecklistStatus = "todo" | "progress" | "done";
+
+// ─────────────────────────────────────────────
+// TargetCustomersSection — auto-prefill from validation / launching strategy
+// ─────────────────────────────────────────────
+
+function TargetCustomersSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `target-customers-${title}`;
+
+  const [main, setMain] = useState("");
+  const [secondary, setSecondary] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        setMain(obj?.main?.label ?? "");
+        setSecondary(obj?.secondary?.label ?? "");
+        setSaved(true);
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const save = () => {
+    if (!title) return;
+    const obj: Record<string, { label: string }> = {};
+    if (main.trim()) obj.main = { label: main.trim() };
+    if (secondary.trim()) obj.secondary = { label: secondary.trim() };
+    try { localStorage.setItem(storageKey, JSON.stringify(obj)); } catch { /* ignore */ }
+    setSaved(true);
+  };
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      {!main && !secondary && (
+        <p className="text-[11px] text-[#9A9A9A] italic">
+          Complete Launching Strategy in Validation to auto-fill this.
+        </p>
+      )}
+      <div className="space-y-2">
+        <div>
+          <p className="text-[11px] font-semibold text-[#9A9A9A] mb-1">Primary</p>
+          <textarea
+            value={main}
+            onChange={(e) => { setMain(e.target.value); setSaved(false); }}
+            rows={2}
+            placeholder="e.g. Solo founders building their first product"
+            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white"
+          />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-[#9A9A9A] mb-1">Secondary</p>
+          <textarea
+            value={secondary}
+            onChange={(e) => { setSecondary(e.target.value); setSaved(false); }}
+            rows={2}
+            placeholder="e.g. Early-stage startup teams"
+            className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-[#151515] transition-colors bg-white"
+          />
+        </div>
+      </div>
+      <button
+        onClick={save}
+        disabled={saved || (!main.trim() && !secondary.trim())}
+        className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-[#32C382]/40 text-[#32C382] hover:bg-[#F5FFD9] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+        {saved ? "Saved" : "Save"}
+      </button>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────
 // BusinessNameSection — special item for biz_name
@@ -4089,12 +4433,17 @@ function BusinessNameSection({ project, onNameChosen }: { project: DirectionCard
   const title = project?.title ?? "";
   const storageKey = `business-name-${title}`;
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ name: string; reason: string }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
@@ -4189,36 +4538,57 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
     setChatLoading(false);
   };
 
-  const chooseName = (name: string) => {
-    setChosen(name);
-    setCollapsed(true);
-    try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
-    onNameChosen(name);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = (prefill?: string) => { setEditValue(prefill ?? chosen); setEditing(true); };
+  const saveEdit = () => {
+    const v = editValue.trim();
+    if (v) { setChosen(v); try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } onNameChosen(v); }
+    setEditing(false);
+    setCollapsed(!!v);
   };
+
+  const chooseName = (name: string) => { startEdit(name); };
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      {/* Description hint */}
-      {!collapsed && (
-        <p className="text-[12px] text-[#62646A] leading-relaxed">
-          A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
-        </p>
-      )}
-
-      {/* Chosen name badge */}
-      {chosen && (
+      {/* Chosen name badge — shown when name saved and not editing */}
+      {chosen && !editing && (
         <div className="flex items-center gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
           <span className="text-[13px] font-semibold text-[#151515]">{chosen}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] ml-auto hover:underline">
-            {collapsed ? "Change" : "Collapse"}
-          </button>
+          <button onClick={() => startEdit()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto shrink-0">Edit</button>
         </div>
       )}
 
-      {/* Generate / suggestions */}
-      {!collapsed && (
+      {/* Edit field — shown when editing OR no name chosen yet */}
+      {(editing || !chosen) && (
         <>
+          {/* Hint only when no name yet */}
+          {!chosen && !editing && (
+            <p className="text-[12px] text-[#62646A] leading-relaxed">
+              A great business name is <strong className="text-[#151515] font-medium">clear</strong>, <strong className="text-[#151515] font-medium">simple</strong>, and instantly tells people what you do. Avoid clever wordplay — clarity wins.
+            </p>
+          )}
+
+          {editing && (
+            <div className="space-y-2">
+              <input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                autoFocus
+                placeholder="Type or choose a name below…"
+                className="w-full text-[13px] text-[#151515] px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+              />
+              <div className="flex gap-2">
+                <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+                <button onClick={() => { setEditing(false); }} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Generate / suggestions */}
           {stage === "idle" && (
             <button onClick={generateSuggestions} disabled={!title}
               className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
@@ -4233,20 +4603,13 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
           {stage === "done" && suggestions.length > 0 && (
             <motion.div key={suggestionKey} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-2">
               {suggestions.map((s, i) => (
-                <div key={i} className={cn(
-                  "rounded-xl border p-3 transition-all",
-                  chosen === s.name ? "border-[#32C382] bg-[#F5FFD9]" : "border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20"
-                )}>
+                <div key={i} className="rounded-xl border p-3 transition-all border-gray-100 bg-[#FAFAFA] hover:border-[#151515]/20">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold text-[#151515]">{s.name}</span>
-                    {chosen !== s.name ? (
-                      <button onClick={() => chooseName(s.name)}
-                        className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
-                        Choose
-                      </button>
-                    ) : (
-                      <CheckCircle2 size={13} className="text-[#32C382] shrink-0" />
-                    )}
+                    <button onClick={() => chooseName(s.name)}
+                      className="text-[10px] font-medium text-[#151515] border border-[#151515]/20 px-2.5 py-1 rounded-full hover:bg-[#151515] hover:text-white transition-colors shrink-0">
+                      Choose
+                    </button>
                   </div>
                   <p className="text-[11px] text-[#62646A] mt-0.5 leading-snug">{s.reason}</p>
                 </div>
@@ -4258,7 +4621,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
             </motion.div>
           )}
 
-          {/* Chat for more options */}
+          {/* Chat for more ideas */}
           {stage === "done" && (
             <div className="border border-gray-100 rounded-xl overflow-hidden">
               {chatHistory.length > 0 && (
@@ -4295,7 +4658,7 @@ Return JSON: [{"name": "...", "reason": "1 sentence why this works — and why i
 // BrandTextSection — generic for tagline / benefit / offerings
 // ─────────────────────────────────────────────
 
-type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "website" | "hosting";
+type BrandTextType = "tagline" | "benefit" | "offerings" | "logo" | "domain" | "website";
 
 const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: string; placeholder: string }> = {
   tagline: {
@@ -4314,9 +4677,9 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
     placeholder: 'e.g. "Validate your business idea with real customer feedback in 30 days."',
   },
   logo: {
-    hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling. Take this to a designer or tool like Looka or Canva.",
-    promptInstruction: `Generate 3 logo concept directions for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY a short concept title (3-5 words). The "reason" field contains the full 2-3 sentence visual description. Example: [{"text": "Minimal wordmark, deep teal", "reason": "Clean sans-serif type, no icon, conveys trust"}, ...]`,
-    placeholder: 'e.g. "Something more minimal and modern"',
+    hint: "A logo concept describes visual direction — type style, symbol ideas, and feeling.",
+    promptInstruction: "",
+    placeholder: 'e.g. "Bold S, forward momentum — geometric lettermark"',
   },
   domain: {
     hint: "Your domain should match your business name closely. Check availability at namecheap.com or porkbun.com before registering.",
@@ -4328,30 +4691,144 @@ const BRAND_TEXT_META: Record<BrandTextType, { hint: string; promptInstruction: 
     promptInstruction: `Recommend 3 website platform options for this business type. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — Page1, Page2, Page3". The "reason" field explains why it fits. Example: [{"text": "Squarespace — Home, Services, Contact", "reason": "Easy to use, great templates"}, ...]`,
     placeholder: 'e.g. "Something with booking built in"',
   },
-  hosting: {
-    hint: "Most simple sites have hosting built in. Only set up separate hosting if you are building a custom coded site.",
-    promptInstruction: `Recommend 3 hosting or all-in-one website platform options for this business. IMPORTANT: return a JSON array. The "text" field must contain ONLY "Platform — price/plan". The "reason" field explains why it fits. Example: [{"text": "Squarespace Basic — ~$16/mo", "reason": "Hosting included, easy to manage"}, ...]`,
-    placeholder: 'e.g. "What is the cheapest reliable option?"',
-  },
 };
+
+// ─────────────────────────────────────────────
+// LogoConceptSection — upload logo images (JPEG/PNG ≤ 5 MB)
+// ─────────────────────────────────────────────
+
+const MAX_LOGO_SIZE = 5 * 1024 * 1024; // 5 MB
+
+function LogoConceptSection({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const storageKey = `brand-logo-concepts-${title}`;
+
+  const [logos, setLogos] = useState<string[]>([]); // saved base64 data URLs
+  const [pending, setPending] = useState<string | null>(null); // awaiting Save
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) setLogos(JSON.parse(raw));
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title]);
+
+  const persist = (list: string[]) => {
+    setLogos(list);
+    try { localStorage.setItem(storageKey, JSON.stringify(list)); } catch { /* ignore */ }
+  };
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setError("");
+    const file = files[0];
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setError("Only JPEG or PNG files are supported.");
+      return;
+    }
+    if (file.size > MAX_LOGO_SIZE) {
+      setError("File must be under 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) setPending(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const savePending = () => {
+    if (!pending) return;
+    persist([...logos, pending]);
+    setPending(null);
+  };
+
+  const cancelPending = () => { setPending(null); setError(""); };
+
+  const remove = (i: number) => persist(logos.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="mt-2 ml-[26px] space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Upload your logo files. JPEG or PNG, max 5 MB each.</p>
+
+      {logos.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {logos.map((src, i) => (
+            <div key={i} className="relative group w-24 h-24 rounded-xl overflow-hidden border border-gray-200 bg-[#F9F9F9]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`Logo ${i + 1}`} className="w-full h-full object-contain p-1" />
+              <button
+                onClick={() => remove(i)}
+                className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-[11px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pending preview — waiting for Save */}
+      {pending && (
+        <div className="space-y-2">
+          <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-dashed border-[#151515] bg-[#F9F9F9]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pending} alt="Preview" className="w-full h-full object-contain p-1" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={savePending} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+            <button onClick={cancelPending} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {!pending && (
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="text-[12px] font-medium px-4 py-2 rounded-xl border border-dashed border-gray-300 text-[#62646A] hover:border-[#151515] hover:text-[#151515] transition-colors"
+          >
+            + Add logo
+          </button>
+          {error && <p className="mt-1.5 text-[11px] text-[#DF2E16]">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function BrandTextSection({ type, project }: { type: BrandTextType; project: DirectionCardData | null }) {
   const title = project?.title ?? "";
   const storageKey = `brand-${type}-${title}`;
   const meta = BRAND_TEXT_META[type];
 
-  const [chosen, setChosen] = useState(() => {
-    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
-  });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return !!localStorage.getItem(storageKey); } catch { return false; }
-  });
+  // Stable defaults for SSR/first client render — reading localStorage during
+  // render causes a hydration mismatch that disables page interactivity.
+  const [chosen, setChosen] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setChosen(stored ?? "");
+      setCollapsed(!!stored);
+    } catch {}
+  }, [storageKey]);
   const [suggestions, setSuggestions] = useState<{ text?: string; name?: string; reason?: string; available?: boolean | null }[]>([]);
   const [stage, setStage] = useState<"idle" | "loading" | "done">("idle");
   const [suggestionKey, setSuggestionKey] = useState(0);
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   useEffect(() => {
@@ -4493,52 +4970,19 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
     } catch { setStage("idle"); }
   };
 
-  const sendChat = async () => {
-    const msg = chatInput.trim();
-    if (!msg || chatLoading) return;
-    setChatInput("");
-    const newHistory = [...chatHistory, { role: "user" as const, text: msg }];
-    setChatHistory(newHistory);
-    setChatLoading(true);
-    const ctx = buildContext();
-    const system = `You are Sorene, a startup brand coach. Return a JSON array where "text" is the actual copy and "reason" explains why it works: [{"text": "...", "reason": "..."}]. No markdown outside the JSON.`;
-    const history = newHistory.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }));
-    const prompt = `${buildPrompt(ctx)}\n\nUser feedback: "${msg}". Generate 3 new options based on the feedback.`;
-    try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system, history }) });
-      if (res.ok) {
-        const data = await res.json();
-        const match = (data?.reply ?? "").trim().match(/\[[\s\S]*\]/);
-        if (match) {
-          const raw = JSON.parse(match[0]);
-          let parsed = Array.isArray(raw) ? raw.map((s: { name?: string; text?: string; reason?: string }) => ({ text: s.text || s.name || "", reason: s.reason || "" })) : raw;
-          setSuggestions([]);
-          setTimeout(async () => {
-            setSuggestions(parsed);
-            setSuggestionKey((k) => k + 1);
-            if (type === "domain") {
-              parsed = await checkAndAnnotateDomains(parsed);
-              setCheckingAvailability(false);
-              setSuggestions(parsed);
-              setSuggestionKey((k) => k + 1);
-            }
-          }, 120);
-          try { localStorage.setItem(`brand-${type}-suggestions-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-          setChatHistory([...newHistory, { role: "ai", text: "Here are 3 new options:" }]);
-        } else {
-          setChatHistory([...newHistory, { role: "ai", text: (data?.reply ?? "").trim() }]);
-        }
-      }
-    } catch { /* ignore */ }
-    setChatLoading(false);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = (prefill?: string) => { setEditValue(prefill ?? chosen); setEditing(true); };
+  const saveEdit = () => {
+    const v = editValue.trim();
+    if (v) { setChosen(v); try { localStorage.setItem(storageKey, v); } catch { /* ignore */ } }
+    setEditing(false);
+    setCollapsed(!!v);
   };
 
-  const choose = (name: string) => {
-    setChosen(name);
-    setCollapsed(true);
-    try { localStorage.setItem(storageKey, name); } catch { /* ignore */ }
-  };
+  // "Choose" from suggestions → open edit field for review before saving
+  const choose = (name: string) => { startEdit(name); };
 
   const [customInput, setCustomInput] = useState("");
   const [customChecking, setCustomChecking] = useState(false);
@@ -4562,22 +5006,36 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
 
   return (
     <div className="mt-2 ml-[26px] space-y-3">
-      {!collapsed && (
-        <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
-      )}
-
-      {chosen && (
+      {chosen && !editing && (
         <div className="flex items-start gap-2 px-3 py-2 bg-[#F5FFD9] border border-[#32C382]/30 rounded-xl">
           <CheckCircle2 size={13} className="text-[#32C382] shrink-0 mt-0.5" />
           <span className="text-[13px] font-medium text-[#151515] flex-1 leading-snug">{chosen}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] shrink-0 hover:underline">
-            {collapsed ? "Change" : "Collapse"}
-          </button>
+          <button onClick={() => startEdit()} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors shrink-0">Edit</button>
         </div>
       )}
 
-      {!collapsed && (
+      {/* Suggestions + edit field — shown when no value saved yet, or when editing */}
+      {(!chosen || editing) && (
         <>
+          {!chosen && !editing && (
+            <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.hint}</p>
+          )}
+          {editing && (
+            <div className="space-y-2">
+              <textarea
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="Type or choose an option below…"
+                className="w-full text-[13px] text-[#151515] leading-relaxed resize-none px-3 py-2 rounded-xl border border-[#151515] focus:outline-none bg-white"
+              />
+              <div className="flex gap-2">
+                <button onClick={saveEdit} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+                <button onClick={() => setEditing(false)} className="text-[11px] font-medium px-3 py-1.5 rounded-full border border-gray-200 text-[#62646A] hover:border-[#151515] transition-colors">Cancel</button>
+              </div>
+            </div>
+          )}
           {stage === "idle" && (
             <button onClick={generateSuggestions} disabled={!title}
               className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
@@ -4670,27 +5128,6 @@ Remember: "text" = the actual copy itself (short). "reason" = why it works (expl
               )}
             </div>
           )}
-          {stage === "done" && (
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              {chatHistory.length > 0 && (
-                <div className="px-3 py-2 space-y-1.5 max-h-32 overflow-y-auto bg-[#FAFAFA]">
-                  {chatHistory.map((m, i) => (
-                    <p key={i} className={cn("text-[11px] leading-relaxed", m.role === "user" ? "text-[#151515] font-medium" : "text-[#62646A]")}>
-                      {m.role === "ai" ? <span className="text-[#32C382] font-semibold">Sorene: </span> : "You: "}{m.text}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                  placeholder={meta.placeholder}
-                  className="flex-1 text-[12px] text-[#151515] placeholder-gray-300 bg-transparent focus:outline-none" />
-                <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading} className="shrink-0 text-[#32C382] disabled:opacity-30 transition-colors">
-                  {chatLoading ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
@@ -4713,6 +5150,9 @@ function PricingPackageSection({ project }: { project: DirectionCardData | null 
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [ownDesc, setOwnDesc] = useState("");
+  const [ownEval, setOwnEval] = useState("");
+  const [ownEvalLoading, setOwnEvalLoading] = useState(false);
 
   useEffect(() => {
     if (!title) return;
@@ -4857,6 +5297,43 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
           )}
         </>
       )}
+      {!collapsed && <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-px bg-gray-100" />
+          <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or describe your own</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-3 space-y-2">
+          <textarea
+            value={ownDesc}
+            onChange={(e) => setOwnDesc(e.target.value)}
+            placeholder="Describe your pricing packages (e.g. a starter at $99/mo, a pro at $299/mo with 5 seats)…"
+            rows={3}
+            className="w-full text-[13px] text-[#151515] bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#32C382] resize-none placeholder:text-[#9CA3AF]"
+          />
+          <button
+            onClick={async () => {
+              const text = ownDesc.trim();
+              if (!text || ownEvalLoading) return;
+              setOwnEvalLoading(true);
+              setOwnEval("");
+              await generate(`\n\nUser described their own packages: "${text}". Use this as the basis — structure them into the correct format and evaluate if the pricing makes sense for this business.`);
+              setOwnEval("Packages structured from your description.");
+              setOwnEvalLoading(false);
+            }}
+            disabled={!ownDesc.trim() || ownEvalLoading}
+            className="flex items-center gap-1 text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30"
+          >
+            {ownEvalLoading ? <Loader2 size={10} className="animate-spin" /> : <img src="/figmaAssets/starfour.svg" className="w-2 h-2" alt="" />}
+            Structure &amp; evaluate
+          </button>
+          {ownEval && (
+            <p className="text-[11px] text-[#62646A] leading-relaxed">
+              <span className="text-[#32C382] font-semibold">Sorene: </span>{ownEval}
+            </p>
+          )}
+        </div>
+      </div>}
     </div>
   );
 }
@@ -4864,6 +5341,49 @@ Return JSON: [{"name":"Package name","price":"$X/mo or $X one-time","description
 // ─────────────────────────────────────────────
 // BrandColorSection
 // ─────────────────────────────────────────────
+
+function ColorUploadArea({ title }: { title: string }) {
+  const storageKey = `brand-color-upload-${title}`;
+  const [preview, setPreview] = useState<string>(() => {
+    try { return localStorage.getItem(storageKey) ?? ""; } catch { return ""; }
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setPreview(dataUrl);
+      try { localStorage.setItem(storageKey, dataUrl); } catch { /* ignore */ }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <>
+      {preview ? (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-[#32C382]/30 bg-[#F5FFD9]">
+          <img src={preview} alt="Brand colors" className="w-10 h-10 object-contain rounded-lg border border-white" />
+          <span className="text-[12px] font-medium text-[#151515] flex-1">Brand image saved</span>
+          <button onClick={() => { setPreview(""); try { localStorage.removeItem(storageKey); } catch {} }}
+            className="text-[10px] text-[#9CA3AF] hover:text-[#374151] transition-colors">Remove</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="w-full flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border border-dashed border-gray-200 bg-[#FAFAFA] hover:border-[#32C382]/50 hover:bg-[#F5FFD9]/30 transition-all"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V7M7 10l3-3 3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="2" width="16" height="16" rx="4" stroke="#9CA3AF" strokeWidth="1.5"/></svg>
+          <span className="text-[11px] text-[#9CA3AF]">Upload brand image or mood board</span>
+          <span className="text-[10px] text-[#C4C4C4]">PNG, JPG, SVG</span>
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+    </>
+  );
+}
 
 type ColorPalette = { id: string; name: string; vibe: string; primary: string; secondary: string; accent: string; neutral: string };
 
@@ -4939,8 +5459,8 @@ Return JSON: [{"id":"p1","name":"palette name","vibe":"2-word mood description",
               <div key={i} className="w-5 h-5 rounded-md border border-white/50 shadow-sm" style={{ backgroundColor: hex }} />
             ))}
           </div>
-          <span className="text-[12px] font-semibold text-[#151515] flex-1">{chosen.name}</span>
-          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline">{collapsed ? "Change" : "Collapse"}</button>
+          <span className="text-[11px] font-semibold text-[#151515] flex-1 truncate">{chosen.name}</span>
+          <button onClick={() => setCollapsed((v) => !v)} className="text-[11px] text-[#32C382] hover:underline shrink-0">{collapsed ? "Change" : "Collapse"}</button>
         </div>
       )}
 
@@ -4982,6 +5502,14 @@ Return JSON: [{"id":"p1","name":"palette name","vibe":"2-word mood description",
               <button onClick={generate} className="text-[10px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Regenerate</button>
             </div>
           )}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">or upload brand colors</span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+            <ColorUploadArea title={title} />
+          </div>
         </>
       )}
     </div>
@@ -5114,9 +5642,18 @@ const PILLAR_TAGLINES: Record<string, string> = {
   growth:      "Scale what works",
 };
 
-function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
+function PillarCard({ pillar, project, onNameChosen, autoOpen }: { pillar: PillarDef; project: DirectionCardData | null; onNameChosen?: (name: string) => void; autoOpen?: boolean }) {
   const title = project?.title ?? "";
-  const [isExpanded, setIsExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(autoOpen ?? false);
+
+  useEffect(() => {
+    if (autoOpen) {
+      setIsExpanded(true);
+      setTimeout(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
   const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
   const [tips, setTips] = useState<Record<string, string>>({});
   const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
@@ -5190,6 +5727,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
 
   return (
     <motion.div
+      ref={cardRef}
       layout
       transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
       className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col group cursor-pointer"
@@ -5235,21 +5773,6 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
         </div>
       </motion.div>
 
-      {/* Collapsed body */}
-      <AnimatePresence>
-        {!isExpanded && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
-            className="px-4 pt-3 pb-4">
-            <p className="text-[12px] text-[#9A9A9A] mb-2">{doneCount}/{pillar.items.length} tasks complete</p>
-            <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-[#32C382] transition-all duration-500"
-                style={{ width: `${pillar.items.length > 0 ? Math.round((doneCount / pillar.items.length) * 100) : 0}%` }}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Expanded body */}
       <AnimatePresence initial={false}>
@@ -5261,29 +5784,13 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5">
-              {/* Tips controls */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[12px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
-                {tipsStage === "idle" && (
-                  <button onClick={generateTips} disabled={!title}
-                    className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center gap-1">
-                    <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Get personalised tips
-                  </button>
-                )}
-                {tipsStage === "loading" && (
-                  <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
-                    <Loader2 size={11} className="animate-spin" /> Getting tips…
-                  </div>
-                )}
-              </div>
-
               <div className="space-y-3">
                 {pillar.items.map((item) => {
                   const status = statuses[item.id] ?? "todo";
                   const tip = tips[item.id];
                   const hasContent = pillar.id === "brand_digital" && [
-                    "biz_name", "tagline", "benefit", "offerings", "pricing",
-                    "logo", "domain", "website", "hosting", "brand_color", "social",
+                    "biz_name", "target_customers", "tagline", "benefit", "offerings", "pricing",
+                    "logo", "domain", "website", "brand_color", "social",
                   ].includes(item.id);
                   const open = !!openItems[item.id];
                   return (
@@ -5326,13 +5833,19 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                                 onNameChosen?.(name);
                               }} />
                             )}
+                            {item.id === "target_customers" && (
+                              <TargetCustomersSection project={project} />
+                            )}
                             {(item.id === "tagline" || item.id === "benefit" || item.id === "offerings") && (
                               <BrandTextSection type={item.id as BrandTextType} project={project} />
                             )}
                             {item.id === "pricing" && (
                               <PricingPackageSection project={project} />
                             )}
-                            {(item.id === "logo" || item.id === "domain" || item.id === "website" || item.id === "hosting") && (
+                            {item.id === "logo" && (
+                              <LogoConceptSection project={project} />
+                            )}
+                            {(item.id === "domain" || item.id === "website") && (
                               <BrandTextSection type={item.id as BrandTextType} project={project} />
                             )}
                             {item.id === "brand_color" && (
@@ -5344,7 +5857,7 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      {tip && item.id !== "biz_name" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "hosting" && item.id !== "brand_color" && item.id !== "social" && (
+                      {tip && item.id !== "biz_name" && item.id !== "target_customers" && item.id !== "tagline" && item.id !== "benefit" && item.id !== "offerings" && item.id !== "pricing" && item.id !== "logo" && item.id !== "domain" && item.id !== "website" && item.id !== "brand_color" && item.id !== "social" && (
                         <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
                           {tip}
                         </p>
@@ -5365,126 +5878,1452 @@ function PillarCard({ pillar, project, onNameChosen }: { pillar: PillarDef; proj
 // LaunchPadContent — main component
 // ─────────────────────────────────────────────
 
-function LaunchPadContent({ project, onNameChosen }: { project: DirectionCardData | null; onNameChosen?: (name: string) => void }) {
+function LaunchPadContent({ project, onNameChosen, autoOpenPillarId, onAutoOpenConsumed }: {
+  project: DirectionCardData | null;
+  onNameChosen?: (name: string) => void;
+  autoOpenPillarId?: string;
+  onAutoOpenConsumed?: () => void;
+}) {
+  useEffect(() => {
+    if (autoOpenPillarId) {
+      // Clear after one render so switching tabs doesn't re-trigger
+      const t = setTimeout(() => onAutoOpenConsumed?.(), 500);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenPillarId]);
+
   return (
-    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="p-6 flex flex-col gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
-        <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen} />
+        <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen}
+          autoOpen={autoOpenPillarId === pillar.id} />
       ))}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// GrowthItemCard — expandable card with AI generation + inline editing + save
+// ─────────────────────────────────────────────
+
+type GrowthStage = "idle" | "loading" | "editing" | "saved";
+
+// Helpers to read localStorage context
+function readGrowthContext(title: string) {
+  const get = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
+  let targetCustomer = "";
+  try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+  return {
+    painkiller: get(`painkiller-verdict-${title}`),
+    offer: get(`mvo-defined-${title}`),
+    patternSummary: get(`pattern-summary-${title}`),
+    businessName: get(`business-name-${title}`),
+    tagline: get(`brand-tagline-${title}`),
+    benefit: get(`brand-benefit-${title}`),
+    offerings: get(`brand-offerings-${title}`),
+    pricing: get(`brand-pricing-${title}`),
+    targetCustomer,
+    revenueTarget: get(`finance-revenue_target-${title}`),
+    runway: get(`finance-runway-${title}`),
+    fundingPath: get(`finance-funding_path-${title}`),
+  };
+}
+
+function ctxLines(ctx: ReturnType<typeof readGrowthContext>, title: string) {
+  const lines: string[] = [`Project: "${title}"`];
+  if (ctx.businessName) lines.push(`Business name: "${ctx.businessName}"`);
+  if (ctx.targetCustomer) lines.push(`Target customer: "${ctx.targetCustomer}"`);
+  if (ctx.painkiller) lines.push(`Painkiller verdict: "${ctx.painkiller}"`);
+  if (ctx.offer) lines.push(`Offer: "${ctx.offer}"`);
+  if (ctx.pricing) lines.push(`Pricing: "${ctx.pricing}"`);
+  if (ctx.revenueTarget) lines.push(`Revenue target: "${ctx.revenueTarget}"`);
+  if (ctx.runway) lines.push(`Runway: "${ctx.runway}"`);
+  if (ctx.fundingPath) lines.push(`Funding path: "${ctx.fundingPath}"`);
+  if (ctx.patternSummary) lines.push(`Pattern summary: "${ctx.patternSummary.slice(0, 300)}"`);
+  return lines.join("\n");
+}
+
+const GROWTH_AI_SYSTEM = "You are Sorene, a startup coach. Return ONLY valid JSON — no markdown, no preamble.";
+
+// ── Business Plan ──────────────────────────────
+const BP_SECTIONS = [
+  { id: "executive_summary", label: "Executive Summary" },
+  { id: "problem_solution", label: "Problem & Solution" },
+  { id: "target_market", label: "Target Market" },
+  { id: "business_model", label: "Business Model" },
+  { id: "revenue_streams", label: "Revenue Streams" },
+  { id: "plan_90_day", label: "90-Day Plan" },
+] as const;
+
+function BusinessPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-business-plan-${title}`;
+  type Sections = Record<string, string>;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<Sections>({});
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}
+
+Generate a concise business plan. Return JSON with exactly these keys:
+{
+  "executive_summary": "2-3 sentences: what the business is, who it's for, what it does",
+  "problem_solution": "The validated pain (2 sentences) followed by how the offer solves it (2 sentences)",
+  "target_market": "Primary customer description and secondary if applicable. Include context on their situation.",
+  "business_model": "How you make money — pricing model and delivery method in 1-2 sentences",
+  "revenue_streams": "Specific packages or tiers with projected numbers if known. One per line.",
+  "plan_90_day": "Three milestones — Month 1: [build/setup actions], Month 2: [first sales actions], Month 3: [scale actions]. Use bullet points."
+}`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+    setOpenSection(null);
+  };
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">AI will draft all 6 sections using your validation data — target customer, painkiller, offer, and pricing. Review and edit each section before saving.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate business plan
+      </button>
+    </div>
+  );
+
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Drafting your business plan…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {BP_SECTIONS.map((s) => (
+        <div key={s.id} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button
+            onClick={() => setOpenSection(openSection === s.id ? null : s.id)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left"
+          >
+            <span className="text-[12px] font-semibold text-[#151515]">{s.label}</span>
+            {openSection === s.id ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>
+            {openSection === s.id && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                transition={{ duration: 0.2 }} className="overflow-hidden">
+                <p className="px-3 py-3 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap border-t border-gray-100">{data[s.id] ?? ""}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {BP_SECTIONS.map((s) => (
+        <div key={s.id} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2.5 bg-[#FAFAFA] border-b border-gray-100">
+            <p className="text-[12px] font-semibold text-[#151515]">{s.label}</p>
+          </div>
+          <textarea
+            value={data[s.id] ?? ""}
+            onChange={(e) => setData((prev) => ({ ...prev, [s.id]: e.target.value }))}
+            rows={s.id === "plan_90_day" ? 5 : 3}
+            placeholder={
+              s.id === "executive_summary" ? "What the business is, who it's for, what it does…" :
+              s.id === "problem_solution" ? "The pain you validated + how your offer solves it…" :
+              s.id === "target_market" ? "Primary customer and secondary audience…" :
+              s.id === "business_model" ? "How you make money — pricing model and delivery…" :
+              s.id === "revenue_streams" ? "Packages, tiers, and projected numbers…" :
+              "Month 1: build / Month 2: sell / Month 3: scale…"
+            }
+            className="w-full px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed bg-white focus:outline-none resize-none placeholder:text-gray-300"
+          />
+        </div>
+      ))}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Marketing Plan ─────────────────────────────
+type MktChannel = { channel: string; tactics: string[]; priority: "high" | "medium" | "low" };
+
+function MarketingPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-marketing-plan-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<MktChannel[]>([]);
+  const [openCh, setOpenCh] = useState<number | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a marketing plan as a JSON array of channels: [{"channel":"...","tactics":["..."],"priority":"high"|"medium"|"low"}]. Return 4-6 channels most relevant to this business.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved"); setOpenCh(null);
+  };
+
+  const priorityColor = (p: string) => p === "high" ? "bg-red-100 text-red-700" : p === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-[#62646A]";
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Channel-by-channel plan with priority-ranked tactics tailored to your audience and offer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate marketing plan
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your marketing plan…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {data.map((ch, ci) => (
+        <div key={ci} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenCh(openCh === ci ? null : ci)}
+            className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-semibold text-[#151515]">{ch.channel}</span>
+              <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", priorityColor(ch.priority))}>{ch.priority}</span>
+            </div>
+            {openCh === ci ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>
+            {openCh === ci && (
+              <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                <div className="px-3 py-2.5 space-y-1 border-t border-gray-100">
+                  {ch.tactics.map((t, ti) => <div key={ti} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{t}</p></div>)}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {data.map((ch, ci) => (
+        <div key={ci} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center justify-between">
+            <input value={ch.channel} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, channel: e.target.value } : c))} className="text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none flex-1 mr-2" />
+            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0", priorityColor(ch.priority))}>{ch.priority}</span>
+            <button onClick={() => setData((prev) => prev.filter((_, i) => i !== ci))} className="ml-2 text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px]">✕</button>
+          </div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {ch.tactics.map((t, ti) => (
+              <div key={ti} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                <input value={t} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.map((tt, j) => j === ti ? e.target.value : tt) } : c))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.filter((_, j) => j !== ti) } : c))} className="text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px] shrink-0">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: [...c.tactics, ""] } : c))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add tactic</button>
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => [...prev, { channel: "New channel", tactics: [""], priority: "medium" }])} className="text-[11px] text-[#62646A] border border-dashed border-gray-300 rounded-full px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add channel</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
+    </div>
+  );
+}
+
+// ── GTM Strategy ───────────────────────────────
+type GtmMilestone = { week: string; milestone: string; actions: string[] };
+
+function GtmStrategyCard({ title }: { title: string }) {
+  const storageKey = `growth-gtm-strategy-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<GtmMilestone[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a go-to-market strategy as a JSON array: [{"week":"Week 1-2","milestone":"...","actions":["..."]}]. Return 5-6 milestone blocks covering the first 12 weeks.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Week-by-week milestones covering your first 12 weeks — from setup through traction.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate GTM strategy
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Mapping your go-to-market timeline…</div>
+  );
+
+  if (readOnly) return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-3">
+        {data.map((m, mi) => (
+          <div key={mi} className="relative">
+            <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-[#32C382] border-2 border-white flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-[#32C382] shrink-0">{m.week}</span>
+                <p className="text-[12px] font-semibold text-[#151515]">{m.milestone}</p>
+              </div>
+              <div className="px-3 py-2 space-y-1">
+                {m.actions.map((a, ai) => <div key={ai} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{a}</p></div>)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-3">
+        {data.map((m, mi) => (
+          <div key={mi} className="relative">
+            <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-[#32C382] border-2 border-white flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-[#32C382] shrink-0">{m.week}</span>
+                <input value={m.milestone} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, milestone: e.target.value } : x))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
+              </div>
+              <div className="px-3 py-2.5 space-y-1.5">
+                {m.actions.map((a, ai) => (
+                  <div key={ai} className="flex items-start gap-2">
+                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                    <input value={a} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.map((aa, j) => j === ai ? e.target.value : aa) } : x))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                    <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.filter((_, j) => j !== ai) } : x))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+                  </div>
+                ))}
+                <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: [...x.actions, ""] } : x))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add action</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Sales Playbook ─────────────────────────────
+type SalesPlaybook = { opener: string; pitch: string; objections: { objection: string; response: string }[] };
+
+function SalesPlaybookCard({ title }: { title: string }) {
+  const storageKey = `growth-sales-playbook-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<SalesPlaybook>({ opener: "", pitch: "", objections: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a sales playbook. Return JSON: {"opener":"...","pitch":"...","objections":[{"objection":"...","response":"..."}]}. Include 3-5 common objections.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openSP, setOpenSP] = useState<string | null>(null);
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Your sales opener, pitch, and objection-handling scripts based on your validated offer and target customer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate sales playbook
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Writing your sales playbook…</div>
+  );
+
+  if (readOnly) return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "opener", label: "Opener" }, { key: "pitch", label: "Pitch" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenSP(openSP === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openSP === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openSP === key && <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden"><p className="px-3 py-3 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap border-t border-gray-100">{data[key as "opener" | "pitch"]}</p></motion.div>}</AnimatePresence>
+        </div>
+      ))}
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-3">Objection Handler</p>
+      {data.objections.map((obj, oi) => (
+        <div key={oi} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenSP(openSP === `obj-${oi}` ? null : `obj-${oi}`)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] text-[#151515]">{obj.objection}</span>
+            {openSP === `obj-${oi}` ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openSP === `obj-${oi}` && <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden"><p className="px-3 py-3 text-[12px] text-[#32C382] leading-relaxed border-t border-gray-100">{obj.response}</p></motion.div>}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {[{ key: "opener", label: "Opener" }, { key: "pitch", label: "Pitch" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100"><p className="text-[12px] font-semibold text-[#151515]">{label}</p></div>
+          <textarea value={data[key as "opener" | "pitch"]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} placeholder={key === "opener" ? "How you start the conversation…" : "Your 30-second pitch…"} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-none placeholder:text-gray-300" />
+        </div>
+      ))}
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-1">Objection Handler</p>
+      {data.objections.map((obj, oi) => (
+        <div key={oi} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100 flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-red-400 shrink-0">Objection</span>
+            <input value={obj.objection} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, objection: e.target.value } : o) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" placeholder="What they say…" />
+            <button onClick={() => setData((prev) => ({ ...prev, objections: prev.objections.filter((_, i) => i !== oi) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+          </div>
+          <div className="px-3 py-2 flex items-start gap-2">
+            <span className="text-[10px] font-semibold text-[#32C382] shrink-0 mt-0.5">Response</span>
+            <textarea value={obj.response} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, response: e.target.value } : o) }))} rows={2} className="flex-1 text-[12px] text-[#151515] bg-white focus:outline-none resize-none" placeholder="How you respond…" />
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => ({ ...prev, objections: [...prev.objections, { objection: "", response: "" }] }))} className="text-[11px] text-[#62646A] border border-dashed border-gray-300 rounded-full px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add objection</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Financial Model ────────────────────────────
+const FM_DEFAULT_ROWS = [
+  { label: "Revenue", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Costs", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Gross Profit", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Runway (months)", m1: "", m3: "", m6: "", m12: "" },
+];
+
+type FmRow = { label: string; m1: string; m3: string; m6: string; m12: string };
+
+function FinancialModelCard({ title }: { title: string }) {
+  const storageKey = `growth-financial-model-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [rows, setRows] = useState<FmRow[]>(FM_DEFAULT_ROWS);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { const parsed = JSON.parse(raw); setRows(parsed.rows ?? FM_DEFAULT_ROWS); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate realistic financial projections. Return JSON: {"rows":[{"label":"Revenue","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Costs","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Gross Profit","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Runway (months)","m1":"X","m3":"X","m6":"X","m12":"X"}]}. Use realistic figures based on context.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { const parsed = JSON.parse(match[0]); setRows(parsed.rows ?? FM_DEFAULT_ROWS); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("editing"); // fall back to blank editing
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ rows })); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openFM, setOpenFM] = useState<string | null>(null);
+  const colHdr = ["", "Month 1", "Month 3", "Month 6", "Month 12"];
+  const colKeys: (keyof FmRow)[] = ["label", "m1", "m3", "m6", "m12"];
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Editable revenue, cost, and runway projections across 1, 3, 6, and 12-month horizons.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate financial model
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your financial projections…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {rows.map((row) => (
+        <div key={row.label} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenFM(openFM === row.label ? null : row.label)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{row.label}</span>
+            {openFM === row.label ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openFM === row.label && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="grid grid-cols-4 gap-0 border-t border-gray-100">
+                {(["m1", "m3", "m6", "m12"] as const).map((k, i) => (
+                  <div key={k} className={cn("px-3 py-2.5 text-center", i < 3 && "border-r border-gray-100")}>
+                    <p className="text-[10px] text-[#9A9A9A] mb-1">{["Mo 1","Mo 3","Mo 6","Mo 12"][i]}</p>
+                    <p className="text-[12px] font-semibold text-[#151515]">{row[k] || "—"}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto rounded-xl border border-[#ECEDEE]">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-[#FAFAFA] border-b border-[#ECEDEE]">
+              {colHdr.map((h, i) => <th key={i} className="px-3 py-2 text-left font-semibold text-[#151515] whitespace-nowrap">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri} className="border-b border-[#ECEDEE] last:border-0">
+                {colKeys.map((col, ci) => (
+                  <td key={ci} className={cn("px-3 py-2", col === "label" ? "font-semibold text-[#151515] bg-[#FAFAFA] border-r border-[#ECEDEE]" : "text-[#151515]")}>
+                    {col === "label"
+                      ? <span>{row[col]}</span>
+                      : <input value={row[col]} onChange={(e) => setRows((prev) => prev.map((r, i) => i === ri ? { ...r, [col]: e.target.value } : r))} className="w-full bg-transparent focus:outline-none min-w-[60px]" placeholder="$0" />
+                    }
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Growth Metrics ─────────────────────────────
+type GrowthMetrics = { northStar: string; supporting: string[] };
+
+function GrowthMetricsCard({ title }: { title: string }) {
+  const storageKey = `growth-metrics-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<GrowthMetrics>({ northStar: "", supporting: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nSuggest the most important growth metrics. Return JSON: {"northStar":"the single most important metric","supporting":["metric1","metric2","metric3","metric4","metric5"]}`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Your single most important metric and the supporting KPIs that tell you if you're on track.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate growth metrics
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Identifying your North Star metric…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      <div className="rounded-xl border-2 border-[#32C382] bg-[#F5FFD9] px-3 py-3">
+        <p className="text-[10px] font-semibold text-[#32C382] uppercase tracking-wide mb-1">North Star Metric</p>
+        <p className="text-[14px] font-semibold text-[#151515]">{data.northStar}</p>
+      </div>
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-2">Supporting Metrics</p>
+      {data.supporting.map((m, i) => (
+        <div key={i} className="flex items-center gap-2 rounded-xl border border-gray-100 px-3 py-2">
+          <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-[#62646A] flex items-center justify-center shrink-0">{i + 1}</span>
+          <p className="text-[12px] text-[#151515] flex-1">{m}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border-2 border-[#32C382] bg-[#F5FFD9] overflow-hidden">
+        <div className="px-3 py-2 border-b border-[#32C382]/30">
+          <p className="text-[10px] font-semibold text-[#32C382] uppercase tracking-wide">North Star Metric</p>
+        </div>
+        <div className="px-3 py-3">
+          <input value={data.northStar} onChange={(e) => setData((prev) => ({ ...prev, northStar: e.target.value }))} className="w-full text-[14px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="e.g. Weekly active users" />
+        </div>
+      </div>
+      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Supporting Metrics</p>
+      <div className="space-y-2">
+        {data.supporting.map((m, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-xl border border-[#ECEDEE] px-3 py-2">
+            <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-[#62646A] flex items-center justify-center shrink-0">{i + 1}</span>
+            <input value={m} onChange={(e) => setData((prev) => ({ ...prev, supporting: prev.supporting.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+            <button onClick={() => setData((prev) => ({ ...prev, supporting: prev.supporting.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+          </div>
+        ))}
+        {data.supporting.length < 5 && (
+          <button onClick={() => setData((prev) => ({ ...prev, supporting: [...prev.supporting, ""] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 w-full text-left hover:border-[#151515] transition-colors">+ Add supporting metric</button>
+        )}
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Pitch Deck ─────────────────────────────────
+type PitchSlide = { slide: string; bullets: string[] };
+
+function PitchDeckCard({ title }: { title: string }) {
+  const storageKey = `growth-pitch-deck-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [slides, setSlides] = useState<PitchSlide[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setSlides(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a pitch deck outline with ~10 slides. Return JSON array: [{"slide":"Problem","bullets":["...","..."]},{"slide":"Solution","bullets":["...","..."]},{"slide":"Market","bullets":["..."]},{"slide":"Product","bullets":["..."]},{"slide":"Traction","bullets":["..."]},{"slide":"Business Model","bullets":["..."]},{"slide":"Team","bullets":["..."]},{"slide":"Ask","bullets":["..."]}]`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setSlides(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(slides)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openPD, setOpenPD] = useState<number | null>(null);
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">A 10-slide pitch deck outline with AI-written bullets for each slide, ready to take into Canva or Figma.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate pitch deck
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your pitch deck outline…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {slides.map((sl, si) => (
+        <div key={si} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenPD(openPD === si ? null : si)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{si + 1}</span>
+            <span className="text-[12px] font-semibold text-[#151515] flex-1">{sl.slide}</span>
+            {openPD === si ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openPD === si && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
+                {sl.bullets.map((b, bi) => (
+                  <div key={bi} className="flex items-start gap-2">
+                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">•</span>
+                    <p className="text-[12px] text-[#151515] leading-relaxed">{b}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3">
+        {slides.map((sl, si) => (
+          <div key={si} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+            <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{si + 1}</span>
+              <input value={sl.slide} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, slide: e.target.value } : s))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
+            </div>
+            <div className="px-3 py-2.5 space-y-1.5">
+              {sl.bullets.map((b, bi) => (
+                <div key={bi} className="flex items-start gap-2">
+                  <span className="text-[#32C382] text-[10px] mt-1 shrink-0">•</span>
+                  <input value={b} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.map((bb, j) => j === bi ? e.target.value : bb) } : s))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                  <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.filter((_, j) => j !== bi) } : s))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+                </div>
+              ))}
+              <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: [...s.bullets, ""] } : s))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add bullet</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Retention Playbook ─────────────────────────
+type RetentionPlaybook = { onboarding_steps: string[]; check_in_triggers: string[]; churn_signals: string[]; win_back: string };
+
+function RetentionPlaybookCard({ title }: { title: string }) {
+  const storageKey = `growth-retention-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<RetentionPlaybook>({ onboarding_steps: [], check_in_triggers: [], churn_signals: [], win_back: "" });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a customer retention and churn prevention playbook. Return JSON: {"onboarding_steps":["..."],"check_in_triggers":["..."],"churn_signals":["..."],"win_back":"..."}. Include 4-5 items per list.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openRP, setOpenRP] = useState<string | null>(null);
+
+  const listSections: { key: keyof RetentionPlaybook; label: string }[] = [
+    { key: "onboarding_steps", label: "Onboarding Steps" },
+    { key: "check_in_triggers", label: "Check-in Triggers" },
+    { key: "churn_signals", label: "Churn Signals" },
+  ];
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Onboarding steps, check-in triggers, churn signals, and win-back tactics to keep customers longer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate retention playbook
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your retention playbook…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[...listSections, { key: "win_back" as keyof RetentionPlaybook, label: "Win-Back Strategy" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenRP(openRP === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openRP === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openRP === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key])
+                  ? (data[key] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {listSections.map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {(data[key] as string[]).map((item, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>
+          </div>
+        </div>
+      ))}
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Win-Back Strategy</p></div>
+        <textarea value={data.win_back} onChange={(e) => setData((prev) => ({ ...prev, win_back: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Referral Strategy ──────────────────────────
+type ReferralStrategy = { referral_program: string; partner_types: string[]; outreach_script: string; incentive: string };
+
+function ReferralStrategyCard({ title }: { title: string }) {
+  const storageKey = `growth-referral-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<ReferralStrategy>({ referral_program: "", partner_types: [], outreach_script: "", incentive: "" });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a referral and partnerships strategy. Return JSON: {"referral_program":"...","partner_types":["..."],"outreach_script":"...","incentive":"..."}. Include 3-5 partner types.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openRS, setOpenRS] = useState<string | null>(null);
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Referral program design, partner types to target, and an outreach script to start conversations.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate referral strategy
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your referral strategy…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[
+        { key: "referral_program", label: "Referral Program" },
+        { key: "partner_types", label: "Partner Types" },
+        { key: "outreach_script", label: "Outreach Script" },
+        { key: "incentive", label: "Incentive / Reward" },
+      ].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenRS(openRS === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openRS === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openRS === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key as keyof ReferralStrategy])
+                  ? (data[key as keyof ReferralStrategy] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key as keyof ReferralStrategy] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {[{ key: "referral_program" as const, label: "Referral Program" }, { key: "outreach_script" as const, label: "Outreach Script" }, { key: "incentive" as const, label: "Incentive / Reward" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <textarea value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+        </div>
+      ))}
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Partner Types</p></div>
+        <div className="px-3 py-2.5 space-y-1.5">
+          {data.partner_types.map((pt, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+              <input value={pt} onChange={(e) => setData((prev) => ({ ...prev, partner_types: prev.partner_types.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+              <button onClick={() => setData((prev) => ({ ...prev, partner_types: prev.partner_types.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+            </div>
+          ))}
+          <button onClick={() => setData((prev) => ({ ...prev, partner_types: [...prev.partner_types, ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add partner type</button>
+        </div>
+      </div>
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Content & SEO Plan ─────────────────────────
+type ContentSeo = { keywords: string[]; content_types: string[]; posting_cadence: string; first_5_posts: string[] };
+
+function ContentSeoCard({ title }: { title: string }) {
+  const storageKey = `growth-content-seo-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<ContentSeo>({ keywords: [], content_types: [], posting_cadence: "", first_5_posts: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a content and SEO plan. Return JSON: {"keywords":["..."],"content_types":["..."],"posting_cadence":"...","first_5_posts":["..."]}. Include 5-8 keywords, 3-5 content types, and 5 post ideas.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openCS, setOpenCS] = useState<string | null>(null);
+
+  const listSections2: { key: keyof ContentSeo; label: string }[] = [
+    { key: "keywords", label: "Target Keywords" },
+    { key: "content_types", label: "Content Types" },
+    { key: "first_5_posts", label: "First 5 Post Ideas" },
+  ];
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">Keywords, content types, posting cadence, and your first 5 content ideas to build organic reach.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate content & SEO plan
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your content & SEO plan…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "posting_cadence", label: "Posting Cadence" }, ...listSections2].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenCS(openCS === key ? null : key)} className="w-full flex items-center justify-between px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="text-[12px] font-semibold text-[#151515]">{label}</span>
+            {openCS === key ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openCS === key && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-1.5">
+                {Array.isArray(data[key as keyof ContentSeo])
+                  ? (data[key as keyof ContentSeo] as string[]).map((item, i) => (
+                    <div key={i} className="flex items-start gap-2"><span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span><p className="text-[12px] text-[#151515] leading-relaxed">{item}</p></div>
+                  ))
+                  : <p className="text-[12px] text-[#151515] leading-relaxed">{data[key as keyof ContentSeo] as string}</p>
+                }
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+        <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">Posting Cadence</p></div>
+        <input value={data.posting_cadence} onChange={(e) => setData((prev) => ({ ...prev, posting_cadence: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" placeholder="e.g. 3x per week" />
+      </div>
+      {listSections2.map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {(data[key] as string[]).map((item, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                <input value={item} onChange={(e) => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                <button onClick={() => setData((prev) => ({ ...prev, [key]: (prev[key] as string[]).filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setData((prev) => ({ ...prev, [key]: [...(prev[key] as string[]), ""] }))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add item</button>
+          </div>
+        </div>
+      ))}
+      <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Hiring Plan ────────────────────────────────
+type HiringRole = { role: string; when: string; why: string };
+type HiringPlan = { first_hire: string; timeline: string; roles: HiringRole[] };
+
+function HiringPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-hiring-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<HiringPlan>({ first_hire: "", timeline: "", roles: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a hiring plan. Return JSON: {"first_hire":"...","timeline":"...","roles":[{"role":"...","when":"...","why":"..."}]}. Include 3-5 roles in order of priority.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const [openHP, setOpenHP] = useState<number | null>(null);
+
+  if (stage === "idle") return (
+    <div className="space-y-3">
+      <p className="text-[12px] text-[#62646A] leading-relaxed">When to hire, which roles come first, and the rationale for each based on your stage and offer.</p>
+      <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 text-[11px] font-medium text-[#32C382] border border-[#32C382]/40 px-3 py-1.5 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30">
+        <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Generate hiring plan
+      </button>
+    </div>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Planning your hiring roadmap…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle2 size={13} className="text-[#32C382]" />
+        <span className="text-[12px] font-medium text-[#32C382]">Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors ml-auto">Edit</button>
+      </div>
+      {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-gray-100 overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-gray-100"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed">{data[key]}</p>
+        </div>
+      ))}
+      <p className="text-[10px] font-semibold text-[#9A9A9A] uppercase tracking-widest mt-2">Roles Roadmap</p>
+      {data.roles.map((role, ri) => (
+        <div key={ri} className="rounded-xl border border-gray-100 overflow-hidden">
+          <button onClick={() => setOpenHP(openHP === ri ? null : ri)} className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#FAFAFA] hover:bg-gray-100 transition-colors text-left">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{ri + 1}</span>
+            <span className="text-[12px] font-semibold text-[#151515] flex-1">{role.role}</span>
+            {openHP === ri ? <ChevronUp size={13} className="text-[#9A9A9A]" /> : <ChevronDown size={13} className="text-[#9A9A9A]" />}
+          </button>
+          <AnimatePresence initial={false}>{openHP === ri && (
+            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+              <div className="px-3 py-3 border-t border-gray-100 space-y-2">
+                {[{ k: "when" as const, l: "When" }, { k: "why" as const, l: "Why" }].map(({ k, l }) => (
+                  <div key={k} className="flex items-start gap-2">
+                    <span className="text-[10px] font-semibold text-[#9A9A9A] shrink-0 w-8 mt-0.5">{l}</span>
+                    <p className="text-[12px] text-[#151515] leading-relaxed">{role[k]}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}</AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {[{ key: "first_hire" as const, label: "First Hire" }, { key: "timeline" as const, label: "Hiring Timeline" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          <input value={data[key]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none" />
+        </div>
+      ))}
+      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide mt-2">Roles Roadmap</p>
+      {data.roles.map((role, ri) => (
+        <div key={ri} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{ri + 1}</span>
+            <input value={role.role} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, role: e.target.value } : r) }))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="Role title" />
+            <button onClick={() => setData((prev) => ({ ...prev, roles: prev.roles.filter((_, i) => i !== ri) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>
+          </div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {[{ key: "when" as const, label: "When" }, { key: "why" as const, label: "Why" }].map(({ key: rk, label: rl }) => (
+              <div key={rk} className="flex items-start gap-2">
+                <span className="text-[10px] font-semibold text-[#9A9A9A] shrink-0 w-8 mt-0.5">{rl}</span>
+                <input value={role[rk]} onChange={(e) => setData((prev) => ({ ...prev, roles: prev.roles.map((r, i) => i === ri ? { ...r, [rk]: e.target.value } : r) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setData((prev) => ({ ...prev, roles: [...prev.roles, { role: "", when: "", why: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add role</button>
+        <button onClick={save} className="text-[11px] font-medium px-3 py-1.5 rounded-full bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors">Save</button>
+      </div>
+    </div>
+  );
+}
+
+// ── GrowthItemCard — expandable row ────────────
+const GROWTH_ITEM_META: Record<string, { gradient: string; tagline: string; description: string }> = {
+  business_plan:      { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #6366F1 35%, #8B5CF6 100%)", tagline: "Strategy · Vision", description: "A concise plan covering your market, business model, revenue streams, and 90-day execution roadmap." },
+  marketing_plan:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F38744 35%, #EF4444 100%)", tagline: "Channels · Tactics", description: "Channel-by-channel marketing plan with priority tactics tailored to your audience and offer." },
+  gtm_strategy:       { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #06B6D4 35%, #3B82F6 100%)", tagline: "Launch · Timeline", description: "Week-by-week go-to-market milestones to take your product from built to gaining traction." },
+  sales_playbook:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #10B981 35%, #059669 100%)", tagline: "Script · Objections", description: "Your sales opener, pitch, and objection-handling scripts based on your validated offer." },
+  financial_model:    { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F59E0B 35%, #D97706 100%)", tagline: "Revenue · Runway", description: "Editable revenue, cost, and runway projections across 1, 3, 6, and 12-month horizons." },
+  growth_metrics:     { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #A3E635 35%, #16B364 100%)", tagline: "North Star · KPIs", description: "Your single most important metric and the supporting KPIs that tell you if you're on track." },
+  retention_playbook: { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #EC4899 35%, #8B5CF6 100%)", tagline: "Onboarding · Churn", description: "Onboarding steps, check-in triggers, churn signals, and win-back tactics to keep customers longer." },
+  referral_strategy:  { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #F59E0B 35%, #EF4444 100%)", tagline: "Referrals · Partners", description: "Referral program design, partner types to target, and an outreach script to start conversations." },
+  content_seo:        { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #06B6D4 35%, #10B981 100%)", tagline: "Content · SEO", description: "Keywords, content types, posting cadence, and your first 5 content ideas to build organic reach." },
+  pitch_deck:         { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #0A0A0A 35%, #374151 100%)", tagline: "Slides · Story", description: "A 10-slide pitch deck outline with AI-written bullets for each slide, ready to take into Canva or Figma." },
+  hiring_plan:        { gradient: "radial-gradient(140% 260% at 0% 0%, #0A0A0A 26%, rgba(0,0,0,0) 81%), linear-gradient(114deg, #6366F1 35%, #EC4899 100%)", tagline: "First hires · Roles", description: "When to hire, which roles come first, and the rationale for each based on your stage and offer." },
+};
+
+function GrowthItemCard({ id, label, project }: { id: string; label: string; project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
+  const meta = GROWTH_ITEM_META[id] ?? { gradient: "linear-gradient(135deg,#6366F1,#8B5CF6)", tagline: "", description: "" };
+
+  useEffect(() => {
+    try {
+      const keyFn = GROWTH_STORAGE_KEYS[id];
+      if (keyFn && title) setHasSaved(!!localStorage.getItem(keyFn(title)));
+    } catch { /* ignore */ }
+  }, [id, title]);
+
+  const renderContent = () => {
+    if (id === "business_plan") return <BusinessPlanCard title={title} />;
+    if (id === "marketing_plan") return <MarketingPlanCard title={title} />;
+    if (id === "gtm_strategy") return <GtmStrategyCard title={title} />;
+    if (id === "sales_playbook") return <SalesPlaybookCard title={title} />;
+    if (id === "financial_model") return <FinancialModelCard title={title} />;
+    if (id === "growth_metrics") return <GrowthMetricsCard title={title} />;
+    if (id === "pitch_deck") return <PitchDeckCard title={title} />;
+    if (id === "retention_playbook") return <RetentionPlaybookCard title={title} />;
+    if (id === "referral_strategy") return <ReferralStrategyCard title={title} />;
+    if (id === "content_seo") return <ContentSeoCard title={title} />;
+    if (id === "hiring_plan") return <HiringPlanCard title={title} />;
+    return null;
+  };
+
+  return (
+    <motion.div
+      layout
+      transition={{ layout: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[28px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col cursor-pointer"
+      onClick={!isExpanded ? () => setIsExpanded(true) : undefined}
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }}
+        className={cn("flex flex-col relative", isExpanded ? "p-5 pb-8" : "p-5")}
+        style={{ background: meta.gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.2)_0%,transparent_70%)] pointer-events-none" />
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.button
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
+              className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-[12px] font-medium mb-5 w-fit relative z-10"
+            >
+              <ChevronLeft size={16} /> Back
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div className="flex justify-between items-start relative z-10">
+          <div>
+            <h3 className="text-[14px] font-semibold text-white leading-snug">{label}</h3>
+            {!isExpanded && <p className="text-[10px] text-white/60 font-medium uppercase tracking-wide mt-0.5">{meta.tagline}</p>}
+          </div>
+          {!isExpanded && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {hasSaved && <CheckCircle2 size={13} className="text-white/80" />}
+              <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/20 text-white text-[12px] font-medium border border-white/30 backdrop-blur-sm">
+                Open <ArrowRight size={12} />
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Collapsed description */}
+      <AnimatePresence>
+        {!isExpanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} layout="position"
+            className="px-5 py-4">
+            <p className="text-[12px] text-[#62646A] leading-relaxed">{meta.description}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Expanded content */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5">{renderContent()}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 // GrowthContent — top-level Growth tab (full width)
 // ─────────────────────────────────────────────
 
 function GrowthContent({ project }: { project: DirectionCardData | null }) {
   const pillar = GROWTH_PILLAR;
-  const title = project?.title ?? "";
-  const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
-  const [tips, setTips] = useState<Record<string, string>>({});
-  const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
-
-  useEffect(() => {
-    if (!title) return;
-    const loaded: Record<string, ChecklistStatus> = {};
-    for (const item of pillar.items) {
-      try {
-        const v = localStorage.getItem(`launchpad-status-${item.id}-${title}`) as ChecklistStatus | null;
-        loaded[item.id] = v ?? "todo";
-      } catch { loaded[item.id] = "todo"; }
-    }
-    setStatuses(loaded);
-    try {
-      const raw = localStorage.getItem(`launchpad-tips-${pillar.id}-${title}`);
-      if (raw) { setTips(JSON.parse(raw)); setTipsStage("done"); }
-      else { setTips({}); setTipsStage("idle"); }
-    } catch { setTips({}); setTipsStage("idle"); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
-
-  const cycleStatus = (itemId: string) => {
-    setStatuses((prev) => {
-      const cur = prev[itemId] ?? "todo";
-      const next: ChecklistStatus = cur === "todo" ? "progress" : cur === "progress" ? "done" : "todo";
-      const updated = { ...prev, [itemId]: next };
-      try { localStorage.setItem(`launchpad-status-${itemId}-${title}`, next); } catch { /* ignore */ }
-      return updated;
-    });
-  };
-
-  const generateTips = async () => {
-    if (!title) return;
-    setTipsStage("loading");
-    const painkiller      = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
-    const offer           = localStorage.getItem(`mvo-defined-${title}`) ?? "";
-    const patternSummary  = localStorage.getItem(`pattern-summary-${title}`) ?? "";
-    let targetCustomer = "";
-    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
-    const itemList = pillar.items.map((i) => `"${i.id}": "${i.label}"`).join(", ");
-    const system = `You are Sorene, a startup coach. Respond ONLY with valid JSON — a single object. No markdown, no preamble.`;
-    const prompt = `Give a short, specific tip (1 sentence, max 20 words) for each checklist item for this founder.\n\nProject: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}\n\nPillar: "${pillar.label}"\nItems: { ${itemList} }\n\nReturn JSON: { [itemId]: "tip string" }`;
-    try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
-      if (res.ok) {
-        const data = await res.json();
-        const match = (data?.reply ?? "").trim().match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          setTips(parsed); setTipsStage("done");
-          try { localStorage.setItem(`launchpad-tips-${pillar.id}-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-        } else { setTipsStage("idle"); }
-      } else { setTipsStage("idle"); }
-    } catch { setTipsStage("idle"); }
-  };
-
-  const doneCount = pillar.items.filter((i) => (statuses[i.id] ?? "todo") === "done").length;
-
+  const itemsMap = Object.fromEntries(pillar.items.map((i) => [i.id, i.label]));
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <span className="text-[12px] text-[#9A9A9A]">{doneCount}/{pillar.items.length} done</span>
-        {tipsStage === "idle" && (
-          <button onClick={generateTips} disabled={!title}
-            className="text-[10px] font-medium text-[#32C382] border border-[#32C382]/40 px-2.5 py-1 rounded-full hover:bg-[#F5FFD9] transition-colors disabled:opacity-30 flex items-center gap-1">
-            <img src="/figmaAssets/starfour.svg" className="w-2.5 h-2.5" alt="" /> Get personalised tips
-          </button>
-        )}
-        {tipsStage === "loading" && (
-          <div className="flex items-center gap-1 text-[11px] text-[#9A9A9A]">
-            <Loader2 size={11} className="animate-spin" /> Getting tips…
+    <div className="p-5 space-y-6">
+      {GROWTH_CLUSTERS.map((cluster) => (
+        <section key={cluster.label}>
+          <div className="flex items-baseline gap-3 mb-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-[#151515]">{cluster.label}</h4>
           </div>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {pillar.items.map((item) => {
-          const status = statuses[item.id] ?? "todo";
-          const tip = tips[item.id];
-          return (
-            <div key={item.id}>
-              <button onClick={() => cycleStatus(item.id)} className="w-full flex items-center gap-3 text-left group">
-                <div className={cn(
-                  "w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
-                  status === "done"       ? "bg-[#32C382] border-[#32C382]"
-                  : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
-                  : "bg-white border-gray-300 group-hover:border-[#151515]"
-                )} />
-                <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
-                  {item.label}
-                </span>
-              </button>
-              {tip && (
-                <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
-                  {tip}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+          <div className="grid grid-cols-1 gap-4">
+            {cluster.ids.map((itemId) => {
+              const label = itemsMap[itemId];
+              if (!label) return null;
+              return <GrowthItemCard key={itemId} id={itemId} label={label} project={project} />;
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -5518,7 +7357,7 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         name: "Customer Research Agent",
         tagline: "Validation · Interviews",
         description: "Finds and qualifies your target customers, drafts interview scripts, and synthesizes patterns from the conversations you log.",
-        tags: ["Find customers", "Interview scripts", "Pattern synthesis"],
+        tags: ["Live now", "Find customers", "Interview scripts", "Pattern synthesis"],
         whatItDoes: [
           "Identifies and ranks your ideal customer segments",
           "Drafts tailored interview questions and outreach to recruit them",
@@ -5534,7 +7373,7 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         name: "Outreach Agent",
         tagline: "Distribution · Pipeline",
         description: "Writes and personalises cold DMs and emails to prospects, partners, and early users, then tracks replies and suggests follow-ups.",
-        tags: ["Cold DMs", "Personalisation", "Follow-ups"],
+        tags: ["Live now", "Cold DMs", "Personalisation", "Follow-ups"],
         whatItDoes: [
           "Drafts personalised messages from your offer and a prospect's context",
           "Suggests channels and the best time to reach out",
@@ -5549,8 +7388,8 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
         gradient: `radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)`,
         name: "Content & Social Agent",
         tagline: "Build-in-public · Inbound",
-        description: "Turns your founder journey and offer into posts and a weekly calendar, adapting tone and format per channel (X, Threads, LinkedIn).",
-        tags: ["X", "Threads", "LinkedIn", "Content calendar"],
+        description: "Turns your founder journey into Threads posts — generates options in your voice, you review and post with one click.",
+        tags: ["Live now", "Threads", "Generate & post"],
         whatItDoes: [
           "Generates post ideas from your journey, wins, and customer insights",
           "Adapts each idea to the norms of X, Threads, and LinkedIn",
@@ -5705,7 +7544,1350 @@ const AGENT_TIERS: { tier: string; label: string; blurb: string; agents: AgentDe
   },
 ];
 
-function AgentDetail({ agent }: { agent: AgentDef }) {
+// ── Customer Research Agent UI ─────────────────────────────────────────────
+function CustomerResearchAgentUI({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+
+  type Stage = "idle" | "loading" | "done";
+  const [targetStage, setTargetStage] = useState<Stage>("idle");
+  const [targetResult, setTargetResult] = useState("");
+  const [scriptStage, setScriptStage] = useState<Stage>("idle");
+  const [scriptResult, setScriptResult] = useState("");
+  const [patternStage, setPatternStage] = useState<Stage>("idle");
+  const [patternResult, setPatternResult] = useState("");
+
+  // Conversation log state (shared with Validation tab via same localStorage key)
+  interface ConvEntry { id: string; name: string; notes: string; fileName?: string; createdAt: string; }
+  const [convEntries, setConvEntries] = useState<ConvEntry[]>([]);
+  const [addConvOpen, setAddConvOpen] = useState(false);
+  const [convForm, setConvForm] = useState({ name: "", notes: "", fileName: "" });
+  const [convSaving, setConvSaving] = useState(false);
+  const [convExpandedId, setConvExpandedId] = useState<string | null>(null);
+  const convFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const t = localStorage.getItem(`cr-target-${title}`);
+      if (t) { setTargetResult(t); setTargetStage("done"); }
+      const s = localStorage.getItem(`cr-script-${title}`);
+      if (s) { setScriptResult(s); setScriptStage("done"); }
+      const p = localStorage.getItem(`cr-patterns-${title}`);
+      if (p) { setPatternResult(p); setPatternStage("done"); }
+      // Load conversations (same key as Validation tab)
+      const c = localStorage.getItem(`convlog-${title}`);
+      if (c) setConvEntries(JSON.parse(c));
+    } catch { /* ignore */ }
+  }, [title]);
+
+  const saveConvEntries = (updated: ConvEntry[]) => {
+    setConvEntries(updated);
+    try { localStorage.setItem(`convlog-${title}`, JSON.stringify(updated)); } catch { /* ignore */ }
+    // Persist to Firestore
+    import("@/lib/firebase").then(({ auth }) =>
+      auth?.currentUser?.getIdToken().then((token) => {
+        if (!token) return;
+        // Sync all entries via the existing conversations API
+        updated.forEach((entry) => {
+          fetch("/api/execution-projects/conversations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ projectTitle: title, entry }),
+          }).catch(() => {});
+        });
+      })
+    ).catch(() => {});
+  };
+
+  const handleAddConv = async () => {
+    if (!convForm.name.trim() && !convForm.notes.trim()) return;
+    setConvSaving(true);
+    const entry: ConvEntry = {
+      id: Date.now().toString(),
+      name: convForm.name.trim(),
+      notes: convForm.notes.trim(),
+      fileName: convForm.fileName || undefined,
+      createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    };
+    const updated = [entry, ...convEntries];
+    saveConvEntries(updated);
+    setConvForm({ name: "", notes: "", fileName: "" });
+    if (convFileRef.current) convFileRef.current.value = "";
+    setAddConvOpen(false);
+    setConvSaving(false);
+  };
+
+  const handleDeleteConv = (id: string) => {
+    const updated = convEntries.filter((e) => e.id !== id);
+    saveConvEntries(updated);
+    if (convExpandedId === id) setConvExpandedId(null);
+  };
+
+  const callAI = async (prompt: string, system: string): Promise<string> => {
+    const { authFetch } = await import("@/lib/authFetch");
+    const res = await authFetch("/api/execution-assist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, system }),
+    });
+    if (!res.ok) throw new Error("AI error");
+    const data = await res.json();
+    return (data?.reply ?? "").trim();
+  };
+
+  const findTargets = async () => {
+    if (!project) return;
+    setTargetStage("loading");
+    try {
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown headers, no JSON. Use short numbered lines.`;
+      const prompt = `Find 8 specific types of people or communities this founder should talk to immediately for customer research.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.description ? `Details: ${project.description.slice(0, 300)}` : ""}
+
+List 8 specific targets. For each: their role/community, where to find them (platform or place), and why they're relevant. Be specific — not "entrepreneurs" but "bootstrapped SaaS founders in Southeast Asia who run < 10-person teams". Keep each line short.`;
+      const reply = await callAI(prompt, system);
+      setTargetResult(reply);
+      setTargetStage("done");
+      try { localStorage.setItem(`cr-target-${title}`, reply); } catch { /* ignore */ }
+    } catch { setTargetStage("idle"); }
+  };
+
+  const generateScript = async () => {
+    if (!project) return;
+    setScriptStage("loading");
+    try {
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown headers, no JSON.`;
+      const prompt = `Write a customer interview script for this project.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Target customer: ${project.first_10_customers}` : ""}
+${project.description ? `Details: ${project.description.slice(0, 300)}` : ""}
+
+Write 8 questions. Start with easy openers about their current situation, move to problem depth, end with willingness to pay/change. The goal is to validate whether the pain is real and severe enough. Don't mention the product until question 7+. Format as numbered questions only — no intro, no explanations between questions.`;
+      const reply = await callAI(prompt, system);
+      setScriptResult(reply);
+      setScriptStage("done");
+      try { localStorage.setItem(`cr-script-${title}`, reply); } catch { /* ignore */ }
+    } catch { setScriptStage("idle"); }
+  };
+
+  const analysePatterns = async () => {
+    if (!project) return;
+    setPatternStage("loading");
+    try {
+      let convSummary = "No conversations logged yet.";
+      try {
+        const raw = localStorage.getItem(`convlog-${title}`);
+        if (raw) {
+          const entries = JSON.parse(raw) as { name?: string; notes?: string }[];
+          if (entries.length > 0) {
+            convSummary = `${entries.length} conversations logged:\n` +
+              entries.map((e, i) => `${i + 1}. ${e.name ?? "Anonymous"}: ${(e.notes ?? "").slice(0, 200)}`).join("\n");
+          }
+        }
+      } catch { /* ignore */ }
+
+      const system = `You are Sorene, a sharp execution coach. Reply in plain text only — no markdown, no JSON.`;
+      const prompt = `Analyse the patterns across these customer conversations and give a validation verdict.
+
+Project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+
+Conversations:
+${convSummary}
+
+Write 4-5 sentences covering: (1) the strongest signal you see, (2) the most common pain point or objection, (3) any surprising insight, (4) a clear verdict — is the pain validated, partially validated, or not validated yet, and why. Be specific to what they actually said. End with one concrete next action.`;
+      const reply = await callAI(prompt, system);
+      setPatternResult(reply);
+      setPatternStage("done");
+      try { localStorage.setItem(`cr-patterns-${title}`, reply); } catch { /* ignore */ }
+    } catch { setPatternStage("idle"); }
+  };
+
+  const AgentSection = ({
+    icon: Icon, label, sublabel, stage, result, onRun, runLabel, refreshLabel = "Refresh",
+  }: {
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+    label: string; sublabel: string;
+    stage: Stage; result: string;
+    onRun: () => void; runLabel: string; refreshLabel?: string;
+  }) => (
+    <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <Icon size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">{label}</p>
+            <p className="text-[11px] text-[#9A9A9A]">{sublabel}</p>
+          </div>
+        </div>
+        {stage === "done" && (
+          <button onClick={onRun} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">{refreshLabel}</button>
+        )}
+      </div>
+      <div className="px-5 py-4">
+        {stage === "idle" && (
+          <button onClick={onRun}
+            className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+            {runLabel}
+          </button>
+        )}
+        {stage === "loading" && (
+          <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+            <Loader2 size={13} className="animate-spin" /> Working on it…
+          </div>
+        )}
+        {stage === "done" && result && (
+          <div className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">
+            <MarkdownText text={result} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!project) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-[13px] text-[#9A9A9A]">Select a project from your Hub first to use this agent.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-4">
+      <AgentSection
+        icon={Users}
+        label="Who to talk to"
+        sublabel="Specific people and communities to reach for interviews"
+        stage={targetStage}
+        result={targetResult}
+        onRun={findTargets}
+        runLabel="Find my target customers →"
+      />
+      <AgentSection
+        icon={MessageCircle}
+        label="Interview script"
+        sublabel="Tailored questions to surface real pain — not polite feedback"
+        stage={scriptStage}
+        result={scriptResult}
+        onRun={generateScript}
+        runLabel="Generate interview script →"
+      />
+      {/* Pattern analysis with inline conversation logger */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+              <BarChart3 size={14} className="text-white" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Pattern analysis</p>
+              <p className="text-[11px] text-[#9A9A9A]">Log conversations, then Sorene finds the signal</p>
+            </div>
+          </div>
+          {patternStage === "done" && (
+            <button onClick={analysePatterns} className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">Refresh</button>
+          )}
+        </div>
+
+        {/* Conversation logger */}
+        <div className="border-b border-[#ECEDEE]">
+          <div className="flex items-center justify-between px-5 py-3 bg-white">
+            <p className="text-[12px] font-medium text-[#151515]">
+              Conversations logged
+              {convEntries.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-[10px] font-semibold text-[#62646A]">{convEntries.length}</span>}
+            </p>
+            <button onClick={() => setAddConvOpen((v) => !v)}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all",
+                addConvOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+              <Plus size={11} />{addConvOpen ? "Cancel" : "Add"}
+            </button>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {addConvOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                className="overflow-hidden">
+                <div className="px-5 pb-4 space-y-3 bg-[#FAFAFA] border-t border-gray-100">
+                  <div className="pt-3">
+                    <input value={convForm.name} onChange={(e) => setConvForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="Who did you speak to? (name or description)"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                  </div>
+                  <textarea value={convForm.notes} onChange={(e) => setConvForm((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="Notes — what problems did they mention? What exact words did they use? How much pain were they in?"
+                    rows={4}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border border-dashed border-gray-200 hover:border-[#151515] transition-colors text-[11px] text-[#62646A] hover:text-[#151515]">
+                      <Paperclip size={12} />
+                      {convForm.fileName
+                        ? <span className="text-[#151515] font-medium truncate max-w-[160px]">{convForm.fileName}</span>
+                        : "Attach notes (Word / PDF)"}
+                      <input ref={convFileRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden"
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) setConvForm((p) => ({ ...p, fileName: f.name })); }} />
+                    </label>
+                    <button onClick={handleAddConv} disabled={!convForm.name.trim() && !convForm.notes.trim()}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      {convSaving && <Loader2 size={12} className="animate-spin" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {convEntries.length === 0 && !addConvOpen && (
+            <div className="px-5 py-4 text-center">
+              <p className="text-[12px] text-[#9A9A9A]">No conversations yet — add one after each customer chat.</p>
+            </div>
+          )}
+          <div className="divide-y divide-gray-50">
+            {convEntries.map((entry) => {
+              const isOpen = convExpandedId === entry.id;
+              return (
+                <div key={entry.id}>
+                  <button onClick={() => setConvExpandedId(isOpen ? null : entry.id)}
+                    className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors">
+                    <div className="w-6 h-6 rounded-full bg-[#F3F4F6] flex items-center justify-center shrink-0 text-[10px] font-bold text-[#62646A]">
+                      {(entry.name?.[0] || "?").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-medium text-[#151515] truncate">{entry.name || "Anonymous"}</p>
+                    </div>
+                    {entry.fileName && <FileText size={12} className="text-[#9A9A9A] shrink-0" />}
+                    <span className="text-[11px] text-[#9A9A9A] shrink-0">{entry.createdAt}</span>
+                    {isOpen ? <ChevronUp size={13} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={13} className="text-[#9A9A9A] shrink-0" />}
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                        className="overflow-hidden">
+                        <div className="px-5 pb-3 space-y-2 bg-[#FAFAFA]">
+                          {entry.notes && (
+                            <div className="rounded-xl bg-white border border-gray-100 px-3 py-2.5">
+                              <p className="text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{entry.notes}</p>
+                            </div>
+                          )}
+                          {entry.fileName && (
+                            <p className="flex items-center gap-1.5 text-[11px] text-[#62646A]"><Paperclip size={11} />{entry.fileName}</p>
+                          )}
+                          <button onClick={() => handleDeleteConv(entry.id)}
+                            className="flex items-center gap-1.5 text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                            <Trash2 size={11} /> Delete
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Analyse button / result */}
+        <div className="px-5 py-4">
+          {patternStage === "idle" && (
+            <button onClick={analysePatterns}
+              className="w-full py-2.5 rounded-xl border border-dashed border-gray-200 text-[12px] text-[#9A9A9A] hover:border-[#151515] hover:text-[#151515] transition-colors">
+              Analyse my conversations →
+            </button>
+          )}
+          {patternStage === "loading" && (
+            <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+              <Loader2 size={13} className="animate-spin" /> Analysing patterns…
+            </div>
+          )}
+          {patternStage === "done" && patternResult && (
+            <div className="text-[13px] text-[#151515] leading-relaxed">
+              <MarkdownText text={patternResult} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Outreach Agent UI ──────────────────────────────────────────────────────
+interface OutreachProspect {
+  id: string;
+  name: string;
+  role: string;
+  context: string;
+  message: string;
+  format: "dm" | "email";
+  status: "drafted" | "sent" | "replied" | "interested" | "declined";
+  createdAt: string;
+}
+
+function OutreachAgentUI({ project }: { project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const pipelineKey = `outreach-pipeline-${title}`;
+
+  const [prospects, setProspects] = useState<OutreachProspect[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "", context: "", format: "dm" as "dm" | "email" });
+  const [generating, setGenerating] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem(pipelineKey);
+      if (raw) setProspects(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, [title, pipelineKey]);
+
+  const save = (updated: OutreachProspect[]) => {
+    setProspects(updated);
+    try { localStorage.setItem(pipelineKey, JSON.stringify(updated)); } catch { /* ignore */ }
+  };
+
+  const generateMessage = async () => {
+    if (!project || !form.name.trim()) return;
+    setGenerating(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const system = `You are Sorene, a sharp execution coach helping a founder write outreach. Write only the message itself — no subject line label, no intro explaining what you're writing, no sign-off instructions. Just the message text, ready to copy and send.`;
+      const prompt = `Write a personalised ${form.format === "email" ? "cold email" : "cold DM"} for this founder to send to a prospect.
+
+Founder's project: "${project.title}"
+${project.oneliner ? `What it does: ${project.oneliner}` : ""}
+${project.first_10_customers ? `Who they're targeting: ${project.first_10_customers}` : ""}
+
+Prospect: ${form.name}${form.role ? `, ${form.role}` : ""}
+${form.context ? `Context about them: ${form.context}` : ""}
+
+The message should: reference something specific about the prospect, connect their situation to what the founder is building, and end with one clear low-friction ask (a 20-min call, a quick reply, feedback on an idea — not a sale). Keep it under 120 words. Sound like a real person, not a template.`;
+
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (!res.ok) throw new Error("fail");
+      const data = await res.json();
+      const msg = (data?.reply ?? "").trim();
+
+      const prospect: OutreachProspect = {
+        id: Date.now().toString(),
+        name: form.name.trim(),
+        role: form.role.trim(),
+        context: form.context.trim(),
+        message: msg,
+        format: form.format,
+        status: "drafted",
+        createdAt: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      };
+      save([prospect, ...prospects]);
+      setExpandedId(prospect.id);
+      setForm({ name: "", role: "", context: "", format: "dm" });
+      setFormOpen(false);
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  const updateStatus = (id: string, status: OutreachProspect["status"]) => {
+    save(prospects.map((p) => p.id === id ? { ...p, status } : p));
+  };
+
+  const deleteProspect = (id: string) => {
+    save(prospects.filter((p) => p.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  const STATUS_COLORS: Record<OutreachProspect["status"], string> = {
+    drafted: "bg-gray-100 text-[#62646A]",
+    sent: "bg-blue-50 text-blue-600",
+    replied: "bg-yellow-50 text-yellow-700",
+    interested: "bg-[#DCFCE7] text-[#16A34A]",
+    declined: "bg-red-50 text-red-500",
+  };
+  const STATUS_LABELS: Record<OutreachProspect["status"], string> = {
+    drafted: "Drafted", sent: "Sent", replied: "Replied", interested: "Interested", declined: "Declined",
+  };
+  const STATUS_NEXT: Record<OutreachProspect["status"], OutreachProspect["status"][]> = {
+    drafted: ["sent"],
+    sent: ["replied", "declined"],
+    replied: ["interested", "declined"],
+    interested: ["declined"],
+    declined: [],
+  };
+
+  if (!project) {
+    return (
+      <div className="p-6 text-center">
+        <p className="text-[13px] text-[#9A9A9A]">Select a project from your Hub first to use this agent.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-center justify-end">
+        <button
+          onClick={() => setFormOpen((v) => !v)}
+          className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all",
+            formOpen ? "bg-gray-100 text-[#62646A]" : "bg-[#151515] text-white hover:bg-[#2a2a2a]")}>
+          <Plus size={13} />{formOpen ? "Cancel" : "New prospect"}
+        </button>
+      </div>
+
+      {/* Add prospect form */}
+      <AnimatePresence initial={false}>
+        {formOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+            className="overflow-hidden">
+            <div className="rounded-2xl border border-[#ECEDEE] bg-[#FAFAFA] p-4 space-y-3">
+              <p className="text-[12px] font-semibold text-[#151515]">Tell Sorene about the prospect</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Name *"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+                <input
+                  value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
+                  placeholder="Role / company"
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+              </div>
+              <textarea
+                value={form.context} onChange={(e) => setForm((p) => ({ ...p, context: e.target.value }))}
+                placeholder="What do you know about them? (LinkedIn summary, recent post, mutual connection, their problem…)"
+                rows={3}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-[#151515] placeholder-gray-300 resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <p className="text-[12px] text-[#62646A]">Format:</p>
+                  {(["dm", "email"] as const).map((f) => (
+                    <button key={f} onClick={() => setForm((p) => ({ ...p, format: f }))}
+                      className={cn("px-3 py-1 rounded-full text-[11px] font-medium transition-colors",
+                        form.format === f ? "bg-[#151515] text-white" : "bg-gray-100 text-[#62646A] hover:bg-gray-200")}>
+                      {f === "dm" ? "Cold DM" : "Cold Email"}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={generateMessage} disabled={!form.name.trim() || generating}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#151515] text-white text-sm font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                  {generating && <Loader2 size={13} className="animate-spin" />}
+                  Write message →
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pipeline */}
+      {prospects.length === 0 && !formOpen ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 px-5 py-8 text-center">
+          <Mail size={20} className="text-[#9A9A9A] mx-auto mb-2" />
+          <p className="text-[13px] text-[#9A9A9A]">No prospects yet. Add one and Sorene will write the message.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+            <p className="text-[12px] font-semibold text-[#151515]">Pipeline</p>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-[#62646A] font-semibold">{prospects.length}</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {prospects.map((p) => {
+              const isOpen = expandedId === p.id;
+              return (
+                <div key={p.id}>
+                  <button onClick={() => setExpandedId(isOpen ? null : p.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                    <div className="w-7 h-7 rounded-full bg-[#F3F4F6] flex items-center justify-center shrink-0 text-[11px] font-bold text-[#62646A]">
+                      {(p.name[0] ?? "?").toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-body-small-medium text-[#151515] truncate">{p.name}</p>
+                      <p className="text-[11px] text-[#9A9A9A] truncate">{p.role || p.createdAt}</p>
+                    </div>
+                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0", STATUS_COLORS[p.status])}>
+                      {STATUS_LABELS[p.status]}
+                    </span>
+                    {isOpen ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                        transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                        className="overflow-hidden">
+                        <div className="px-4 pb-4 space-y-3 bg-[#FAFAFA]">
+                          <div className="rounded-xl bg-white border border-gray-100 px-3 py-3">
+                            <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide mb-1.5">
+                              {p.format === "email" ? "Cold Email" : "Cold DM"}
+                            </p>
+                            <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{p.message}</p>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(p.message)}
+                              className="mt-2 text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                              Copy →
+                            </button>
+                          </div>
+                          {STATUS_NEXT[p.status].length > 0 && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[11px] text-[#9A9A9A]">Mark as:</p>
+                              {STATUS_NEXT[p.status].map((s) => (
+                                <button key={s} onClick={() => updateStatus(p.id, s)}
+                                  className={cn("text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors", STATUS_COLORS[s], "hover:opacity-80")}>
+                                  {STATUS_LABELS[s]}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <button onClick={() => deleteProspect(p.id)}
+                            className="flex items-center gap-1.5 text-[12px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Content & Social Agent UI ──────────────────────────────────────────────
+const POST_TOPICS = [
+  { value: "win", label: "Recent win", hint: "Something that worked, a milestone, a small victory" },
+  { value: "lesson", label: "Lesson learned", hint: "Something that didn't work and what you took from it" },
+  { value: "customer", label: "Customer insight", hint: "Something surprising you heard from a customer conversation" },
+  { value: "build", label: "What I'm building", hint: "Update on progress, what changed, what's next" },
+  { value: "blocker", label: "Current blocker", hint: "Real struggle — vulnerability builds trust and often gets advice" },
+  { value: "custom", label: "Custom topic", hint: "Describe what you want to write about" },
+];
+
+const THREADS_ICON = (
+  <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white">
+    <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.064c0-3.518.85-6.372 2.495-8.423C5.845 1.277 8.599.095 12.18.071h.014c2.746.018 5.143.808 7.137 2.35 1.89 1.46 3.19 3.51 3.867 6.105l-2.012.54c-.55-2.07-1.586-3.696-3.078-4.832-1.584-1.213-3.564-1.826-5.889-1.82-2.94.02-5.086.92-6.37 2.67C4.568 6.89 3.937 9.19 3.937 12.004v.064c0 2.814.63 5.114 1.912 6.92 1.284 1.75 3.43 2.65 6.37 2.67 2.497.017 4.253-.557 5.5-1.752 1.392-1.332 2.094-3.31 2.086-5.876a7.2 7.2 0 0 0-.085-1.136h-7.558v-2.33h9.756c.112.573.168 1.176.168 1.793v.003c.013 3.363-.962 5.937-2.9 7.647-1.72 1.515-4.08 2.284-6.999 2.268Z" />
+  </svg>
+);
+
+interface ThreadsDraft { id: string; text: string; editing: boolean; schedulerOpen: boolean; frozen?: boolean; frozenAt?: number; posted?: boolean; postFailed?: boolean; failReason?: string; }
+interface ContentDNA { summary: string; bestHours: number[]; postCount: number; analyzedAt: number; }
+interface ScheduledPost { id: string; text: string; scheduledAt: number; status: string; failReason?: string; }
+
+function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }) {
+  const authUser = useAtomValue(userAtom);
+  const [accountStatus, setAccountStatus] = useState<"loading" | "disconnected" | "connected">("loading");
+  const [username, setUsername] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  // Content DNA
+  const [dna, setDna] = useState<ContentDNA | null>(null);
+  const [scanningHistory, setScanningHistory] = useState(false);
+
+  // Weekly batch
+  const [cadence, setCadence] = useState<1 | 2>(1);
+  const [ctaLink, setCtaLink] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [weekDrafts, setWeekDrafts] = useState<ThreadsDraft[]>([]);
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
+
+  // Publishing / scheduling
+  const [publishing, setPublishing] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // Custom slot overrides: draftId → timestamp (ms). When set, overrides scheduleSlots[i].
+  const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
+  // Which draft has the slot editor open
+  const [editingSlot, setEditingSlot] = useState<string | null>(null);
+  // Pending date/time string while slot editor is open: draftId → { date, time }
+  const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
+
+  // Best posting times (local HH:MM strings)
+  const bestTimes: string[] = dna?.bestHours?.slice(0, 2).map((utcH) => {
+    const d = new Date();
+    d.setUTCHours(utcH, 0, 0, 0);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  }) ?? ["08:00", "19:00"];
+
+  // Pre-compute schedule slots for the next 7 days at bestTimes
+  const scheduleSlots = (() => {
+    const slots: number[] = [];
+    const today = new Date();
+    today.setSeconds(0, 0);
+    for (let day = 0; day < 7; day++) {
+      const times = cadence === 2 ? bestTimes : [bestTimes[0]];
+      for (const t of times) {
+        const [h, m] = t.split(":").map(Number);
+        const d = new Date(today);
+        d.setDate(d.getDate() + day);
+        d.setHours(h, m, 0, 0);
+        if (d.getTime() > Date.now() + 60_000) slots.push(d.getTime());
+      }
+    }
+    return slots.sort((a, b) => a - b);
+  })();
+
+  const loadAccount = async () => {
+    const { authFetch } = await import("@/lib/authFetch");
+    const [accountRes, scheduleRes, draftsRes] = await Promise.all([
+      authFetch("/api/threads/account"),
+      authFetch("/api/threads/schedule"),
+      authFetch("/api/threads/drafts"),
+    ]);
+    if (accountRes.ok) {
+      const data = await accountRes.json() as { connected: boolean; username?: string };
+      if (data.connected) { setAccountStatus("connected"); setUsername(data.username ?? ""); }
+      else setAccountStatus("disconnected");
+    } else { setAccountStatus("disconnected"); }
+    if (scheduleRes.ok) {
+      const data = await scheduleRes.json() as { posts: ScheduledPost[] };
+      setScheduledPosts(data.posts ?? []);
+    }
+    if (draftsRes.ok) {
+      const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2; slotOverrides: Record<string, number> } | null };
+      if (data.batch && data.batch.drafts.length > 0) {
+        setWeekDrafts(data.batch.drafts);
+        setCtaLink(data.batch.ctaLink ?? "");
+        setCadence(data.batch.cadence ?? 1);
+        setSlotOverrides(data.batch.slotOverrides ?? {});
+      }
+    }
+    setDraftsLoaded(true);
+  };
+
+  useEffect(() => {
+    if (!authUser) return;
+    loadAccount().catch(() => { setAccountStatus("disconnected"); setDraftsLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
+
+  // Auto-save drafts to Firestore whenever they change (debounced 1.5s)
+  useEffect(() => {
+    if (!draftsLoaded || !authUser) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        if (weekDrafts.length === 0) {
+          await authFetch("/api/threads/drafts", { method: "DELETE" });
+        } else {
+          await authFetch("/api/threads/drafts", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ drafts: weekDrafts, ctaLink, cadence, slotOverrides }),
+          });
+        }
+      } catch { /* ignore */ }
+    }, 1500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDrafts, ctaLink, cadence, slotOverrides, draftsLoaded]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("threads_connected") === "1") {
+      setAccountStatus("connected");
+      window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
+      setTimeout(() => scanHistory(), 500);
+    }
+    if (params.get("threads_error") === "1") {
+      setAccountStatus("disconnected");
+      window.history.replaceState({}, "", window.location.pathname + "?tab=agents");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll every 60s to mark frozen drafts as posted once their scheduled time has passed
+  useEffect(() => {
+    const check = async () => {
+      const frozen = weekDrafts.filter((d) => d.frozen && !d.posted);
+      if (!frozen.length || !authUser) return;
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        const res = await authFetch("/api/threads/schedule");
+        if (!res.ok) return;
+        const data = await res.json() as { posts: ScheduledPost[]; failed?: ScheduledPost[]; published?: ScheduledPost[] };
+        const pendingTexts = new Set(data.posts.map((p) => p.text.trim()));
+        const publishedTexts = new Set((data.published ?? []).map((p) => p.text.trim()));
+        const now = Date.now();
+        setWeekDrafts((prev) => prev.map((d) => {
+          if (!d.frozen || d.posted || d.postFailed) return d;
+          if ((d.frozenAt ?? 0) > now) return d;
+          const cleanText = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+          const failedPost = (data.failed ?? []).find((p) => p.text.trim() === cleanText);
+          if (failedPost) return { ...d, postFailed: true, failReason: failedPost.failReason };
+          if (publishedTexts.has(cleanText)) return { ...d, posted: true };
+          if (!pendingTexts.has(cleanText)) return { ...d, posted: true }; // fallback
+          return d;
+        }));
+      } catch { /* ignore */ }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekDrafts, authUser]);
+
+  const scanHistory = async () => {
+    setScanningHistory(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/history");
+      if (res.ok) {
+        const data = await res.json() as { dna?: ContentDNA };
+        if (data.dna) setDna(data.dna);
+      }
+    } catch { /* ignore */ }
+    setScanningHistory(false);
+  };
+
+  const connectThreads = async () => {
+    setConnecting(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/auth");
+      if (res.ok) {
+        const data = await res.json() as { url?: string };
+        if (data.url) {
+          window.open(data.url, "_blank");
+          // Poll for connection after the OAuth popup completes
+          const poll = setInterval(async () => {
+            try {
+              const { authFetch: af } = await import("@/lib/authFetch");
+              const r = await af("/api/threads/account");
+              if (r.ok) {
+                const d = await r.json() as { connected: boolean; username?: string };
+                if (d.connected) {
+                  clearInterval(poll);
+                  setAccountStatus("connected");
+                  setUsername(d.username ?? "");
+                  setConnecting(false);
+                }
+              }
+            } catch { /* ignore */ }
+          }, 3000);
+          // Stop polling after 5 minutes
+          setTimeout(() => { clearInterval(poll); setConnecting(false); }, 300000);
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+    setConnecting(false);
+  };
+
+  const disconnectThreads = async () => {
+    setDisconnecting(true);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/threads/account", { method: "DELETE" });
+      setAccountStatus("disconnected");
+      setUsername("");
+      setWeekDrafts([]);
+      setDna(null);
+    } catch { /* ignore */ }
+    setDisconnecting(false);
+  };
+
+  const generateWeek = async () => {
+    setGenerating(true);
+    setWeekDrafts([]);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const count = cadence * 7;
+
+      // Pull brand context from Launchpad localStorage
+      const title = project?.title ?? "";
+      const brandName    = title ? (localStorage.getItem(`business-name-${title}`) ?? "") : "";
+      const tagline      = title ? (localStorage.getItem(`brand-tagline-${title}`) ?? "") : "";
+      const benefit      = title ? (localStorage.getItem(`brand-benefit-${title}`) ?? "") : "";
+      const offerings    = title ? (localStorage.getItem(`brand-offerings-${title}`) ?? "") : "";
+
+      const brandContext = [
+        brandName  && `Brand name: ${brandName}`,
+        tagline    && `Tagline: ${tagline}`,
+        benefit    && `Core benefit: ${benefit}`,
+        offerings  && `Offerings: ${offerings}`,
+      ].filter(Boolean).join("\n");
+
+      // Brand is the source of truth for social content — LaunchPad is final
+      // Only fall back to project direction if no brand info exists yet
+      const projectContext = !brandContext && project
+        ? [`About: ${project.title}`, project.oneliner && `What it does: ${project.oneliner}`, project.first_10_customers && `Target customer: ${project.first_10_customers}`].filter(Boolean).join("\n")
+        : "";
+
+      const dnaContext = dna?.summary
+        ? `\nContent DNA (what resonates with this audience): ${dna.summary}`
+        : "";
+
+      const ctaNote = ctaLink.trim()
+        ? `\nCTA link: ${ctaLink.trim()} — do NOT put this in the post body. Mark posts that should have a CTA link with [ADD_LINK_IN_COMMENT] at the very end.`
+        : "";
+
+      const system = `You are ghostwriting Threads posts for a founder. Your job is to sound like a real person — not a content creator, not a marketer, not an AI.
+
+VOICE — this is the most important thing:
+- Write like someone typing a thought between meetings. Informal. Imperfect. Occasionally incomplete.
+- Use contractions always (don't, isn't, we've, I'm). Never "do not", "is not".
+- Vary sentence length wildly. One-word sentences are fine. So are run-ons.
+- It's okay to start with "I" sometimes. Real people do.
+- Avoid "perfect" rhythm where every line is the same length — that's the AI tell.
+- No motivational tone. No "here's what I learned" energy. Just observations, thoughts, opinions.
+
+WHAT MAKES IT FEEL HUMAN:
+- Specific details beat generic statements. "3 users churned in week 2" > "some users left early"
+- Mild self-doubt or admission of uncertainty reads as authentic
+- An unfinished thought or a question you genuinely don't know the answer to
+- Slightly awkward transitions are fine — don't over-polish
+- A hot take with a soft hedge ("maybe I'm wrong but...")
+- Real frustration, real excitement — not performed emotion
+
+WHAT TO AVOID:
+- Never start with "In a world where..." or "Let's talk about..." or "Here's the truth:"
+- No em dashes (—) used for dramatic effect. Use comma or period instead.
+- No "Unpopular opinion:" label. Just say the unpopular opinion.
+- No inspirational ending lines like "Keep building." or "Stay consistent."
+- No hashtags, ever
+- No numbered lists or bullet points — prose only
+- No URLs in body. If CTA needed: [ADD_LINK_IN_COMMENT] at end
+- Max 500 characters. Short is better.
+
+FORMATS — use different ones across the week:
+hot take / genuine question / short story with a twist / thing I got wrong / observation nobody says out loud / something I'm trying / result or data point with context`;
+
+      const prompt = `Write exactly ${count} Threads posts for a 7-day schedule (${cadence} post${cadence > 1 ? "s" : ""} per day).
+
+${projectContext}${brandContext ? `\n${brandContext}` : ""}${dnaContext}${ctaNote}
+
+Each post must use a different format and angle. They should feel like the same person's feed — consistent voice, different moods. Vary which posts get the CTA marker (max 2 of the ${count}).
+
+Separate posts with exactly "---". No labels, no numbering, no intro text. Just the ${count} posts.`;
+
+      const res = await authFetch("/api/execution-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, system }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { reply?: string };
+        const posts = (data.reply ?? "").trim().split(/\n?---\n?/).map((s) => s.trim()).filter(Boolean).slice(0, count);
+        setWeekDrafts(posts.map((text, i) => ({ id: `${Date.now()}-${i}`, text, editing: false, schedulerOpen: false })));
+      }
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  const updateDraft = (id: string, text: string) =>
+    setWeekDrafts((prev) => prev.map((d) => d.id === id ? { ...d, text } : d));
+  const toggleEdit = (id: string) =>
+    setWeekDrafts((prev) => prev.map((d) => d.id === id ? { ...d, editing: !d.editing } : d));
+  const discardDraft = (id: string) =>
+    setWeekDrafts((prev) => prev.filter((d) => d.id !== id));
+
+  const publishNow = async (draft: ThreadsDraft): Promise<boolean> => {
+    setPublishing(draft.id);
+    let success = false;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim() }),
+      });
+      if (res.ok) {
+        success = true;
+        setSuccessMsg("Posted ✓");
+        setTimeout(() => setSuccessMsg(""), 3000);
+      }
+    } catch { /* ignore */ }
+    setPublishing(null);
+    return success;
+  };
+
+  // Approve all — validate token first, then schedule each draft at its slot
+  const approveAll = async () => {
+    if (weekDrafts.length === 0) return;
+    setApprovingAll(true);
+    setErrorMsg("");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+
+      // Validate token before committing
+      const validateRes = await authFetch("/api/threads/validate");
+      if (validateRes.ok) {
+        const vd = await validateRes.json() as { valid: boolean; reason?: string };
+        if (!vd.valid) {
+          setErrorMsg(`Threads token issue: ${vd.reason ?? "please reconnect your account"}`);
+          setApprovingAll(false);
+          return;
+        }
+      }
+
+      // Check all posts are within 500 chars
+      const overLimit = weekDrafts.filter((d) => {
+        const clean = d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+        return clean.length > 500;
+      });
+      if (overLimit.length > 0) {
+        setErrorMsg(`${overLimit.length} post${overLimit.length > 1 ? "s are" : " is"} over 500 characters — please edit before scheduling.`);
+        setApprovingAll(false);
+        return;
+      }
+
+      const pendingDrafts = weekDrafts.filter((d) => !d.frozen);
+      const newScheduled: ScheduledPost[] = [];
+      for (let i = 0; i < pendingDrafts.length; i++) {
+        const draft = pendingDrafts[i];
+        const globalIdx = weekDrafts.indexOf(draft);
+        const scheduledAt = slotOverrides[draft.id] ?? scheduleSlots[globalIdx] ?? (Date.now() + (i + 1) * 24 * 60 * 60 * 1000);
+        const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
+        const cleanText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+        const res = await authFetch("/api/threads/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: cleanText,
+            scheduledAt,
+            ...(hasCta && ctaLink.trim() ? { ctaLink: ctaLink.trim() } : {}),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { post: ScheduledPost };
+          newScheduled.push(data.post);
+        }
+      }
+      setScheduledPosts((prev) => [...prev, ...newScheduled].sort((a, b) => a.scheduledAt - b.scheduledAt));
+      // Freeze pending drafts in place — show them as locked/waiting
+      const now = Date.now();
+      setWeekDrafts((prev) => prev.map((d, i) => d.frozen ? d : {
+        ...d,
+        frozen: true,
+        frozenAt: slotOverrides[d.id] ?? scheduleSlots[i] ?? now,
+        editing: false,
+      }));
+      // Clear saved drafts from Firestore immediately
+      authFetch("/api/threads/drafts", { method: "DELETE" }).catch(() => {});
+      setSuccessMsg(`${newScheduled.length} posts scheduled ✓`);
+    } catch { /* ignore */ }
+    setApprovingAll(false);
+  };
+
+  const cancelScheduled = async (id: string) => {
+    setCancellingId(id);
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/threads/schedule", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setScheduledPosts((prev) => prev.filter((p) => p.id !== id));
+    } catch { /* ignore */ }
+    setCancellingId(null);
+  };
+
+  return (
+    <div className="p-5 space-y-5">
+      {/* Threads connection */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-black">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white">
+                <path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.5 12.068v-.064c0-3.518.85-6.372 2.495-8.423C5.845 1.277 8.599.095 12.18.071h.014c2.746.018 5.143.808 7.137 2.35 1.89 1.46 3.19 3.51 3.867 6.105l-2.012.54c-.55-2.07-1.586-3.696-3.078-4.832-1.584-1.213-3.564-1.826-5.889-1.82-2.94.02-5.086.92-6.37 2.67C4.568 6.89 3.937 9.19 3.937 12.004v.064c0 2.814.63 5.114 1.912 6.92 1.284 1.75 3.43 2.65 6.37 2.67 2.497.017 4.253-.557 5.5-1.752 1.392-1.332 2.094-3.31 2.086-5.876a7.2 7.2 0 0 0-.085-1.136h-7.558v-2.33h9.756c.112.573.168 1.176.168 1.793v.003c.013 3.363-.962 5.937-2.9 7.647-1.72 1.515-4.08 2.284-6.999 2.268Z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#151515]">Threads</p>
+              {accountStatus === "connected"
+                ? <p className="text-[11px] text-[#32C382]">Connected{username ? ` · @${username}` : ""}</p>
+                : <p className="text-[11px] text-[#9A9A9A]">Connect to generate and post directly</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {accountStatus === "loading" && <Loader2 size={14} className="animate-spin text-[#9A9A9A]" />}
+            {accountStatus === "connected" && (
+              <>
+                <button onClick={scanHistory} disabled={scanningHistory}
+                  className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium flex items-center gap-1">
+                  {scanningHistory ? <Loader2 size={11} className="animate-spin" /> : null}
+                  {dna ? "Re-scan" : "Scan history"}
+                </button>
+                <button onClick={disconnectThreads} disabled={disconnecting}
+                  className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors font-medium">
+                  Disconnect
+                </button>
+              </>
+            )}
+            {accountStatus === "disconnected" && (
+              <button onClick={connectThreads} disabled={connecting}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-50">
+                {connecting ? <Loader2 size={12} className="animate-spin" /> : null}
+                Connect
+              </button>
+            )}
+          </div>
+        </div>
+        {accountStatus === "disconnected" && (
+          <div className="px-5 py-4 text-center">
+            <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate, schedule, and post directly from here.</p>
+          </div>
+        )}
+        {/* Content DNA */}
+        {accountStatus === "connected" && (
+          <div className="px-5 py-4 border-t border-[#ECEDEE]">
+            {scanningHistory && (
+              <div className="flex items-center gap-2 text-[12px] text-[#9A9A9A]">
+                <Loader2 size={12} className="animate-spin" /> Scanning your post history…
+              </div>
+            )}
+            {!scanningHistory && dna && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Content DNA · {dna.postCount} posts analysed</p>
+                  <p className="text-[10px] text-[#9A9A9A]">Best times: {bestTimes.join(" & ")}</p>
+                </div>
+                <p className="text-[12px] text-[#62646A] leading-relaxed">{dna.summary}</p>
+              </div>
+            )}
+            {!scanningHistory && !dna && (
+              <button onClick={scanHistory} className="text-[12px] text-[#9A9A9A] hover:text-[#151515] transition-colors">
+                Scan your post history → Sorene learns what works for your audience
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Plan a week */}
+      <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+          <div className="w-8 h-8 rounded-xl bg-[#151515] flex items-center justify-center shrink-0">
+            <CalendarDays size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-[13px] font-semibold text-[#151515]">Plan your week</p>
+            <p className="text-[11px] text-[#9A9A9A]">
+              Generate a full week of posts · review · approve all at once
+            </p>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Cadence */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-2">Posts per day</p>
+            <div className="flex gap-2">
+              {([1, 2] as const).map((n) => (
+                <button key={n} onClick={() => setCadence(n)}
+                  className={cn("flex-1 py-2.5 rounded-xl text-[12px] font-semibold border transition-colors",
+                    cadence === n ? "bg-[#151515] text-white border-[#151515]" : "bg-white text-[#62646A] border-gray-200 hover:border-[#151515] hover:text-[#151515]")}>
+                  {n === 1 ? "1 post / day" : "2 posts / day"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#9A9A9A] mt-1.5">
+              Best times: <span className="font-medium text-[#151515]">{bestTimes.join(" & ")}</span>
+              {dna ? " · from your history" : " · general best practice"}
+            </p>
+          </div>
+
+          {/* CTA link */}
+          <div>
+            <p className="text-[12px] font-medium text-[#151515] mb-1.5">CTA link <span className="text-[#9A9A9A] font-normal">(optional)</span></p>
+            <input value={ctaLink} onChange={(e) => setCtaLink(e.target.value)}
+              placeholder="e.g. https://sorene.ai/waitlist"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-[12px] text-[#151515] placeholder-gray-300 focus:outline-none focus:border-[#151515] transition-colors" />
+            <p className="text-[11px] text-[#9A9A9A] mt-1">Links go in the first comment, not the post — Threads suppresses link reach.</p>
+          </div>
+
+          <button onClick={generateWeek} disabled={generating}
+            className="w-full py-2.5 rounded-xl bg-[#151515] text-white text-[12px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            {generating ? <><Loader2 size={13} className="animate-spin" /> Writing {cadence * 7} posts…</> : `Generate ${cadence * 7} posts for the week →`}
+          </button>
+        </div>
+      </div>
+
+      {/* Weekly drafts — review + approve */}
+      {weekDrafts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[12px] font-semibold text-[#151515]">This week's posts</p>
+              <p className="text-[11px] text-[#9A9A9A] mt-0.5">
+                {weekDrafts.some((d) => !d.frozen)
+                  ? "Edit any post, remove ones you don't like, then approve and schedule."
+                  : "All scheduled — posts will go live at the times shown."}
+              </p>
+            </div>
+            {successMsg && <span className="text-[11px] text-[#32C382] font-medium shrink-0">{successMsg}</span>}
+          </div>
+
+          {weekDrafts.map((draft, i) => {
+            const effectiveSlot = slotOverrides[draft.id] ?? scheduleSlots[i];
+            const effectiveDate = effectiveSlot ? new Date(effectiveSlot) : null;
+            const slotDateVal = effectiveDate ? effectiveDate.toLocaleDateString("en-CA") : ""; // YYYY-MM-DD
+            const slotTimeVal = effectiveDate ? effectiveDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
+            const slotLabel = effectiveDate ? effectiveDate.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+            const hasCta = draft.text.includes("[ADD_LINK_IN_COMMENT]");
+            const displayText = draft.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim();
+            const isEditingSlot = editingSlot === draft.id;
+
+            const pendingDate = pendingSlot[draft.id]?.date ?? slotDateVal;
+            const pendingTime = pendingSlot[draft.id]?.time ?? slotTimeVal;
+            const commitSlotEdit = () => {
+              if (!pendingDate || !pendingTime) return;
+              const ts = new Date(`${pendingDate}T${pendingTime}`).getTime();
+              if (!isNaN(ts)) setSlotOverrides((prev) => ({ ...prev, [draft.id]: ts }));
+            };
+
+            return (
+              <div key={draft.id} className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[11px] font-semibold text-[#9A9A9A] uppercase tracking-wide">Day {Math.floor(i / cadence) + 1}{cadence === 2 ? ` · ${i % 2 === 0 ? "AM" : "PM"}` : ""}</p>
+                    {slotLabel && (
+                      <button onClick={() => setEditingSlot(isEditingSlot ? null : draft.id)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors underline underline-offset-2 decoration-dotted">
+                        {slotLabel}
+                      </button>
+                    )}
+                    {hasCta && ctaLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">link in comment</span>}
+                  </div>
+                  {draft.frozen ? (
+                    <div className="flex items-center gap-2">
+                      {draft.posted ? (
+                        <><CheckCircle2 size={11} className="text-[#32C382]" /><span className="text-[11px] text-[#32C382] font-medium">Posted</span></>
+                      ) : draft.postFailed ? (
+                        <><span className="text-[11px] text-red-500 font-medium">Failed to post{draft.failReason ? `: ${draft.failReason}` : ""}</span>
+                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, postFailed: false, failReason: undefined, editing: false } : d))}
+                          className="text-[11px] text-red-400 hover:text-red-600 transition-colors font-medium underline underline-offset-2">
+                          Retry
+                        </button></>
+                      ) : (
+                        <><Lock size={11} className="text-[#9A9A9A]" /><span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
+                        <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, editing: true } : d))}
+                          className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium underline underline-offset-2">
+                          Edit
+                        </button></>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={cn("text-[11px]", displayText.length > 500 ? "text-red-500" : "text-[#9A9A9A]")}>{displayText.length}/500</span>
+                      <button onClick={() => toggleEdit(draft.id)}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                        {draft.editing ? "Done" : "Edit"}
+                      </button>
+                      <button onClick={() => discardDraft(draft.id)} className="text-[#9A9A9A] hover:text-[#DF2E16] transition-colors">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {isEditingSlot && !draft.posted && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                      transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                      className="overflow-hidden border-b border-[#ECEDEE]">
+                      <div className="px-4 py-3 bg-white flex items-center gap-2 flex-wrap">
+                        <p className="text-[11px] text-[#9A9A9A] font-medium">Change schedule:</p>
+                        <input type="date" value={pendingDate}
+                          min={new Date().toLocaleDateString("en-CA")}
+                          onChange={(e) => setPendingSlot((prev) => ({ ...prev, [draft.id]: { date: e.target.value, time: pendingTime } }))}
+                          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
+                        <input type="time" value={pendingTime}
+                          onChange={(e) => setPendingSlot((prev) => ({ ...prev, [draft.id]: { date: pendingDate, time: e.target.value } }))}
+                          className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[12px] text-[#151515] focus:outline-none focus:border-[#151515] transition-colors" />
+                        <button onClick={() => { commitSlotEdit(); setEditingSlot(null); }}
+                          className="text-[11px] px-3 py-1.5 rounded-lg bg-[#151515] text-white font-medium hover:bg-[#2a2a2a] transition-colors">
+                          Save
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className={cn("p-4 space-y-3", draft.posted && "opacity-40")}>
+                  {draft.editing && !draft.posted ? (
+                    <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
+                      rows={4} maxLength={500}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
+                  ) : (
+                    <p className="text-[13px] text-[#151515] leading-relaxed whitespace-pre-wrap">{displayText}</p>
+                  )}
+                  {hasCta && ctaLink && (
+                    <p className="text-[11px] text-blue-500 flex items-center gap-1">
+                      <span>💬</span> First comment will include: {ctaLink}
+                    </p>
+                  )}
+                  {accountStatus === "connected" && !draft.frozen && (
+                    <button onClick={async () => {
+                      const postedAt = Date.now();
+                      setSlotOverrides((prev) => ({ ...prev, [draft.id]: postedAt }));
+                      const ok = await publishNow(draft);
+                      if (ok) {
+                        setWeekDrafts((prev) => prev.map((d) => d.id === draft.id
+                          ? { ...d, frozen: true, frozenAt: postedAt, editing: false }
+                          : d));
+                      } else {
+                        setSlotOverrides((prev) => { const n = { ...prev }; delete n[draft.id]; return n; });
+                      }
+                    }} disabled={!!publishing || displayText.length > 500}
+                      className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium">
+                      {publishing === draft.id ? <Loader2 size={11} className="animate-spin inline mr-1" /> : null}
+                      Post now instead →
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Approve and schedule */}
+          {accountStatus === "connected" && weekDrafts.some((d) => !d.frozen) && (
+            <div className="space-y-2">
+              {errorMsg && (
+                <p className="text-[12px] text-red-500 text-center px-2">{errorMsg}</p>
+              )}
+              <button onClick={approveAll} disabled={approvingAll}
+                className="w-full py-3 rounded-2xl bg-[#151515] text-white text-[13px] font-semibold hover:bg-[#2a2a2a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {approvingAll
+                  ? <><Loader2 size={13} className="animate-spin" /> Scheduling…</>
+                  : <>Approve and schedule {weekDrafts.filter((d) => !d.frozen).length} posts</>}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// ── Agent detail panel ─────────────────────────────────────────────────────
+function AgentDetail({ agent, project }: { agent: AgentDef; project: DirectionCardData | null }) {
+  if (agent.id === "customer_research") return <CustomerResearchAgentUI project={project} />;
+  if (agent.id === "outreach") return <OutreachAgentUI project={project} />;
+  if (agent.id === "content_social") return <ContentSocialAgentUI project={project} />;
+
   return (
     <div className="p-6 space-y-6">
       <section>
@@ -5735,15 +8917,9 @@ function AgentDetail({ agent }: { agent: AgentDef }) {
   );
 }
 
-function AgentsContent() {
+function AgentsContent({ project }: { project: DirectionCardData | null }) {
   return (
     <div className="p-6 space-y-8">
-      <div>
-        <h3 className="text-[15px] font-semibold text-[#151515]">AI Agents</h3>
-        <p className="text-[13px] text-[#62646A] leading-relaxed mt-1">
-          Specialised agents that run parts of your execution so you can focus on the work only you can do. Built around your project&rsquo;s data.
-        </p>
-      </div>
       {AGENT_TIERS.map((tier) => (
         <section key={tier.tier}>
           <div className="flex items-baseline gap-3 mb-1">
@@ -5762,8 +8938,7 @@ function AgentsContent() {
                   title: agent.name,
                   tagline: agent.tagline,
                   description: agent.description,
-                  content: <AgentDetail agent={agent} />,
-                  strengthTags: agent.tags,
+                  content: <AgentDetail agent={agent} project={project} />,
                 }}
               />
             ))}
@@ -5807,9 +8982,9 @@ const FB_ICON = (
 );
 
 const COMMUNITY_CHANNELS = [
-  { id: "discord",   label: "Discord",   icon: DISCORD_ICON,  description: "Join our Discord — daily standups, founder channels, co-working sessions, and the fastest path to real peer accountability.",   color: "#5865F2", link: "#" },
-  { id: "whatsapp",  label: "WhatsApp",  icon: WA_ICON,       description: "A private WhatsApp community for Sorene founders. Share wins, ask questions, get feedback — in a group that understands early-stage.",   color: "#25D366", link: "#" },
-  { id: "facebook",  label: "Facebook",  icon: FB_ICON,       description: "The Sorene Facebook Group — weekly challenges, founder spotlights, and a broader network of entrepreneurs at every stage.",            color: "#1877F2", link: "#" },
+  { id: "discord",   label: "Discord",   icon: DISCORD_ICON,  description: "Join our Discord — daily standups, founder channels, co-working sessions, and the fastest path to real peer accountability.",   color: "#5865F2", link: "https://discord.gg/2YtvCm2SWp" },
+  { id: "whatsapp",  label: "WhatsApp",  icon: WA_ICON,       description: "A private WhatsApp community for Sorene founders. Share wins, ask questions, get feedback — in a group that understands early-stage.",   color: "#25D366", link: "https://chat.whatsapp.com/DdV5otkoSdV0tLmg1RUxrG" },
+  { id: "facebook",  label: "Facebook",  icon: FB_ICON,       description: "The Sorene Facebook Group — weekly challenges, founder spotlights, and a broader network of entrepreneurs at every stage.",            color: "#1877F2", link: "https://www.facebook.com/groups/sorene" },
 ];
 
 type ConnectSetting = {
@@ -5821,40 +8996,116 @@ type ConnectSetting = {
   defaultValue: string | boolean;
 };
 
-const CHANNEL_SETTINGS: Record<"whatsapp" | "telegram", ConnectSetting[]> = {
+const CHANNEL_SETTINGS: Record<"whatsapp", ConnectSetting[]> = {
   whatsapp: [
-    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Weekly" },
-    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article via WhatsApp each morning.",         type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Off" },
-    { id: "checkin_prompt",  label: "Weekly accountability check-in", description: "Sorene asks how your week went every Monday.",                     type: "toggle",  defaultValue: true },
-    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
-  ],
-  telegram: [
-    { id: "reminder_freq",   label: "Business update reminders",  description: "Push a daily or weekly prompt to share your business status.",        type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "knowledge",       label: "Business knowledge snippets", description: "Receive a curated tip or article each morning.",                      type: "select",  options: ["Off", "Daily", "Weekly"],   defaultValue: "Daily" },
-    { id: "realtime_coach",  label: "Real-time coaching",         description: "Ask Sorene anything via Telegram between sessions.",                   type: "toggle",  defaultValue: true },
-    { id: "log_convos",      label: "Log customer conversations",  description: "Reply in chat to log a new customer conversation to your Hub.",       type: "toggle",  defaultValue: true },
+    { id: "reminder_freq",  label: "Business update reminders",   description: "Push a daily or weekly prompt to share your business status.",   type: "select", options: ["Off", "Daily", "Weekly"], defaultValue: "Weekly" },
+    { id: "knowledge",      label: "Business knowledge snippets", description: "Receive a curated business tip via WhatsApp each day.",          type: "select", options: ["Off", "Daily"],           defaultValue: "Off" },
+    { id: "checkin_prompt", label: "Accountability check-in",     description: "Sorene checks in on your tasks at the hour you choose.",         type: "toggle", defaultValue: false },
   ],
 };
 
-const MESSENGER_FEATURES = [
-  "Real-time coaching between sessions",
-  "Ask Sorene anything on the go",
-  "Log customer conversations via chat",
-  "Progress synced to your Execution Hub",
-  "Daily reminders via message",
-  "Business status update prompts",
-  "Business knowledge learning in chat",
-];
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const suffix = i < 12 ? "AM" : "PM";
+  const h = i % 12 === 0 ? 12 : i % 12;
+  return { value: i, label: `${h}:00 ${suffix}` };
+});
+const DAY_OPTIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const MESSENGER_FEATURES: string[] = [];
+
+function HourSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(Number(e.target.value))}
+      className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+      {HOUR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
+function DaySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0">
+      {DAY_OPTIONS.map((d) => <option key={d}>{d}</option>)}
+    </select>
+  );
+}
+
+type WaSettings = {
+  activeProjectTitle?: string;
+  reminder_freq?: string;
+  reminder_hour?: number;
+  reminder_day?: string;
+  knowledge?: string;
+  knowledge_hour?: number;
+  checkin_prompt?: boolean;
+  checkin_hour?: number;
+};
 
 function MessengerConnectCard() {
-  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | "telegram" | null>(null);
-  const [settings, setSettings] = useState<Record<string, Record<string, string | boolean>>>({
-    whatsapp: Object.fromEntries(CHANNEL_SETTINGS.whatsapp.map((s) => [s.id, s.defaultValue])),
-    telegram: Object.fromEntries(CHANNEL_SETTINGS.telegram.map((s) => [s.id, s.defaultValue])),
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState<"whatsapp" | null>(null);
+  const [waSettings, setWaSettings] = useState<WaSettings>({
+    reminder_freq: "Weekly",
+    reminder_hour: 8,
+    reminder_day: "Mon",
+    knowledge: "Off",
+    knowledge_hour: 8,
+    checkin_prompt: false,
+    checkin_hour: 8,
   });
-  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle", telegram: "idle" });
+  const [projects, setProjects] = useState<{ title: string }[]>([]);
+  const [linkState, setLinkState] = useState<Record<string, "idle" | "loading" | "linked">>({ whatsapp: "idle" });
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleLink = async (platform: "whatsapp" | "telegram") => {
+  // Load settings + projects on mount
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        const [settingsRes, projectsRes] = await Promise.all([
+          authFetch("/api/messaging/whatsapp/settings"),
+          authFetch("/api/execution-projects/list"),
+        ]);
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          if (data.settings && typeof data.settings === "object") {
+            setWaSettings((prev) => ({ ...prev, ...data.settings }));
+          }
+        }
+        if (projectsRes.ok) {
+          const data = await projectsRes.json();
+          if (data.projects?.length) setProjects(data.projects);
+        }
+      } catch { /* ignore */ }
+    };
+    load();
+  }, []);
+
+  // Debounce-save settings to Firestore
+  const saveSettings = (updated: WaSettings) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        await authFetch("/api/messaging/whatsapp/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updated),
+        });
+      } catch { /* ignore */ }
+    }, 600);
+  };
+
+  const updateSetting = <K extends keyof WaSettings>(key: K, val: WaSettings[K]) => {
+    setWaSettings((prev) => {
+      const next = { ...prev, [key]: val };
+      saveSettings(next);
+      return next;
+    });
+  };
+
+  const handleLink = async (platform: "whatsapp") => {
     if (linkState[platform] !== "idle") return;
     setLinkState((prev) => ({ ...prev, [platform]: "loading" }));
     try {
@@ -5874,165 +9125,328 @@ function MessengerConnectCard() {
     }
   };
 
-  const setSetting = (platform: "whatsapp" | "telegram", id: string, val: string | boolean) => {
-    setSettings((prev) => ({ ...prev, [platform]: { ...prev[platform], [id]: val } }));
-  };
-
-  const platforms: { id: "whatsapp" | "telegram"; name: string; icon: React.ReactNode; color: string; tagline: string }[] = [
-    { id: "whatsapp", name: "WhatsApp",  icon: WA_ICON, color: "#25D366", tagline: "Weekly check-ins · Progress tracking" },
-    { id: "telegram", name: "Telegram",  icon: TG_ICON, color: "#229ED9", tagline: "Instant messaging · Real-time coaching" },
-  ];
+  const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #34D399 34.62%, #059669 100%)";
 
   return (
-    <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
-      {/* Header */}
-      <div className="p-6 pb-5">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="flex -space-x-2">
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{WA_ICON}</div>
-            <div className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">{TG_ICON}</div>
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Connect via WhatsApp or Telegram</h3>
-            <p className="text-[12px] text-[#9A9A9A]">Sorene in your pocket — coaching, logging, reminders</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Features list */}
-      <div className="px-6 pb-5">
-        <div className="flex flex-wrap gap-1.5">
-          {MESSENGER_FEATURES.map((f) => (
-            <span key={f} className="text-[11px] font-medium text-[#62646A] bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-full">{f}</span>
-          ))}
-        </div>
-      </div>
-
-      {/* Platform buttons + settings */}
-      <div className="px-6 pb-6 space-y-3">
-        {platforms.map((p) => (
-          <div key={p.id} className="rounded-2xl border border-gray-100 overflow-hidden">
-            {/* Platform row */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: p.color + "20" }}>
-                {p.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#151515]">{p.name}</p>
-                <p className="text-[11px] text-[#9A9A9A]">{p.tagline}</p>
-              </div>
-              <button
-                onClick={() => setSettingsOpen(settingsOpen === p.id ? null : p.id)}
-                className={cn("p-2 rounded-lg transition-colors", settingsOpen === p.id ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
-                title="Settings"
-              >
-                <Settings size={14} />
-              </button>
-              <button
-                onClick={() => handleLink(p.id)}
-                disabled={linkState[p.id] === "loading"}
-                className={cn(
-                  "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
-                  linkState[p.id] === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30"
-                  : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
-                  linkState[p.id] === "loading" && "opacity-60 cursor-not-allowed"
-                )}
-              >
-                {linkState[p.id] === "loading" && <Loader2 size={12} className="animate-spin" />}
-                {linkState[p.id] === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
-              </button>
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className="flex flex-col relative p-5 pb-8"
+        style={{ background: gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <MessageCircle size={13} className="text-white" />
             </div>
-
-            {/* Settings panel */}
-            <AnimatePresence initial={false}>
-              {settingsOpen === p.id && (
-                <motion.div
-                  initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden border-t border-gray-100"
-                >
-                  <div className="px-4 py-3 space-y-3 bg-[#FAFAFA]">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
-                    {CHANNEL_SETTINGS[p.id].map((s) => (
-                      <div key={s.id} className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-medium text-[#151515]">{s.label}</p>
-                          <p className="text-[11px] text-[#9A9A9A] leading-snug">{s.description}</p>
-                        </div>
-                        {s.type === "toggle" ? (
-                          <button
-                            onClick={() => setSetting(p.id, s.id, !settings[p.id][s.id])}
-                            className={cn(
-                              "w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative",
-                              settings[p.id][s.id] ? "bg-[#32C382]" : "bg-gray-200"
-                            )}
-                          >
-                            <span className={cn(
-                              "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
-                              settings[p.id][s.id] ? "left-[18px]" : "left-0.5"
-                            )} />
-                          </button>
-                        ) : (
-                          <select
-                            value={settings[p.id][s.id] as string}
-                            onChange={(e) => setSetting(p.id, s.id, e.target.value)}
-                            className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none shrink-0"
-                          >
-                            {s.options?.map((o) => <option key={o}>{o}</option>)}
-                          </select>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-semibold text-white truncate">Connect via WhatsApp</p>
+              <p className="text-[12px] sm:text-[13px] text-white/80 mt-0.5 leading-relaxed">Your coach is now in your pocket. Get sharp, personalised coaching on the go, log customer conversations instantly, and stay on track with daily check-ins and reminders — all through WhatsApp.</p>
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
+          <button onClick={() => setIsExpanded((v) => !v)}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0 mt-0.5">
+            <ChevronDown size={15} className={cn("text-white transition-transform", isExpanded ? "" : "-rotate-90")} />
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 space-y-3">
+              {/* WhatsApp row */}
+              <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: "#25D36620" }}>
+                    {WA_ICON}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[#151515]">WhatsApp</p>
+                    <p className="text-[11px] text-[#9A9A9A] hidden sm:block">Real-time coaching · Weekly check-ins · Progress tracking</p>
+                  </div>
+                  <button onClick={() => setSettingsOpen(settingsOpen === "whatsapp" ? null : "whatsapp")}
+                    className={cn("p-2 rounded-lg transition-colors shrink-0", settingsOpen === "whatsapp" ? "bg-gray-100 text-[#151515]" : "text-[#9A9A9A] hover:text-[#151515] hover:bg-gray-50")}
+                    title="Settings">
+                    <Settings size={14} />
+                  </button>
+                  <button onClick={() => handleLink("whatsapp")} disabled={linkState.whatsapp === "loading"}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all shrink-0",
+                      linkState.whatsapp === "linked" ? "bg-[#F5FFD9] text-[#196141] border border-[#32C382]/30" : "bg-[#151515] text-white hover:bg-[#2a2a2a]",
+                      linkState.whatsapp === "loading" && "opacity-60 cursor-not-allowed"
+                    )}>
+                    {linkState.whatsapp === "loading" && <Loader2 size={12} className="animate-spin" />}
+                    {linkState.whatsapp === "linked" ? <><CheckCircle2 size={12} /> Connected</> : <>Connect <ArrowRight size={12} /></>}
+                  </button>
+                </div>
+
+                {/* Settings panel */}
+                <AnimatePresence initial={false}>
+                  {settingsOpen === "whatsapp" && (
+                    <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }}
+                      transition={{ duration: 0.2 }} className="overflow-hidden border-t border-gray-100">
+                      <div className="px-4 py-3 space-y-4 bg-[#FAFAFA]">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9A9A9A]">Notification settings</p>
+
+                        {/* Active project selector */}
+                        <div className="space-y-1">
+                          <p className="text-[12px] font-medium text-[#151515]">Active project</p>
+                          <p className="text-[11px] text-[#9A9A9A] leading-snug">Context used for coaching and scheduled messages.</p>
+                          <select
+                            value={waSettings.activeProjectTitle ?? ""}
+                            onChange={(e) => updateSetting("activeProjectTitle", e.target.value || undefined)}
+                            className="mt-1 w-full text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                          >
+                            <option value="">No project selected</option>
+                            {projects.map((p) => <option key={p.title} value={p.title}>{p.title}</option>)}
+                          </select>
+                        </div>
+
+                        {/* Business update reminders */}
+                        <div className="space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Business update reminders</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Push a daily or weekly prompt to share your business status.</p>
+                            </div>
+                            <select value={waSettings.reminder_freq ?? "Off"} onChange={(e) => updateSetting("reminder_freq", e.target.value)}
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none w-full sm:w-auto shrink-0">
+                              {["Off", "Daily", "Weekly"].map((o) => <option key={o}>{o}</option>)}
+                            </select>
+                          </div>
+                          {(waSettings.reminder_freq === "Daily" || waSettings.reminder_freq === "Weekly") && (
+                            <div className="flex items-center gap-2 pl-1 flex-wrap">
+                              {waSettings.reminder_freq === "Weekly" && (
+                                <>
+                                  <span className="text-[11px] text-[#62646A]">on</span>
+                                  <DaySelect value={waSettings.reminder_day ?? "Mon"} onChange={(v) => updateSetting("reminder_day", v)} />
+                                </>
+                              )}
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.reminder_hour ?? 8} onChange={(v) => updateSetting("reminder_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Business knowledge snippets */}
+                        <div className="space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Business knowledge snippets</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Receive a curated business tip via WhatsApp each day.</p>
+                            </div>
+                            <select value={waSettings.knowledge ?? "Off"} onChange={(e) => updateSetting("knowledge", e.target.value)}
+                              className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none w-full sm:w-auto shrink-0">
+                              {["Off", "Daily"].map((o) => <option key={o}>{o}</option>)}
+                            </select>
+                          </div>
+                          {waSettings.knowledge === "Daily" && (
+                            <div className="flex items-center gap-2 pl-1">
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.knowledge_hour ?? 8} onChange={(v) => updateSetting("knowledge_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Accountability check-in */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-medium text-[#151515]">Accountability check-in</p>
+                              <p className="text-[11px] text-[#9A9A9A] leading-snug">Sorene checks in on your tasks at the hour you choose.</p>
+                            </div>
+                            <button onClick={() => updateSetting("checkin_prompt", !waSettings.checkin_prompt)}
+                              className={cn("w-9 h-5 rounded-full shrink-0 mt-0.5 transition-colors relative", waSettings.checkin_prompt ? "bg-[#32C382]" : "bg-gray-200")}>
+                              <span className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all", waSettings.checkin_prompt ? "left-[18px]" : "left-0.5")} />
+                            </button>
+                          </div>
+                          {waSettings.checkin_prompt && (
+                            <div className="flex items-center gap-2 pl-1">
+                              <span className="text-[11px] text-[#62646A]">at</span>
+                              <HourSelect value={waSettings.checkin_hour ?? 8} onChange={(v) => updateSetting("checkin_hour", v)} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
 function CommunityCard() {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const gradient = "radial-gradient(140.13% 256.85% at 0% 0%, #0A0A0A 25.96%, rgba(0,0,0,0) 81.25%), linear-gradient(114deg, #818CF8 34.62%, #6366F1 100%)";
+
+  return (
+    <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+      className="relative rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white flex flex-col"
+    >
+      {/* Gradient header */}
+      <motion.div layout transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+        className="flex flex-col relative p-5 pb-8"
+        style={{ background: gradient }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(0,0,0,0.25)_0%,transparent_70%)] pointer-events-none" />
+        <div className="flex justify-between items-start relative z-10 gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Users size={13} className="text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-semibold text-white truncate">Sorene Entrepreneur Community</p>
+              <p className="text-[13px] text-white/80 mt-0.5">Join fellow founders — accountability, insights, real talk</p>
+            </div>
+          </div>
+          <button onClick={() => setIsExpanded((v) => !v)}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0 mt-0.5">
+            <ChevronDown size={15} className={cn("text-white transition-transform", isExpanded ? "" : "-rotate-90")} />
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Expanded body */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.2 } }}
+            className="overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 space-y-3">
+              {COMMUNITY_CHANNELS.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
+                    {c.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
+                    <p className="text-[11px] text-[#9A9A9A] leading-snug hidden sm:block">{c.description}</p>
+                  </div>
+                  <a href={c.link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0">
+                    Join <ArrowRight size={12} />
+                  </a>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+type ThreadsStatus = "idle" | "loading" | "connected" | "disconnecting";
+interface ThreadsProfile { username: string; profilePictureUrl: string; }
+
+function ThreadsConnectCard() {
+  const [status, setStatus] = useState<ThreadsStatus>("idle");
+  const [profile, setProfile] = useState<ThreadsProfile | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const { authFetch } = await import("@/lib/authFetch");
+        const res = await authFetch("/api/threads/account");
+        if (res.ok) {
+          const data = await res.json() as { connected: boolean; username?: string; profilePictureUrl?: string };
+          if (data.connected) { setStatus("connected"); setProfile({ username: data.username ?? "", profilePictureUrl: data.profilePictureUrl ?? "" }); }
+        }
+      } catch { /* ignore */ }
+    };
+    check();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("threads_connected") === "1") {
+      setStatus("connected");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("threads_connected");
+      window.history.replaceState({}, "", url.toString());
+      import("@/lib/authFetch").then(({ authFetch }) =>
+        authFetch("/api/threads/account").then((r) => r.json()).then((data: { connected: boolean; username?: string; profilePictureUrl?: string }) => {
+          if (data.connected) setProfile({ username: data.username ?? "", profilePictureUrl: data.profilePictureUrl ?? "" });
+        })
+      ).catch(() => { /* ignore */ });
+    }
+    if (params.get("threads_error") === "1") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("threads_error");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  const handleConnect = async () => {
+    setStatus("loading");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/threads/auth");
+      if (!res.ok) throw new Error("Failed to get auth URL");
+      const { url } = await res.json() as { url: string };
+      window.open(url, "_blank");
+    } catch { setStatus("idle"); }
+  };
+
+  const handleDisconnect = async () => {
+    setStatus("disconnecting");
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/threads/account", { method: "DELETE" });
+      setStatus("idle"); setProfile(null);
+    } catch { setStatus("connected"); }
+  };
+
   return (
     <div className="rounded-[32px] overflow-hidden shadow-sm border border-gray-100 bg-white">
       <div className="p-6 pb-5">
         <div className="flex items-center gap-3 mb-1">
-          <div className="flex -space-x-2">
-            {COMMUNITY_CHANNELS.map((c) => (
-              <div key={c.id} className="w-8 h-8 rounded-full bg-white ring-2 ring-white flex items-center justify-center overflow-hidden">
-                {c.icon}
-              </div>
-            ))}
-          </div>
+          <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center shrink-0">{THREADS_ICON}</div>
           <div>
-            <h3 className="text-[15px] font-semibold text-[#151515]">Sorene Entrepreneur Community</h3>
-            <p className="text-[12px] text-[#9A9A9A]">Join fellow founders — accountability, insights, real talk</p>
+            <h3 className="text-[15px] font-semibold text-[#151515]">Threads</h3>
+            <p className="text-[12px] text-[#9A9A9A]">Connect to generate and post directly</p>
           </div>
         </div>
       </div>
-
-      <div className="px-6 pb-6 space-y-3">
-        {COMMUNITY_CHANNELS.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 hover:bg-[#FAFAFA] transition-colors">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.color + "15" }}>
-              {c.icon}
-            </div>
+      <div className="px-6 pb-6">
+        {status === "connected" && profile ? (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 bg-[#FAFAFA]">
+            {profile.profilePictureUrl
+              ? <img src={profile.profilePictureUrl} className="w-8 h-8 rounded-full object-cover shrink-0" alt="" />
+              : <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0 text-[12px] font-bold text-[#62646A]">{profile.username?.[0]?.toUpperCase() ?? "T"}</div>
+            }
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-[#151515]">{c.label}</p>
-              <p className="text-[11px] text-[#9A9A9A] leading-snug">{c.description}</p>
+              <p className="text-[13px] font-semibold text-[#151515]">@{profile.username}</p>
+              <div className="flex items-center gap-1 mt-0.5"><CheckCircle2 size={11} className="text-[#32C382]" /><p className="text-[11px] text-[#32C382] font-medium">Connected</p></div>
             </div>
-            <a
-              href={c.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-[#151515] text-white hover:bg-[#2a2a2a] transition-colors shrink-0"
-            >
-              Join <ArrowRight size={12} />
-            </a>
+            <button onClick={handleDisconnect} disabled={status !== "connected"} className="text-[11px] text-[#9A9A9A] hover:text-red-500 transition-colors disabled:opacity-50">
+              {status !== "connected" ? "Disconnecting…" : "Disconnect"}
+            </button>
           </div>
-        ))}
+        ) : (
+          <div className="rounded-2xl border border-gray-100 p-4 space-y-3">
+            <p className="text-[12px] text-[#62646A] leading-relaxed">Connect your Threads account to generate, schedule, and post directly from here.</p>
+            <button onClick={handleConnect} disabled={status === "loading"}
+              className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold transition-all bg-[#151515] text-white hover:bg-[#2a2a2a]", status === "loading" && "opacity-60 cursor-not-allowed")}>
+              {status === "loading" && <Loader2 size={12} className="animate-spin" />}
+              Connect <ArrowRight size={12} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6040,7 +9454,7 @@ function CommunityCard() {
 
 function ConnectContent() {
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-3 sm:p-6 space-y-4">
       <MessengerConnectCard />
       <CommunityCard />
     </div>
@@ -6594,9 +10008,19 @@ function ProjectSettings({
 export default function Page() {
   const authUser = useAtomValue(userAtom);
   const [activeTab, setActiveTab] = useState<Tab | null>("validation");
+  const [launchpadOpenPillar, setLaunchpadOpenPillar] = useState<string | undefined>(undefined);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const bumpOnboard = useSetAtom(executionOnboardTriggerAtom);
+  const [navigateTab, setNavigateTab] = useAtom(executionNavigateTabAtom);
+
+  // After onboarding evaluation, the chat sets a target tab; switch to it here.
+  useEffect(() => {
+    if (navigateTab === "validation" || navigateTab === "launchpad" || navigateTab === "growth") {
+      setActiveTab(navigateTab);
+      setNavigateTab(null);
+    }
+  }, [navigateTab, setNavigateTab]);
 
   // "Create My Project" from the empty state → open the chat and start the
   // onboarding conversation (assess name + status, route to the right tab).
@@ -6679,10 +10103,15 @@ export default function Page() {
     return () => window.removeEventListener("execution-state-hydrated", onHydrated);
   }, [authUser?.uid]);
 
-  const handleCreateProject = async () => {
-    if (!createTitle.trim()) return;
-    setCreateSaving(true);
-    const project: DirectionCardData = { title: createTitle.trim(), oneliner: createDesc.trim() } as DirectionCardData;
+  // Create a project, persist it, and select it. Reused by the create dialog and
+  // by the onboarding chat's "Start Validate" action. Skips creating a duplicate
+  // if a project with the same title already exists (just selects it instead).
+  const createAndSelectProject = async (title: string, oneliner: string): Promise<DirectionCardData | null> => {
+    const t = title.trim();
+    if (!t) return null;
+    const existing = projects.find((p) => p.title === t);
+    if (existing) { setSelectedProject(existing); return existing; }
+    const project: DirectionCardData = { title: t, oneliner: oneliner.trim() } as DirectionCardData;
     const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
     if (token) {
       await fetch("/api/execution-projects/add", {
@@ -6693,11 +10122,33 @@ export default function Page() {
     }
     setProjects((prev) => [...prev, project]);
     setSelectedProject(project);
+    return project;
+  };
+
+  const handleCreateProject = async () => {
+    if (!createTitle.trim()) return;
+    setCreateSaving(true);
+    await createAndSelectProject(createTitle, createDesc);
     setCreateTitle("");
     setCreateDesc("");
     setCreateSaving(false);
     setCreateOpen(false);
   };
+
+  // "Start Validate" from the onboarding chat: create + select the project, then
+  // open the Validation tab.
+  const [startValidate, setStartValidate] = useAtom(executionStartValidateAtom);
+  useEffect(() => {
+    if (!startValidate) return;
+    const { title, oneliner } = startValidate;
+    setStartValidate(null);
+    (async () => {
+      await createAndSelectProject(title, oneliner);
+      setActiveTab("validation");
+      setChatOpen(false);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startValidate]);
 
 
   const projectLabel = selectedProject ? `"${selectedProject.title}"` : "your idea";
@@ -6720,7 +10171,10 @@ export default function Page() {
       title: "The Go / No-Go Check",
       tagline: "Launch readiness · Health check",
       description: `A crystal-clear assessment that tells you if you're ready to launch ${projectLabel} — measured across market validation, problem clarity, learning, and finance.`,
-      content: <GoNoGoContent project={selectedProject ?? null} />,
+      content: <GoNoGoContent project={selectedProject ?? null} onConfirmLaunch={() => {
+        setLaunchpadOpenPillar("brand_digital");
+        setActiveTab("launchpad");
+      }} />,
       strengthTags: ["Market", "Problem", "Learning", "Finance"],
     },
   ];
@@ -6773,9 +10227,9 @@ export default function Page() {
             </div>
 
             {/* Tabs + inline accordion content */}
-            <div className="px-4 lg:px-6 pt-4 pb-24 space-y-3">
+            <div className="px-4 lg:px-6 pt-2 pb-24 space-y-2">
               {/* Tab strip */}
-              <div className="flex w-full rounded-[22px] overflow-hidden shadow-sm border border-gray-100">
+              <div className="flex overflow-x-auto no-scrollbar rounded-[22px] shadow-sm border border-gray-100 w-full">
                 {TABS.map((tab, i) => {
                   const isActive = activeTab === tab.id as Tab | null;
                   return (
@@ -6783,7 +10237,7 @@ export default function Page() {
                       key={tab.id}
                       onClick={() => setActiveTab(activeTab === tab.id ? null : tab.id)}
                       className={cn(
-                        "relative flex flex-1 items-center justify-center gap-2 px-2 py-[13px] text-[13px] font-semibold transition-all duration-300",
+                        "relative flex flex-1 items-center justify-center gap-2 px-2 py-3 text-[13px] font-semibold transition-all duration-300",
                         i > 0 && "border-l border-white/20",
                         isActive ? "text-white" : "text-[#9A9A9A] hover:text-[#62646A]"
                       )}
@@ -6814,9 +10268,12 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} />
+                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} onConfirmLaunch={() => { setLaunchpadOpenPillar("brand_digital"); setActiveTab("launchpad"); }} />
                         : activeTab === "launchpad"
-                        ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null} onNameChosen={(name) => {
+                        ? <LaunchPadContent key={`lp-${hydratedTick}-${launchpadOpenPillar ?? "none"}`} project={selectedProject ?? null}
+                            autoOpenPillarId={launchpadOpenPillar}
+                            onAutoOpenConsumed={() => setLaunchpadOpenPillar(undefined)}
+                            onNameChosen={(name) => {
                             const key = selectedProject?.title ?? "";
                             if (!key) return;
                             const updated = { ...customNames, [key]: name };
@@ -6826,7 +10283,7 @@ export default function Page() {
                         : activeTab === "growth"
                         ? <GrowthContent key={`gr-${hydratedTick}`} project={selectedProject ?? null} />
                         : activeTab === "agents"
-                        ? <AgentsContent />
+                        ? <AgentsContent project={selectedProject ?? null} />
                         : isDirectSync
                         ? <ConnectContent />
                         : currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)}

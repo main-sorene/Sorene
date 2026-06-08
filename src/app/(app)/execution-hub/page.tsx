@@ -8730,12 +8730,22 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
               </div>
             )}
             {!scanningHistory && dna && (
-              <div className="space-y-1.5">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-semibold text-[#151515] uppercase tracking-wide">Content DNA · {dna.postCount} posts analysed</p>
                   <p className="text-[10px] text-[#9A9A9A]">Best times: {bestTimes.join(" & ")}</p>
                 </div>
-                <p className="text-[12px] text-[#62646A] leading-relaxed">{dna.summary}</p>
+                <div className="space-y-2.5">
+                  {dna.summary.split(/\n\n+/).map((para, i) => (
+                    <p key={i} className="text-[12px] text-[#62646A] leading-relaxed">
+                      {para.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+                        part.startsWith("**") && part.endsWith("**")
+                          ? <strong key={j} className="font-semibold text-[#151515]">{part.slice(2, -2)}</strong>
+                          : part
+                      )}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
             {!scanningHistory && !dna && (

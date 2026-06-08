@@ -99,8 +99,8 @@ export async function GET(req: NextRequest) {
 
     const msg = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 400,
-      system: `You are Sorene, a sharp execution coach analysing a founder's Threads content performance. Be specific and direct. Plain text only, no markdown.`,
+      max_tokens: 700,
+      system: `You are Sorene, a sharp execution coach analysing a founder's Threads content performance. Be specific, direct, and actionable. Use **bold** to highlight key phrases and numbers. Structure your response in exactly 3 short paragraphs separated by blank lines.`,
       messages: [{
         role: "user",
         content: `Analyse these ${posts.length} Threads posts and their engagement metrics. Find the patterns that drive performance for this specific account.
@@ -108,7 +108,12 @@ export async function GET(req: NextRequest) {
 Posts (text + engagement):
 ${postsForAnalysis.map((p, i) => `${i + 1}. "${p.text}" | views:${p.views} likes:${p.likes} replies:${p.replies} reposts:${p.reposts}`).join("\n")}
 
-Write 3-4 sentences covering: (1) what type of content gets the most engagement, (2) what tone/format works best, (3) one specific thing to do more of. Be concrete — reference actual patterns from the posts above.`,
+Write exactly 3 paragraphs:
+1. **What's working** — which post types, formats, or topics get the most engagement (cite post numbers and real metrics).
+2. **What's not working** — patterns that underperform and why.
+3. **What to do next** — 2-3 specific, actionable things to do in the next week based on what the data shows. Start this paragraph with "**Next:**".
+
+Use **bold** on key insights, numbers, and action items. Be concrete — reference actual patterns.`,
       }],
     });
 

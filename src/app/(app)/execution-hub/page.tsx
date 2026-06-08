@@ -8740,9 +8740,13 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                     {hasCta && ctaLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">link in comment</span>}
                   </div>
                   {draft.frozen ? (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <Lock size={11} className="text-[#9A9A9A]" />
                       <span className="text-[11px] text-[#9A9A9A] font-medium">Scheduled</span>
+                      <button onClick={() => setWeekDrafts((prev) => prev.map((d) => d.id === draft.id ? { ...d, frozen: false, editing: true } : d))}
+                        className="text-[11px] text-[#9A9A9A] hover:text-[#151515] transition-colors font-medium underline underline-offset-2">
+                        Edit
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3 shrink-0">
@@ -8758,9 +8762,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                   )}
                 </div>
 
-                {/* Inline slot editor — only when not frozen */}
                 <AnimatePresence initial={false}>
-                  {isEditingSlot && !draft.frozen && (
+                  {isEditingSlot && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                       transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
                       className="overflow-hidden border-b border-[#ECEDEE]">
@@ -8782,8 +8785,8 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
                   )}
                 </AnimatePresence>
 
-                <div className={cn("p-4 space-y-3", draft.frozen && "opacity-50")}>
-                  {draft.editing && !draft.frozen ? (
+                <div className="p-4 space-y-3">
+                  {draft.editing ? (
                     <textarea value={displayText} onChange={(e) => updateDraft(draft.id, e.target.value + (hasCta ? "\n[ADD_LINK_IN_COMMENT]" : ""))}
                       rows={4} maxLength={500}
                       className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-[13px] text-[#151515] resize-none focus:outline-none focus:border-[#151515] transition-colors" />
@@ -8835,31 +8838,6 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         </div>
       )}
 
-      {/* Scheduled queue */}
-      {scheduledPosts.length > 0 && (
-        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-3 bg-[#FAFAFA] border-b border-[#ECEDEE]">
-            <p className="text-[12px] font-semibold text-[#151515]">Scheduled queue</p>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-200 text-[#62646A] font-semibold">{scheduledPosts.length}</span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {scheduledPosts.map((post) => (
-              <div key={post.id} className="flex items-start gap-3 px-5 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] text-[#151515] leading-relaxed line-clamp-2">{post.text}</p>
-                  <p className="text-[11px] text-[#9A9A9A] mt-1">
-                    {new Date(post.scheduledAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                <button onClick={() => cancelScheduled(post.id)} disabled={cancellingId === post.id}
-                  className="text-[11px] text-[#9A9A9A] hover:text-[#DF2E16] transition-colors shrink-0 font-medium">
-                  {cancellingId === post.id ? <Loader2 size={11} className="animate-spin" /> : "Cancel"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

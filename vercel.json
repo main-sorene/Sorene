@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/threads-scheduled",
-      "schedule": "0 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

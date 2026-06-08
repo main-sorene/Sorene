@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getAdminFirestore } from "@/lib/firebaseAdmin";
+import type * as FirebaseFirestore from "@google-cloud/firestore";
 
 const APP_SECRET = process.env.THREADS_APP_SECRET ?? "";
 
@@ -80,14 +81,26 @@ export async function GET(req: NextRequest) {
   let failed = 0;
 
   try {
-    const usersSnap = await db.collection("users")
-      .where("threadsAccount.accessToken", "!=", null)
+    // Query all pending scheduled posts across all users using a collection group query
+    const duePostsSnap = await db.collectionGroup("threadsScheduled")
+      .where("status", "==", "pending")
+      .where("scheduledAt", "<=", now)
       .get();
 
-    await Promise.all(usersSnap.docs.map(async (userDoc) => {
-      const account = userDoc.data().threadsAccount as {
+    // Group by user (parent doc)
+    const byUser = new Map<string, { userRef: FirebaseFirestore.DocumentReference; posts: FirebaseFirestore.QueryDocumentSnapshot[] }>();
+    for (const postDoc of duePostsSnap.docs) {
+      const userRef = postDoc.ref.parent.parent!;
+      if (!byUser.has(userRef.id)) byUser.set(userRef.id, { userRef, posts: [] });
+      byUser.get(userRef.id)!.posts.push(postDoc);
+    }
+
+    await Promise.all([...byUser.values()].map(async ({ userRef, posts }) => {
+      // Load account from correct subcollection path
+      const accountSnap = await userRef.collection("integrations").doc("threads").get();
+      const account = accountSnap.data() as {
         accessToken: string;
-        userId: string;
+        threadsUserId: string;
         connectedAt?: number;
       } | undefined;
       if (!account?.accessToken) return;
@@ -95,38 +108,27 @@ export async function GET(req: NextRequest) {
       // Refresh token if nearing expiry
       const freshToken = await maybeRefreshToken(account.accessToken, account.connectedAt ?? 0);
       if (freshToken !== account.accessToken) {
-        await userDoc.ref.set({ threadsAccount: { ...account, accessToken: freshToken, connectedAt: Date.now() } }, { merge: true });
+        await accountSnap.ref.set({ accessToken: freshToken, connectedAt: Date.now() }, { merge: true });
       }
 
-      try {
-        const dueSnap = await userDoc.ref
-          .collection("threadsScheduled")
-          .where("status", "==", "pending")
-          .where("scheduledAt", "<=", now)
-          .get();
-
-        for (const postDoc of dueSnap.docs) {
-          const post = postDoc.data() as { text: string; id: string; ctaLink?: string };
-          try {
-            const postId = await publishPost(freshToken, account.userId, post.text);
-            await postDoc.ref.update({ status: "published", publishedAt: now, postId });
-            await userDoc.ref.collection("threadsPosts").doc(postId).set({
-              id: postId, text: post.text, postedAt: now,
-            });
-            // Post CTA link as first comment if present
-            if (post.ctaLink) {
-              await postReply(freshToken, account.userId, postId, post.ctaLink);
-            }
-            processed++;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[threads-cron] failed user=${userDoc.id} post=${post.id}:`, msg);
-            await postDoc.ref.update({ status: "failed", failReason: msg });
-            failed++;
+      for (const postDoc of posts) {
+        const post = postDoc.data() as { text: string; id: string; ctaLink?: string };
+        try {
+          const postId = await publishPost(freshToken, account.threadsUserId, post.text);
+          await postDoc.ref.update({ status: "published", publishedAt: now, postId });
+          await userRef.collection("threadsPosts").doc(postId).set({
+            id: postId, text: post.text, postedAt: now,
+          });
+          if (post.ctaLink) {
+            await postReply(freshToken, account.threadsUserId, postId, post.ctaLink);
           }
+          processed++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[threads-cron] failed user=${userRef.id} post=${post.id}:`, msg);
+          await postDoc.ref.update({ status: "failed", failReason: msg });
+          failed++;
         }
-      } catch (err) {
-        console.error(`[threads-cron] error user=${userDoc.id}:`, err);
       }
     }));
 

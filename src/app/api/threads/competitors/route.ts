@@ -21,8 +21,17 @@ export async function GET(req: NextRequest) {
   const projectTitle = req.nextUrl.searchParams.get("project");
   const key = projectTitle ? `threadsCompetitors__${slug(projectTitle)}` : "threadsCompetitors";
 
-  const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
-  const competitors = (snap.data()?.[key] ?? []) as Competitor[];
+  const db = getAdminFirestore();
+  const snap = await db.collection("users").doc(user.uid).get();
+  const userData = snap.data();
+  let competitors = (userData?.[key] ?? []) as Competitor[];
+
+  // One-time migration: if no namespaced competitors but old flat-key data exists, migrate it
+  if (competitors.length === 0 && projectTitle && userData?.threadsCompetitors?.length && !userData?.threadsCompetitorsMigrated) {
+    competitors = userData.threadsCompetitors as Competitor[];
+    await db.collection("users").doc(user.uid).set({ [key]: competitors, threadsCompetitorsMigrated: true }, { merge: true });
+  }
+
   return Response.json({ competitors });
 }
 

@@ -27,9 +27,17 @@ export async function GET(req: NextRequest) {
   const projectTitle = req.nextUrl.searchParams.get("project");
   const batchKey = projectTitle ? `threadsDraftBatch__${slug(projectTitle)}` : "threadsDraftBatch";
 
-  const snap = await getAdminFirestore().collection("users").doc(user.uid).get();
+  const db = getAdminFirestore();
+  const snap = await db.collection("users").doc(user.uid).get();
   const userData = snap.data();
-  const batch = userData?.[batchKey] as DraftBatch | undefined;
+  let batch = userData?.[batchKey] as DraftBatch | undefined;
+
+  // One-time migration: if no namespaced data but old flat-key data exists, migrate it to this project
+  if (!batch && projectTitle && userData?.threadsDraftBatch && !userData?.threadsDataMigrated) {
+    batch = userData.threadsDraftBatch as DraftBatch;
+    await db.collection("users").doc(user.uid).set({ [batchKey]: batch, threadsDataMigrated: true }, { merge: true });
+  }
+
   console.log("[drafts GET] uid:", user.uid, "email:", user.email, "key:", batchKey, "drafts:", batch?.drafts?.length ?? 0);
   return Response.json({ batch: batch ?? null });
 }

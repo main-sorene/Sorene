@@ -12,17 +12,21 @@ export async function GET(req: NextRequest) {
 
   // Determine which integration doc to read: namespaced if project provided, fallback to legacy
   const docId = projectTitle ? `threads__${slug(projectTitle)}` : "threads";
-  const [snap, fallbackSnap, userSnap] = await Promise.all([
+  const [snap, userSnap] = await Promise.all([
     db.doc(`users/${user.uid}/integrations/${docId}`).get(),
-    projectTitle ? db.doc(`users/${user.uid}/integrations/threads`).get() : Promise.resolve(null),
     db.doc(`users/${user.uid}`).get(),
   ]);
 
-  // Use namespaced doc if it has data, otherwise fall back to legacy doc (backwards compat)
-  const account = (snap.data() ?? (fallbackSnap?.data())) ?? null;
+  const account = snap.data() ?? null;
   const userData = userSnap.data();
   const dnaKey = projectTitle ? `threadsContentDNA__${slug(projectTitle)}` : "threadsContentDNA";
-  const dna = userData?.[dnaKey] ?? null;
+  let dna = userData?.[dnaKey] ?? null;
+
+  // One-time migration: if no namespaced DNA but old flat-key DNA exists, migrate it
+  if (!dna && projectTitle && userData?.threadsContentDNA && !userData?.threadsDNAMigrated) {
+    dna = userData.threadsContentDNA;
+    await db.doc(`users/${user.uid}`).set({ [dnaKey]: dna, threadsDNAMigrated: true }, { merge: true });
+  }
 
   if (!account?.accessToken) return Response.json({ connected: false, dna });
   return Response.json({ connected: true, username: account.username, connectedAt: account.connectedAt, dna });

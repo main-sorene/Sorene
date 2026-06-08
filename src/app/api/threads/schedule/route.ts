@@ -18,17 +18,31 @@ export async function GET(req: NextRequest) {
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const projectTitle = req.nextUrl.searchParams.get("project");
+  const db = getAdminFirestore();
+  const col = db.collection("users").doc(user.uid).collection("threadsScheduled");
 
-  let query: FirebaseFirestore.Query = getAdminFirestore()
-    .collection("users").doc(user.uid)
-    .collection("threadsScheduled");
+  // One-time migration: stamp existing posts without projectTitle if user hasn't migrated yet
+  if (projectTitle) {
+    const userSnap = await db.doc(`users/${user.uid}`).get();
+    if (!userSnap.data()?.threadsScheduleMigrated) {
+      // Catch docs where projectTitle field doesn't exist — fetch all and filter
+      const allDocs = await col.get();
+      const needsTag = allDocs.docs.filter((d) => !d.data().projectTitle);
+      if (needsTag.length > 0) {
+        const batch = db.batch();
+        needsTag.forEach((d) => batch.update(d.ref, { projectTitle }));
+        await batch.commit();
+      }
+      await db.doc(`users/${user.uid}`).set({ threadsScheduleMigrated: true }, { merge: true });
+    }
+  }
 
+  let query: FirebaseFirestore.Query = col;
   if (projectTitle) {
     query = query.where("projectTitle", "==", projectTitle);
   }
 
   const snap = await query.get();
-
   const all = snap.docs.map((d) => d.data() as ScheduledPost);
   const posts = all
     .filter((p) => p.status === "pending")

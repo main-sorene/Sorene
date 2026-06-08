@@ -11,12 +11,7 @@ export async function GET(req: NextRequest) {
   const db = getAdminFirestore();
   const docId = projectTitle ? `reddit__${slug(projectTitle)}` : "reddit";
   const snap = await db.doc(`users/${user.uid}/integrations/${docId}`).get();
-  let data = snap.data();
-  // Fall back to legacy doc for backwards compat
-  if (!data?.accessToken && projectTitle) {
-    const legacy = await db.doc(`users/${user.uid}/integrations/reddit`).get();
-    data = legacy.data();
-  }
+  const data = snap.data();
   if (!data?.accessToken) return Response.json({ connected: false });
   return Response.json({ connected: true, username: data.username, karma: data.karma, connectedAt: data.connectedAt });
 }

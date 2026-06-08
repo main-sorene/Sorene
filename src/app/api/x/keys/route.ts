@@ -21,12 +21,7 @@ export async function GET(req: NextRequest) {
   const docId = projectTitle ? `x__${slug(projectTitle)}` : "x";
   const db = getAdminFirestore();
   const snap = await db.doc(`users/${user.uid}/integrations/${docId}`).get();
-  let keys = snap.data() as XKeys | undefined;
-  // Fall back to legacy doc for backwards compat
-  if (!keys?.apiKey && projectTitle) {
-    const legacy = await db.doc(`users/${user.uid}/integrations/x`).get();
-    keys = legacy.data() as XKeys | undefined;
-  }
+  const keys = snap.data() as XKeys | undefined;
   if (!keys?.apiKey) return Response.json({ connected: false });
   return Response.json({ connected: true, username: keys.username, connectedAt: keys.connectedAt });
 }

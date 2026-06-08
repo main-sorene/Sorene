@@ -8333,7 +8333,28 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
       const res = await authFetch("/api/threads/auth");
       if (res.ok) {
         const data = await res.json() as { url?: string };
-        if (data.url) { window.location.href = data.url; return; }
+        if (data.url) {
+          window.open(data.url, "_blank");
+          // Poll for connection after the OAuth popup completes
+          const poll = setInterval(async () => {
+            try {
+              const { authFetch: af } = await import("@/lib/authFetch");
+              const r = await af("/api/threads/account");
+              if (r.ok) {
+                const d = await r.json() as { connected: boolean; username?: string };
+                if (d.connected) {
+                  clearInterval(poll);
+                  setAccountStatus("connected");
+                  setUsername(d.username ?? "");
+                  setConnecting(false);
+                }
+              }
+            } catch { /* ignore */ }
+          }, 3000);
+          // Stop polling after 5 minutes
+          setTimeout(() => { clearInterval(poll); setConnecting(false); }, 300000);
+          return;
+        }
       }
     } catch { /* ignore */ }
     setConnecting(false);
@@ -9342,7 +9363,7 @@ function ThreadsConnectCard() {
       const res = await authFetch("/api/threads/auth");
       if (!res.ok) throw new Error("Failed to get auth URL");
       const { url } = await res.json() as { url: string };
-      window.location.href = url;
+      window.open(url, "_blank");
     } catch { setStatus("idle"); }
   };
 

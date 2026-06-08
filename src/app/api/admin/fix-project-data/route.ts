@@ -81,3 +81,65 @@ export async function POST(req: NextRequest) {
 
   return Response.json({ ok: true, uid, actions });
 }
+
+// GET — inspect a user's social data state (no mutations)
+export async function GET(req: NextRequest) {
+  const secret = req.headers.get("x-admin-secret");
+  if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const email = req.nextUrl.searchParams.get("email");
+  if (!email) return Response.json({ error: "email required" }, { status: 400 });
+
+  const db = getAdminFirestore();
+
+  let uid: string | null = null;
+  const directSnap = await db.collection("users").doc(email).get();
+  if (directSnap.exists) { uid = email; }
+  else {
+    const q = await db.collection("users").where("email", "==", email).limit(1).get();
+    if (!q.empty) uid = q.docs[0].id;
+  }
+  if (!uid) {
+    try {
+      const { getAuth } = await import("firebase-admin/auth");
+      uid = (await getAuth().getUserByEmail(email)).uid;
+    } catch { /* ignore */ }
+  }
+  if (!uid) return Response.json({ error: "User not found" }, { status: 404 });
+
+  const userSnap = await db.collection("users").doc(uid).get();
+  const userData = userSnap.data() ?? {};
+
+  // Collect relevant keys
+  const socialKeys: Record<string, boolean> = {};
+  for (const key of Object.keys(userData)) {
+    if (key.startsWith("threads") || key.startsWith("reddit") || key === "legacyProjectTitle") {
+      socialKeys[key] = true;
+    }
+  }
+
+  // List integration docs
+  const integSnaps = await db.collection("users").doc(uid).collection("integrations").get();
+  const integDocs = integSnaps.docs.map((d) => ({
+    id: d.id,
+    hasAccessToken: !!d.data().accessToken,
+    hasThreadsUserId: !!d.data().threadsUserId,
+    username: d.data().username,
+  }));
+
+  // Count scheduled posts by projectTitle
+  const scheduledSnap = await db.collection("users").doc(uid).collection("threadsScheduled").get();
+  const scheduledByProject: Record<string, number> = {};
+  for (const d of scheduledSnap.docs) {
+    const pt = d.data().projectTitle ?? "(untagged)";
+    scheduledByProject[pt] = (scheduledByProject[pt] ?? 0) + 1;
+  }
+
+  return Response.json({
+    uid,
+    legacyProjectTitle: userData.legacyProjectTitle ?? null,
+    userDocKeys: socialKeys,
+    integrationDocs: integDocs,
+    scheduledPostsByProject: scheduledByProject,
+  });
+}

@@ -1086,7 +1086,7 @@ function ValidationProgress({ project, onCreateProject, onConfirmLaunch }: { pro
   }
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-5 space-y-4">
       {/* Progress Bar */}
       <div className="relative">
         {/* Connector line */}
@@ -5894,7 +5894,7 @@ function LaunchPadContent({ project, onNameChosen, autoOpenPillarId, onAutoOpenC
   }, [autoOpenPillarId]);
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="p-5 flex flex-col gap-4">
       {LAUNCH_PILLARS.map((pillar) => (
         <PillarCard key={pillar.id} pillar={pillar} project={project} onNameChosen={onNameChosen}
           autoOpen={autoOpenPillarId === pillar.id} />
@@ -9103,7 +9103,7 @@ function AgentDetail({ agent, project }: { agent: AgentDef; project: DirectionCa
 
 function AgentsContent({ project }: { project: DirectionCardData | null }) {
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-5 space-y-6">
       {AGENT_TIERS.map((tier) => (
         <section key={tier.tier}>
           <div className="flex items-baseline gap-3 mb-1">
@@ -9639,7 +9639,7 @@ function ThreadsConnectCard() {
 
 function ConnectContent() {
   return (
-    <div className="p-3 sm:p-6 space-y-4">
+    <div className="p-5 space-y-4">
       <MessengerConnectCard />
       <CommunityCard />
     </div>

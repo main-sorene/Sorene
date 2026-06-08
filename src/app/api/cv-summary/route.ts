@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { assertTextCompletion } from "@/lib/aiSafety";
+import { assertTextCompletion, maskPii } from "@/lib/aiSafety";
 
 export const maxDuration = 60;
 
@@ -78,7 +78,8 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    const text = assertTextCompletion(message);
+    // Mask any PII the model may have echoed back from the CV before storing/returning
+    const text = maskPii(assertTextCompletion(message));
     return Response.json({ summary: text });
   } catch (error) {
     console.error("[cv-summary] error:", error);

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
-import { maskPii, maskAnswers } from "@/lib/aiSafety";
+import { maskPii, maskAnswers, sanitizeName } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
       cvSummary?: string;
     };
 
-    const { eligibility, firstName, rawAnswers, cvSummary } = body;
+    const { eligibility, firstName: rawFirstName, rawAnswers, cvSummary } = body;
+    const firstName = sanitizeName(rawFirstName);
 
     const safeAnswers = maskAnswers(rawAnswers);
     const safeCvSummary = cvSummary ? maskPii(cvSummary) : undefined;
@@ -134,9 +135,14 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         for await (const chunk of stream) {
-          if (chunk.type === "message_delta" && chunk.delta.stop_reason === "tool_use") {
-            controller.error(new Error("Model returned tool_use stop — no tools registered"));
-            return;
+          if (chunk.type === "message_delta") {
+            if (chunk.delta.stop_reason === "tool_use") {
+              controller.error(new Error("Model returned tool_use stop — no tools registered"));
+              return;
+            }
+            if (chunk.delta.stop_reason === "max_tokens") {
+              console.warn("[direction] Response truncated at max_tokens — output may be incomplete");
+            }
           }
           if (
             chunk.type === "content_block_delta" &&

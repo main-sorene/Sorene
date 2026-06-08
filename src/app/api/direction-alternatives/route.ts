@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
-import { assertTextCompletion } from "@/lib/aiSafety";
+import { assertTextCompletion, sanitizeName } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -17,11 +17,13 @@ export async function POST(req: NextRequest) {
       return Response.json({ summaries: [] });
     }
 
+    const safeName = sanitizeName(firstName);
+
     const modelList = models
       .map((m, i) => `${i + 1}. ${m.model} (${m.compatibility}% compatibility)`)
       .join("\n");
 
-    const prompt = `You are Sorene — a direct, warm entrepreneurship coach. Generate brief summaries for ${models.length} alternative business directions for ${firstName}.
+    const prompt = `You are Sorene — a direct, warm entrepreneurship coach. Generate brief summaries for ${models.length} alternative business directions for ${safeName}.
 
 Models (in order, do not reorder):
 ${modelList}

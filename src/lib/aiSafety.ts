@@ -25,6 +25,15 @@ export function maskPii(input: string): string {
 }
 
 /**
+ * Strips prompt-injection characters from a display name.
+ * Allows letters, spaces, hyphens, apostrophes — nothing that could
+ * escape a prompt context or inject instructions.
+ */
+export function sanitizeName(name: string): string {
+  return name.replace(/[^a-zA-Z\s'\-]/g, "").trim().slice(0, 64) || "there";
+}
+
+/**
  * Masks every value in a key→value answer map.
  */
 export function maskAnswers(

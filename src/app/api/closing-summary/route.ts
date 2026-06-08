@@ -1,17 +1,18 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { maskAnswers, assertTextCompletion } from "@/lib/aiSafety";
+import { maskAnswers, assertTextCompletion, sanitizeName } from "@/lib/aiSafety";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
-    const { firstName, answers: rawAnswers, hasCv } = (await req.json()) as {
+    const { firstName: rawFirstName, answers: rawAnswers, hasCv } = (await req.json()) as {
       firstName: string;
       answers: Record<string, string>;
       hasCv: boolean;
     };
 
+    const firstName = sanitizeName(rawFirstName);
     const answers = maskAnswers(rawAnswers);
     const answerBlock = Object.entries(answers)
       .map(([k, v]) => `${k}: ${v}`)

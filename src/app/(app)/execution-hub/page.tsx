@@ -529,7 +529,8 @@ function GoNoGoContent({ project, onConfirmLaunch }: { project: DirectionCardDat
 
   // AI readiness analysis
   type AStage = "idle" | "loading" | "done";
-  const projectTitle  = project?.title ?? "";
+  const projectTitle = project?.title ?? "";
+
   const analysisKey   = projectTitle ? `go-nogo-analysis-${projectTitle}` : null;
   const [analysisStage, setAnalysisStage] = useState<AStage>("idle");
   const [analysis, setAnalysis] = useState("");
@@ -791,9 +792,9 @@ Return a JSON object with exactly these keys:
       }
       localStorage.setItem(`launch-profile-confirmed-${projectTitle}`, JSON.stringify(profile));
       setConfirmed(true);
-      setTimeout(() => onConfirmLaunch?.(), 800);
     } catch { /* ignore */ }
     setConfirming(false);
+    onConfirmLaunch?.();
   };
 
   return (
@@ -1032,7 +1033,7 @@ const VALIDATION_STAGES = [
   { id: 5, label: "Launch Readiness", shortLabel: "LR" },
 ];
 
-function ValidationProgress({ project, onCreateProject }: { project: DirectionCardData | null; onCreateProject: () => void }) {
+function ValidationProgress({ project, onCreateProject, onConfirmLaunch }: { project: DirectionCardData | null; onCreateProject: () => void; onConfirmLaunch?: () => void }) {
   const stageKey = `validation-stage-${project?.title ?? ""}`;
   const [activeStage, setActiveStageRaw] = useState<number>(() => {
     if (!project?.title) return 1;
@@ -1133,7 +1134,7 @@ function ValidationProgress({ project, onCreateProject }: { project: DirectionCa
           {activeStage <= 4 ? (
             <VibeStageContent step={VIBE_STEPS[activeStage - 1]} project={project} onAdvance={() => setActiveStage((s) => Math.min(s + 1, 5))} />
           ) : (
-            <GoNoGoContent project={project} />
+            <GoNoGoContent project={project} onConfirmLaunch={onConfirmLaunch} />
           )}
         </motion.div>
       </AnimatePresence>
@@ -8715,7 +8716,7 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} />
+                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} onConfirmLaunch={() => { setLaunchpadOpenPillar("brand_digital"); setActiveTab("launchpad"); }} />
                         : activeTab === "launchpad"
                         ? <LaunchPadContent key={`lp-${hydratedTick}`} project={selectedProject ?? null}
                             autoOpenPillarId={launchpadOpenPillar}

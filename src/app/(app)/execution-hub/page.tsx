@@ -8530,7 +8530,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       const res = await authFetch("/api/execution-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, system }),
+        body: JSON.stringify({ prompt, system, maxTokens: Math.max(1500, count * 200) }),
       });
       if (res.ok) {
         const data = await res.json() as { reply?: string };

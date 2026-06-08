@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
     const creditCheck = await checkCredits(userKey);
     if (!creditCheck.ok) return NextResponse.json({ error: "Credit limit reached" }, { status: 402 });
 
-    const { prompt, system, history } = (await req.json()) as {
+    const { prompt, system, history, maxTokens } = (await req.json()) as {
       prompt: string;
       system?: string;
       history?: { role: "user" | "assistant"; content: string }[];
+      maxTokens?: number;
     };
     if (!prompt || !prompt.trim()) {
       return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const msg = await getClient().messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1500,
+      max_tokens: Math.min(maxTokens ?? 1500, 8000),
       system: system || "You are Sorene, a sharp, practical co-founder. Follow the user's instructions exactly. When asked for JSON, return only valid JSON with no markdown fences or preamble.",
       messages: [...prior, { role: "user", content: prompt }],
     });

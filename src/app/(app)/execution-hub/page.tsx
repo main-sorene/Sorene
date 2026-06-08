@@ -5880,101 +5880,729 @@ function LaunchPadContent({ project, onNameChosen, autoOpenPillarId, onAutoOpenC
 }
 
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// GrowthItemCard — expandable card with AI generation + inline editing + save
+// ─────────────────────────────────────────────
+
+type GrowthStage = "idle" | "loading" | "editing" | "saved";
+
+// Helpers to read localStorage context
+function readGrowthContext(title: string) {
+  const get = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
+  let targetCustomer = "";
+  try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
+  return {
+    painkiller: get(`painkiller-verdict-${title}`),
+    offer: get(`mvo-defined-${title}`),
+    patternSummary: get(`pattern-summary-${title}`),
+    businessName: get(`business-name-${title}`),
+    tagline: get(`brand-tagline-${title}`),
+    benefit: get(`brand-benefit-${title}`),
+    offerings: get(`brand-offerings-${title}`),
+    pricing: get(`brand-pricing-${title}`),
+    targetCustomer,
+    revenueTarget: get(`finance-revenue_target-${title}`),
+    runway: get(`finance-runway-${title}`),
+    fundingPath: get(`finance-funding_path-${title}`),
+  };
+}
+
+function ctxLines(ctx: ReturnType<typeof readGrowthContext>, title: string) {
+  const lines: string[] = [`Project: "${title}"`];
+  if (ctx.businessName) lines.push(`Business name: "${ctx.businessName}"`);
+  if (ctx.targetCustomer) lines.push(`Target customer: "${ctx.targetCustomer}"`);
+  if (ctx.painkiller) lines.push(`Painkiller verdict: "${ctx.painkiller}"`);
+  if (ctx.offer) lines.push(`Offer: "${ctx.offer}"`);
+  if (ctx.pricing) lines.push(`Pricing: "${ctx.pricing}"`);
+  if (ctx.revenueTarget) lines.push(`Revenue target: "${ctx.revenueTarget}"`);
+  if (ctx.runway) lines.push(`Runway: "${ctx.runway}"`);
+  if (ctx.fundingPath) lines.push(`Funding path: "${ctx.fundingPath}"`);
+  if (ctx.patternSummary) lines.push(`Pattern summary: "${ctx.patternSummary.slice(0, 300)}"`);
+  return lines.join("\n");
+}
+
+const GROWTH_AI_SYSTEM = "You are Sorene, a startup coach. Return ONLY valid JSON — no markdown, no preamble.";
+
+// ── Business Plan ──────────────────────────────
+const BP_SECTIONS = [
+  { id: "executive_summary", label: "Executive Summary" },
+  { id: "problem_solution", label: "Problem & Solution" },
+  { id: "target_market", label: "Target Market" },
+  { id: "business_model", label: "Business Model" },
+  { id: "revenue_streams", label: "Revenue Streams" },
+  { id: "plan_90_day", label: "90-Day Plan" },
+] as const;
+
+function BusinessPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-business-plan-${title}`;
+  type Sections = Record<string, string>;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<Sections>({});
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a business plan with these sections. Return JSON: {"executive_summary":"...","problem_solution":"...","target_market":"...","business_model":"...","revenue_streams":"...","plan_90_day":"..."}`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Generating your business plan…</div>
+  );
+
+  if (stage === "saved") return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+        <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+      </div>
+      {BP_SECTIONS.map((s) => (
+        <div key={s.id} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{s.label}</p></div>
+          <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[s.id] ?? ""}</p>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {BP_SECTIONS.map((s) => (
+        <div key={s.id} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{s.label}</p></div>
+          <textarea
+            value={data[s.id] ?? ""}
+            onChange={(e) => setData((prev) => ({ ...prev, [s.id]: e.target.value }))}
+            rows={4}
+            className="w-full px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed bg-white focus:outline-none resize-y"
+          />
+        </div>
+      ))}
+      <button onClick={save} className="px-4 py-2 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
+    </div>
+  );
+}
+
+// ── Marketing Plan ─────────────────────────────
+type MktChannel = { channel: string; tactics: string[]; priority: "high" | "medium" | "low" };
+
+function MarketingPlanCard({ title }: { title: string }) {
+  const storageKey = `growth-marketing-plan-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<MktChannel[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate a marketing plan as a JSON array of channels: [{"channel":"...","tactics":["..."],"priority":"high"|"medium"|"low"}]. Return 4-6 channels.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const priorityColor = (p: string) => p === "high" ? "bg-red-100 text-red-700" : p === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-[#62646A]";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your marketing plan…</div>
+  );
+
+  const readOnly = stage === "saved";
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      {data.map((ch, ci) => (
+        <div key={ci} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center justify-between">
+            {readOnly
+              ? <p className="text-[12px] font-semibold text-[#151515]">{ch.channel}</p>
+              : <input value={ch.channel} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, channel: e.target.value } : c))} className="text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none flex-1 mr-2" />
+            }
+            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", priorityColor(ch.priority))}>{ch.priority}</span>
+            {!readOnly && <button onClick={() => setData((prev) => prev.filter((_, i) => i !== ci))} className="ml-2 text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px]">✕</button>}
+          </div>
+          <div className="px-3 py-2.5 space-y-1.5">
+            {ch.tactics.map((t, ti) => (
+              <div key={ti} className="flex items-start gap-2">
+                <span className="text-[#32C382] text-[10px] mt-1">▸</span>
+                {readOnly
+                  ? <p className="text-[12px] text-[#151515] leading-relaxed">{t}</p>
+                  : <input value={t} onChange={(e) => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.map((tt, j) => j === ti ? e.target.value : tt) } : c))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                }
+                {!readOnly && <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: c.tactics.filter((_, j) => j !== ti) } : c))} className="text-[#9A9A9A] hover:text-red-500 transition-colors text-[10px] shrink-0">✕</button>}
+              </div>
+            ))}
+            {!readOnly && (
+              <button onClick={() => setData((prev) => prev.map((c, i) => i === ci ? { ...c, tactics: [...c.tactics, ""] } : c))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add tactic</button>
+            )}
+          </div>
+        </div>
+      ))}
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setData((prev) => [...prev, { channel: "New channel", tactics: [""], priority: "medium" }])} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515]">+ Add channel</button>
+          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── GTM Strategy ───────────────────────────────
+type GtmMilestone = { week: string; milestone: string; actions: string[] };
+
+function GtmStrategyCard({ title }: { title: string }) {
+  const storageKey = `growth-gtm-strategy-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<GtmMilestone[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a go-to-market strategy as a JSON array: [{"week":"Week 1-2","milestone":"...","actions":["..."]}]. Return 5-6 milestone blocks covering the first 12 weeks.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Mapping your go-to-market timeline…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      <div className="relative pl-4 border-l-2 border-[#32C382]/30 space-y-4">
+        {data.map((m, mi) => (
+          <div key={mi} className="relative">
+            <div className="absolute -left-[21px] w-4 h-4 rounded-full bg-[#32C382] border-2 border-white flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-white" /></div>
+            <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+              <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-[#32C382] shrink-0">{m.week}</span>
+                {readOnly
+                  ? <p className="text-[12px] font-semibold text-[#151515]">{m.milestone}</p>
+                  : <input value={m.milestone} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, milestone: e.target.value } : x))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
+                }
+              </div>
+              <div className="px-3 py-2.5 space-y-1.5">
+                {m.actions.map((a, ai) => (
+                  <div key={ai} className="flex items-start gap-2">
+                    <span className="text-[#32C382] text-[10px] mt-1 shrink-0">▸</span>
+                    {readOnly
+                      ? <p className="text-[12px] text-[#151515] leading-relaxed">{a}</p>
+                      : <input value={a} onChange={(e) => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.map((aa, j) => j === ai ? e.target.value : aa) } : x))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                    }
+                    {!readOnly && <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: x.actions.filter((_, j) => j !== ai) } : x))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+                  </div>
+                ))}
+                {!readOnly && <button onClick={() => setData((prev) => prev.map((x, i) => i === mi ? { ...x, actions: [...x.actions, ""] } : x))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add action</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Sales Playbook ─────────────────────────────
+type SalesPlaybook = { opener: string; pitch: string; objections: { objection: string; response: string }[] };
+
+function SalesPlaybookCard({ title }: { title: string }) {
+  const storageKey = `growth-sales-playbook-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<SalesPlaybook>({ opener: "", pitch: "", objections: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a sales playbook. Return JSON: {"opener":"...","pitch":"...","objections":[{"objection":"...","response":"..."}]}. Include 3-5 common objections.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Writing your sales playbook…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      {[{ key: "opener", label: "Opener" }, { key: "pitch", label: "Pitch" }].map(({ key, label }) => (
+        <div key={key} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE]"><p className="text-[11px] font-semibold text-[#151515]">{label}</p></div>
+          {readOnly
+            ? <p className="px-3 py-2.5 text-[12px] text-[#151515] leading-relaxed whitespace-pre-wrap">{data[key as "opener" | "pitch"]}</p>
+            : <textarea value={data[key as "opener" | "pitch"]} onChange={(e) => setData((prev) => ({ ...prev, [key]: e.target.value }))} rows={3} className="w-full px-3 py-2.5 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+          }
+        </div>
+      ))}
+      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide mt-2">Objection Handler</p>
+      {data.objections.map((obj, oi) => (
+        <div key={oi} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+          <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+            <span className="text-[10px] font-semibold text-red-500 shrink-0">Objection</span>
+            {readOnly
+              ? <p className="text-[12px] text-[#151515] flex-1">{obj.objection}</p>
+              : <input value={obj.objection} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, objection: e.target.value } : o) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+            }
+            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, objections: prev.objections.filter((_, i) => i !== oi) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+          </div>
+          <div className="px-3 py-2.5 flex items-start gap-2">
+            <span className="text-[10px] font-semibold text-[#32C382] shrink-0 mt-0.5">Response</span>
+            {readOnly
+              ? <p className="text-[12px] text-[#151515] leading-relaxed">{obj.response}</p>
+              : <textarea value={obj.response} onChange={(e) => setData((prev) => ({ ...prev, objections: prev.objections.map((o, i) => i === oi ? { ...o, response: e.target.value } : o) }))} rows={2} className="flex-1 text-[12px] text-[#151515] bg-white focus:outline-none resize-y" />
+            }
+          </div>
+        </div>
+      ))}
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setData((prev) => ({ ...prev, objections: [...prev.objections, { objection: "", response: "" }] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 hover:border-[#151515] transition-colors">+ Add objection</button>
+          <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Financial Model ────────────────────────────
+const FM_DEFAULT_ROWS = [
+  { label: "Revenue", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Costs", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Gross Profit", m1: "", m3: "", m6: "", m12: "" },
+  { label: "Runway (months)", m1: "", m3: "", m6: "", m12: "" },
+];
+
+type FmRow = { label: string; m1: string; m3: string; m6: string; m12: string };
+
+function FinancialModelCard({ title }: { title: string }) {
+  const storageKey = `growth-financial-model-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [rows, setRows] = useState<FmRow[]>(FM_DEFAULT_ROWS);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { const parsed = JSON.parse(raw); setRows(parsed.rows ?? FM_DEFAULT_ROWS); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nGenerate realistic financial projections. Return JSON: {"rows":[{"label":"Revenue","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Costs","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Gross Profit","m1":"$X","m3":"$X","m6":"$X","m12":"$X"},{"label":"Runway (months)","m1":"X","m3":"X","m6":"X","m12":"X"}]}. Use realistic figures based on context.`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { const parsed = JSON.parse(match[0]); setRows(parsed.rows ?? FM_DEFAULT_ROWS); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("editing"); // fall back to blank editing
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ rows })); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+  const colHdr = ["", "Month 1", "Month 3", "Month 6", "Month 12"];
+  const colKeys: (keyof FmRow)[] = ["label", "m1", "m3", "m6", "m12"];
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your financial projections…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      <div className="overflow-x-auto rounded-xl border border-[#ECEDEE]">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-[#FAFAFA] border-b border-[#ECEDEE]">
+              {colHdr.map((h, i) => <th key={i} className="px-3 py-2 text-left font-semibold text-[#151515] whitespace-nowrap">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri} className="border-b border-[#ECEDEE] last:border-0">
+                {colKeys.map((col, ci) => (
+                  <td key={ci} className={cn("px-3 py-2", col === "label" ? "font-semibold text-[#151515] bg-[#FAFAFA] border-r border-[#ECEDEE]" : "text-[#151515]")}>
+                    {readOnly || col === "label"
+                      ? <span>{row[col]}</span>
+                      : <input value={row[col]} onChange={(e) => setRows((prev) => prev.map((r, i) => i === ri ? { ...r, [col]: e.target.value } : r))} className="w-full bg-transparent focus:outline-none min-w-[60px]" placeholder="$0" />
+                    }
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Growth Metrics ─────────────────────────────
+type GrowthMetrics = { northStar: string; supporting: string[] };
+
+function GrowthMetricsCard({ title }: { title: string }) {
+  const storageKey = `growth-metrics-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [data, setData] = useState<GrowthMetrics>({ northStar: "", supporting: [] });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setData(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nSuggest the most important growth metrics. Return JSON: {"northStar":"the single most important metric","supporting":["metric1","metric2","metric3","metric4","metric5"]}`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\{[\s\S]*\}/);
+        if (match) { setData(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Identifying your North Star metric…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      <div className="rounded-xl border-2 border-[#32C382] bg-[#F5FFD9] overflow-hidden">
+        <div className="px-3 py-2 border-b border-[#32C382]/30">
+          <p className="text-[10px] font-semibold text-[#32C382] uppercase tracking-wide">North Star Metric</p>
+        </div>
+        <div className="px-3 py-3">
+          {readOnly
+            ? <p className="text-[14px] font-semibold text-[#151515]">{data.northStar}</p>
+            : <input value={data.northStar} onChange={(e) => setData((prev) => ({ ...prev, northStar: e.target.value }))} className="w-full text-[14px] font-semibold text-[#151515] bg-transparent focus:outline-none" placeholder="e.g. Weekly active users" />
+          }
+        </div>
+      </div>
+      <p className="text-[11px] font-semibold text-[#62646A] uppercase tracking-wide">Supporting Metrics</p>
+      <div className="space-y-2">
+        {data.supporting.map((m, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-xl border border-[#ECEDEE] px-3 py-2">
+            <span className="w-5 h-5 rounded-full bg-gray-100 text-[10px] font-bold text-[#62646A] flex items-center justify-center shrink-0">{i + 1}</span>
+            {readOnly
+              ? <p className="text-[12px] text-[#151515] flex-1">{m}</p>
+              : <input value={m} onChange={(e) => setData((prev) => ({ ...prev, supporting: prev.supporting.map((s, j) => j === i ? e.target.value : s) }))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+            }
+            {!readOnly && <button onClick={() => setData((prev) => ({ ...prev, supporting: prev.supporting.filter((_, j) => j !== i) }))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+          </div>
+        ))}
+        {!readOnly && data.supporting.length < 5 && (
+          <button onClick={() => setData((prev) => ({ ...prev, supporting: [...prev.supporting, ""] }))} className="text-[11px] text-[#62646A] hover:text-[#151515] border border-dashed border-gray-300 rounded-xl px-3 py-1.5 w-full text-left hover:border-[#151515] transition-colors">+ Add supporting metric</button>
+        )}
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── Pitch Deck ─────────────────────────────────
+type PitchSlide = { slide: string; bullets: string[] };
+
+function PitchDeckCard({ title }: { title: string }) {
+  const storageKey = `growth-pitch-deck-${title}`;
+  const [stage, setStage] = useState<GrowthStage>("idle");
+  const [slides, setSlides] = useState<PitchSlide[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) { setSlides(JSON.parse(raw)); setStage("saved"); }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const generate = async () => {
+    setStage("loading");
+    const ctx = readGrowthContext(title);
+    const prompt = `${ctxLines(ctx, title)}\n\nCreate a pitch deck outline with ~10 slides. Return JSON array: [{"slide":"Problem","bullets":["...","..."]},{"slide":"Solution","bullets":["...","..."]},{"slide":"Market","bullets":["..."]},{"slide":"Product","bullets":["..."]},{"slide":"Traction","bullets":["..."]},{"slide":"Business Model","bullets":["..."]},{"slide":"Team","bullets":["..."]},{"slide":"Ask","bullets":["..."]}]`;
+    try {
+      const { authFetch } = await import("@/lib/authFetch");
+      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system: GROWTH_AI_SYSTEM }) });
+      if (res.ok) {
+        const d = await res.json();
+        const match = (d?.reply ?? "").trim().match(/\[[\s\S]*\]/);
+        if (match) { setSlides(JSON.parse(match[0])); setStage("editing"); return; }
+      }
+    } catch { /* ignore */ }
+    setStage("idle");
+  };
+
+  const save = () => {
+    try { localStorage.setItem(storageKey, JSON.stringify(slides)); } catch { /* ignore */ }
+    setStage("saved");
+  };
+
+  const readOnly = stage === "saved";
+
+  if (stage === "idle") return (
+    <button onClick={generate} disabled={!title} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#151515] text-white text-[12px] font-medium hover:bg-[#2a2a2a] transition-colors disabled:opacity-40">
+      <img src="/figmaAssets/starfour.svg" className="w-3 h-3" alt="" /> Generate
+    </button>
+  );
+  if (stage === "loading") return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-[#9A9A9A]"><Loader2 size={11} className="animate-spin" /> Building your pitch deck outline…</div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {readOnly && (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[#32C382]"><CheckCircle2 size={10} /> Saved</span>
+          <button onClick={() => setStage("editing")} className="text-[11px] text-[#62646A] hover:text-[#151515] transition-colors underline underline-offset-2">Edit</button>
+        </div>
+      )}
+      <div className="grid gap-3">
+        {slides.map((sl, si) => (
+          <div key={si} className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+            <div className="px-3 py-2 bg-[#FAFAFA] border-b border-[#ECEDEE] flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-[#151515] text-white text-[9px] font-bold flex items-center justify-center shrink-0">{si + 1}</span>
+              {readOnly
+                ? <p className="text-[12px] font-semibold text-[#151515]">{sl.slide}</p>
+                : <input value={sl.slide} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, slide: e.target.value } : s))} className="flex-1 text-[12px] font-semibold text-[#151515] bg-transparent focus:outline-none" />
+              }
+            </div>
+            <div className="px-3 py-2.5 space-y-1.5">
+              {sl.bullets.map((b, bi) => (
+                <div key={bi} className="flex items-start gap-2">
+                  <span className="text-[#32C382] text-[10px] mt-1 shrink-0">•</span>
+                  {readOnly
+                    ? <p className="text-[12px] text-[#151515] leading-relaxed">{b}</p>
+                    : <input value={b} onChange={(e) => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.map((bb, j) => j === bi ? e.target.value : bb) } : s))} className="flex-1 text-[12px] text-[#151515] bg-transparent focus:outline-none" />
+                  }
+                  {!readOnly && <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: s.bullets.filter((_, j) => j !== bi) } : s))} className="text-[#9A9A9A] hover:text-red-500 text-[10px] shrink-0">✕</button>}
+                </div>
+              ))}
+              {!readOnly && <button onClick={() => setSlides((prev) => prev.map((s, i) => i === si ? { ...s, bullets: [...s.bullets, ""] } : s))} className="text-[11px] text-[#32C382] hover:underline mt-1">+ Add bullet</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!readOnly && <button onClick={save} className="px-4 py-1.5 rounded-full bg-[#32C382] text-white text-[12px] font-semibold hover:bg-[#28a96e] transition-colors">Save</button>}
+    </div>
+  );
+}
+
+// ── GrowthItemCard — expandable wrapper ────────
+function GrowthItemCard({ id, label, project }: { id: string; label: string; project: DirectionCardData | null }) {
+  const title = project?.title ?? "";
+  const [open, setOpen] = useState(false);
+
+  const renderContent = () => {
+    if (id === "business_plan") return <BusinessPlanCard title={title} />;
+    if (id === "marketing_plan") return <MarketingPlanCard title={title} />;
+    if (id === "gtm_strategy") return <GtmStrategyCard title={title} />;
+    if (id === "sales_playbook") return <SalesPlaybookCard title={title} />;
+    if (id === "financial_model") return <FinancialModelCard title={title} />;
+    if (id === "growth_metrics") return <GrowthMetricsCard title={title} />;
+    if (id === "pitch_deck") return <PitchDeckCard title={title} />;
+    return null;
+  };
+
+  return (
+    <div className="rounded-xl border border-[#ECEDEE] overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-gray-50 transition-colors text-left"
+      >
+        <span className="text-[14px] font-semibold text-[#151515]">{label}</span>
+        {open ? <ChevronUp size={14} className="text-[#9A9A9A] shrink-0" /> : <ChevronDown size={14} className="text-[#9A9A9A] shrink-0" />}
+      </button>
+      {open && (
+        <div className="px-4 py-4 border-t border-[#ECEDEE]">
+          {renderContent()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // GrowthContent — top-level Growth tab (full width)
 // ─────────────────────────────────────────────
 
 function GrowthContent({ project }: { project: DirectionCardData | null }) {
   const pillar = GROWTH_PILLAR;
-  const title = project?.title ?? "";
-  const [statuses, setStatuses] = useState<Record<string, ChecklistStatus>>({});
-  const [tips, setTips] = useState<Record<string, string>>({});
-  const [tipsStage, setTipsStage] = useState<"idle" | "loading" | "done">("idle");
-
-  useEffect(() => {
-    if (!title) return;
-    const loaded: Record<string, ChecklistStatus> = {};
-    for (const item of pillar.items) {
-      try {
-        const v = localStorage.getItem(`launchpad-status-${item.id}-${title}`) as ChecklistStatus | null;
-        loaded[item.id] = v ?? "todo";
-      } catch { loaded[item.id] = "todo"; }
-    }
-    setStatuses(loaded);
-    try {
-      const raw = localStorage.getItem(`launchpad-tips-${pillar.id}-${title}`);
-      if (raw) { setTips(JSON.parse(raw)); setTipsStage("done"); }
-      else { setTips({}); setTipsStage("idle"); }
-    } catch { setTips({}); setTipsStage("idle"); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
-
-  const cycleStatus = (itemId: string) => {
-    setStatuses((prev) => {
-      const cur = prev[itemId] ?? "todo";
-      const next: ChecklistStatus = cur === "todo" ? "progress" : cur === "progress" ? "done" : "todo";
-      const updated = { ...prev, [itemId]: next };
-      try { localStorage.setItem(`launchpad-status-${itemId}-${title}`, next); } catch { /* ignore */ }
-      return updated;
-    });
-  };
-
-  const generateTips = async () => {
-    if (!title) return;
-    setTipsStage("loading");
-    const painkiller      = localStorage.getItem(`painkiller-verdict-${title}`) ?? "";
-    const offer           = localStorage.getItem(`mvo-defined-${title}`) ?? "";
-    const patternSummary  = localStorage.getItem(`pattern-summary-${title}`) ?? "";
-    let targetCustomer = "";
-    try { targetCustomer = JSON.parse(localStorage.getItem(`target-customers-${title}`) ?? "{}").main?.label ?? ""; } catch { /* ignore */ }
-    const itemList = pillar.items.map((i) => `"${i.id}": "${i.label}"`).join(", ");
-    const system = `You are Sorene, a startup coach. Respond ONLY with valid JSON — a single object. No markdown, no preamble.`;
-    const prompt = `Give a short, specific tip (1 sentence, max 20 words) for each checklist item for this founder.\n\nProject: "${title}"${targetCustomer ? `\nTarget customer: "${targetCustomer}"` : ""}${painkiller ? `\nPainkiller: "${painkiller}"` : ""}${offer ? `\nOffer: "${offer}"` : ""}${patternSummary ? `\nPattern: "${patternSummary.slice(0, 200)}"` : ""}\n\nPillar: "${pillar.label}"\nItems: { ${itemList} }\n\nReturn JSON: { [itemId]: "tip string" }`;
-    try {
-      const { authFetch } = await import("@/lib/authFetch");
-      const res = await authFetch("/api/execution-assist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, system }) });
-      if (res.ok) {
-        const data = await res.json();
-        const match = (data?.reply ?? "").trim().match(/\{[\s\S]*\}/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          setTips(parsed); setTipsStage("done");
-          try { localStorage.setItem(`launchpad-tips-${pillar.id}-${title}`, JSON.stringify(parsed)); } catch { /* ignore */ }
-        } else { setTipsStage("idle"); }
-      } else { setTipsStage("idle"); }
-    } catch { setTipsStage("idle"); }
-  };
-
-  const doneCount = pillar.items.filter((i) => (statuses[i.id] ?? "todo") === "done").length;
-
   return (
-    <div className="p-6">
-
-      <div className="space-y-4">
-        {pillar.items.map((item) => {
-          const status = statuses[item.id] ?? "todo";
-          const tip = tips[item.id];
-          return (
-            <div key={item.id}>
-              <button onClick={() => cycleStatus(item.id)} className="w-full flex items-center gap-3 text-left group">
-                <div className={cn(
-                  "w-3.5 h-3.5 rounded-full shrink-0 transition-colors border",
-                  status === "done"       ? "bg-[#32C382] border-[#32C382]"
-                  : status === "progress" ? "bg-[#FFD43B] border-[#FFD43B]"
-                  : "bg-white border-gray-300 group-hover:border-[#151515]"
-                )} />
-                <span className={cn("text-[14px] transition-colors flex-1", status === "done" ? "text-[#9A9A9A] line-through" : "text-[#151515]")}>
-                  {item.label}
-                </span>
-              </button>
-              {tip && (
-                <p className="text-[11px] text-[#62646A] italic leading-relaxed pl-[26px] mt-1">
-                  {tip}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+    <div className="p-6 space-y-3">
+      {pillar.items.map((item) => (
+        <GrowthItemCard key={item.id} id={item.id} label={item.label} project={project} />
+      ))}
     </div>
   );
 }

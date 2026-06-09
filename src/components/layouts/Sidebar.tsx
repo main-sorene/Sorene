@@ -45,7 +45,12 @@ function ConversationItem({ conv }: { conv: Conversation }) {
   const handleClick = () => {
     if (!isAssessmentComplete) return;
     setActiveId(conv.id);
-    router.push(`/chat/${conv.id}`);
+    // Assessment conversations live at /chat, not /chat/:id
+    if (conv.id.startsWith("assessment-")) {
+      router.push("/chat");
+    } else {
+      router.push(`/chat/${conv.id}`);
+    }
     setSidebarOpen(false);
   };
 
@@ -463,13 +468,47 @@ export function Sidebar({
         </AnimatePresence>
       </div>
 
-      {/* New Chat Section — above nav items */}
-      {!collapsed && (
-        <div className="px-2 mt-2 mb-1">
-          <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-            New Chat
-          </p>
-          <div className="space-y-0.5">
+      {/* New Chat — nav button + conversation list */}
+      <div className={cn("px-2 shrink-0", collapsed && "px-3")}>
+        <button
+          data-testid="nav-new-chat"
+          disabled={!isAssessmentComplete}
+          onClick={() => {
+            if (!isAssessmentComplete) return;
+            setActiveId(null);
+            router.push("/chat");
+            if (mobile) setSidebarOpen(false);
+          }}
+          className={cn(
+            "text-label-medium w-full flex items-center rounded-xl transition-all duration-200 text-left group px-2 h-14 text-[#151515]",
+            pathname === "/chat" ? "bg-[#ECEDEE]" : "",
+            !isAssessmentComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+          )}
+          title={collapsed ? "New Chat" : undefined}
+        >
+          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            <img
+              src="/figmaAssets/note-pencil.svg"
+              alt="New Chat"
+              className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
+            />
+          </div>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -4 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="whitespace-nowrap overflow-hidden text-[14px] font-medium"
+              >
+                New Chat
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+        {!collapsed && (
+          <div className="space-y-0.5 mb-1">
             {conversations
               .filter(
                 (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
@@ -478,8 +517,8 @@ export function Sidebar({
                 <ConversationItem key={conv.id} conv={conv} />
               ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Nav items */}
       <div className={cn("px-2 shrink-0", collapsed && "px-3")}>

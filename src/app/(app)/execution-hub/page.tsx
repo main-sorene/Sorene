@@ -8242,6 +8242,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const [approvingAll, setApprovingAll] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
   const [publishedScheduled, setPublishedScheduled] = useState<ScheduledPost[]>([]);
+  const [scheduleDebug, setScheduleDebug] = useState("init");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   // Custom slot overrides: draftId → timestamp (ms). When set, overrides scheduleSlots[i].
   const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
@@ -8398,15 +8399,21 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   useEffect(() => {
     if (!authUser) return;
     const p = encodeURIComponent(project.title);
+    setScheduleDebug(`title="${project.title}" fetching…`);
     import("@/lib/authFetch").then(({ authFetch }) =>
       authFetch(`/api/threads/schedule?project=${p}`)
-        .then((res) => res.ok ? res.json() : null)
-        .then((data: { posts?: ScheduledPost[]; published?: ScheduledPost[] } | null) => {
+        .then(async (res) => {
+          const text = await res.text();
+          setScheduleDebug(`title="${project.title}" status=${res.status} body=${text.slice(0, 200)}`);
+          if (!res.ok) return null;
+          try { return JSON.parse(text) as { posts?: ScheduledPost[]; published?: ScheduledPost[] }; } catch { return null; }
+        })
+        .then((data) => {
           if (!data) return;
           setScheduledPosts(data.posts ?? []);
           setPublishedScheduled((data.published ?? []).sort((a, b) => b.scheduledAt - a.scheduledAt).slice(0, 20));
         })
-        .catch(() => {})
+        .catch((e) => setScheduleDebug(`title="${project.title}" ERROR ${String(e).slice(0, 150)}`))
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, project.title]);
@@ -9661,7 +9668,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       )}
 
       {/* DEBUG — remove after diagnosis */}
-      <p className="text-[11px] text-[#9A9A9A] px-5 pt-2">scheduled:{scheduledPosts.length} published:{publishedScheduled.length}</p>
+      <p className="text-[10px] text-[#DF2E16] px-5 pt-2 break-all">scheduled:{scheduledPosts.length} published:{publishedScheduled.length} · {scheduleDebug}</p>
 
       {/* Scheduled queue — pending posts in Firestore not covered by the drafts list above */}
       {scheduledPosts.length > 0 && (

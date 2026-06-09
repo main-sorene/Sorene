@@ -6,6 +6,7 @@ import type {
   IdeationData,
 } from "@/store/atoms";
 import { API_BASE_URL, apiRequest } from "@/lib/queryClient";
+import { authFetch } from "@/lib/authFetch";
 
 export const chatKeys = {
   history: (userId: string, chatId: string) =>
@@ -183,7 +184,15 @@ export async function getChatHistory(params: {
 export async function sendReply(
   payload: ApiReplyPayload,
 ): Promise<ApiReplyResponse> {
-  const res = await apiRequest("POST", `${API_BASE_URL}/reply`, payload);
+  const res = await authFetch(`${API_BASE_URL}/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = (await res.text()) || res.statusText;
+    throw new Error(`${res.status}: ${text}`);
+  }
   return (await res.json()) as ApiReplyResponse;
 }
 

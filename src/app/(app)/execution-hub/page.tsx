@@ -9649,6 +9649,9 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         </div>
       )}
 
+      {/* DEBUG — remove after diagnosis */}
+      <p className="text-[11px] text-[#9A9A9A] px-5 pt-2">scheduled:{scheduledPosts.length} published:{publishedScheduled.length}</p>
+
       {/* Scheduled queue — pending posts in Firestore not covered by the drafts list above */}
       {scheduledPosts.length > 0 && (
         <div className="space-y-2">

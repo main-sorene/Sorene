@@ -5,6 +5,7 @@ import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
+import type { EscalationFlag } from "@/lib/dnaEngine";
 
 export type DirectionAlternative = {
   model: string;
@@ -145,6 +146,20 @@ export function useDirectionResult() {
     .filter((a) => a.model !== model)
     .slice(0, 2);
 
+  const escalation: EscalationFlag | undefined = profile?.directionEligibility?.escalation;
+
+  // Log escalation trigger once per session (fire-and-forget)
+  useEffect(() => {
+    if (!escalation || !user?.uid) return;
+    saveUserProfile(user.uid, {
+      escalationLog: {
+        trigger: escalation.trigger,
+        topCompatibility: escalation.topCompatibility,
+        timestamp: new Date().toISOString(),
+      },
+    }).catch((err) => console.warn("[escalation] log failed:", err));
+  }, [escalation?.trigger, user?.uid]);
+
   return {
     directionText: streamedText,
     isLoading: isLoading || isStreaming,
@@ -152,5 +167,6 @@ export function useDirectionResult() {
     model,
     bestCompatibility: alternatives.find((a) => a.model === model)?.compatibility ?? 100,
     otherDirections,
+    escalation,
   };
 }

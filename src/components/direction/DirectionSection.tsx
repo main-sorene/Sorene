@@ -94,6 +94,7 @@ export const DirectionSection = () => {
     model,
     bestCompatibility,
     otherDirections,
+    escalation,
   } = useDirectionResult();
   const [ideation] = useAtom(ideationAtom);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -120,6 +121,17 @@ export const DirectionSection = () => {
   if (directionText) {
     return (
       <div className="p-3 lg:py-6 lg:px-3 space-y-6 pb-24">
+        {escalation && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 flex flex-col gap-3">
+            <p>{escalation.message}</p>
+            <a
+              href="mailto:advisors@sorene.ai?subject=Advisor%20Call%20Request"
+              className="self-start rounded-lg bg-amber-900 px-4 py-2 text-xs font-medium text-white hover:bg-amber-800 transition-colors"
+            >
+              Join advisor waitlist
+            </a>
+          </div>
+        )}
         <section>
           <DirectionCard
             variant="hero"
@@ -196,6 +208,17 @@ export const DirectionSection = () => {
 
   return (
     <div className="p-3 lg:py-6 lg:px-3  space-y-4 pb-24">
+      {escalation && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 flex flex-col gap-3">
+          <p>{escalation.message}</p>
+          <a
+            href="mailto:advisors@sorene.ai?subject=Advisor%20Call%20Request"
+            className="self-start rounded-lg bg-amber-900 px-4 py-2 text-xs font-medium text-white hover:bg-amber-800 transition-colors"
+          >
+            Join advisor waitlist
+          </a>
+        </div>
+      )}
       {/* Hero Section */}
       <section>
         {bestPickIdea && (

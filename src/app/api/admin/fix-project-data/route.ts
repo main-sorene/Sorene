@@ -41,12 +41,13 @@ export async function POST(req: NextRequest) {
   await db.collection("users").doc(uid).set({ legacyProjectTitle }, { merge: true });
   actions.push(`Set legacyProjectTitle: "${legacyProjectTitle}"`);
 
-  // 2. Migrate integrations/threads → integrations/threads__${slug} if not already done
+  // 2. Merge integrations/threads → integrations/threads__${slug} so the namespaced doc
+  //    gets the good connection fields (accessToken, threadsUserId, username) even if a
+  //    partial doc already exists for this namespace.
   const legacyInteg = await db.doc(`users/${uid}/integrations/threads`).get();
-  const namedInteg = await db.doc(`users/${uid}/integrations/threads__${projectSlug}`).get();
-  if (legacyInteg.exists && !namedInteg.exists) {
-    await db.doc(`users/${uid}/integrations/threads__${projectSlug}`).set(legacyInteg.data()!);
-    actions.push(`Migrated integrations/threads → threads__${projectSlug}`);
+  if (legacyInteg.exists && legacyInteg.data()?.accessToken) {
+    await db.doc(`users/${uid}/integrations/threads__${projectSlug}`).set(legacyInteg.data()!, { merge: true });
+    actions.push(`Merged integrations/threads → threads__${projectSlug} (username: ${legacyInteg.data()?.username ?? "n/a"})`);
   }
 
   // 3. Clear any wrongly-namespaced data for OTHER projects (wipe keys that don't belong to legacyProjectTitle)

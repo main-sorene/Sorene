@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { maskPii, assertTextCompletion } from "@/lib/aiSafety";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { answer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage, previousAnswers, cvSummary } =
+    const { answer: rawAnswer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage, previousAnswers, cvSummary } =
       (await req.json()) as {
         answer: string;
         signal: string;
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
         previousAnswers?: Record<string, string>;
         cvSummary?: string;
       };
+    const answer = maskPii(rawAnswer);
 
     // Build context from what we know about the user so far
     const priorContext = (() => {

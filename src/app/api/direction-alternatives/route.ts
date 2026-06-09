@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
+import { assertTextCompletion, sanitizeName, maskScores } from "@/lib/aiSafety";
 import { verifyAuth } from "@/lib/firebaseAdmin";
 import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
@@ -29,11 +30,14 @@ export async function POST(req: NextRequest) {
       return Response.json({ summaries: [] });
     }
 
+    const safeName = sanitizeName(firstName);
+    const safeScores = maskScores(scores);
+
     const modelList = models
       .map((m, i) => `${i + 1}. ${m.model} (${m.compatibility}% compatibility)`)
       .join("\n");
 
-    const prompt = `You are Sorene — a direct, warm entrepreneurship coach. Generate brief summaries for ${models.length} alternative business directions for ${firstName}.
+    const prompt = `You are Sorene — a direct, warm entrepreneurship coach. Generate brief summaries for ${models.length} alternative business directions for ${safeName}.
 
 Models (in order, do not reorder):
 ${modelList}
@@ -44,8 +48,8 @@ DNA scores:
 - Energy stability: ${scores.energy_stability_score}/10
 - Structure preference: ${scores.structure_score}/10 (higher = solo)
 - Capacity: ${scores.constraint_score}/10
-- What energizes them: ${scores.energy_source}
-- Trade-off they chose: ${scores.non_negotiable}
+- What energizes them: ${safeScores.energy_source}
+- Trade-off they chose: ${safeScores.non_negotiable}
 
 For each model, write a concise 2-3 sentence summary (max 60 words) that:
 - Describes a concrete direction within that model
@@ -61,21 +65,30 @@ The array must contain exactly ${models.length} strings, in the same order as th
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 600,
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
 
     await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
-    const block = message.content[0];
-    const raw = block && block.type === "text" ? block.text.trim() : "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return Response.json({ summaries: [] });
+    const raw = assertTextCompletion(message);
+
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) {
+      console.error("[direction-alternatives] No JSON object found in response");
+      return Response.json({ summaries: [] });
+    }
 
     try {
-      const parsed = JSON.parse(jsonMatch[0]) as { summaries?: string[] };
+      const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as { summaries?: string[] };
       const summaries = Array.isArray(parsed.summaries) ? parsed.summaries : [];
+      if (summaries.length !== models.length) {
+        console.error(`[direction-alternatives] Expected ${models.length} summaries, got ${summaries.length}`);
+      }
       return Response.json({ summaries });
-    } catch {
+    } catch (parseErr) {
+      console.error("[direction-alternatives] JSON parse error:", parseErr);
       return Response.json({ summaries: [] });
     }
   } catch (err) {

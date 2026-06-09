@@ -91,7 +91,7 @@ export function ChatArea() {
       ideateSections(commonPayload)
         .then(() => ideate(commonPayload))
         .then((ideationRes) => setIdeation(ideationRes))
-        .catch(() => {});
+        .catch((err: unknown) => { console.error("[ideation] failed:", err); });
 
       return result;
     },

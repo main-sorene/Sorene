@@ -572,7 +572,7 @@ export function useAssessmentFlow() {
         }
 
         const nextId = typeof currentNode.next === "function"
-          ? currentNode.next(text, ctx)
+          ? currentNode.next(answerForLogic, ctx)
           : currentNode.next;
         await advanceToNode(nextId, newAnswers, ctx, currentNode.signal, text);
       }

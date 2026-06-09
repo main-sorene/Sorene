@@ -36,9 +36,20 @@ export type StructuralModel =
   | "Low-Risk Hybrid"
   | "Startup";
 
+export type EscalationTrigger =
+  | "low_readiness_low_energy"
+  | "financial_pressure_low_fit"
+  | "no_dominant_fit";
+
+export type EscalationFlag = {
+  trigger: EscalationTrigger;
+  message: string;
+  topCompatibility: number;
+};
+
 export type DirectionEligibility =
-  | { eligible: true; model: StructuralModel; scores: DnaScores }
-  | { eligible: false; reason: string; scores: DnaScores };
+  | { eligible: true; model: StructuralModel; scores: DnaScores; escalation?: EscalationFlag }
+  | { eligible: false; reason: string; scores: DnaScores; escalation?: EscalationFlag };
 
 function snapRisk(value: number): 1 | 3 | 5 | 8 | 10 {
   const allowed = [1, 3, 5, 8, 10] as const;
@@ -103,11 +114,8 @@ function computeScores(answers: RawAnswers): DnaScores {
   if (q5.includes("Within 3 months")) constraintBase -= 3;
   else if (q5.includes("12+ months") || q5.includes("Income isn't")) constraintBase += 3;
 
-  const constraint_score = (Math.max(3, Math.min(9, constraintBase)) === 3
-    ? 3
-    : Math.max(3, Math.min(9, constraintBase)) <= 6
-    ? 6
-    : 9) as 3 | 6 | 9;
+  const clampedConstraint = Math.max(3, Math.min(9, constraintBase));
+  const constraint_score = (clampedConstraint === 3 ? 3 : clampedConstraint <= 6 ? 6 : 9) as 3 | 6 | 9;
 
   // readiness_score
   let readiness_score: 3 | 5 | 8 = 5;
@@ -229,20 +237,19 @@ export function computeDirection(answers: RawAnswers): DirectionEligibility {
   const scores = computeScores(answers);
   const { readiness_score, energy_stability_score, constraint_score } = scores;
 
-  // Eligibility gates
-  if (readiness_score <= 3) {
-    return {
-      eligible: false,
-      reason: "You're still in exploration mode. The priority right now is clarifying what you want, not choosing a direction.",
-      scores,
+  // Eligibility gates — check for soft escalation even on ineligible paths
+  if (readiness_score <= 3 || energy_stability_score <= 2) {
+    const escalation: EscalationFlag = {
+      trigger: "low_readiness_low_energy",
+      message:
+        "Profiles like yours often benefit from a single focused conversation before moving forward. If you'd like a human perspective, you can join the waitlist for an advisor call.",
+      topCompatibility: 0,
     };
-  }
-  if (energy_stability_score <= 2) {
-    return {
-      eligible: false,
-      reason: "Your energy pattern suggests this isn't the right moment to start. Stabilising comes first.",
-      scores,
-    };
+    const reason =
+      readiness_score <= 3
+        ? "You're still in exploration mode. The priority right now is clarifying what you want, not choosing a direction."
+        : "Your energy pattern suggests this isn't the right moment to start. Stabilising comes first.";
+    return { eligible: false, reason, scores, escalation };
   }
   if (constraint_score === 3 && readiness_score < 5) {
     return {
@@ -263,8 +270,28 @@ export function computeDirection(answers: RawAnswers): DirectionEligibility {
 
   const ranked = rankModels(scores, eligible);
   const bestModel = ranked[0]?.model ?? "Low-Risk Hybrid";
+  const topCompatibility = ranked[0]?.compatibility ?? 0;
 
-  return { eligible: true, model: bestModel, scores };
+  // Soft escalation checks for eligible users
+  let escalation: EscalationFlag | undefined;
+
+  if (constraint_score === 3 && topCompatibility < 50) {
+    escalation = {
+      trigger: "financial_pressure_low_fit",
+      message:
+        "We want to be straight with you — your profile has some conflicting signals that made this harder to pin down. This direction is our best read, but it's worth pressure-testing with someone before acting on it.",
+      topCompatibility,
+    };
+  } else if (topCompatibility < 50) {
+    escalation = {
+      trigger: "no_dominant_fit",
+      message:
+        "Your profile doesn't map cleanly to one pattern — which actually tells us something useful. The direction below is directional, not definitive. A 20-minute call could help clarify what's pulling in different directions.",
+      topCompatibility,
+    };
+  }
+
+  return { eligible: true, model: bestModel, scores, escalation };
 }
 
 export type RankedModel = { model: StructuralModel; compatibility: number };

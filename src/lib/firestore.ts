@@ -60,6 +60,16 @@ export interface UserProfile {
     eligible: boolean;
     model?: string;
     reason?: string;
+    escalation?: {
+      trigger: string;
+      message: string;
+      topCompatibility: number;
+    };
+  };
+  escalationLog?: {
+    trigger: string;
+    topCompatibility: number;
+    timestamp: string;
   };
   directionText?: string;
   directionAlternatives?: {

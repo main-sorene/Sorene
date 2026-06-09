@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Play, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 import { EducationChat } from "@/components/education/EducationChat";
 
 const videos = [
@@ -35,8 +36,8 @@ function VideoCard({ title }: { title: string }) {
           Coming soon
         </div>
       </div>
-      <div className="px-5 py-4">
-        <p className="text-[14px] font-semibold text-[#151515] leading-[1.45]">{title}</p>
+      <div className="flex items-center justify-center px-5 py-4 flex-1">
+        <p className="text-[14px] font-semibold text-[#151515] leading-[1.45] text-center">{title}</p>
       </div>
     </div>
   );
@@ -44,13 +45,14 @@ function VideoCard({ title }: { title: string }) {
 
 export default function Page() {
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[#F9FAFB] relative">
-      {/* Left column — hidden on mobile when chat is open */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden ${chatOpen ? "hidden xl:flex" : "flex"}`}>
+    <div className="flex h-full w-full overflow-hidden relative bg-[#F9FAFB]">
+      {/* Main content — hidden on mobile when chat is open */}
+      <div className={cn("flex-1 flex flex-col h-full overflow-hidden", chatOpen ? "hidden xl:flex" : "flex")}>
         <div className="flex-1 overflow-y-auto no-scrollbar bg-[#F9FAFB]">
-          <div className="max-w-6xl mx-auto p-3 lg:py-6 lg:px-3 pb-24">
+          <div className="max-w-6xl mx-auto p-3 lg:py-6 lg:px-6 pb-24">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {videos.map((video, i) => (
                 <motion.div
@@ -67,9 +69,29 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Right column — desktop chat panel */}
-      <div className="w-112.5 h-full shrink-0 hidden xl:block">
-        <EducationChat />
+      {/* Desktop chat sidebar — collapsible with animated width */}
+      <AnimatePresence initial={false}>
+        {!chatCollapsed && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 450, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="h-full shrink-0 hidden xl:block overflow-hidden"
+          >
+            <EducationChat />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop collapse/expand bubble */}
+      <div className="absolute bottom-6 right-6 z-40 hidden xl:block">
+        <button
+          onClick={() => setChatCollapsed((v) => !v)}
+          className="w-14 h-14 rounded-full bg-[#151515] flex items-center justify-center shadow-lg hover:bg-[#2a2a2a] transition-colors"
+        >
+          <MessageCircle size={22} className="text-white" />
+        </button>
       </div>
 
       {/* Mobile chat panel */}
@@ -87,7 +109,7 @@ export default function Page() {
         )}
       </AnimatePresence>
 
-      {/* Floating chat button — mobile only */}
+      {/* Mobile chat bubble */}
       {!chatOpen && (
         <button
           onClick={() => setChatOpen(true)}

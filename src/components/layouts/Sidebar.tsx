@@ -468,7 +468,7 @@ export function Sidebar({
         </AnimatePresence>
       </div>
 
-      {/* New Chat — nav button + conversation list */}
+      {/* Your Sorene Assistant — nav button + conversation list */}
       <div className={cn("px-2 shrink-0", collapsed && "px-3")}>
         <button
           data-testid="nav-new-chat"
@@ -484,12 +484,12 @@ export function Sidebar({
             pathname === "/chat" ? "bg-[#ECEDEE]" : "",
             !isAssessmentComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
           )}
-          title={collapsed ? "New Chat" : undefined}
+          title={collapsed ? "Your Sorene Assistant" : undefined}
         >
           <div className="w-12 h-12 flex items-center justify-center shrink-0">
             <img
-              src="/figmaAssets/note-pencil.svg"
-              alt="New Chat"
+              src="/figmaAssets/chat-start.svg"
+              alt="Your Sorene Assistant"
               className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
             />
           </div>
@@ -502,7 +502,7 @@ export function Sidebar({
                 transition={{ duration: 0.15, ease: "easeOut" }}
                 className="whitespace-nowrap overflow-hidden text-[14px] font-medium"
               >
-                New Chat
+                Your Sorene Assistant
               </motion.span>
             )}
           </AnimatePresence>

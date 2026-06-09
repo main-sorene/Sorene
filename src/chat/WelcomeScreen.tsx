@@ -58,6 +58,7 @@ export function WelcomeScreen() {
           onSuggestionClick={handleRecipeClick}
           className="w-full max-w-5xl"
           disableNavigation
+          segmentOverride="chat"
         />
       </div>
     </div>

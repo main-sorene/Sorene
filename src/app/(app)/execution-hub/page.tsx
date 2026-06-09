@@ -8241,6 +8241,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const [errorMsg, setErrorMsg] = useState("");
   const [approvingAll, setApprovingAll] = useState(false);
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [publishedScheduled, setPublishedScheduled] = useState<ScheduledPost[]>([]);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   // Custom slot overrides: draftId → timestamp (ms). When set, overrides scheduleSlots[i].
   const [slotOverrides, setSlotOverrides] = useState<Record<string, number>>({});
@@ -8346,8 +8347,9 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       if (data.dna) setDna(data.dna);
     } else { setAccountStatus("disconnected"); }
     if (scheduleRes.ok) {
-      const data = await scheduleRes.json() as { posts: ScheduledPost[] };
+      const data = await scheduleRes.json() as { posts: ScheduledPost[]; published?: ScheduledPost[]; failed?: ScheduledPost[] };
       setScheduledPosts(data.posts ?? []);
+      setPublishedScheduled((data.published ?? []).sort((a, b) => b.scheduledAt - a.scheduledAt).slice(0, 20));
     }
     if (draftsRes.ok) {
       const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2 | 3; slotOverrides: Record<string, number>; userNotes?: string } | null };
@@ -9647,34 +9649,58 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
         </div>
       )}
 
-      {/* Legacy scheduled posts — posts that exist in Firestore but don't have a matching weekDraft */}
-      {(() => {
-        const frozenTexts = new Set(weekDrafts.filter((d) => d.frozen).map((d) => d.text.replace(/\[ADD_LINK_IN_COMMENT\]\s*$/, "").trim()));
-        const orphaned = scheduledPosts.filter((p) => !frozenTexts.has(p.text.trim()));
-        if (orphaned.length === 0) return null;
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Clock size={13} className="text-[#9A9A9A]" />
-              <p className="text-[12px] font-semibold text-[#151515]">Scheduled Queue</p>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[#9A9A9A] font-semibold">{orphaned.length}</span>
-            </div>
-            <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden divide-y divide-[#ECEDEE]">
-              {orphaned.map((post) => (
-                <div key={post.id} className="px-4 py-3 flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] text-[#151515] leading-relaxed line-clamp-2">{post.text}</p>
-                    <p className="text-[10px] text-[#9A9A9A] mt-1">{new Date(post.scheduledAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
-                  </div>
-                  <button onClick={() => cancelScheduled(post.id)} className="text-[#BCBCBC] hover:text-[#DF2E16] transition-colors shrink-0 mt-0.5">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
+      {/* Scheduled queue — pending posts in Firestore not covered by the drafts list above */}
+      {scheduledPosts.length > 0 && weekDrafts.filter((d) => d.frozen && !d.posted).length === 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Clock size={13} className="text-[#9A9A9A]" />
+            <p className="text-[12px] font-semibold text-[#151515]">Scheduled Queue</p>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[#9A9A9A] font-semibold">{scheduledPosts.length}</span>
           </div>
-        );
-      })()}
+          <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden divide-y divide-[#ECEDEE]">
+            {scheduledPosts.map((post) => (
+              <div key={post.id} className="px-4 py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-[#151515] leading-relaxed line-clamp-2">{post.text}</p>
+                  <p className="text-[10px] text-[#9A9A9A] mt-1">{new Date(post.scheduledAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                </div>
+                <button onClick={() => cancelScheduled(post.id)} className="text-[#BCBCBC] hover:text-[#DF2E16] transition-colors shrink-0 mt-0.5">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Published scheduled posts (from schedule Firestore collection, not weekDrafts) */}
+      {publishedScheduled.length > 0 && weekDrafts.filter((d) => d.posted).length === 0 && (
+        <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
+          <button onClick={() => setPostedOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={13} className="text-[#32C382]" />
+              <p className="text-[12px] font-semibold text-[#151515]">Posted</p>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#E8FBF0] text-[#32C382] font-semibold">{publishedScheduled.length}</span>
+            </div>
+            <ChevronDown size={14} className={cn("text-[#9A9A9A] transition-transform", postedOpen && "rotate-180")} />
+          </button>
+          <AnimatePresence initial={false}>
+            {postedOpen && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
+                className="overflow-hidden divide-y divide-[#ECEDEE]">
+                {publishedScheduled.map((post) => (
+                  <div key={post.id} className="px-4 py-3 flex items-start gap-3">
+                    <p className="text-[12px] text-[#9A9A9A] leading-relaxed flex-1 line-clamp-2">{post.text}</p>
+                    <p className="text-[10px] text-[#9A9A9A] shrink-0 mt-0.5">{new Date(post.scheduledAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
             </motion.div>
           )}

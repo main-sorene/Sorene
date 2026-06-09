@@ -5,10 +5,25 @@ export async function GET(req: NextRequest) {
   const secret = req.headers.get("x-admin-secret");
   if (secret !== process.env.CRON_SECRET) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const uid = new URL(req.url).searchParams.get("uid");
-  if (!uid) return Response.json({ error: "Missing uid" }, { status: 400 });
-
+  let uid = new URL(req.url).searchParams.get("uid");
+  const email = new URL(req.url).searchParams.get("email");
   const db = getAdminFirestore();
+
+  if (!uid && email) {
+    const directSnap = await db.collection("users").doc(email).get();
+    if (directSnap.exists) { uid = email; }
+    else {
+      const q = await db.collection("users").where("email", "==", email).limit(1).get();
+      if (!q.empty) uid = q.docs[0].id;
+    }
+    if (!uid) {
+      try {
+        const { getAuth } = await import("firebase-admin/auth");
+        uid = (await getAuth().getUserByEmail(email)).uid;
+      } catch { /* ignore */ }
+    }
+  }
+  if (!uid) return Response.json({ error: "Missing uid or email" }, { status: 400 });
   const snap = await db.collection("users").doc(uid).collection("threadsScheduled").get();
   const now = Date.now();
 
@@ -17,6 +32,7 @@ export async function GET(req: NextRequest) {
     return {
       id: p.id,
       status: p.status,
+      projectTitle: p.projectTitle ?? "(untagged)",
       scheduledAt: p.scheduledAt,
       scheduledDate: new Date(p.scheduledAt).toISOString(),
       isPast: p.scheduledAt < now,

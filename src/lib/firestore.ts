@@ -42,6 +42,11 @@ export interface UserProfile {
     eligible: boolean;
     model?: string;
     reason?: string;
+    escalation?: {
+      trigger: string;
+      message: string;
+      topCompatibility: number;
+    };
   };
   directionText?: string;
   directionAlternatives?: {
@@ -49,6 +54,11 @@ export interface UserProfile {
     compatibility: number;
     summary?: string;
   }[];
+  escalationLog?: {
+    trigger: string;
+    topCompatibility: number;
+    timestamp: string;
+  };
 }
 
 function getDb() {

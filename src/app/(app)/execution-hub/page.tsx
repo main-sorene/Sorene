@@ -8329,9 +8329,8 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const loadAccount = async () => {
     const { authFetch } = await import("@/lib/authFetch");
     const p = encodeURIComponent(project.title);
-    const [accountRes, scheduleRes, draftsRes, competitorsRes, xRes, xScheduleRes, redditRes, redditWatchlistRes, redditOppRes] = await Promise.all([
+    const [accountRes, draftsRes, competitorsRes, xRes, xScheduleRes, redditRes, redditWatchlistRes, redditOppRes] = await Promise.all([
       authFetch(`/api/threads/account?project=${p}`),
-      authFetch(`/api/threads/schedule?project=${p}`),
       authFetch(`/api/threads/drafts?project=${p}`),
       authFetch(`/api/threads/competitors?project=${p}`),
       authFetch(`/api/x/keys?project=${p}`),
@@ -8346,11 +8345,6 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       else setAccountStatus("disconnected");
       if (data.dna) setDna(data.dna);
     } else { setAccountStatus("disconnected"); }
-    if (scheduleRes.ok) {
-      const data = await scheduleRes.json() as { posts: ScheduledPost[]; published?: ScheduledPost[]; failed?: ScheduledPost[] };
-      setScheduledPosts(data.posts ?? []);
-      setPublishedScheduled((data.published ?? []).sort((a, b) => b.scheduledAt - a.scheduledAt).slice(0, 20));
-    }
     if (draftsRes.ok) {
       const data = await draftsRes.json() as { batch: { drafts: ThreadsDraft[]; ctaLink: string; cadence: 1 | 2 | 3; slotOverrides: Record<string, number>; userNotes?: string } | null };
       if (data.batch) {
@@ -8397,6 +8391,23 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   useEffect(() => {
     if (!authUser) return;
     loadAccount().catch(() => { setAccountStatus("disconnected"); setDraftsLoaded(true); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser, project.title]);
+
+  // Load scheduled posts independently so a failure doesn't block the rest of loadAccount
+  useEffect(() => {
+    if (!authUser) return;
+    const p = encodeURIComponent(project.title);
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch(`/api/threads/schedule?project=${p}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data: { posts?: ScheduledPost[]; published?: ScheduledPost[] } | null) => {
+          if (!data) return;
+          setScheduledPosts(data.posts ?? []);
+          setPublishedScheduled((data.published ?? []).sort((a, b) => b.scheduledAt - a.scheduledAt).slice(0, 20));
+        })
+        .catch(() => {})
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, project.title]);
 

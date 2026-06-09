@@ -337,63 +337,12 @@ export function Sidebar({
         </AnimatePresence>
       </div>
 
-      {/* Nav items */}
-      <div className={cn("px-2 shrink-0", collapsed && "px-3")}>
-        {navItems.map((item) => {
-          const isActive = item.path ? pathname === item.path : false;
-          return (
-            <button
-              key={item.label}
-              data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-              disabled={!isAssessmentComplete}
-              onClick={() => {
-                if (!isAssessmentComplete) return;
-                if (item.action) item.action();
-                else if (item.path) {
-                  router.push(item.path);
-                  if (mobile) setSidebarOpen(false);
-                }
-              }}
-              className={cn(
-                "text-label-medium w-full flex items-center rounded-xl transition-all duration-200 text-left group px-2 h-14 text-[#151515]",
-                isActive ? "bg-[#ECEDEE]" : "",
-                !isAssessmentComplete
-                  ? "opacity-50 cursor-not-allowed"
-                  : "cursor-pointer",
-              )}
-              title={collapsed ? item.label : undefined}
-            >
-              <div className="w-12 h-12 flex items-center justify-center shrink-0">
-                <img
-                  src={item.icon}
-                  alt={item.label}
-                  className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
-                />
-              </div>
-              <AnimatePresence mode="popLayout" initial={false}>
-                {!collapsed && (
-                  <motion.span
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -4 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="whitespace-nowrap overflow-hidden text-[14px] font-medium"
-                  >
-                    {item.label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Scrollable conversation sections */}
-      {!collapsed && (
-        <ScrollArea className="flex-1 mt-4">
-          <div className="px-2">
-            {/* New Chat Section */}
-            <div className="mb-4">
+      {/* Scrollable area: New Chat section + nav items + DNA/Direction sections */}
+      <ScrollArea className="flex-1 mt-2">
+        <div className={cn("px-2", collapsed && "px-3")}>
+          {/* New Chat Section */}
+          {!collapsed && (
+            <div className="mb-2">
               <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
                 New Chat
               </p>
@@ -407,46 +356,90 @@ export function Sidebar({
                   ))}
               </div>
             </div>
+          )}
 
-            {/* DNA Section */}
-            {conversations.filter((c) => c.segment === "dna").length > 0 && (
-              <div className="mb-4">
-                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  DNA
-                </p>
-                <div className="space-y-0.5">
-                  {conversations
-                    .filter((c) => c.segment === "dna")
-                    .map((conv) => (
-                      <ConversationItem key={conv.id} conv={conv} />
-                    ))}
+          {/* Nav items */}
+          {navItems.map((item) => {
+            const isActive = item.path ? pathname === item.path : false;
+            return (
+              <button
+                key={item.label}
+                data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                disabled={!isAssessmentComplete}
+                onClick={() => {
+                  if (!isAssessmentComplete) return;
+                  if (item.action) item.action();
+                  else if (item.path) {
+                    router.push(item.path);
+                    if (mobile) setSidebarOpen(false);
+                  }
+                }}
+                className={cn(
+                  "text-label-medium w-full flex items-center rounded-xl transition-all duration-200 text-left group px-2 h-14 text-[#151515]",
+                  isActive ? "bg-[#ECEDEE]" : "",
+                  !isAssessmentComplete
+                    ? "opacity-50 cursor-not-allowed"
+                    : "cursor-pointer",
+                )}
+                title={collapsed ? item.label : undefined}
+              >
+                <div className="w-12 h-12 flex items-center justify-center shrink-0">
+                  <img
+                    src={item.icon}
+                    alt={item.label}
+                    className="w-5 h-5 transition-all duration-200 group-hover:scale-110"
+                  />
                 </div>
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {!collapsed && (
+                    <motion.span
+                      initial={{ opacity: 0, x: -4 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -4 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="whitespace-nowrap overflow-hidden text-[14px] font-medium"
+                    >
+                      {item.label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+            );
+          })}
+
+          {/* DNA Section */}
+          {!collapsed && conversations.filter((c) => c.segment === "dna").length > 0 && (
+            <div className="mt-4 mb-4">
+              <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                DNA
+              </p>
+              <div className="space-y-0.5">
+                {conversations
+                  .filter((c) => c.segment === "dna")
+                  .map((conv) => (
+                    <ConversationItem key={conv.id} conv={conv} />
+                  ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Direction Section */}
-            {conversations.filter((c) => c.segment === "ideation").length >
-              0 && (
-              <div className="mb-4">
-                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  DIRECTION
-                </p>
-                <div className="space-y-0.5">
-                  {conversations
-                    .filter((c) => c.segment === "ideation")
-                    .map((conv) => (
-                      <ConversationItem key={conv.id} conv={conv} />
-                    ))}
-                </div>
+          {/* Direction Section */}
+          {!collapsed && conversations.filter((c) => c.segment === "ideation").length > 0 && (
+            <div className="mb-4">
+              <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                DIRECTION
+              </p>
+              <div className="space-y-0.5">
+                {conversations
+                  .filter((c) => c.segment === "ideation")
+                  .map((conv) => (
+                    <ConversationItem key={conv.id} conv={conv} />
+                  ))}
               </div>
-            )}
-
-          </div>
-        </ScrollArea>
-      )}
-
-      {/* spacer if collapsed */}
-      {collapsed && <div className="flex-1" />}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
 
       {!collapsed && (
         <div className="px-2 mb-4 flex justify-center">

@@ -392,6 +392,26 @@ export function Sidebar({
       {!collapsed && (
         <ScrollArea className="flex-1 mt-4">
           <div className="px-2">
+            {/* New Chat Section */}
+            {conversations.filter(
+              (c) => !["dna", "ideation"].includes(c.segment || ""),
+            ).length > 0 && (
+              <div className="mb-4">
+                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+                  New Chat
+                </p>
+                <div className="space-y-0.5">
+                  {conversations
+                    .filter(
+                      (c) => !["dna", "ideation"].includes(c.segment || ""),
+                    )
+                    .map((conv) => (
+                      <ConversationItem key={conv.id} conv={conv} />
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* DNA Section */}
             {conversations.filter((c) => c.segment === "dna").length > 0 && (
               <div className="mb-4">
@@ -425,25 +445,6 @@ export function Sidebar({
               </div>
             )}
 
-            {/* Other Section */}
-            {conversations.filter(
-              (c) => !["dna", "ideation"].includes(c.segment || ""),
-            ).length > 0 && (
-              <div className="mb-4">
-                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  Others
-                </p>
-                <div className="space-y-0.5">
-                  {conversations
-                    .filter(
-                      (c) => !["dna", "ideation"].includes(c.segment || ""),
-                    )
-                    .map((conv) => (
-                      <ConversationItem key={conv.id} conv={conv} />
-                    ))}
-                </div>
-              </div>
-            )}
           </div>
         </ScrollArea>
       )}

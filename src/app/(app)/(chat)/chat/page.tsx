@@ -3,7 +3,6 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { isAssessmentCompleteAtom, isAssessmentInProgressAtom, userAtom, authLoadingAtom } from "@/store/atoms";
 import { useEffect } from "react";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
-import { WelcomeScreen } from "@/chat/WelcomeScreen";
 
 export default function Page() {
   const user = useAtomValue(userAtom);
@@ -23,7 +22,8 @@ export default function Page() {
   }, [user, isAssessmentInProgress, setAssessmentComplete]);
 
   if (authLoading) return null;
-  if (isAssessmentComplete) return <WelcomeScreen />;
+  // For completed users, ChatLayout renders ChatArea which handles the welcome screen
+  if (isAssessmentComplete) return null;
 
   return <AssessmentChatPage />;
 }

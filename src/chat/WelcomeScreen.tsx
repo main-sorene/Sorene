@@ -57,6 +57,7 @@ export function WelcomeScreen() {
           suggestions={suggestionLabels}
           onSuggestionClick={handleRecipeClick}
           className="w-full max-w-5xl"
+          disableNavigation
         />
       </div>
     </div>

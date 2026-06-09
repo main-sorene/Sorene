@@ -1,5 +1,5 @@
-// Server-only — imports @anthropic-ai/sdk. Do not import from client components.
-import type Anthropic from "@anthropic-ai/sdk";
+// Server-only — do not import from client components.
+import Anthropic from "@anthropic-ai/sdk";
 
 export { maskPii, sanitizeName, maskScores, maskAnswers } from "./piiUtils";
 

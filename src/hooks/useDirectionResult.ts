@@ -5,8 +5,6 @@ import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { useQuery } from "@tanstack/react-query";
-import type { EscalationFlag } from "@/lib/dnaEngine";
-
 export type DirectionAlternative = {
   model: string;
   compatibility: number;
@@ -146,7 +144,7 @@ export function useDirectionResult() {
     .filter((a) => a.model !== model)
     .slice(0, 2);
 
-  const escalation: EscalationFlag | undefined = profile?.directionEligibility?.escalation;
+  const escalation = profile?.directionEligibility?.escalation;
 
   // Log escalation trigger once per session (fire-and-forget)
   useEffect(() => {

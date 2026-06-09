@@ -8210,8 +8210,17 @@ function ContentSocialAgentUI({ project }: { project: DirectionCardData | null }
 }
 
 function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCardData; authUser: ReturnType<typeof useAtomValue<typeof userAtom>> }) {
-  const [accountStatus, setAccountStatus] = useState<"loading" | "disconnected" | "connected">("loading");
-  const [username, setUsername] = useState("");
+  // Initialize from cached status so returning users see their status instantly and
+  // first-time users see the Connect button immediately — no loading spinner flash.
+  const [accountStatus, setAccountStatus] = useState<"loading" | "disconnected" | "connected">(() => {
+    try {
+      const cached = localStorage.getItem(`social-threads-status-${project.title}`);
+      return cached === "connected" ? "connected" : "disconnected";
+    } catch { return "disconnected"; }
+  });
+  const [username, setUsername] = useState(() => {
+    try { return localStorage.getItem(`social-threads-username-${project.title}`) ?? ""; } catch { return ""; }
+  });
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -8252,7 +8261,12 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
   const [pendingSlot, setPendingSlot] = useState<Record<string, { date: string; time: string }>>({});
 
   // ── X (Twitter) channel state ──
-  const [xStatus, setXStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+  const [xStatus, setXStatus] = useState<"loading" | "connected" | "disconnected">(() => {
+    try {
+      const cached = localStorage.getItem(`social-x-status-${project.title}`);
+      return cached === "connected" ? "connected" : "disconnected";
+    } catch { return "disconnected"; }
+  });
   const [xUsername, setXUsername] = useState("");
   const [xKeyForm, setXKeyForm] = useState(false);
   const [xKeys, setXKeys] = useState({ apiKey: "", apiSecret: "", accessToken: "", accessTokenSecret: "" });
@@ -8341,8 +8355,17 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     ]);
     if (accountRes.ok) {
       const data = await accountRes.json() as { connected: boolean; username?: string; dna?: ContentDNA | null };
-      if (data.connected) { setAccountStatus("connected"); setUsername(data.username ?? ""); }
-      else setAccountStatus("disconnected");
+      if (data.connected) {
+        setAccountStatus("connected");
+        setUsername(data.username ?? "");
+        try {
+          localStorage.setItem(`social-threads-status-${project.title}`, "connected");
+          localStorage.setItem(`social-threads-username-${project.title}`, data.username ?? "");
+        } catch { /* ignore */ }
+      } else {
+        setAccountStatus("disconnected");
+        try { localStorage.setItem(`social-threads-status-${project.title}`, "disconnected"); } catch { /* ignore */ }
+      }
       if (data.dna) setDna(data.dna);
     } else { setAccountStatus("disconnected"); }
     if (draftsRes.ok) {
@@ -8364,8 +8387,14 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
     }
     if (xRes.ok) {
       const data = await xRes.json() as { connected: boolean; username?: string };
-      if (data.connected) { setXStatus("connected"); setXUsername(data.username ?? ""); }
-      else setXStatus("disconnected");
+      if (data.connected) {
+        setXStatus("connected");
+        setXUsername(data.username ?? "");
+        try { localStorage.setItem(`social-x-status-${project.title}`, "connected"); } catch { /* ignore */ }
+      } else {
+        setXStatus("disconnected");
+        try { localStorage.setItem(`social-x-status-${project.title}`, "disconnected"); } catch { /* ignore */ }
+      }
     } else { setXStatus("disconnected"); }
     if (xScheduleRes.ok) {
       const data = await xScheduleRes.json() as { posts: XScheduledPost[] };
@@ -8581,6 +8610,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       if (data.ok) {
         setXStatus("connected");
         setXUsername(data.username ?? "");
+        try { localStorage.setItem(`social-x-status-${project.title}`, "connected"); } catch { /* ignore */ }
         setXKeyForm(false);
         setXKeys({ apiKey: "", apiSecret: "", accessToken: "", accessTokenSecret: "" });
       } else {
@@ -8595,6 +8625,7 @@ function ContentSocialAgentUIInner({ project, authUser }: { project: DirectionCa
       const { authFetch } = await import("@/lib/authFetch");
       await authFetch(`/api/x/keys?project=${encodeURIComponent(project.title)}`, { method: "DELETE" });
       setXStatus("disconnected");
+      try { localStorage.setItem(`social-x-status-${project.title}`, "disconnected"); } catch { /* ignore */ }
       setXUsername("");
       setXDrafts([]);
     } catch { /* ignore */ }
@@ -8877,6 +8908,10 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
                   clearInterval(poll);
                   setAccountStatus("connected");
                   setUsername(d.username ?? "");
+                  try {
+                    localStorage.setItem(`social-threads-status-${project.title}`, "connected");
+                    localStorage.setItem(`social-threads-username-${project.title}`, d.username ?? "");
+                  } catch { /* ignore */ }
                   setConnecting(false);
                 }
               }
@@ -8897,6 +8932,10 @@ Separate posts with exactly "---". No labels, no numbering, no intro. Just the $
       const { authFetch } = await import("@/lib/authFetch");
       await authFetch(`/api/threads/account?project=${encodeURIComponent(project.title)}`, { method: "DELETE" });
       setAccountStatus("disconnected");
+      try {
+        localStorage.setItem(`social-threads-status-${project.title}`, "disconnected");
+        localStorage.removeItem(`social-threads-username-${project.title}`);
+      } catch { /* ignore */ }
       setUsername("");
       setWeekDrafts([]);
       setDna(null);
@@ -9213,7 +9252,6 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             </div>
           </button>
           <div className="flex items-center gap-3 shrink-0">
-            {accountStatus === "loading" && <Loader2 size={14} className="animate-spin text-[#9A9A9A]" />}
             {accountStatus === "connected" && (
               <>
                 <button onClick={(e) => { e.stopPropagation(); scanHistory(); }} disabled={scanningHistory}
@@ -9245,9 +9283,6 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
-        {accountStatus === "loading" && (
-          <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[#9A9A9A]" /></div>
-        )}
         {accountStatus === "disconnected" && (
           <div className="px-5 py-4 text-center space-y-3">
             <p className="text-[12px] text-[#9A9A9A]">Connect your Threads account to generate, schedule, and post directly from here.</p>
@@ -9752,10 +9787,6 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
               transition={{ height: { type: "spring", stiffness: 400, damping: 40 }, opacity: { duration: 0.15 } }}
               className="overflow-hidden border-t border-[#ECEDEE]">
-
-              {xStatus === "loading" && (
-                <div className="flex justify-center py-6"><Loader2 size={16} className="animate-spin text-[#9A9A9A]" /></div>
-              )}
 
               {/* Setup flow — disconnected */}
               {xStatus === "disconnected" && (

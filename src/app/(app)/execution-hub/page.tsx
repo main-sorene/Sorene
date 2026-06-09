@@ -11582,15 +11582,15 @@ export default function Page() {
                 })}
               </div>
 
-              {/* Accordion panel */}
-              <AnimatePresence initial={false}>
+              {/* Accordion panel — pure fade (no vertical translate) so the card stays flush under the tabs */}
+              <AnimatePresence initial={false} mode="wait">
                 {activeTab && (
                   <motion.div
                     key={activeTab}
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
                     className="rounded-[28px] bg-white shadow-sm border border-gray-100 overflow-hidden"
                   >
                     <div

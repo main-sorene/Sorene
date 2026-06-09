@@ -134,36 +134,4 @@ export const authApi = {
     return (await res.json()) as ProfileResponse;
   },
 
-  uploadCV: async (params: {
-    file: File;
-    user_id: string;
-    chat_id?: string;
-    character?: string;
-    name?: string;
-  }): Promise<{
-    file_name: string;
-    file_path: string;
-    status: string;
-    text: string;
-    text_length: number;
-  }> => {
-    const formData = new FormData();
-    formData.append("file", params.file);
-    formData.append("user_id", params.user_id);
-    if (params.chat_id) formData.append("chat_id", params.chat_id);
-    if (params.character) formData.append("character", params.character);
-    if (params.name) formData.append("name", params.name);
-
-    const res = await fetch("https://web.fayjen.com/profile/cv", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`CV upload failed: ${errorText}`);
-    }
-
-    return await res.json();
-  },
 };

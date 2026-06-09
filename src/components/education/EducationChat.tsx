@@ -54,28 +54,43 @@ export function EducationChat({ onClose }: { onClose?: () => void }) {
     authUser?.displayName?.split(" ")[0] ||
     "there";
 
-  const send = useCallback(async (text: string) => {
+  // Build direction context from the user's first direction card
+  const directionCards = (authUser?.profile as any)?.directionCards as any[] | undefined;
+  const primaryDirection = directionCards?.[0] ?? null;
+
+  const send = useCallback(async (text: string, recipeId?: string) => {
     if (!text.trim() || loading) return;
     setMessages((prev) => [...prev, { id: makeId(), role: "user", content: text }]);
     setLoading(true);
+
     try {
-      const res = await authFetch("/api/chat", {
+      const profile = authUser?.profile;
+      const res = await authFetch("/api/education-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          context: "education",
+          recipeId,
           history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-          userProfile: authUser?.profile ? {
-            firstName: authUser.profile.firstName,
-            occupation: authUser.profile.occupation,
-            cvSummary: authUser.profile.cvSummary,
-            dnaScores: authUser.profile.dnaScores,
-            dnaNarrative: (authUser.profile as any).dna_narrative,
-            assessmentAnswers: authUser.profile.assessmentAnswers,
+          userProfile: profile ? {
+            firstName: profile.firstName,
+            occupation: profile.occupation,
+            cvSummary: profile.cvSummary,
+            dnaScores: profile.dnaScores,
+            dnaNarrative: (profile as any).dna_narrative,
+            assessmentAnswers: profile.assessmentAnswers,
           } : undefined,
+          direction: primaryDirection ? {
+            title: primaryDirection.title,
+            oneliner: primaryDirection.oneliner,
+            description: primaryDirection.description,
+            simple_positioning: primaryDirection.simple_positioning,
+            path_label: primaryDirection.path_label,
+            first_10_customers: primaryDirection.first_10_customers,
+          } : null,
         }),
       });
+
       const reply = res.ok
         ? ((await res.json())?.reply ?? "I'm here to help with your entrepreneurial journey.")
         : "Sorry, something went wrong. Please try again.";
@@ -86,7 +101,7 @@ export function EducationChat({ onClose }: { onClose?: () => void }) {
       setLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
-  }, [loading, messages, authUser?.profile]);
+  }, [loading, messages, authUser?.profile, primaryDirection]);
 
   const submitInput = () => {
     const text = (textareaRef.current?.value ?? input).trim();
@@ -172,7 +187,7 @@ export function EducationChat({ onClose }: { onClose?: () => void }) {
             {SUGGESTIONS.map((s) => (
               <button
                 key={s.recipeId}
-                onClick={() => send(s.label)}
+                onClick={() => send(s.label, s.recipeId)}
                 disabled={loading}
                 className="flex items-center justify-center gap-1 px-2 py-[7px] rounded-full border border-[#ECEDEE] bg-[#F8F9FA] text-[11px] sm:text-[12px] font-medium text-[#111111] hover:bg-[#F1F3F5] transition-all disabled:opacity-50"
               >
@@ -193,7 +208,7 @@ export function EducationChat({ onClose }: { onClose?: () => void }) {
                 }
               }}
               onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
-              placeholder="Ask anything about education"
+              placeholder="Ask anything about the founder journey"
               rows={1}
               disabled={loading}
               className="flex-1 resize-none bg-transparent text-sm text-[#111111] placeholder:text-[#9CA3AF] outline-none leading-6 max-h-24 overflow-y-auto disabled:opacity-50"

@@ -463,6 +463,24 @@ export function Sidebar({
         </AnimatePresence>
       </div>
 
+      {/* New Chat Section — above nav items */}
+      {!collapsed && (
+        <div className="px-2 mt-2 mb-1">
+          <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
+            New Chat
+          </p>
+          <div className="space-y-0.5">
+            {conversations
+              .filter(
+                (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
+              )
+              .map((conv) => (
+                <ConversationItem key={conv.id} conv={conv} />
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Nav items */}
       <div className={cn("px-2 shrink-0", collapsed && "px-3")}>
         {navItems.map((item) => {
@@ -578,26 +596,6 @@ export function Sidebar({
                 <div className="space-y-0.5">
                   {conversations
                     .filter((c) => c.segment === "education")
-                    .map((conv) => (
-                      <ConversationItem key={conv.id} conv={conv} />
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* Other Section */}
-            {conversations.filter(
-              (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
-            ).length > 0 && (
-              <div className="mb-4">
-                <p className="text-label-medium text-[#62646A] uppercase tracking-widest px-3 mb-1">
-                  OTHER
-                </p>
-                <div className="space-y-0.5">
-                  {conversations
-                    .filter(
-                      (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
-                    )
                     .map((conv) => (
                       <ConversationItem key={conv.id} conv={conv} />
                     ))}

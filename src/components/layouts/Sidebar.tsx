@@ -511,7 +511,9 @@ export function Sidebar({
           <div className="space-y-0.5 mb-1">
             {conversations
               .filter(
-                (c) => !["dna", "ideation", "education", "execution"].includes(c.segment || ""),
+                (c) =>
+                  !["dna", "ideation", "education", "execution"].includes(c.segment || "") &&
+                  !c.id.startsWith("assessment-"),
               )
               .map((conv) => (
                 <ConversationItem key={conv.id} conv={conv} />

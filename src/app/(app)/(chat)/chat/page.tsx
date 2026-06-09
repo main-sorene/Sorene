@@ -2,8 +2,8 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { isAssessmentCompleteAtom, isAssessmentInProgressAtom, userAtom, authLoadingAtom } from "@/store/atoms";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
+import { WelcomeScreen } from "@/chat/WelcomeScreen";
 
 export default function Page() {
   const user = useAtomValue(userAtom);
@@ -11,7 +11,6 @@ export default function Page() {
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const setAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
-  const router = useRouter();
 
   useEffect(() => {
     if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
@@ -23,14 +22,8 @@ export default function Page() {
     }
   }, [user, isAssessmentInProgress, setAssessmentComplete]);
 
-  useEffect(() => {
-    if (isAssessmentComplete) {
-      router.replace("/dna");
-    }
-  }, [isAssessmentComplete, router]);
-
   if (authLoading) return null;
-  if (isAssessmentComplete) return null;
+  if (isAssessmentComplete) return <WelcomeScreen />;
 
   return <AssessmentChatPage />;
 }

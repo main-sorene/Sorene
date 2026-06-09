@@ -88,7 +88,7 @@ export function DNACard({
         !isExpanded &&
           variant === "standard" &&
           (isLarge ? "min-h-[242px]" : "min-h-[242px]"),
-        !isExpanded && variant === "hero" && isLarge && "min-h-[242px]",
+        !isExpanded && variant === "hero" && isLarge && "min-h-[280px]",
       )}
       style={gradientStyle}
       onClick={!isExpanded ? handleToggle : undefined}
@@ -194,8 +194,16 @@ export function DNACard({
               </div>
             </div>
 
-            <div className="p-8 pb-10 relative z-20">
-              <p className="text-white text-label-medium leading-relaxed max-w-[85%]">
+            <div className="p-8 pb-10 relative z-20 flex flex-col gap-2">
+              {heroStatement && (
+                <p
+                  className="text-white font-medium leading-snug tracking-tight"
+                  style={{ fontSize: "22px" }}
+                >
+                  {heroStatement}
+                </p>
+              )}
+              <p className="text-white text-label-medium leading-relaxed max-w-[85%] opacity-80">
                 {description}
               </p>
             </div>
@@ -262,6 +270,14 @@ export function DNACard({
   );
 }
 
+function signalColor(value: string): string {
+  const v = value.toLowerCase();
+  if (v === "high" || v === "ready" || v === "stable") return "#16B364";
+  if (v === "medium" || v === "moderate" || v === "deciding") return "#F59E0B";
+  if (v === "low" || v === "limited" || v === "exploring" || v === "depleted") return "#EF4444";
+  return "#151515";
+}
+
 function DetailContent({
   heroStatement,
   keySignals,
@@ -275,45 +291,93 @@ function DetailContent({
   blindSpots?: string[];
   riskExamples?: string[];
 }) {
+  // Group Emotional Risk + Financial Risk into a single Risk Profile row
+  const emotionalRiskSignal = keySignals?.find((s) => s.label === "Emotional Risk");
+  const financialRiskSignal = keySignals?.find((s) => s.label === "Financial Risk");
+  const hasRiskGroup = !!(emotionalRiskSignal && financialRiskSignal);
+  const filteredSignals = (keySignals || []).filter(
+    (s) => s.label !== "Emotional Risk" && s.label !== "Financial Risk"
+  );
+
+  const renderSignalValue = (value: string) => (
+    <div className="text-heading-xsmall mb-2 font-medium" style={{ color: signalColor(value) }}>
+      {value}
+    </div>
+  );
+
   return (
     <div className="p-6 space-y-12">
-      {/* {heroStatement && (
-        <section>
-          <div className="text-heading-small text-[#151515] mb-2">
-            {heroStatement}
-          </div>
-          <Separator className="bg-gray-100 mt-6" />
-        </section>
-      )} */}
-
       {keySignals && keySignals.length > 0 && (
         <section>
           <h4 className="text-body-medium-medium text-[#151515] mb-6 tracking-widest uppercase">
             Key Signals
           </h4>
           <div className="divide-y divide-gray-100 border-t border-gray-100">
-            {keySignals.map((signal, idx) => (
-              <div
-                key={idx}
-                className="flex flex-col md:flex-row md:items-start py-4"
-              >
+            {filteredSignals.map((signal, idx) => {
+              // Insert Risk Profile group before Time Availability
+              const insertRiskBefore = hasRiskGroup && signal.label === "Time Availability" && idx === filteredSignals.findIndex((s) => s.label === "Time Availability");
+              return (
+                <>
+                  {insertRiskBefore && (
+                    <div key="risk-profile" className="flex flex-col md:flex-row md:items-start py-4">
+                      <div className="w-64 shrink-0 mb-2 md:mb-0">
+                        <span className="text-body-small-medium text-[#62646A]">Risk Profile</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex gap-12 mb-2">
+                          <div>
+                            <p className="text-body-small text-[#62646A] mb-1">{emotionalRiskSignal!.label}</p>
+                            {renderSignalValue(emotionalRiskSignal!.value)}
+                          </div>
+                          <div>
+                            <p className="text-body-small text-[#62646A] mb-1">{financialRiskSignal!.label}</p>
+                            {renderSignalValue(financialRiskSignal!.value)}
+                          </div>
+                        </div>
+                        {emotionalRiskSignal!.explanation && (
+                          <p className="text-body-small text-[#62646A] leading-relaxed max-w-2xl">
+                            {emotionalRiskSignal!.explanation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div key={idx} className="flex flex-col md:flex-row md:items-start py-4">
+                    <div className="w-64 shrink-0 mb-2 md:mb-0">
+                      <span className="text-body-small-medium text-[#62646A]">{signal.label}</span>
+                    </div>
+                    <div className="flex-1">
+                      {renderSignalValue(signal.value)}
+                      {signal.explanation && (
+                        <p className="text-body-small text-[#62646A] leading-relaxed max-w-2xl">
+                          {signal.explanation}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })}
+            {/* Render Risk Profile at end if Time Availability not in list */}
+            {hasRiskGroup && !filteredSignals.find((s) => s.label === "Time Availability") && (
+              <div key="risk-profile-end" className="flex flex-col md:flex-row md:items-start py-4">
                 <div className="w-64 shrink-0 mb-2 md:mb-0">
-                  <span className="text-body-small-medium text-[#62646A]">
-                    {signal.label}
-                  </span>
+                  <span className="text-body-small-medium text-[#62646A]">Risk Profile</span>
                 </div>
                 <div className="flex-1">
-                  <div className="text-heading-xsmall mb-2 text-[#151515]">
-                    {signal.value}
+                  <div className="flex gap-12 mb-2">
+                    <div>
+                      <p className="text-body-small text-[#62646A] mb-1">{emotionalRiskSignal!.label}</p>
+                      {renderSignalValue(emotionalRiskSignal!.value)}
+                    </div>
+                    <div>
+                      <p className="text-body-small text-[#62646A] mb-1">{financialRiskSignal!.label}</p>
+                      {renderSignalValue(financialRiskSignal!.value)}
+                    </div>
                   </div>
-                  {signal.explanation && (
-                    <p className="text-body-small text-[#62646A] leading-relaxed max-w-2xl">
-                      {signal.explanation}
-                    </p>
-                  )}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </section>
       )}

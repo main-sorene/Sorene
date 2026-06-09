@@ -2,10 +2,23 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DnaScores } from "@/lib/dnaEngine";
 import { assertTextCompletion, sanitizeName, maskScores } from "@/lib/aiSafety";
+import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) {
+    return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
+  }
+
   try {
     const { models, scores, firstName } = (await req.json()) as {
       models: { model: string; compatibility: number }[];
@@ -56,9 +69,10 @@ The array must contain exactly ${models.length} strings, in the same order as th
       messages: [{ role: "user", content: prompt }],
     });
 
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+
     const raw = assertTextCompletion(message);
 
-    // Extract JSON from the response, tolerating any surrounding whitespace
     const jsonStart = raw.indexOf("{");
     const jsonEnd = raw.lastIndexOf("}");
     if (jsonStart === -1 || jsonEnd === -1) {
@@ -70,9 +84,7 @@ The array must contain exactly ${models.length} strings, in the same order as th
       const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as { summaries?: string[] };
       const summaries = Array.isArray(parsed.summaries) ? parsed.summaries : [];
       if (summaries.length !== models.length) {
-        console.error(
-          `[direction-alternatives] Expected ${models.length} summaries, got ${summaries.length}`,
-        );
+        console.error(`[direction-alternatives] Expected ${models.length} summaries, got ${summaries.length}`);
       }
       return Response.json({ summaries });
     } catch (parseErr) {

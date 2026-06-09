@@ -1,6 +1,6 @@
 "use client";
 export type AssessmentContext = {
-  profile: { firstName: string; cvFileName?: string | null };
+  profile: { firstName: string; lastName?: string; cvFileName?: string | null };
   answers: Record<string, string>;
   hasCv: boolean;
 };
@@ -10,6 +10,7 @@ export type FollowUp = {
   message: string | ((answer: string) => string);
   inputType: "freetext" | "choice";
   choices?: string[];
+  allowCustom?: boolean;
 };
 
 export type QuestionNode = {
@@ -29,45 +30,88 @@ export type QuestionNode = {
   };
 };
 
+// Profile collection nodes — run at the start of every assessment
+// (after CV upload decision). Answers are saved to the user profile,
+// not to assessment scoring answers.
+export const PROFILE_NODES: QuestionNode[] = [
+  {
+    // Shown when user uploaded a CV — confirm the full name we extracted
+    id: "onb_confirm_name",
+    signal: "Profile Setup",
+    soreneMessage: (ctx) => {
+      const fullName = [ctx.profile.firstName, ctx.profile.lastName].filter(Boolean).join(" ");
+      return `Before we begin — I want to make sure I have your name right. From your CV, I'm reading **${fullName}**. Is that correct? If not, just type your full name.`;
+    },
+    inputType: "choice",
+    choices: ["Yes"],
+    allowCustom: true,
+    next: "onb_birthday",
+  },
+  {
+    // Shown when user skipped CV — collect full name
+    id: "onb_name_full",
+    signal: "Profile Setup",
+    soreneMessage: (ctx) =>
+      `Before we begin${ctx.profile.firstName && ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""} — what's your full name?`,
+    inputType: "freetext",
+    next: "onb_birthday",
+  },
+  {
+    id: "onb_birthday",
+    signal: "Profile Setup",
+    soreneMessage: "When's your birthday? (DD/MM/YYYY)",
+    inputType: "freetext",
+    next: "onb_gender",
+  },
+  {
+    id: "onb_gender",
+    signal: "Profile Setup",
+    soreneMessage: "Last one — what's your gender?",
+    inputType: "choice",
+    choices: ["Male", "Female", "Prefer not to say"],
+    next: "settings_review", // special: handled in useAssessmentFlow
+  },
+];
+
 export const QUESTION_NODES: QuestionNode[] = [
   // Background questions — only used when user skips CV upload
   {
     id: "bg1_history",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage: (ctx) =>
-      `That's completely fine${ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""}. Let me get to know you through a few short questions instead.\n\nTo start — could you walk me through what you've been doing professionally over the last few years? Not the job titles, but what your days have actually looked like, what kind of work has filled your time.`,
+      `That's completely fine${ctx.profile.firstName !== "there" ? `, ${ctx.profile.firstName}` : ""}. I'll get to know you through a few questions instead — starting with where you are right now.\n\nWhat's your current or most recent role, and what does it actually involve day-to-day? Give me the real version, not the job title.`,
     inputType: "freetext",
     next: "bg2_skills",
   },
   {
     id: "bg2_skills",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "Thank you for sharing that. When people come to you for help at work — colleagues, clients, friends — what do they tend to ask you about? What are the things you've quietly become good at over time, even if they don't feel like big achievements?",
+      "How many years have you been working professionally, and which fields or industries have you spent most of that time in?",
     inputType: "freetext",
     next: "bg3_pattern",
   },
   {
     id: "bg3_pattern",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "When you look back at the path you've taken — the roles, the shifts, the choices you made — does a thread run through it? Some quiet pattern in what kept pulling you forward, or in what you kept moving away from? Or has it felt more like one thing after another, without much shape?",
+      "What would you say you're genuinely expert in — not just experienced with, but the thing people come to you for when something important needs to get done right?",
     inputType: "freetext",
     next: "bg4_direction",
   },
   {
     id: "bg4_direction",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "Where do you feel yourself drifting these days — whether it's something you're quietly being drawn toward, or something you're slowly starting to step away from? Even if it's not fully formed yet, name what comes to mind.",
+      "What are the key skills and tools you use regularly? Think broadly — technical skills, domain knowledge, tools you rely on, and the interpersonal or leadership capabilities you've built.",
     inputType: "freetext",
     next: "bg5_turning",
   },
   {
     id: "bg5_turning",
-    signal: "Background",
+    signal: "Professional Profile",
     soreneMessage:
-      "One last bit of context before we go deeper. Looking back, was there a moment — a project, a conversation, a season of your life — that quietly shifted how you saw your work, or what you wanted from it? Take your time with this one.",
+      "Last one on your background — walk me briefly through your career path. What roles or industries have shaped who you are professionally, and what's the arc of how you got here?",
     inputType: "freetext",
     next: "q1_energy",
   },
@@ -78,7 +122,7 @@ export const QUESTION_NODES: QuestionNode[] = [
       if (ctx.hasCv) {
         return `Think about a time when work didn't feel like work. When you were so absorbed that you lost track of time. What were you actually doing in that moment?`;
       }
-      return `Think of a specific moment in your work or life when you felt genuinely energized — like what you were doing actually mattered and didn't feel like a burden. What were you doing, and why did it feel that way?`;
+      return `Good — that gives me a solid picture of your background. Now I want to understand how you actually work, not just what you've done.\n\nThink of a specific moment when work felt genuinely energizing — like what you were doing actually mattered and didn't feel like a burden. What were you doing, and why did it feel that way?`;
     },
     inputType: "freetext",
     next: "q1_followup",
@@ -92,7 +136,26 @@ export const QUESTION_NODES: QuestionNode[] = [
       return `${preview ? `I hear you — that sense of things clicking into place. ` : ""}What drains you? What kind of work makes the day feel long and leaves you feeling empty — not physically tired, but emotionally flat?`;
     },
     inputType: "freetext",
+    next: "q1b_quit_reason",
+  },
+  {
+    id: "q1b_quit_reason",
+    signal: "Negative Filter",
+    soreneMessage:
+      "Now think about your most recent role — or the situation you're moving away from. What specifically pushed you out, or is pushing you out now? Not 'I needed a change' — but what was the thing you knew you couldn't keep doing?",
+    inputType: "freetext",
     next: "q2_pattern",
+    alwaysFollowUp: {
+      message:
+        "And did you actually enjoy the type of work itself — the tasks, the craft, the content of the role — or was it mainly the environment, management, or conditions that made you want to leave?",
+      inputType: "choice" as const,
+      choices: [
+        "I enjoyed the work itself — the problem was the environment or conditions",
+        "I didn't enjoy the actual work either — it wasn't the right fit for me",
+        "Mixed — some of what I did I loved, other parts I didn't",
+        "Hard to separate — everything felt connected",
+      ],
+    },
   },
   {
     id: "q2_pattern",
@@ -111,8 +174,14 @@ export const QUESTION_NODES: QuestionNode[] = [
       condition: (answer) =>
         answer.includes("All the time") || answer.includes("Pretty often"),
       message:
-        "So this was a real thread — not just a one-off. Did it consistently energize you, or did it start to feel like extra work on top of your real job?",
-      inputType: "freetext",
+        "So this was a real pattern, not just a one-off. When it happened, did it feel exciting and natural — or more like extra effort you had to push through?",
+      inputType: "choice",
+      choices: [
+        "Exciting and natural — it felt like what I was meant to do",
+        "A mix — energizing but still required real effort",
+        "More like extra effort — I pushed through but it didn't come easily",
+      ],
+      allowCustom: true,
     },
   },
   {
@@ -311,7 +380,7 @@ export const CLOSING_MESSAGE =
   "Thank you for being honest with me. Give me a moment to bring this together.";
 
 export function getNode(id: string): QuestionNode | undefined {
-  return QUESTION_NODES.find((n) => n.id === id);
+  return QUESTION_NODES.find((n) => n.id === id) ?? PROFILE_NODES.find((n) => n.id === id);
 }
 
 export function getNodeMessage(

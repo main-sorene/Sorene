@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Plus } from "lucide-react";
+import { Menu } from "lucide-react";
 import {
   activeConversationAtom,
   activeConversationIdAtom,
@@ -13,7 +13,6 @@ import {
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -95,32 +94,33 @@ export function ChatHeader() {
 
       {/* Right: New Chat + avatar */}
       <div className="flex items-center gap-3">
-        <button
-          data-testid="new-chat-header"
-          onClick={handleNewChat}
-          disabled={!isAssessmentComplete}
-          className={cn(
-            "flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-body-medium-medium transition-colors",
-            isAssessmentComplete
-              ? "bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
-              : "bg-[#111111] text-white cursor-not-allowed opacity-50",
-          )}
+        <a
+          href="https://discord.gg/2YtvCm2SWp"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors bg-[#111111] hover:bg-[#222222] text-white cursor-pointer"
         >
-          <Plus size={18} />
-          New Chat
-        </button>
+          Product Feedback
+        </a>
 
         {/* User avatar */}
-        <Link href="/settings" data-testid="user-avatar" className="hidden sm:block">
-          <img
-            src={
-              authUser?.profile?.photoUrl ||
-              `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-            }
-            alt="User Profile"
-            className="w-10 h-10 rounded-lg cursor-pointer bg-purple-100 transition-transform hover:scale-105 active:scale-95"
-          />
-        </Link>
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          data-testid="user-avatar"
+          className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shrink-0"
+        >
+          {authUser?.profile?.photoUrl ? (
+            <img
+              src={authUser.profile.photoUrl}
+              alt="User Profile"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-[#3D3D3D] flex items-center justify-center text-white text-sm font-semibold">
+              {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+            </div>
+          )}
+        </button>
       </div>
     </header>
   );

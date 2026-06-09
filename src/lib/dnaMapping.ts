@@ -44,10 +44,12 @@ export function mapProfileToDNA(profile: ProfileData): DNACoreItem[] {
     gradient: `radial-gradient(125.79% 132.57% at 50% 0%, #000 28.72%, rgba(0, 0, 0, 0.00) 100%), linear-gradient(180deg, #16B364 0%, #ECFCCB 100%)`,
     icon: "/figmaAssets/dna.svg",
     hero_statement: `${identity?.archetype?.[0] || "Strategic Thinker"} driven by ${core?.primary_motivation || "purpose"}.`,
-    description:
-      core?.description?.primary_motivation ||
-      `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with ${core?.structure_preference || "guided"} structure and ${(core?.collaboration_mode || "collaborative").replace("_", " ")} collaboration.`,
-    summary: `As ${identity?.archetype?.[0] || "a professional"}, you combine a ${core?.primary_motivation || "value"}-led approach with a preference for ${core?.structure_preference || "balanced"} environments and ${(core?.collaboration_mode || "dynamic").replace("_", " ")} settings to ensure meaningful outcomes.`,
+    description: core
+      ? `${capitalize(core.primary_motivation || "")}-driven, ${(core.structure_preference || "").toLowerCase().replace(/_/g, " ")}-structured, and ${(core.collaboration_mode || "").toLowerCase().replace(/_/g, " ")} by nature — you bring ${(core.execution_bias || "focused execution").toLowerCase().replace(/_/g, " ")} to everything you build.`
+      : `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with guided structure and collaborative collaboration.`,
+    summary: core
+      ? `${capitalize(core.primary_motivation || "")}-driven, ${(core.structure_preference || "").toLowerCase().replace(/_/g, " ")}-structured, and ${(core.collaboration_mode || "").toLowerCase().replace(/_/g, " ")} by nature — you bring ${(core.execution_bias || "focused execution").toLowerCase().replace(/_/g, " ")} to everything you build.`
+      : `You are an ${identity?.archetype?.join(" and ") || "individual"} who operates best with guided structure and collaborative collaboration.`,
     key_signals: [
       {
         label: "Primary Motivation",
@@ -56,13 +58,13 @@ export function mapProfileToDNA(profile: ProfileData): DNACoreItem[] {
       },
       {
         label: "Structure Preference",
-        value: capitalize(core?.structure_preference || "flexible"),
+        value: capitalize((core?.structure_preference || "flexible").replace(/_/g, " ")),
         explanation: core?.description?.structure_preference,
       },
       {
         label: "Collaboration Mode",
         value: capitalize(
-          (core?.collaboration_mode || "collaborative").replace("_", " "),
+          (core?.collaboration_mode || "collaborative").replace(/_/g, " "),
         ),
         explanation: core?.description?.collaboration_mode,
       },
@@ -80,6 +82,16 @@ export function mapProfileToDNA(profile: ProfileData): DNACoreItem[] {
         label: "Financial Risk",
         value: capitalize(core?.risk_financial || "balanced"),
         explanation: core?.description?.risk_financial,
+      },
+      {
+        label: "Time Availability",
+        value: capitalize((core?.time_availability || "").replace(/_/g, " ") || "—"),
+        explanation: core?.description?.time_availability,
+      },
+      {
+        label: "Readiness Level",
+        value: capitalize((core?.readiness_level || "").replace(/_/g, " ") || "—"),
+        explanation: core?.description?.readiness_level,
       },
     ],
   });

@@ -6,6 +6,7 @@ import {
   isHistoryLoadingAtom,
   isAddMoreInfoModeAtom,
   isAssessmentCompleteAtom,
+  isAssessmentInProgressAtom,
   selectedModelAtom,
   userAtom,
   ideationAtom,
@@ -37,6 +38,7 @@ export function ChatArea() {
   const [isAssessmentComplete, setIsAssessmentComplete] = useAtom(
     isAssessmentCompleteAtom,
   );
+  const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const selectedModel = useAtomValue(selectedModelAtom);
   const authUser = useAtomValue(userAtom);
   const setIdeation = useSetAtom(ideationAtom);
@@ -48,12 +50,16 @@ export function ChatArea() {
 
   const queryClient = useQueryClient();
 
-  // If profile exists, mark assessment as complete to hide buttons and enable chat
+  // If profile exists, mark assessment as complete to hide buttons and enable chat —
+  // but guard against flipping mid-session so AssessmentChatPage stays visible.
   useEffect(() => {
-    if (profileRes?.dnaAssessmentComplete && !isAssessmentComplete) {
-      setIsAssessmentComplete(true);
+    if (profileRes?.dnaAssessmentComplete && !isAssessmentComplete && !isAssessmentInProgress) {
+      const sessionKey = `assessment_state_${authUser?.uid || "guest"}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        setIsAssessmentComplete(true);
+      }
     }
-  }, [profileRes, isAssessmentComplete, setIsAssessmentComplete]);
+  }, [profileRes, isAssessmentComplete, isAssessmentInProgress, setIsAssessmentComplete, authUser?.uid]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async () => {

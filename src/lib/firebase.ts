@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { Auth, getAuth, GoogleAuthProvider } from "firebase/auth";
+import { Auth, getAuth, GoogleAuthProvider, signInWithPopup, UserCredential, browserLocalPersistence, setPersistence } from "firebase/auth";
 import { FirebaseStorage, getStorage } from "firebase/storage";
 import { Firestore, getFirestore } from "firebase/firestore";
 
@@ -30,6 +30,9 @@ function initializeFirebase() {
   try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
+    // Explicitly persist session in localStorage so mobile refreshes and
+    // app-switching never drop the auth state.
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
     storage = getStorage(app);
     db = getFirestore(app);
     provider = new GoogleAuthProvider();
@@ -42,5 +45,10 @@ function initializeFirebase() {
 }
 
 initializeFirebase();
+
+export async function signInWithGoogle(): Promise<UserCredential> {
+  if (!auth || !provider) throw new Error("Firebase not initialized");
+  return signInWithPopup(auth, provider);
+}
 
 export { app, auth, provider, storage, db };

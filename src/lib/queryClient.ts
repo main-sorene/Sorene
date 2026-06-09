@@ -8,8 +8,14 @@ import { toast } from "@/hooks/use-toast";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "/api";
 
+// Dispatched when any API call returns 402 — triggers the upgrade modal
+export const CREDITS_EXHAUSTED_EVENT = "sorene:credits_exhausted";
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    if (res.status === 402 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(CREDITS_EXHAUSTED_EVENT));
+    }
     let errorMessage = res.statusText;
     try {
       const data = await res.json();

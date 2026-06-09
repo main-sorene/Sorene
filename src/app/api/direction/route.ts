@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
 import { maskPii, maskAnswers, maskScores, sanitizeName } from "@/lib/aiSafety";
+import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -39,17 +41,17 @@ function buildUserMessage(
     const hasBg = bg1 || bg2 || bg3 || bg4 || bg5;
     if (hasBg) {
       const lines = [
-        bg1 ? `- Recent professional life: ${bg1}` : "",
-        bg2 ? `- What people come to them for: ${bg2}` : "",
-        bg3 ? `- Pattern across their path: ${bg3}` : "",
-        bg4 ? `- Where they're drifting: ${bg4}` : "",
-        bg5 ? `- Turning-point moment: ${bg5}` : "",
+        bg1 ? `- Current / most recent role: ${bg1}` : "",
+        bg2 ? `- Years of experience and fields: ${bg2}` : "",
+        bg3 ? `- Core expertise (what they're known for): ${bg3}` : "",
+        bg4 ? `- Key skills and tools: ${bg4}` : "",
+        bg5 ? `- Career arc: ${bg5}` : "",
       ].filter(Boolean).join("\n");
       cvBlock = `\n\nBackground context (from their own words — they did not share a CV):\n${lines}\n\nWeave 1-2 specific references to their actual history (real roles, real skills, real shifts) where natural — especially in the Understanding Reflection and Fit Justification. Do not list it back to them; integrate it.`;
     }
   }
 
-  if (!eligibility.eligible) {
+  if (eligibility.eligible === false) {
     const { reason, scores } = eligibility;
     return `The user's name is ${firstName}.${cvBlock}
 
@@ -60,6 +62,7 @@ Reason: ${reason}
 DNA context:
 - Energy source: ${scores.energy_source}
 - Energy drains: ${scores.energy_drains}
+- Why they left / are leaving: ${scores.quit_reason || "not provided"}
 - Readiness: ${rawAnswers["q11_readiness"] || ""}
 - Constraints: ${rawAnswers["q4_time"] || ""} / ${rawAnswers["q5_finance"] || ""}
 
@@ -91,10 +94,14 @@ DNA scores:
 What they said:
 - What energizes them: ${scores.energy_source}
 - What drains them: ${scores.energy_drains}
+- Why they left / are leaving their last role: ${scores.quit_reason || "not provided"}
 - Value trade-off they chose: ${scores.non_negotiable}
 - What success feels like to them: ${scores.success_feeling}
 - Motivation driver: ${scores.motivation_driver}
 - Raw answers to key questions: q7=${rawAnswers["q7_uncertainty"] || ""}, q8=${rawAnswers["q8_workmode"] || ""}, q11=${rawAnswers["q11_readiness"] || ""}
+
+NEGATIVE FILTER — NON-NEGOTIABLE:
+The elements in "What drains them" and "Why they left" represent what this person is actively running away from. Any direction you suggest MUST NOT reproduce these conditions. If the quit reason or drain pattern names specific environments, dynamics, or task types (e.g. "constant reporting to management", "open-plan office politics", "reactive support work"), your suggested direction must structurally exclude them — not merely avoid mentioning them. If the selected model would naturally involve those elements, explain explicitly in the Fit Justification how this specific direction is architected to avoid them. Skill match alone is never sufficient justification if those skills were exercised in a context the person is fleeing.
 
 Write the Direction output following the 7-step protocol:
 1. Understanding Reflection (2-3 sentences): reflect how they operate — their energy, risk profile, constraints. Make them feel seen. Reference what they actually said.
@@ -109,6 +116,17 @@ Keep the total response under 500 words. Write as Sorene speaking directly to ${
 }
 
 export async function POST(req: NextRequest) {
+  const authedUser = await verifyAuth(req);
+  if (!authedUser) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+
+  const userKey = authedUser.email ?? authedUser.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) {
+    return new Response(JSON.stringify({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }), { status: 402 });
+  }
+
   try {
     const body = await req.json() as {
       eligibility: DirectionEligibility;
@@ -119,19 +137,14 @@ export async function POST(req: NextRequest) {
 
     const { eligibility, firstName: rawFirstName, rawAnswers, cvSummary } = body;
     const firstName = sanitizeName(rawFirstName);
-
     const safeAnswers = maskAnswers(rawAnswers);
     const safeCvSummary = cvSummary ? maskPii(cvSummary) : undefined;
-    const safeEligibility = {
-      ...eligibility,
-      scores: maskScores(eligibility.scores),
-    };
+    const safeEligibility = { ...eligibility, scores: maskScores(eligibility.scores) };
     const userMessage = buildUserMessage(safeEligibility, firstName, safeAnswers, safeCvSummary);
 
     const stream = await client.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      temperature: 0,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     });
@@ -139,15 +152,6 @@ export async function POST(req: NextRequest) {
     const readable = new ReadableStream({
       async start(controller) {
         for await (const chunk of stream) {
-          if (chunk.type === "message_delta") {
-            if (chunk.delta.stop_reason === "tool_use") {
-              controller.error(new Error("Model returned tool_use stop — no tools registered"));
-              return;
-            }
-            if (chunk.delta.stop_reason === "max_tokens") {
-              console.warn("[direction] Response truncated at max_tokens — output may be incomplete");
-            }
-          }
           if (
             chunk.type === "content_block_delta" &&
             chunk.delta.type === "text_delta"
@@ -155,6 +159,10 @@ export async function POST(req: NextRequest) {
             controller.enqueue(new TextEncoder().encode(chunk.delta.text));
           }
         }
+        // Deduct after stream completes, before closing so the write finishes
+        // while the serverless function is still alive
+        const final = await stream.finalMessage();
+        await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
       },
     });

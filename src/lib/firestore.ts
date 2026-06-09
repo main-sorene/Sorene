@@ -1,5 +1,7 @@
-import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField, collection, getDocs } from "firebase/firestore";
+import { db } from "./firebase";
+import type { DirectionCardData } from "./directionTypes";
+import type { Conversation } from "@/store/atoms";
 
 export interface UserProfile {
   firstName: string;
@@ -13,6 +15,10 @@ export interface UserProfile {
   useCase: string;
   onboardingComplete: boolean;
   dnaAssessmentComplete?: boolean;
+  fullName?: string;
+  nickname?: string;
+  workType?: string;
+  orgId?: string;
   cvData?: {
     file_name: string;
     file_path: string;
@@ -37,7 +43,19 @@ export interface UserProfile {
     success_feeling: string;
     energy_source: string;
     energy_drains: string;
+    quit_reason: string;
+    // Derived text labels (added in later engine versions)
+    primary_motivation?: string;
+    collaboration_mode?: string;
+    structure_preference?: string;
+    ambiguity_tolerance?: string;
+    emotional_risk?: string;
+    financial_risk?: string;
+    time_availability?: string;
+    readiness_label?: string;
+    strength_patterns?: string[];
   };
+  dna_narrative?: Record<string, string>;
   directionEligibility?: {
     eligible: boolean;
     model?: string;
@@ -48,17 +66,23 @@ export interface UserProfile {
       topCompatibility: number;
     };
   };
+  escalationLog?: {
+    trigger: string;
+    topCompatibility: number;
+    timestamp: string;
+  };
   directionText?: string;
   directionAlternatives?: {
     model: string;
     compatibility: number;
     summary?: string;
   }[];
-  escalationLog?: {
-    trigger: string;
-    topCompatibility: number;
-    timestamp: string;
-  };
+  directionCards?: DirectionCardData[];
+  resourcesConstraints?: Record<string, string>;
+  mieReport?: unknown;
+  mieReportGeneratedAt?: string;
+  problemScanReport?: unknown;
+  problemScanReportGeneratedAt?: string;
 }
 
 function getDb() {
@@ -89,7 +113,8 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
     return null;
   } catch (error) {
-    await auth?.signOut();
+    // Do NOT sign the user out here — a transient/slow read would otherwise
+    // log them out and bounce them back to the landing page.
     console.error("[Firestore] Error fetching user profile:", error);
     return null;
   }
@@ -105,7 +130,7 @@ export async function saveUserProfile(
     return;
   }
   try {
-    console.log("[Firestore] Saving profile for uid:", uid, data);
+    console.log("[Firestore] Saving profile for uid:", uid);
     const docRef = doc(firestore, "users", uid);
 
     // Remove undefined values to avoid Firebase error
@@ -138,9 +163,20 @@ export async function saveUserProfile(
   }
 }
 
+export async function clearDownstreamProfile(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  const docRef = doc(firestore, "users", uid);
+  await updateDoc(docRef, {
+    directionText: deleteField(),
+    directionAlternatives: deleteField(),
+    directionEligibility: deleteField(),
+  });
+}
+
 export async function isOnboardingComplete(uid: string): Promise<boolean> {
   const profile = await getUserProfile(uid);
-  console.log("[Firestore] onboarding check for", uid, "profile:", profile);
+  console.log("[Firestore] onboarding check for", uid);
   if (!profile) return false;
   return profile.onboardingComplete === true;
 }
@@ -155,17 +191,21 @@ export async function saveAssessmentResults(
   uid: string,
   answers: Record<string, string>,
   eligibility: import("@/lib/dnaEngine").DirectionEligibility,
+  dna_narrative?: Record<string, string>,
 ): Promise<void> {
   const { scores } = eligibility;
   const { rankModels } = await import("@/lib/dnaEngine");
   const ranked = eligibility.eligible ? rankModels(scores) : [];
+  const directionEligibility =
+    eligibility.eligible === true
+      ? { eligible: true as const, model: eligibility.model }
+      : { eligible: false as const, reason: eligibility.reason };
   await saveUserProfile(uid, {
     assessmentAnswers: answers,
     dnaAssessmentComplete: true,
     dnaScores: scores,
-    directionEligibility: eligibility.eligible
-      ? { eligible: true, model: eligibility.model }
-      : { eligible: false, reason: eligibility.reason },
+    ...(dna_narrative ? { dna_narrative } : {}),
+    directionEligibility,
     directionAlternatives: ranked.map((r) => ({
       model: r.model,
       compatibility: r.compatibility,
@@ -186,5 +226,82 @@ export async function deleteUserProfile(uid: string): Promise<void> {
   } catch (error) {
     console.error("[Firestore] Error deleting user profile:", error);
     throw error;
+  }
+}
+
+// ── Cross-device conversation history ────────────────────────────────────────
+// Local-only chats (assessment, DNA, Direction) live in localStorage, which is
+// per-device. We mirror them to a per-user Firestore subcollection so the
+// sidebar history follows the user across devices. Each conversation is stored
+// as a single JSON blob (one doc per conversation) to stay well under the
+// per-document size limit and avoid Date/nested-object serialization pitfalls.
+
+const CONVERSATIONS = "conversations";
+
+function reviveConversation(raw: any): Conversation | null {
+  if (!raw?.id) return null;
+  return {
+    ...raw,
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
+    messages: Array.isArray(raw.messages)
+      ? raw.messages.map((m: any) => ({ ...m, timestamp: m?.timestamp ? new Date(m.timestamp) : new Date() }))
+      : [],
+  } as Conversation;
+}
+
+export async function getCloudConversations(uid: string): Promise<Conversation[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(collection(firestore, "users", uid, CONVERSATIONS));
+    const out: Conversation[] = [];
+    snap.forEach((d) => {
+      const data = d.data() as { json?: string };
+      if (!data?.json) return;
+      try {
+        const revived = reviveConversation(JSON.parse(data.json));
+        if (revived) out.push(revived);
+      } catch {}
+    });
+    return out;
+  } catch (error) {
+    console.error("[Firestore] Error loading cloud conversations:", error);
+    return [];
+  }
+}
+
+export async function saveCloudConversation(uid: string, conv: Conversation): Promise<void> {
+  const firestore = getDb();
+  if (!firestore || !conv?.id) return;
+  try {
+    await setDoc(doc(firestore, "users", uid, CONVERSATIONS, conv.id), {
+      json: JSON.stringify(conv),
+      segment: conv.segment ?? "",
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[Firestore] Error saving cloud conversation:", error);
+  }
+}
+
+export async function deleteCloudConversation(uid: string, convId: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore || !convId) return;
+  try {
+    await deleteDoc(doc(firestore, "users", uid, CONVERSATIONS, convId));
+  } catch (error) {
+    console.error("[Firestore] Error deleting cloud conversation:", error);
+  }
+}
+
+export async function clearCloudConversations(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  try {
+    const snap = await getDocs(collection(firestore, "users", uid, CONVERSATIONS));
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  } catch (error) {
+    console.error("[Firestore] Error clearing cloud conversations:", error);
   }
 }

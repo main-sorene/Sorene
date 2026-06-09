@@ -14,13 +14,18 @@ import {
   userAtom,
   authLoadingAtom,
   isAssessmentCompleteAtom,
+  isAssessmentInProgressAtom,
+  isCreditsExhaustedOpenAtom,
 } from "@/store/atoms";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { CREDITS_EXHAUSTED_EVENT } from "@/lib/queryClient";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useRouter } from "next/navigation";
 import { SettingsModal } from "../modals/SettingsModal";
 import { LogoutConfirmModal } from "../modals/LogoutConfirmModal";
 import { CancelSubscriptionDialog } from "../modals/CancelSubscriptionDialog";
 import { ManagePaymentModal } from "../modals/ManagePaymentModal";
+import { CreditsExhaustedModal } from "../modals/CreditsExhaustedModal";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useAtom(sidebarOpenAtom);
@@ -29,8 +34,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const authLoading = useAtomValue(authLoadingAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
   const [isAssessmentComplete, setIsAssessmentComplete] = useAtom(isAssessmentCompleteAtom);
+  const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
+  const setCreditsExhausted = useSetAtom(isCreditsExhaustedOpenAtom);
   const pathname = usePathname();
   const router = useRouter();
+
+  const { data: subscription } = useSubscriptionStatus();
+
+  // Listen for 402 credits-exhausted events from anywhere in the app
+  useEffect(() => {
+    const handler = () => setCreditsExhausted(true);
+    window.addEventListener(CREDITS_EXHAUSTED_EVENT, handler);
+    return () => window.removeEventListener(CREDITS_EXHAUSTED_EVENT, handler);
+  }, [setCreditsExhausted]);
+
+  // Proactively show the upgrade modal when any user's credits are fully
+  // exhausted — so they see it as soon as the bar turns red, not only on their
+  // next failed AI call.
+  useEffect(() => {
+    if (!subscription) return;
+    const used = subscription.credits?.used ?? 0;
+    const limit = (subscription.credits?.limit ?? 250) + (subscription.credits?.extra ?? 0);
+    const exhausted = limit > 0 && used >= limit;
+    if (exhausted && pathname !== "/upgrade") {
+      setCreditsExhausted(true);
+    } else if (!exhausted || pathname === "/upgrade") {
+      setCreditsExhausted(false);
+    }
+  }, [subscription, setCreditsExhausted]);
 
   // Redirect unauthenticated users to landing page, incomplete onboarding to /onBoarding
   useEffect(() => {
@@ -41,16 +72,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [authLoading, authUser, router]);
 
-  // Sync assessment complete state from Firestore profile
+  // Sync assessment complete state from Firestore profile —
+  // but only when no active assessment session is live in sessionStorage,
+  // otherwise the assessment page gets replaced before the user can click the button.
   useEffect(() => {
-    if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete) {
-      setIsAssessmentComplete(true);
+    if (authUser?.profile?.dnaAssessmentComplete && !isAssessmentComplete && !isAssessmentInProgress) {
+      const sessionKey = `assessment_state_${authUser.uid}`;
+      if (!sessionStorage.getItem(sessionKey)) {
+        setIsAssessmentComplete(true);
+      }
     }
-  }, [authUser, isAssessmentComplete, setIsAssessmentComplete]);
+  }, [authUser, isAssessmentComplete, isAssessmentInProgress, setIsAssessmentComplete]);
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname, setSidebarOpen]);
+
+  // Persist current route so we can restore it after a mobile refresh
+  useEffect(() => {
+    if (pathname && pathname !== "/") {
+      try { localStorage.setItem("sorene_last_route", pathname); } catch {}
+    }
+  }, [pathname]);
 
   // Show spinner while auth is loading
   if (authLoading) {
@@ -61,8 +104,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Don't render protected content for unauthenticated users
+  // Don't render protected content for unauthenticated or incomplete onboarding users
   if (!authUser) return null;
+  if (!authUser.profile?.onboardingComplete) return null;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#f7f7f7]">
@@ -115,15 +159,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
             {!isAssessmentComplete && <div className="w-8" />}{" "}
             {/* Spacer to maintain alignment if needed */}
-            <img
-              src={
-                authUser?.profile?.photoUrl ||
-                `https://api.dicebear.com/7.x/avataaars/svg?seed=${authUser?.displayName || "User"}`
-              }
-              alt="User Avatar"
+            <button
               onClick={() => setIsSettingsOpen(true)}
-              className="w-8 h-8  rounded-full cursor-pointer object-cover hover:opacity-90 transition-opacity"
-            />
+              className="w-8 h-8 rounded-full overflow-hidden bg-[#3D3D3D] flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+            >
+              {authUser?.profile?.photoUrl ? (
+                <img
+                  src={authUser.profile.photoUrl}
+                  alt="User Avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-white font-semibold text-sm">
+                  {(authUser?.profile?.firstName || authUser?.displayName || authUser?.email || "U").charAt(0).toUpperCase()}
+                </span>
+              )}
+            </button>
           </div>
         )}
         {children}
@@ -133,6 +184,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <LogoutConfirmModal />
       <CancelSubscriptionDialog />
       <ManagePaymentModal />
+      <CreditsExhaustedModal />
     </div>
   );
 }

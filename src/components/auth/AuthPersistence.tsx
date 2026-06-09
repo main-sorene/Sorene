@@ -5,53 +5,55 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
-import { getUserProfile } from "@/lib/firestore";
+import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 
 export function AuthPersistence({ children }: { children: React.ReactNode }) {
   const setUser = useSetAtom(userAtom);
   const setLoading = useSetAtom(authLoadingAtom);
 
   useEffect(() => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
+    if (!auth) { setLoading(false); return; }
+
+    const fallbackTimer = setTimeout(() => setLoading(false), 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          const idToken = await firebaseUser.getIdTokenResult();
-          console.log("[AuthDebug] Firebase User authenticated:", {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            claims: idToken.claims,
-          });
-
-          // Normalize UID: Use email if available, otherwise fallback to Firebase UID
-          const appUid = firebaseUser.email || firebaseUser.uid;
-
-          const profile = await getUserProfile(appUid);
-
-          setUser({
-            uid: appUid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            profile: profile || undefined,
-          });
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error("Error restoring auth session:", error);
+      clearTimeout(fallbackTimer);
+      if (!firebaseUser) {
         setUser(null);
-      } finally {
         setLoading(false);
+        return;
       }
+
+      const appUid = firebaseUser.email || firebaseUser.uid;
+
+      let profile = null;
+      try {
+        profile = await getUserProfile(appUid);
+      } catch {
+        // Firestore read failed (offline / network issue). Keep the user
+        // signed in — don't bounce them to the homepage.
+      }
+
+      if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {
+        saveUserProfile(appUid, { photoUrl: undefined }).catch(() => {});
+        profile.photoUrl = undefined;
+      }
+
+      setUser({
+        uid: appUid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        profile: profile || undefined,
+      });
+      setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [setUser, setLoading]);
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <>{children}</>;
 }

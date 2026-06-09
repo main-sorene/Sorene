@@ -1,12 +1,25 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { maskPii, assertTextCompletion } from "@/lib/aiSafety";
+import { verifyAuth } from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userKey = user.email ?? user.uid;
+  const creditCheck = await checkCredits(userKey);
+  if (!creditCheck.ok) {
+    return Response.json({ error: "credits_exhausted", used: creditCheck.used, limit: creditCheck.limit }, { status: 402 });
+  }
+
   try {
-    const { answer: rawAnswer, signal, questionText, nextQuestion, nextChoices, forceLanguage } =
+    const { answer: rawAnswer, signal, questionText, nextQuestion, nextChoices, forceLanguage, preferredLanguage, previousAnswers, cvSummary } =
       (await req.json()) as {
         answer: string;
         signal: string;
@@ -14,8 +27,24 @@ export async function POST(req: NextRequest) {
         nextQuestion?: string;
         nextChoices?: string[];
         forceLanguage?: string;
+        preferredLanguage?: string;
+        previousAnswers?: Record<string, string>;
+        cvSummary?: string;
       };
     const answer = maskPii(rawAnswer);
+
+    // Build context from what we know about the user so far
+    const priorContext = (() => {
+      const parts: string[] = [];
+      if (cvSummary) parts.push(`Background from their CV: ${cvSummary}`);
+      if (previousAnswers && Object.keys(previousAnswers).length > 0) {
+        const answerLines = Object.entries(previousAnswers)
+          .map(([key, val]) => `- ${key}: "${val}"`)
+          .join("\n");
+        parts.push(`Their previous answers in this assessment:\n${answerLines}`);
+      }
+      return parts.length > 0 ? parts.join("\n\n") : "";
+    })();
 
     const hasNextQuestion = nextQuestion && nextQuestion.trim().length > 0;
     const hasChoices = Array.isArray(nextChoices) && nextChoices.length > 0;
@@ -40,10 +69,11 @@ Output only the translated question, then the separator line "---CHOICES---", th
       const msg = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 600,
-        temperature: 0,
         messages: [{ role: "user", content: prompt }],
       });
-      const raw = assertTextCompletion(msg);
+      await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens));
+      const block = msg.content[0];
+      const raw = block && block.type === "text" ? block.text.trim() : "";
       if (hasChoices) {
         const [qPart, cPart] = raw.split("---CHOICES---");
         const translatedQuestion = (qPart || "").trim() || nextQuestion;
@@ -60,9 +90,14 @@ Output only the translated question, then the separator line "---CHOICES---", th
       });
     }
 
-    const prompt = hasNextQuestion
-      ? `You are Sorene — a direct, warm entrepreneurship coach. The user just answered an assessment question.
+    const languageContext = preferredLanguage
+      ? `The user has been communicating in ${preferredLanguage} in this session. Use their CURRENT message to determine the language. If their current message is in English, respond in English. If their current message is in ${preferredLanguage}, respond in ${preferredLanguage}. Always follow the language of the CURRENT message.`
+      : `Detect the language the user wrote in based on their current message.`;
 
+    const prompt = hasNextQuestion
+      ? `You are Sorene — a direct, warm entrepreneurship coach who truly sees people. The user is going through an assessment and just answered a question.
+
+${priorContext ? `What you already know about this person:\n${priorContext}\n` : ""}
 Signal being measured: ${signal}
 Their answer: "${answer}"
 Next question to ask (in English): """${nextQuestion}"""${
@@ -71,35 +106,44 @@ Next question to ask (in English): """${nextQuestion}"""${
             : ""
         }
 
-Detect the language the user wrote in. Your output must have exactly ${hasChoices ? "four" : "three"} parts separated by blank lines:
+${languageContext} Your output must have exactly ${hasChoices ? "four" : "three"} parts separated by blank lines:
 
-Part 1 — The detected language name in English (e.g. "English", "Vietnamese", "Spanish"). One word or two words only.
+Part 1 — The language name you will respond in (e.g. "English", "Vietnamese", "Spanish"). One word or two words only.
 
-Part 2 — ONE short sentence (max 15 words) in the user's language that:
-- Reflects back what you heard — specific to what they said, not generic
-- Feels like a real human noticing a pattern, not a chatbot confirming receipt
+Part 2 — ONE short sentence (max 20 words) in that language that:
+- Connects their answer to a deeper pattern you've noticed from their background or previous answers
+- Shows you genuinely understand something about who they are — name specific details from their CV or prior answers when relevant
+- Feels like a perceptive friend noticing something they might not have seen about themselves
+- If they mention struggle, honor it — don't rush past it
+- If you see a contradiction or tension between answers, gently name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
+- Use **bold** (markdown double asterisks) to highlight one phrase, max 4 words:
+  - If their answer contains struggle, burnout, friction, or something they're escaping → bold the friction/obstacle phrase (what's holding them back or draining them)
+  - If their answer is neutral or positive → bold the energy/drive phrase (what pulls them forward or defines their core strength)
+  - Never bold both; pick the one that makes the reflection land harder
 
-Part 3 — The next question, translated/adapted into the user's language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If the user wrote in English, output the original question unchanged.${
+Part 3 — The next question, translated/adapted into that language. Preserve the full meaning and tone. Keep all line breaks and bullet points intact. If responding in English, output the original question unchanged.${
           hasChoices
             ? `
 
-Part 4 — The multiple-choice options translated into the user's language, one per line, in the same order, no numbering or bullets. If the user wrote in English, output the original choices unchanged.`
+Part 4 — The multiple-choice options translated into that language, one per line, in the same order, no numbering or bullets. If responding in English, output the original choices unchanged.`
             : ""
         }
 
 Output only these parts separated by blank lines. No labels, no extra text.`
-      : `You are Sorene — a direct, warm entrepreneurship coach. The user just answered an assessment question.
+      : `You are Sorene — a direct, warm entrepreneurship coach who truly sees people. The user just answered the final assessment question.
 
+${priorContext ? `What you know about this person:\n${priorContext}\n` : ""}
 Signal being measured: ${signal}
 Their answer: "${answer}"
 
-IMPORTANT: Detect the language the user wrote in. Respond in that same language.
+${languageContext} Respond in that same language.
 
-Write ONE short sentence (max 15 words) that:
-- Reflects back what you heard — specific to what they said, not generic
-- Feels like a real human noticing a pattern, not a chatbot confirming receipt
+Write ONE short sentence (max 20 words) that:
+- Connects their answer to a deeper pattern you've noticed across their journey — reference specific things they've shared
+- Feels like someone who has been truly listening and sees them clearly
+- If you see a thread connecting multiple answers, name it
 - Never starts with "I see", "Great", "Thanks", "Got it", "Interesting"
 - No punctuation at the end except a period
 
@@ -108,11 +152,12 @@ Output only that one sentence. Nothing else.`;
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: hasNextQuestion ? (hasChoices ? 700 : 400) : 80,
-      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     });
+    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
 
-    const raw = assertTextCompletion(message);
+    const block = message.content[0];
+    const raw = block && block.type === "text" ? block.text.trim() : "";
 
     if (!hasNextQuestion) {
       return Response.json({

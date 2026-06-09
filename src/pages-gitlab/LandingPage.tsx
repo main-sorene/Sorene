@@ -9,6 +9,7 @@ import { PricingSection } from "./sections/PricingSection";
 import { TestimonialsSection } from "./sections/TestimonialsSection";
 import { useEffect } from "react";
 import { FAQSection } from "./sections/FAQSection";
+// v2
 
 export const LandingPageScreen = () => {
   useEffect(() => {

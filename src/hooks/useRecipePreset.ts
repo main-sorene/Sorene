@@ -1,13 +1,15 @@
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   userAtom,
   conversationsAtom,
   isSendingAtom,
   selectedModelAtom,
   activeConversationIdAtom,
+  isCreditsExhaustedOpenAtom,
   Conversation,
   Message,
 } from "@/store/atoms";
+import { useIsCreditsExhausted } from "./useIsCreditsExhausted";
 import { useQuery } from "@tanstack/react-query";
 import {
   getRecipeList,
@@ -25,6 +27,8 @@ export function useRecipePreset({
   onConversationCreated?: (convId: string) => void;
 }) {
   const authUser = useAtomValue(userAtom);
+  const creditsExhausted = useIsCreditsExhausted();
+  const setCreditsExhaustedOpen = useSetAtom(isCreditsExhaustedOpenAtom);
   const [, setConversations] = useAtom(conversationsAtom);
   const [isSending, setIsSending] = useAtom(isSendingAtom);
   const [selectedModel] = useAtom(selectedModelAtom);
@@ -44,6 +48,7 @@ export function useRecipePreset({
   const suggestionLabels = recipes.map((r) => r.label);
 
   const handleRecipeClick = async (label: string) => {
+    if (creditsExhausted) { setCreditsExhaustedOpen(true); return; }
     const recipe = recipes.find((r) => r.label === label);
     if (!recipe || isSending) return;
 

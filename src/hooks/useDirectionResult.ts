@@ -1,10 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAtomValue } from "jotai";
-import { userAtom } from "@/store/atoms";
+import { useAtomValue, useSetAtom } from "jotai";
+import { userAtom, recipeDirectionsAtom, resourcesConstraintsAtom, newRecipeCardIdAtom, type RecipeDirection } from "@/store/atoms";
+import { authFetch } from "@/lib/authFetch";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
+import { friendlyApiError } from "@/lib/apiError";
 import { useQuery } from "@tanstack/react-query";
+import type { DirectionCardData } from "@/lib/directionTypes";
+import type { StructuralModel } from "@/lib/dnaEngine";
+
+
 export type DirectionAlternative = {
   model: string;
   compatibility: number;
@@ -13,106 +19,503 @@ export type DirectionAlternative = {
 
 export function useDirectionResult() {
   const user = useAtomValue(userAtom);
+  // Legacy streaming text — kept for users who have old cached data
   const [streamedText, setStreamedText] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasStreamed, setHasStreamed] = useState(false);
+  const [directionCards, setDirectionCards] = useState<DirectionCardData[]>([]);
   const [alternatives, setAlternatives] = useState<DirectionAlternative[]>([]);
+  const [needsRC, setNeedsRC] = useState(false);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [newestCardTitle, setNewestCardTitle] = useState<string | null>(null);
+  const [loadingDetailFor, setLoadingDetailFor] = useState<string | null>(null);
+  const [loadingSection3For, setLoadingSection3For] = useState<string | null>(null);
+  const [loadingSection4For, setLoadingSection4For] = useState<string | null>(null);
+
+  // Recipe (brainstorm/check-my-idea) cards — shared via jotai so DirectionChat
+  // and DirectionSection see the same list and lazy-load the same staged data.
+  const setRecipeDirections = useSetAtom(recipeDirectionsAtom);
+  const setResourcesConstraints = useSetAtom(resourcesConstraintsAtom);
+  const setNewRecipeCardId = useSetAtom(newRecipeCardIdAtom);
+  const [generatingRecipe, setGeneratingRecipe] = useState(false);
+  const [loadingRecipeDetailFor, setLoadingRecipeDetailFor] = useState<string | null>(null);
+  const [loadingRecipeSection3For, setLoadingRecipeSection3For] = useState<string | null>(null);
+  const [loadingRecipeSection4For, setLoadingRecipeSection4For] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["direction-profile", user?.uid],
     queryFn: () => getUserProfile(user!.uid),
     enabled: !!user?.uid,
     staleTime: 5 * 60 * 1000,
+    // Use atom profile as placeholder so the spinner never shows on re-navigation
+    placeholderData: user?.profile ?? undefined,
+    gcTime: 30 * 60 * 1000,
   });
 
   useEffect(() => {
     if (!profile || hasStreamed) return;
 
-    // Seed alternatives from cache if available
+    // Seed alternatives from cache
     if (profile.directionAlternatives && profile.directionAlternatives.length > 0) {
       setAlternatives(profile.directionAlternatives);
     }
 
-    // If we already have a cached direction text, use it
-    if (profile.directionText) {
+    // If Firestore has R&C but localStorage doesn't, sync it to localStorage + atom + intent flag.
+    // This covers users who filled the form on one device and visit on another.
+    const firestoreHasRC = !!(profile.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+    if (firestoreHasRC && !localStorage.getItem("resourcesConstraints")) {
+      try {
+        localStorage.setItem("resourcesConstraints", JSON.stringify(profile.resourcesConstraints));
+        localStorage.setItem("rcGenerationRequested", "true");
+      } catch {}
+      setResourcesConstraints(profile.resourcesConstraints as unknown as Parameters<typeof setResourcesConstraints>[0]);
+    }
+
+    // New path: structured direction cards
+    // Accept phase 1 cards (title + constraint_check) as well as fully analyzed cards
+    const cachedCards = profile.directionCards;
+    // Any non-empty cards array = show them. Old format cards (missing constraint_check
+    // or ikigai_filters) are still valid — no need to force regeneration.
+    if (cachedCards && cachedCards.length > 0 && cachedCards[0].title) {
+      setDirectionCards(cachedCards);
+      setHasStreamed(true);
+      return;
+    }
+
+    // Legacy fallback: old streamed text — skip it and fall through to regenerate with new format
+    // (old directionText doesn't produce structured cards with full analysis)
+    if (profile.directionText && !profile.directionEligibility) {
       setStreamedText(profile.directionText);
       setHasStreamed(true);
-
-      // If alternatives lack summaries, generate them
-      const alts = profile.directionAlternatives || [];
-      const needSummaries = alts.filter((a) => a.model !== profile.directionEligibility?.model).slice(0, 2);
-      if (needSummaries.length > 0 && needSummaries.some((a) => !a.summary)) {
-        fetchAlternativeSummaries(needSummaries, profile);
-      }
       return;
     }
 
     if (!profile.directionEligibility || !profile.assessmentAnswers) return;
+    if (!profile.directionEligibility.eligible) return;
 
-    const stream = async () => {
+    const hasGenerationIntent = localStorage.getItem("rcGenerationRequested") === "true";
+    if (!hasGenerationIntent) { setNeedsRC(true); return; }
+
+    const generate = async () => {
       setIsStreaming(true);
       setHasStreamed(true);
+      setGenerateError(null);
+
       try {
         const firstName = profile.firstName || "there";
-        const res = await fetch("/api/direction", {
+        const primaryModel = profile.directionEligibility!.model as StructuralModel;
+        const allAlts = profile.directionAlternatives || [];
+
+        const altModels = allAlts
+          .filter((a) => a.model !== primaryModel)
+          .slice(0, 2)
+          .map((a) => ({ model: a.model as StructuralModel, compatibility: a.compatibility, isPrimary: false }));
+
+        const primaryAlt = allAlts.find((a) => a.model === primaryModel);
+        const models = [
+          { model: primaryModel, compatibility: primaryAlt?.compatibility ?? 100, isPrimary: true },
+          ...altModels,
+        ];
+
+        const resources = (() => {
+          try {
+            const stored = localStorage.getItem("resourcesConstraints");
+            return stored ? JSON.parse(stored) : undefined;
+          } catch { return undefined; }
+        })();
+
+        const basePayload = {
+          models,
+          cardIndex: 0,
+          scores: profile.dnaScores,
+          firstName,
+          rawAnswers: profile.assessmentAnswers,
+          cvSummary: profile.cvSummary,
+          dnaNarrative: profile.dna_narrative,
+          resources,
+        };
+
+        // Phase 1 only: fast card shell (Haiku, ~8s)
+        const res1 = await authFetch("/api/direction-cards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            eligibility: {
-              eligible: profile.directionEligibility!.eligible,
-              model: profile.directionEligibility!.model,
-              reason: profile.directionEligibility!.reason,
-              scores: profile.dnaScores,
-            },
-            firstName,
-            rawAnswers: profile.assessmentAnswers,
-            cvSummary: profile.cvSummary,
-          }),
+          body: JSON.stringify({ ...basePayload, phase: 1 }),
         });
 
-        if (!res.ok || !res.body) {
-          setIsStreaming(false);
+        if (!res1.ok) {
+          let errMsg = "Please try again.";
+          try { const j = await res1.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res1.text()); } catch {} }
+          setGenerateError(errMsg);
+          // Clear the intent so the user lands back on the form, not a dead spinner
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+          setNeedsRC(true);
           return;
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "";
+        const data1 = (await res1.json()) as { cards?: DirectionCardData[] };
+        const phase1Card = data1.cards?.[0];
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          fullText += chunk;
-          setStreamedText(fullText);
+        if (phase1Card) {
+          setDirectionCards([phase1Card]);
+          // Save to Firestore and clear intent flag so re-navigation never re-generates
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+          if (user?.uid) {
+            await saveUserProfile(user.uid, { directionCards: [phase1Card], directionText: "" });
+          }
+        } else {
+          setGenerateError("The engine returned no direction. Please try again.");
+          try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+          setNeedsRC(true);
         }
-
-        if (user?.uid && fullText) {
-          await saveUserProfile(user.uid, { directionText: fullText });
-        }
-
-        // After main direction streams, fetch alternative summaries
-        const alts = profile.directionAlternatives || [];
-        const altsToSummarize = alts
-          .filter((a) => a.model !== profile.directionEligibility?.model)
-          .slice(0, 2);
-        if (altsToSummarize.length > 0) {
-          fetchAlternativeSummaries(altsToSummarize, profile);
-        }
+      } catch (err) {
+        console.error("[generate] failed:", err);
+        setGenerateError(
+          err instanceof Error ? err.message : "Something went wrong while generating. Please try again."
+        );
+        try { localStorage.removeItem("rcGenerationRequested"); } catch {}
+        setNeedsRC(true);
       } finally {
         setIsStreaming(false);
       }
     };
 
-    stream();
+    generate();
   }, [profile, hasStreamed, user]);
 
-  async function fetchAlternativeSummaries(
+  const buildBasePayload = () => {
+    if (!profile) return null;
+    const primaryModel = profile.directionEligibility?.model as StructuralModel | undefined;
+    if (!primaryModel) return null;
+
+    const allAlts = profile.directionAlternatives || [];
+    const altModels = allAlts
+      .filter((a) => a.model !== primaryModel)
+      .slice(0, 2)
+      .map((a) => ({ model: a.model as StructuralModel, compatibility: a.compatibility, isPrimary: false }));
+    const primaryAlt = allAlts.find((a) => a.model === primaryModel);
+    const models = [
+      { model: primaryModel, compatibility: primaryAlt?.compatibility ?? 100, isPrimary: true },
+      ...altModels,
+    ];
+
+    const resources = (() => {
+      try {
+        const stored = localStorage.getItem("resourcesConstraints");
+        return stored ? JSON.parse(stored) : undefined;
+      } catch { return undefined; }
+    })();
+
+    return {
+      models,
+      scores: profile.dnaScores,
+      firstName: profile.firstName || "there",
+      rawAnswers: profile.assessmentAnswers,
+      cvSummary: profile.cvSummary,
+      dnaNarrative: profile.dna_narrative,
+      resources,
+    };
+  };
+
+  // Like buildBasePayload but does not require directionEligibility — recipe
+  // ideas are anchored by the concept, so a model is optional (the API falls
+  // back to a neutral one when none is provided).
+  const buildRecipeBasePayload = () => {
+    if (!profile) return null;
+    const base = buildBasePayload();
+    if (base) return base;
+    const resources = (() => {
+      try {
+        const stored = localStorage.getItem("resourcesConstraints");
+        return stored ? JSON.parse(stored) : undefined;
+      } catch { return undefined; }
+    })();
+    return {
+      models: [] as { model: StructuralModel; compatibility: number; isPrimary: boolean }[],
+      scores: profile.dnaScores,
+      firstName: profile.firstName || "there",
+      rawAnswers: profile.assessmentAnswers,
+      cvSummary: profile.cvSummary,
+      dnaNarrative: profile.dna_narrative,
+      resources,
+    };
+  };
+
+  const persistRecipes = (updater: (prev: RecipeDirection[]) => RecipeDirection[]) => {
+    setRecipeDirections((prev) => {
+      const updated = updater(prev);
+      try { localStorage.setItem("recipeDirections", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  };
+
+  // Generate the fast phase-1 shell for a brainstormed idea (concept), then add
+  // it to the shared recipe list so it renders with the staged template.
+  const generateRecipeCard = async (concept: string): Promise<RecipeDirection | null> => {
+    if (generatingRecipe) return null;
+    const base = buildRecipeBasePayload();
+    if (!base) return null;
+    setGeneratingRecipe(true);
+    // Show a skeleton placeholder immediately so users see instant feedback
+    const placeholderId = `recipe-skeleton-${Date.now()}`;
+    persistRecipes((prev) => [...prev, {
+      id: placeholderId, title: concept?.split(":")[0]?.trim() ?? "Building your direction…",
+      description: "", whyFitsYou: [], keyRisks: [], firstStep: "", score: 0,
+      concept, loading: true,
+    }]);
+    setNewRecipeCardId(placeholderId);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...base, cardIndex: 0, phase: 1, concept }),
+      });
+      if (!res.ok) {
+        persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const card = data.cards?.[0];
+      if (!card) {
+        persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
+        return null;
+      }
+      const recipe: RecipeDirection = {
+        id: placeholderId,
+        title: card.title,
+        description: card.description,
+        whyFitsYou: card.why_fits_you ?? [],
+        keyRisks: card.key_risks ?? [],
+        firstStep: "",
+        score: card.compatibility ?? 85,
+        cardData: card,
+        concept,
+        loading: false,
+      };
+      // Replace skeleton in-place
+      persistRecipes((prev) => prev.map((r) => r.id === placeholderId ? recipe : r));
+      setNewRecipeCardId(recipe.id);
+      return recipe;
+    } catch (err) {
+      console.error("[generateRecipeCard] failed:", err);
+      persistRecipes((prev) => prev.filter((r) => r.id !== placeholderId));
+      return null;
+    } finally {
+      setGeneratingRecipe(false);
+    }
+  };
+
+  // Lazy-load a staged phase (2/3/4) for a recipe card, anchored to its concept.
+  const loadRecipePhase = async (
+    id: string,
+    phase: 2 | 3 | 4,
+    setLoading: (v: string | null) => void,
+    alreadyLoaded: (c: DirectionCardData) => boolean,
+  ) => {
+    setRecipeDirections((prevList) => {
+      const recipe = prevList.find((r) => r.id === id);
+      if (!recipe?.cardData || alreadyLoaded(recipe.cardData)) return prevList;
+      const base = buildRecipeBasePayload();
+      if (!base) return prevList;
+
+      setLoading(id);
+      (async () => {
+        try {
+          const res = await authFetch("/api/direction-cards", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...base, cardIndex: 0, phase, phase1Card: recipe.cardData, concept: recipe.concept }),
+          });
+          if (!res.ok) return;
+          const data = (await res.json()) as { cards?: DirectionCardData[] };
+          const fields = data.cards?.[0];
+          if (fields) {
+            persistRecipes((prev) => prev.map((r) =>
+              r.id === id && r.cardData ? { ...r, cardData: { ...r.cardData, ...fields } } : r
+            ));
+          }
+        } finally {
+          setLoading(null);
+        }
+      })();
+      return prevList;
+    });
+  };
+
+  const loadRecipeDetail = (id: string) =>
+    loadRecipePhase(id, 2, setLoadingRecipeDetailFor, (c) => !!c.ikigai_filters);
+  const loadRecipeSection3 = (id: string) =>
+    loadRecipePhase(id, 3, setLoadingRecipeSection3For, (c) => !!c.ocean_classification || !!c.trend_connection);
+  const loadRecipeSection4 = (id: string) =>
+    loadRecipePhase(id, 4, setLoadingRecipeSection4For, (c) => !!c.startup_cost_usd);
+
+  const generateMore = async () => {
+    if (isGeneratingMore) return;
+    setGenerateError(null);
+
+    if (!profile) {
+      setGenerateError("Your profile is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    // Cap at 2 (Stretch) for path label, but allow unlimited cards
+    const nextIndex = Math.min(directionCards.length, 2);
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) {
+      setGenerateError(
+        "We couldn't find your assessment results (DNA / eligibility). Complete the assessment first, then try again."
+      );
+      return;
+    }
+
+    const basePayload = { ...basePayloadBase, cardIndex: nextIndex };
+
+    setNeedsRC(false);
+    setIsGeneratingMore(true);
+    try {
+      // All cards use phase 1 only (single-phase Haiku for speed)
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayload, phase: 1 }),
+      });
+      if (!res.ok) {
+        let errMsg = "Please try again.";
+        try { const j = await res.json(); errMsg = friendlyApiError(j.error || JSON.stringify(j)); } catch { try { errMsg = friendlyApiError(await res.text()); } catch {} }
+        setGenerateError(errMsg);
+        return;
+      }
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const newCard = data.cards?.[0];
+      if (newCard) {
+        setDirectionCards((prev) => {
+          const updated = [...prev, newCard];
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+        setNewestCardTitle(newCard.title);
+      } else {
+        setGenerateError("The engine returned no direction. Please try again.");
+      }
+    } catch (err) {
+      console.error("[generateMore] failed:", err);
+      setGenerateError(
+        err instanceof Error ? err.message : "Something went wrong while generating. Please try again."
+      );
+    } finally {
+      setIsGeneratingMore(false);
+    }
+  };
+
+  const loadCardDetail = async (cardTitle: string) => {
+    if (loadingDetailFor !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.ikigai_filters) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingDetailFor(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 2, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase2Fields = data.cards?.[0];
+      if (phase2Fields) {
+        const mergedCard = { ...card, ...phase2Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingDetailFor(null);
+    }
+  };
+
+  const loadCardSection3 = async (cardTitle: string) => {
+    if (loadingSection3For !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.ocean_classification) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingSection3For(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 3, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase3Fields = data.cards?.[0];
+      if (phase3Fields) {
+        const mergedCard = { ...card, ...phase3Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingSection3For(null);
+    }
+  };
+
+  const loadCardSection4 = async (cardTitle: string) => {
+    if (loadingSection4For !== null) return;
+    const card = directionCards.find((c) => c.title === cardTitle);
+    if (!card) return;
+    if (card.startup_cost_usd) return; // Already loaded
+
+    const basePayloadBase = buildBasePayload();
+    if (!basePayloadBase) return;
+
+    const cardIndex = directionCards.findIndex((c) => c.title === cardTitle);
+
+    setLoadingSection4For(cardTitle);
+    try {
+      const res = await authFetch("/api/direction-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayloadBase, cardIndex, phase: 4, phase1Card: card }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { cards?: DirectionCardData[] };
+      const phase4Fields = data.cards?.[0];
+      if (phase4Fields) {
+        const mergedCard = { ...card, ...phase4Fields };
+        setDirectionCards((prev) => {
+          const updated = prev.map((c) => c.title === cardTitle ? mergedCard : c);
+          if (user?.uid) saveUserProfile(user.uid, { directionCards: updated });
+          return updated;
+        });
+      }
+    } finally {
+      setLoadingSection4For(null);
+    }
+  };
+
+  async function fetchLegacyAlternativeSummaries(
     alts: DirectionAlternative[],
     profileSnapshot: NonNullable<typeof profile>,
   ) {
     try {
-      const res = await fetch("/api/direction-alternatives", {
+      const res = await authFetch("/api/direction-alternatives", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,7 +528,6 @@ export function useDirectionResult() {
       const data = (await res.json()) as { summaries?: string[] };
       if (!data.summaries || data.summaries.length === 0) return;
       const updated = alts.map((a, i) => ({ ...a, summary: data.summaries![i] || a.summary }));
-      // Merge updated alternatives back into full list
       const fullList = (profileSnapshot.directionAlternatives || []).map((a) => {
         const match = updated.find((u) => u.model === a.model);
         return match || a;
@@ -139,32 +541,63 @@ export function useDirectionResult() {
     }
   }
 
-  const model = profile?.directionEligibility?.eligible ? profile.directionEligibility.model : null;
+  const eligibleModel = profile?.directionEligibility?.eligible ? profile.directionEligibility.model : null;
+  const primaryCard = directionCards.find((c) => c.title) ? directionCards[0] : null;
+  const altCards = directionCards.slice(1);
+
+  // Legacy
   const otherDirections = alternatives
-    .filter((a) => a.model !== model)
+    .filter((a) => a.model !== eligibleModel)
     .slice(0, 2);
 
-  const escalation = profile?.directionEligibility?.escalation;
-
-  // Log escalation trigger once per session (fire-and-forget)
-  useEffect(() => {
-    if (!escalation || !user?.uid) return;
-    saveUserProfile(user.uid, {
-      escalationLog: {
-        trigger: escalation.trigger,
-        topCompatibility: escalation.topCompatibility,
-        timestamp: new Date().toISOString(),
-      },
-    }).catch((err) => console.warn("[escalation] log failed:", err));
-  }, [escalation?.trigger, user?.uid]);
+  // Show button whenever R&C is filled (no hard cap — user can always generate more)
+  // Fall back to Firestore copy for cross-device support
+  const hasRCFilled = (() => {
+    try {
+      const stored = localStorage.getItem("resourcesConstraints");
+      if (stored) {
+        const rc = JSON.parse(stored);
+        if (Object.values(rc).some((v) => String(v ?? "").trim() !== "")) return true;
+      }
+    } catch {}
+    return !!(profile?.resourcesConstraints && Object.values(profile.resourcesConstraints).some((v) => String(v ?? "").trim() !== ""));
+  })();
+  const canGenerateMore = hasRCFilled;
 
   return {
+    // Structured cards (new path)
+    primaryCard,
+    altCards,
+    newestCardTitle,
+    clearNewestCard: () => setNewestCardTitle(null),
+    // Legacy text path
     directionText: streamedText,
+    // Shared
     isLoading: isLoading || isStreaming,
     eligibility: profile?.directionEligibility,
-    model,
-    bestCompatibility: alternatives.find((a) => a.model === model)?.compatibility ?? 100,
+    model: eligibleModel,
+    bestCompatibility: alternatives.find((a) => a.model === eligibleModel)?.compatibility ?? 100,
     otherDirections,
-    escalation,
+    needsRC,
+    generateMore,
+    isGeneratingMore,
+    generateError,
+    canGenerateMore,
+    directionCardsCount: directionCards.length,
+    loadCardDetail,
+    loadCardSection3,
+    loadCardSection4,
+    loadingDetailFor,
+    loadingSection3For,
+    loadingSection4For,
+    // Recipe staged-card flow
+    generateRecipeCard,
+    generatingRecipe,
+    loadRecipeDetail,
+    loadRecipeSection3,
+    loadRecipeSection4,
+    loadingRecipeDetailFor,
+    loadingRecipeSection3For,
+    loadingRecipeSection4For,
   };
 }

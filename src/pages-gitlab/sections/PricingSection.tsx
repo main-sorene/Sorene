@@ -5,6 +5,7 @@ import { scrollToSection } from "@/lib/utils";
 
 import { billingYearlyAtom } from "@/store/atoms";
 import { useAtom } from "jotai";
+import { useRouter } from "next/navigation";
 
 const basicFeatures = [
   {
@@ -106,6 +107,7 @@ const professionalFeatures = [
 
 export const PricingSection = () => {
   const [billingYearly, setBillingYearly] = useAtom(billingYearlyAtom);
+  const router = useRouter();
 
   return (
     <div className="px-4 sm:px-5 py-4 flex flex-col items-center gap-12 lg:gap-20 self-stretch w-full bg-white">
@@ -156,7 +158,7 @@ export const PricingSection = () => {
                   >
                     <div className="flex items-center justify-center gap-2 px-3.5 py-2 flex-1 bg-white rounded-lg">
                       <span className="font-medium text-[#101010] text-sm text-center leading-[21px] whitespace-nowrap">
-                        Get Started
+                        Get Started for Free
                       </span>
                     </div>
                   </button>
@@ -216,7 +218,7 @@ export const PricingSection = () => {
                   </div>
                   <button
                     className="flex justify-center gap-2 p-0.5 self-stretch w-full rounded-[10px] border border-solid border-[#fdc24c] shadow-shadow [background:radial-gradient(50%_50%_at_12%_24%,rgba(255,255,255,0.2)_0%,rgba(255,255,255,0)_100%),linear-gradient(0deg,rgba(253,194,76,1)_0%,rgba(253,194,76,1)_100%)] items-center"
-                    onClick={() => scrollToSection("home")}
+                    onClick={() => router.push("/upgrade?plan=starter")}
                   >
                     <div className="flex items-center justify-center gap-2 px-3.5 py-2 flex-1 rounded-lg">
                       <span className="font-medium text-white text-sm text-center leading-[21px] whitespace-nowrap">
@@ -281,7 +283,7 @@ export const PricingSection = () => {
                   {/* CTA */}
                   <button
                     className="flex justify-center gap-2 p-0.5 se878787lf-stretch w-full bg-white rounded-[10px] border border-solid border-[#ededed]"
-                    onClick={() => scrollToSection("home")}
+                    onClick={() => router.push("/upgrade?plan=pro")}
                   >
                     <div className="flex items-center justify-center px-3.5 py-2 flex-1">
                       <span className="text-sm font-medium text-[#101010]">

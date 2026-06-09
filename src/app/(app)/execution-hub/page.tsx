@@ -9650,7 +9650,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       )}
 
       {/* Scheduled queue — pending posts in Firestore not covered by the drafts list above */}
-      {scheduledPosts.length > 0 && weekDrafts.filter((d) => d.frozen && !d.posted).length === 0 && (
+      {scheduledPosts.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Clock size={13} className="text-[#9A9A9A]" />
@@ -9674,7 +9674,7 @@ Separate posts with exactly "---". No labels, no numbering, no intro text. Just 
       )}
 
       {/* Published scheduled posts (from schedule Firestore collection, not weekDrafts) */}
-      {publishedScheduled.length > 0 && weekDrafts.filter((d) => d.posted).length === 0 && (
+      {publishedScheduled.length > 0 && (
         <div className="rounded-2xl border border-[#ECEDEE] overflow-hidden">
           <button onClick={() => setPostedOpen((v) => !v)}
             className="w-full flex items-center justify-between px-4 py-3 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors">

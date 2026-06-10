@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
@@ -32,6 +32,31 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
       } catch {
         // Firestore read failed (offline / network issue). Keep the user
         // signed in — don't bounce them to the homepage.
+      }
+
+      if (!profile) {
+        // No Firestore profile. Could be a fresh OAuth sign-in where the server
+        // write hasn't replicated yet, OR a stale session after a data wipe.
+        // Check the sessionStorage flag set by page.tsx before signInWithCustomToken.
+        let isFreshSignIn = false;
+        try {
+          isFreshSignIn = sessionStorage.getItem("sorene_fresh_signin") === "1";
+          sessionStorage.removeItem("sorene_fresh_signin");
+        } catch {}
+
+        if (isFreshSignIn) {
+          // Wait for Firestore replication then retry once.
+          await new Promise((r) => setTimeout(r, 1500));
+          try { profile = await getUserProfile(appUid); } catch {}
+        }
+
+        if (!profile) {
+          // Still no profile — stale session from before a data wipe. Sign out.
+          await signOut(auth!).catch(() => {});
+          setUser(null);
+          setLoading(false);
+          return;
+        }
       }
 
       if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {

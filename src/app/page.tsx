@@ -33,6 +33,9 @@ function PageInner() {
     }
 
     if (customToken && auth) {
+      // Tell AuthPersistence this is a fresh sign-in so it retries the profile
+      // read instead of signing out (handles Firestore replication lag).
+      try { sessionStorage.setItem("sorene_fresh_signin", "1"); } catch {}
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)

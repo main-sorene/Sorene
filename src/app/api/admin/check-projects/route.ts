@@ -31,6 +31,19 @@ export async function GET(req: NextRequest) {
   }
 
 
+  if (!uid) {
+    // Last resort: list Auth users and find by email (searches all providers)
+    try {
+      const { getAuth } = await import("firebase-admin/auth");
+      const result = await getAuth().listUsers(1000);
+      const match = result.users.find(u =>
+        u.email === email ||
+        u.providerData.some(p => p.email === email)
+      );
+      if (match) { uid = match.uid; lookupMethod = "auth-list-scan"; }
+    } catch { /* ignore */ }
+  }
+
   if (!uid) return Response.json({ error: "User not found by any method", email }, { status: 404 });
 
   try {

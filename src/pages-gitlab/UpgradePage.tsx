@@ -179,8 +179,12 @@ export function UpgradePage() {
       </div>
 
       {/* Pricing Cards */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
-        {plans.map((plan) => {
+      {(() => {
+        const isPaidUser = !!subscription?.active && currentPlanId !== "free";
+        const visiblePlans = isPaidUser ? plans.filter((p) => p.id !== "free") : plans;
+        return (
+      <div className={cn("max-w-7xl mx-auto grid grid-cols-1 gap-4", isPaidUser ? "md:grid-cols-2 max-w-3xl" : "md:grid-cols-3")}>
+        {visiblePlans.map((plan) => {
           const currentDuration = subscription?.duration || 1;
           const uiDuration = billingCycle === "monthly" ? 1 : 6;
           const isCurrent =
@@ -195,7 +199,7 @@ export function UpgradePage() {
           if (isCurrent) {
             buttonText = "Current plan";
           } else if (plan.id === "free") {
-            buttonText = "Downgrade";
+            buttonText = "Use Sorene for Free";
           } else if (cardWeight < currentWeight) {
             buttonText = "Downgrade";
           } else if (cardWeight > currentWeight) {
@@ -275,6 +279,8 @@ export function UpgradePage() {
           );
         })}
       </div>
+        );
+      })()}
     </div>
     </>
   );

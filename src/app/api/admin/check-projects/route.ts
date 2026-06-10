@@ -8,15 +8,19 @@ export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get("email");
   if (!email) return Response.json({ error: "email required" }, { status: 400 });
 
-  const db = getAdminFirestore();
+  let db: ReturnType<typeof getAdminFirestore>;
+  try { db = getAdminFirestore(); } catch (e) { return Response.json({ error: "Firestore init failed: " + String(e) }, { status: 500 }); }
 
   let uid: string | null = null;
-  const directSnap = await db.collection("users").doc(email).get();
-  if (directSnap.exists) { uid = email; }
-  else {
-    const q = await db.collection("users").where("email", "==", email).limit(1).get();
-    if (!q.empty) uid = q.docs[0].id;
-  }
+  try {
+    const directSnap = await db.collection("users").doc(email).get();
+    if (directSnap.exists) { uid = email; }
+    else {
+      const q = await db.collection("users").where("email", "==", email).limit(1).get();
+      if (!q.empty) uid = q.docs[0].id;
+    }
+  } catch (e) { return Response.json({ error: "Firestore query failed: " + String(e) }, { status: 500 }); }
+
   if (!uid) {
     try {
       const { getAuth } = await import("firebase-admin/auth");
@@ -25,12 +29,15 @@ export async function GET(req: NextRequest) {
   }
   if (!uid) return Response.json({ error: "User not found" }, { status: 404 });
 
-  const snap = await db.collection("users").doc(uid).get();
-  const data = snap.data() ?? {};
-
-  return Response.json({
-    uid,
-    executionProjects: data.executionProjects ?? [],
-    projectCount: (data.executionProjects ?? []).length,
-  });
+  try {
+    const snap = await db.collection("users").doc(uid).get();
+    const data = snap.data() ?? {};
+    return Response.json({
+      uid,
+      executionProjects: data.executionProjects ?? [],
+      projectCount: (data.executionProjects ?? []).length,
+    });
+  } catch (e) {
+    return Response.json({ error: String(e), uid }, { status: 500 });
+  }
 }

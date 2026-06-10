@@ -5,10 +5,12 @@ import {
   isAssessmentInProgressAtom,
   userAtom,
   authLoadingAtom,
-  activeConversationIdAtom,
+  assistantThreadAtom,
+  assistantThreadLoadingAtom,
 } from "@/store/atoms";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
+import { getAssistantMessages } from "@/lib/firestore";
 
 export default function Page() {
   const user = useAtomValue(userAtom);
@@ -16,7 +18,9 @@ export default function Page() {
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
   const setAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
-  const setActiveId = useSetAtom(activeConversationIdAtom);
+  const setThread = useSetAtom(assistantThreadAtom);
+  const setThreadLoading = useSetAtom(assistantThreadLoadingAtom);
+  const loadedRef = useRef(false);
 
   useEffect(() => {
     if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
@@ -28,12 +32,18 @@ export default function Page() {
     }
   }, [user, isAssessmentInProgress, setAssessmentComplete]);
 
-  // Always start fresh on /chat — clear any active conversation
+  // Load persistent assistant thread from Firestore on mount (once per page visit)
   useEffect(() => {
-    setActiveId(null);
-  }, [setActiveId]);
+    if (!user?.uid || !isAssessmentComplete || loadedRef.current) return;
+    loadedRef.current = true;
+    setThreadLoading(true);
+    getAssistantMessages(user.uid, 50)
+      .then((messages) => setThread(messages))
+      .finally(() => setThreadLoading(false));
+  }, [user?.uid, isAssessmentComplete, setThread, setThreadLoading]);
 
   if (authLoading) return null;
+  // ChatLayout renders ChatArea for completed users — no WelcomeScreen
   if (isAssessmentComplete) return null;
 
   return <AssessmentChatPage />;

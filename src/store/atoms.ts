@@ -1,5 +1,5 @@
 import { atom } from "jotai";
-import { UserProfile } from "@/lib/firestore";
+import { UserProfile, AssistantMessage } from "@/lib/firestore";
 import type { DirectionCardData } from "@/lib/directionTypes";
 
 export interface AuthUser {
@@ -169,6 +169,13 @@ export interface RecipeDirection {
 export const recipeDirectionsAtom = atom<RecipeDirection[]>([]);
 // Set to the ID of a newly-added recipe card so DirectionSection can auto-expand it
 export const newRecipeCardIdAtom = atom<string | null>(null);
+
+// ── Sorene Assistant persistent thread ───────────────────────────────────────
+// Holds messages loaded from assistantThreads/{uid}/messages (Firestore).
+// Separate from conversationsAtom — this thread never resets, never creates new sessions.
+export type AssistantThreadMessage = AssistantMessage & { id: string };
+export const assistantThreadAtom = atom<AssistantThreadMessage[]>([]);
+export const assistantThreadLoadingAtom = atom<boolean>(false);
 
 export interface ResourcesConstraints {
   networks: string;

@@ -15,24 +15,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing userKey" }, { status: 400 });
   }
 
-  const db = getAdminFirestore();
+  try {
+    const db = getAdminFirestore();
 
-  await db.collection("users").doc(userKey).set(
-    {
-      subscription: {
-        active: false,
-        plan: "free",
-        status: "inactive",
+    await db.collection("users").doc(userKey).set(
+      {
+        subscription: {
+          active: false,
+          plan: "free",
+          status: "inactive",
+        },
+        credits: {
+          used: 0,
+          limit: PLAN_CREDITS.free,
+          extra: 0,
+          reset_at: 0,
+        },
       },
-      credits: {
-        used: 0,
-        limit: PLAN_CREDITS.free,
-        extra: 0,
-        reset_at: 0,
-      },
-    },
-    { merge: true },
-  );
+      { merge: true },
+    );
 
-  return NextResponse.json({ ok: true, userKey, plan: "free", creditsLimit: PLAN_CREDITS.free });
+    return NextResponse.json({ ok: true, userKey, plan: "free", creditsLimit: PLAN_CREDITS.free });
+  } catch (err: unknown) {
+    console.error("[reset-to-free]", err);
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

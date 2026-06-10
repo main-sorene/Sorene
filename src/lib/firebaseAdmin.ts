@@ -47,7 +47,9 @@ export async function verifyAuth(
     const auth = getAdminAuth();
     if (!auth) return null;
     const decoded = await auth.verifyIdToken(token);
-    return { uid: decoded.uid, email: decoded.email };
+    // Use email as the document key to match the client-side convention
+    // (AuthPersistence uses firebaseUser.email || uid as appUid).
+    return { uid: decoded.email ?? decoded.uid, email: decoded.email };
   } catch {
     return null;
   }

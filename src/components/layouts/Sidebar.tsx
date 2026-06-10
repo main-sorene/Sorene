@@ -352,7 +352,7 @@ export function Sidebar({
       if (auth) {
         await signOut(auth);
         try { localStorage.removeItem("sorene_last_route"); } catch {}
-        router.push("/");
+        window.location.href = "/";
       }
     } catch (error) {
       toast({

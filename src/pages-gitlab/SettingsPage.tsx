@@ -67,7 +67,7 @@ export function SettingsPage() {
       if (auth) await signOut(auth);
       try { localStorage.removeItem("sorene_last_route"); } catch {}
       setUser(null);
-      router.push("/");
+      window.location.href = "/";
     } catch {
       toast({ title: "Error signing out", description: "Please try again.", variant: "destructive" });
       setIsLoggingOut(false);

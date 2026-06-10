@@ -335,7 +335,7 @@ export function SettingsModal() {
       try { localStorage.removeItem("sorene_last_route"); } catch {}
       setUser(null);
       setIsOpen(false);
-      router.push("/");
+      window.location.href = "/";
     } catch {
       toast({ title: "Error signing out", description: "Please try again.", variant: "destructive" });
     } finally {

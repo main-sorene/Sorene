@@ -30,13 +30,6 @@ export async function GET(req: NextRequest) {
     } catch { /* ignore */ }
   }
 
-  // 3. Firestore query by email field
-  if (!uid) {
-    try {
-      const q = await db.collection("users").where("email", "==", email).limit(1).get();
-      if (!q.empty) { uid = q.docs[0].id; lookupMethod = "firestore-query"; }
-    } catch (e) { return Response.json({ error: "Firestore query failed: " + String(e) }, { status: 500 }); }
-  }
 
   if (!uid) return Response.json({ error: "User not found by any method", email }, { status: 404 });
 

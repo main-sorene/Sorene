@@ -332,6 +332,7 @@ export function SettingsModal() {
     setIsLoggingOut(true);
     try {
       if (auth) await signOut(auth);
+      try { localStorage.removeItem("sorene_last_route"); } catch {}
       setUser(null);
       setIsOpen(false);
       router.push("/");

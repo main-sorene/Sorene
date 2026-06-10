@@ -351,6 +351,7 @@ export function Sidebar({
     try {
       if (auth) {
         await signOut(auth);
+        try { localStorage.removeItem("sorene_last_route"); } catch {}
         router.push("/");
       }
     } catch (error) {

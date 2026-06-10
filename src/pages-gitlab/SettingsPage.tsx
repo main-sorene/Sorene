@@ -65,6 +65,7 @@ export function SettingsPage() {
     setIsLoggingOut(true);
     try {
       if (auth) await signOut(auth);
+      try { localStorage.removeItem("sorene_last_route"); } catch {}
       setUser(null);
       router.push("/");
     } catch {

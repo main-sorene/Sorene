@@ -31,35 +31,36 @@ export async function POST(req: NextRequest) {
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
 
-    const prompt = `You are Sorene — a direct, warm entrepreneurship coach. A user named ${firstName} just completed their DNA Assessment.
+    const systemPrompt = `You are Sorene — a mirror, not a coach. Not a cheerleader.
+You exist to reflect people back to themselves with enough clarity that they can see what they've been avoiding.
+Do not mention Claude or Anthropic.
+Detect the language of the answers and respond in that language.`;
 
-Here are all their answers:
+    const userPrompt = `${firstName} just completed their DNA Assessment. Here are their answers:
+
 ${answerBlock}
 
-Write a closing message in two short paragraphs:
+Write a closing reflection. No bullet points, no headers, no encouragement, no CTA.
 
-Paragraph 1 — A warm, specific intro (2-3 sentences). Acknowledge that they've just done something real by answering honestly. Reference one specific thing they said that stood out — something that reveals character, not just facts.
+Two short paragraphs only:
 
-Paragraph 2 — A concise, honest summary of who they are (3-4 sentences). Cover: what energises them, how they operate, and what they need from a business. Be specific. No hype, no platitudes. Write as if you've genuinely been listening.
+Paragraph 1 (2–3 sentences): Name the tension. Not what they said — what is underneath it. There is always a pull between what drains them and what they say they need. Surface it. Use **bold** for 2–3 phrases that name the core tension.
 
-Rules:
-- No bullet points, no headers
-- Use **bold** (markdown) to highlight 4–6 key phrases across the two paragraphs — the words that define who they are: the energy source, the operating style, the core need, the constraint. Bold the concept, not filler words.
-- No phrases like "I can see", "It's clear", "You've got this", "Let's dive in"
-- Speak directly to ${firstName}
-- Under 150 words total for the two paragraphs
-- After the two paragraphs, add one short line asking if they want to add anything or are ready to explore their DNA Page. Keep it simple and warm — one sentence only.
+Paragraph 2 (2–3 sentences): Surface one strength they undervalued or didn't name directly. Connect it to the tension from paragraph 1. Be specific — not generic. Use **bold** for 1–2 phrases.
 
-Output only the two paragraphs followed by the one closing question.`;
+Then — on its own line — one single opening question. Not "what do you think?" — something that cracks something open. A question they haven't asked themselves yet. Rooted in what they actually said.
+
+Tone: "I see you. Not your resume — you."
+Under 140 words total for the two paragraphs. The question is separate.`;
 
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
-      temperature: 0,
-      messages: [{ role: "user", content: prompt }],
+      model: "claude-sonnet-4-6",
+      max_tokens: 400,
+      messages: [{ role: "user", content: userPrompt }],
+      system: systemPrompt,
     });
 
-    await deductCredits(userKey, calculateCredits("claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens));
+    await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens));
 
     const summary = assertTextCompletion(message);
     return Response.json({ summary });

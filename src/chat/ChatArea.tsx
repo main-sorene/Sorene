@@ -10,12 +10,13 @@ import {
   selectedModelAtom,
   userAtom,
   ideationAtom,
+  assistantThreadAtom,
+  assistantThreadLoadingAtom,
 } from "@/store/atoms";
 import { MessageBubble } from "./MessageBubble";
-import { WelcomeScreen } from "./WelcomeScreen";
 import { ChatInput } from "./ChatInput";
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,8 +31,13 @@ import { CheckCircle2, Info, Loader2 } from "lucide-react";
 import { useProfile } from "@/hooks/useProfile";
 
 export function ChatArea() {
+  const pathname = usePathname();
+  const isAssistantPath = pathname === "/chat";
+
   const conversation = useAtomValue(activeConversationAtom);
   const isHistoryLoading = useAtomValue(isHistoryLoadingAtom);
+  const assistantThread = useAtomValue(assistantThreadAtom);
+  const assistantThreadLoading = useAtomValue(assistantThreadLoadingAtom);
   const [isAddMoreInfoMode, setIsAddMoreInfoMode] = useAtom(
     isAddMoreInfoModeAtom,
   );
@@ -116,20 +122,53 @@ export function ChatArea() {
     conversation?.messages?.[conversation?.messages?.length - 1]?.content,
   ]);
 
-  // if (isHistoryLoading) {
-  //   return (
-  //     <div className="flex-1 overflow-auto flex items-center justify-center">
-  //       <ChatLoader />
-  //     </div>
-  //   );
-  // }
+  // Assistant thread path — /chat with persistent coaching thread
+  if (isAssistantPath) {
+    if (assistantThreadLoading) {
+      return (
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="animate-spin text-muted-foreground" size={28} />
+          </div>
+          <ChatInput className="w-full max-w-4xl" disableNavigation segmentOverride="chat" />
+        </div>
+      );
+    }
 
-  if (!conversation || conversation.messages.length === 0) {
     return (
-      <div className="flex-1 overflow-auto" data-testid="welcome-screen">
-        <WelcomeScreen />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <ScrollArea className="flex-1">
+          <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 space-y-8" data-testid="assistant-thread">
+            {assistantThread.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full pt-24 gap-3 text-center">
+                <p className="text-lg font-medium text-foreground">Your Sorene Assistant</p>
+                <p className="text-sm text-muted-foreground max-w-sm">
+                  This is your personal coaching space. Send a message to begin.
+                </p>
+              </div>
+            ) : (
+              assistantThread.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={{
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: msg.createdAt ? (msg.createdAt as unknown as { toDate(): Date }).toDate() : new Date(),
+                  }}
+                />
+              ))
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </ScrollArea>
+        <ChatInput className="w-full max-w-4xl" disableNavigation segmentOverride="chat" />
       </div>
     );
+  }
+
+  if (!conversation || conversation.messages.length === 0) {
+    return null;
   }
 
   return (

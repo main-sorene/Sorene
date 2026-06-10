@@ -11394,13 +11394,27 @@ export default function Page() {
     add();
   }, [atomProject, authUser?.uid, setAtomProject]);
 
-  // Load saved execution projects from Firestore
+  // Load saved execution projects — localStorage first (instant), then Firestore (source of truth)
   useEffect(() => {
     if (!authUser?.uid) return;
+    // Seed from localStorage cache immediately so UI isn't empty on load
+    try {
+      const cached = localStorage.getItem(`execution-projects-${authUser.uid}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length) setProjects(parsed);
+      }
+    } catch { /* ignore */ }
+    // Then fetch from Firestore and update both state and cache
     import("@/lib/authFetch").then(({ authFetch }) =>
       authFetch("/api/execution-projects/list")
         .then((r) => r.ok ? r.json() : null)
-        .then((data) => { if (data?.projects?.length) setProjects(data.projects); })
+        .then((data) => {
+          if (data?.projects?.length) {
+            setProjects(data.projects);
+            try { localStorage.setItem(`execution-projects-${authUser.uid}`, JSON.stringify(data.projects)); } catch { /* ignore */ }
+          }
+        })
         .catch(() => {})
     );
   }, [authUser?.uid]);
@@ -11445,7 +11459,11 @@ export default function Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project }),
     }).catch(() => {});
-    setProjects((prev) => [...prev, project]);
+    setProjects((prev) => {
+      const next = [...prev, project];
+      try { localStorage.setItem(`execution-projects-${authUser?.uid}`, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
     setSelectedProject(project);
     return project;
   };

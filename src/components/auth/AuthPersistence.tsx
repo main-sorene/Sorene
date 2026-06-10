@@ -40,14 +40,23 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
         // Check the sessionStorage flag set by page.tsx before signInWithCustomToken.
         let isFreshSignIn = false;
         try {
-          isFreshSignIn = sessionStorage.getItem("sorene_fresh_signin") === "1";
+          // Check both flags: sorene_pending_oauth is set before navigation (reliable),
+          // sorene_fresh_signin is set in page.tsx useEffect (fallback).
+          isFreshSignIn =
+            sessionStorage.getItem("sorene_pending_oauth") === "1" ||
+            sessionStorage.getItem("sorene_fresh_signin") === "1";
+          sessionStorage.removeItem("sorene_pending_oauth");
           sessionStorage.removeItem("sorene_fresh_signin");
         } catch {}
 
         if (isFreshSignIn) {
-          // Wait for Firestore replication then retry once.
+          // Wait for Firestore replication then retry twice.
           await new Promise((r) => setTimeout(r, 1500));
           try { profile = await getUserProfile(appUid); } catch {}
+          if (!profile) {
+            await new Promise((r) => setTimeout(r, 1500));
+            try { profile = await getUserProfile(appUid); } catch {}
+          }
         }
 
         if (!profile) {

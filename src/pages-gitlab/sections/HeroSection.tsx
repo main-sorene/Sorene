@@ -51,7 +51,9 @@ export const HeroSection = () => {
   };
 
   const handleGoogleSignup = () => {
-    // Use server-side OAuth flow — works on all browsers including mobile Safari
+    // Set flag BEFORE navigating — sessionStorage persists through the OAuth
+    // redirect so AuthPersistence sees it when onAuthStateChanged fires on return.
+    try { sessionStorage.setItem("sorene_pending_oauth", "1"); } catch {}
     window.location.href = "/api/auth/google";
   };
 

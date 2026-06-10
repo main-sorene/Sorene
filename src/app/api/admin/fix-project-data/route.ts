@@ -138,6 +138,7 @@ export async function GET(req: NextRequest) {
 
   return Response.json({
     uid,
+    executionProjects: userData.executionProjects ?? [],
     legacyProjectTitle: userData.legacyProjectTitle ?? null,
     userDocKeys: socialKeys,
     integrationDocs: integDocs,

@@ -11611,7 +11611,7 @@ export default function Page() {
                       )}
                     >
                       {activeTab === "validation"
-                        ? <ValidationProgress key={`val-${hydratedTick}`} project={selectedProject} onCreateProject={startProjectOnboarding} onConfirmLaunch={() => { setLaunchpadOpenPillar("brand_digital"); setActiveTab("launchpad"); }} />
+                        ? currentFolders.map((folder) => <FolderCard key={folder.id} folder={folder} />)
                         : activeTab === "launchpad"
                         ? <LaunchPadContent key={`lp-${hydratedTick}-${launchpadOpenPillar ?? "none"}`} project={selectedProject ?? null}
                             autoOpenPillarId={launchpadOpenPillar}

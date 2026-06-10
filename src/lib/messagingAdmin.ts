@@ -42,10 +42,15 @@ export async function consumeLinkToken(token: string): Promise<{ uid: string; pl
 }
 
 export async function linkPlatformToUser(uid: string, platform: MessagingPlatform, platformId: string): Promise<void> {
-  await getDb().collection("users").doc(uid).set(
-    { linkedMessaging: { [platform]: platformId } },
-    { merge: true }
-  );
+  const patch: Record<string, unknown> = {
+    linkedMessaging: { [platform]: platformId },
+  };
+  // Mirror into preferences so the new coaching layer can read it
+  if (platform === "whatsapp") {
+    patch["preferences.whatsappConnected"] = true;
+    patch["preferences.whatsappNumber"] = platformId;
+  }
+  await getDb().collection("users").doc(uid).set(patch, { merge: true });
 }
 
 export async function getUidByPlatformId(platform: MessagingPlatform, platformId: string): Promise<string | null> {

@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, deleteField, collection, getDocs, addDoc, query, orderBy, limit, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import type { DirectionCardData } from "./directionTypes";
 import type { Conversation } from "@/store/atoms";
@@ -44,7 +44,7 @@ export interface UserProfile {
     energy_source: string;
     energy_drains: string;
     quit_reason: string;
-    // Derived text labels (added in later engine versions)
+    // Derived text labels
     primary_motivation?: string;
     collaboration_mode?: string;
     structure_preference?: string;
@@ -54,6 +54,9 @@ export interface UserProfile {
     time_availability?: string;
     readiness_label?: string;
     strength_patterns?: string[];
+    // Coaching identity labels — generated async via /api/dna-labels after assessment
+    value_signature?: string;
+    hidden_strength?: string;
   };
   dna_narrative?: Record<string, string>;
   directionEligibility?: {
@@ -83,6 +86,66 @@ export interface UserProfile {
   mieReportGeneratedAt?: string;
   problemScanReport?: unknown;
   problemScanReportGeneratedAt?: string;
+
+  // ── Coaching layer ─────────────────────────────────────────────────────────
+  coachingStage?: 'lost' | 'exploring' | 'testing' | 'earning' | 'stabilizing';
+  firstSessionComplete?: boolean;
+  lastSessionAt?: string;
+  directionRationale?: string;
+
+  // State memory — updated each session
+  stateMemory?: {
+    emotion?: string;
+    energyLevel?: 'low' | 'medium' | 'high';
+    clarityLevel?: 'confused' | 'exploring' | 'clear';
+    updatedAt?: string;
+  };
+
+  // Behavior memory — the moat
+  behaviorMemory?: {
+    experimentsCompleted?: number;
+    experimentsAbandoned?: number;
+    customerConversations?: number;
+    lastCommitment?: string;
+    lastCommitmentKept?: boolean | null;
+    pivotSignalsTriggered?: number;
+    firstMoneyReceivedAt?: string | null;
+  };
+
+  // Execution Hub
+  executionStage?: string;
+  launchpadItemsCompleted?: string[];
+  activeGrowthStrategies?: string[];
+
+  // Education Module
+  educationProgress?: {
+    currentBlock?: number;
+    completedBlocks?: number[];
+    microExperimentsCompleted?: string[];
+    startedAt?: string;
+    lastActivityAt?: string;
+  };
+
+  // Business Status
+  businessStatusEnabled?: boolean;
+  trackedMetrics?: string[];
+  metricCadence?: 'daily' | 'weekly' | 'monthly' | 'on_request';
+  metricCadenceDay?: string;
+
+  // Preferences (consolidated — includes WhatsApp; old top-level whatsapp fields deprecated)
+  preferences?: {
+    language?: string;
+    timezone?: string;
+    checkinCadence?: 'daily' | 'weekly' | 'monthly' | 'off';
+    checkinDay?: string;
+    checkinTime?: string;
+    pushNotifications?: boolean;
+    quietHoursStart?: string;
+    quietHoursEnd?: string;
+    // WhatsApp — mirrors linkedMessaging.whatsapp; kept in sync on connect/disconnect
+    whatsappConnected?: boolean;
+    whatsappNumber?: string;
+  };
 }
 
 function getDb() {
@@ -303,5 +366,252 @@ export async function clearCloudConversations(uid: string): Promise<void> {
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
   } catch (error) {
     console.error("[Firestore] Error clearing cloud conversations:", error);
+  }
+}
+
+// ── Subcollection types ───────────────────────────────────────────────────────
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: Timestamp;
+  metadata?: {
+    modeUsed?: 'onboarding' | 'reflection' | 'direction' | 'execution';
+    stageAtTime?: string;
+    commitmentExtracted?: string | null;
+  };
+}
+
+export interface ExecutionEntity {
+  entityType: 'customer_call' | 'commitment' | 'decision' | 'blocker' | 'first_money';
+  summary: string;
+  sourceTab: 'assistant' | 'customer_research' | 'outreach' | 'launchpad';
+  confirmed: boolean;
+  completed: boolean | null;
+  createdAt: Timestamp;
+}
+
+export interface BusinessMetricEntry {
+  metricType: string;
+  platform: string;
+  value: number;
+  delta: number;
+  periodType: 'daily' | 'weekly' | 'monthly' | 'manual';
+  notes: string;
+  recordedAt: Timestamp;
+}
+
+export interface PivotSignalEvent {
+  signalType: string;
+  experimentCount: number;
+  conversationCount: number;
+  surfacedAt: Timestamp;
+  userResponse?: string;
+  createdAt: Timestamp;
+}
+
+export interface NudgeLogEntry {
+  channel: string;
+  triggerType: string;
+  sentAt: Timestamp;
+  opened?: boolean;
+}
+
+// ── assistantThreads/{uid}/messages ──────────────────────────────────────────
+
+export async function addAssistantMessage(
+  uid: string,
+  message: Omit<AssistantMessage, 'createdAt'>,
+): Promise<string> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('[Firestore] db not initialized');
+  const ref = await addDoc(
+    collection(firestore, 'assistantThreads', uid, 'messages'),
+    { ...message, createdAt: Timestamp.now() },
+  );
+  return ref.id;
+}
+
+export async function getAssistantMessages(
+  uid: string,
+  limitCount = 50,
+): Promise<(AssistantMessage & { id: string })[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firestore, 'assistantThreads', uid, 'messages'),
+        orderBy('createdAt', 'asc'),
+        limit(limitCount),
+      ),
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as AssistantMessage) }));
+  } catch (error) {
+    console.error('[Firestore] Error loading assistant messages:', error);
+    return [];
+  }
+}
+
+export async function clearAssistantThread(uid: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  const snap = await getDocs(collection(firestore, 'assistantThreads', uid, 'messages'));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+}
+
+// ── executionEntities/{uid}/items ─────────────────────────────────────────────
+
+export async function addExecutionEntity(
+  uid: string,
+  entity: Omit<ExecutionEntity, 'createdAt'>,
+): Promise<string> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('[Firestore] db not initialized');
+  const ref = await addDoc(
+    collection(firestore, 'executionEntities', uid, 'items'),
+    { ...entity, createdAt: Timestamp.now() },
+  );
+  return ref.id;
+}
+
+export async function getExecutionEntities(
+  uid: string,
+): Promise<(ExecutionEntity & { id: string })[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firestore, 'executionEntities', uid, 'items'),
+        orderBy('createdAt', 'desc'),
+      ),
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as ExecutionEntity) }));
+  } catch (error) {
+    console.error('[Firestore] Error loading execution entities:', error);
+    return [];
+  }
+}
+
+export async function updateExecutionEntity(
+  uid: string,
+  itemId: string,
+  patch: Partial<Omit<ExecutionEntity, 'createdAt'>>,
+): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  await updateDoc(doc(firestore, 'executionEntities', uid, 'items', itemId), patch as Record<string, unknown>);
+}
+
+export async function deleteExecutionEntity(uid: string, itemId: string): Promise<void> {
+  const firestore = getDb();
+  if (!firestore) return;
+  await deleteDoc(doc(firestore, 'executionEntities', uid, 'items', itemId));
+}
+
+// ── businessMetrics/{uid}/entries ─────────────────────────────────────────────
+
+export async function addBusinessMetric(
+  uid: string,
+  entry: Omit<BusinessMetricEntry, 'recordedAt'>,
+): Promise<string> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('[Firestore] db not initialized');
+  const ref = await addDoc(
+    collection(firestore, 'businessMetrics', uid, 'entries'),
+    { ...entry, recordedAt: Timestamp.now() },
+  );
+  return ref.id;
+}
+
+export async function getBusinessMetrics(
+  uid: string,
+  limitCount = 100,
+): Promise<(BusinessMetricEntry & { id: string })[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firestore, 'businessMetrics', uid, 'entries'),
+        orderBy('recordedAt', 'desc'),
+        limit(limitCount),
+      ),
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as BusinessMetricEntry) }));
+  } catch (error) {
+    console.error('[Firestore] Error loading business metrics:', error);
+    return [];
+  }
+}
+
+// ── pivotSignals/{uid}/events ──────────────────────────────────────────────────
+
+export async function addPivotSignal(
+  uid: string,
+  event: Omit<PivotSignalEvent, 'createdAt'>,
+): Promise<string> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('[Firestore] db not initialized');
+  const ref = await addDoc(
+    collection(firestore, 'pivotSignals', uid, 'events'),
+    { ...event, createdAt: Timestamp.now() },
+  );
+  return ref.id;
+}
+
+export async function getPivotSignals(
+  uid: string,
+): Promise<(PivotSignalEvent & { id: string })[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firestore, 'pivotSignals', uid, 'events'),
+        orderBy('createdAt', 'desc'),
+      ),
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as PivotSignalEvent) }));
+  } catch (error) {
+    console.error('[Firestore] Error loading pivot signals:', error);
+    return [];
+  }
+}
+
+// ── nudgeLog/{uid}/sent ────────────────────────────────────────────────────────
+
+export async function logNudge(
+  uid: string,
+  nudge: Omit<NudgeLogEntry, 'sentAt'>,
+): Promise<string> {
+  const firestore = getDb();
+  if (!firestore) throw new Error('[Firestore] db not initialized');
+  const ref = await addDoc(
+    collection(firestore, 'nudgeLog', uid, 'sent'),
+    { ...nudge, sentAt: Timestamp.now() },
+  );
+  return ref.id;
+}
+
+export async function getNudgeLog(
+  uid: string,
+  limitCount = 100,
+): Promise<(NudgeLogEntry & { id: string })[]> {
+  const firestore = getDb();
+  if (!firestore) return [];
+  try {
+    const snap = await getDocs(
+      query(
+        collection(firestore, 'nudgeLog', uid, 'sent'),
+        orderBy('sentAt', 'desc'),
+        limit(limitCount),
+      ),
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as NudgeLogEntry) }));
+  } catch (error) {
+    console.error('[Firestore] Error loading nudge log:', error);
+    return [];
   }
 }

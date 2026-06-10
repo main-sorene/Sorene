@@ -44,6 +44,18 @@ export async function GET(req: NextRequest) {
     } catch { /* ignore */ }
   }
 
+  if (!uid) {
+    // Scan Firestore users collection for matching email field
+    try {
+      const snapshot = await db.collection("users").get();
+      const match = snapshot.docs.find(d => {
+        const data = d.data();
+        return data.email === email || (typeof data.email === "string" && data.email.toLowerCase().includes("pamela"));
+      });
+      if (match) { uid = match.id; lookupMethod = "firestore-scan"; }
+    } catch (e) { return Response.json({ error: "Firestore scan failed: " + String(e) }, { status: 500 }); }
+  }
+
   if (!uid) return Response.json({ error: "User not found by any method", email }, { status: 404 });
 
   try {

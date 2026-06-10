@@ -11254,14 +11254,12 @@ export default function Page() {
     if (!atomProject || !authUser?.uid) return;
     const add = async () => {
       // Persist via API
-      const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken());
-      if (token) {
-        await fetch("/api/execution-projects/add", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ project: atomProject }),
-        }).catch(() => {});
-      }
+      const { authFetch } = await import("@/lib/authFetch");
+      await authFetch("/api/execution-projects/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: atomProject }),
+      }).catch(() => {});
       setProjects((prev) => prev.some((p) => p.title === atomProject.title) ? prev : [...prev, atomProject]);
       setSelectedProject(atomProject);
       setAtomProject(null);
@@ -11272,14 +11270,11 @@ export default function Page() {
   // Load saved execution projects from Firestore
   useEffect(() => {
     if (!authUser?.uid) return;
-    import("@/lib/firebase").then(({ auth }) =>
-      auth?.currentUser?.getIdToken().then((token) => {
-        if (!token) return;
-        fetch("/api/execution-projects/list", { headers: { Authorization: `Bearer ${token}` } })
-          .then((r) => r.ok ? r.json() : null)
-          .then((data) => { if (data?.projects?.length) setProjects(data.projects); })
-          .catch(() => {});
-      })
+    import("@/lib/authFetch").then(({ authFetch }) =>
+      authFetch("/api/execution-projects/list")
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => { if (data?.projects?.length) setProjects(data.projects); })
+        .catch(() => {})
     );
   }, [authUser?.uid]);
 
@@ -11317,14 +11312,12 @@ export default function Page() {
     const existing = projects.find((p) => p.title === t);
     if (existing) { setSelectedProject(existing); return existing; }
     const project: DirectionCardData = { title: t, oneliner: oneliner.trim() } as DirectionCardData;
-    const token = await import("@/lib/firebase").then((m) => m.auth?.currentUser?.getIdToken()).catch(() => null);
-    if (token) {
-      await fetch("/api/execution-projects/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ project }),
-      }).catch(() => {});
-    }
+    const { authFetch } = await import("@/lib/authFetch");
+    await authFetch("/api/execution-projects/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project }),
+    }).catch(() => {});
     setProjects((prev) => [...prev, project]);
     setSelectedProject(project);
     return project;

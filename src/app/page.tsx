@@ -5,7 +5,7 @@ import { userAtom, authLoadingAtom } from "@/store/atoms";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LandingPageScreen } from "@/pages-gitlab/LandingPage";
 import { auth } from "@/lib/firebase";
-import { signInWithCustomToken } from "firebase/auth";
+import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { Suspense } from "react";
 
@@ -16,12 +16,12 @@ function PageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [signingIn, setSigningIn] = useState(
-    () => !!searchParams.get("custom_token"),
+    () => !!(searchParams.get("google_id_token") || searchParams.get("custom_token")),
   );
   const [authErrorMsg, setAuthErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const customToken = searchParams.get("custom_token");
+    const googleIdToken = searchParams.get("google_id_token");
     const authError = searchParams.get("auth_error");
 
     if (authError) {
@@ -32,22 +32,19 @@ function PageInner() {
       return;
     }
 
-    if (customToken && auth) {
+    if (googleIdToken && auth) {
       try { sessionStorage.setItem("sorene_fresh_signin", "1"); } catch {}
       setSigningIn(true);
       setAuthLoading(true);
-      signInWithCustomToken(auth, customToken)
+      const credential = GoogleAuthProvider.credential(googleIdToken);
+      signInWithCredential(auth, credential)
         .then(async (result) => {
-          // Write a minimal profile client-side so AuthPersistence finds it.
-          // Server-side Firestore (Admin SDK) is blocked by IAM; the client SDK
-          // uses the user's own Firebase auth token which always has access.
+          // Ensure a Firestore profile exists for this user.
           const uid = result.user.email || result.user.uid;
           try {
             const existing = await getUserProfile(uid);
             if (!existing) {
-              await saveUserProfile(uid, {
-                email: result.user.email || uid,
-              } as any);
+              await saveUserProfile(uid, { email: result.user.email || uid } as any);
             }
           } catch (e) {
             console.warn("[page] profile ensure failed:", e);
@@ -55,7 +52,7 @@ function PageInner() {
           router.replace("/");
         })
         .catch((e) => {
-          console.error("signInWithCustomToken error:", e.message);
+          console.error("signInWithCredential error:", e.message);
           setAuthErrorMsg(`signin_failed: ${e.message}`);
           setSigningIn(false);
           setAuthLoading(false);

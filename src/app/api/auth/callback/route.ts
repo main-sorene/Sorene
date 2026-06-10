@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getAdminAuth } from "@/lib/firebaseAdmin";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -29,7 +28,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/?auth_error=no_code`);
   }
 
-  // Exchange code for tokens
+  // Exchange code for tokens — id_token is a Google ID token usable directly
+  // with Firebase signInWithCredential (no Admin SDK required).
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -44,43 +44,19 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok) {
     const err = await tokenRes.text();
-    console.error("Token exchange failed:", err);
+    console.error("[callback] token exchange failed:", err);
     return NextResponse.redirect(`${APP_URL}/?auth_error=token_exchange_failed`);
   }
 
-  const { access_token } = await tokenRes.json();
+  const { id_token } = await tokenRes.json();
 
-  // Get user info
-  const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-    headers: { Authorization: `Bearer ${access_token}` },
-  });
-
-  if (!userRes.ok) {
-    return NextResponse.redirect(`${APP_URL}/?auth_error=userinfo_failed`);
+  if (!id_token) {
+    return NextResponse.redirect(`${APP_URL}/?auth_error=no_id_token`);
   }
 
-  const googleUser = await userRes.json();
-  const uid = googleUser.email;
-
-  // Create Firebase custom token
-  const adminAuth = getAdminAuth();
-  if (!adminAuth) {
-    return NextResponse.redirect(`${APP_URL}/?auth_error=admin_not_configured`);
-  }
-
-  let customToken: string;
-  try {
-    customToken = await adminAuth.createCustomToken(uid, {
-      email: googleUser.email,
-      name: googleUser.name,
-      picture: googleUser.picture,
-    });
-  } catch (e: any) {
-    console.error("[callback] createCustomToken failed:", e.message);
-    return NextResponse.redirect(`${APP_URL}/?auth_error=token_create_failed`);
-  }
-
+  // Pass the Google ID token to the client — it calls signInWithCredential
+  // directly, bypassing Firebase Admin SDK custom tokens entirely.
   return NextResponse.redirect(
-    `${APP_URL}/?custom_token=${encodeURIComponent(customToken)}`,
+    `${APP_URL}/?google_id_token=${encodeURIComponent(id_token)}`,
   );
 }

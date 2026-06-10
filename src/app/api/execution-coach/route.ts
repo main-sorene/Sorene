@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     try { creditCheck = await checkCredits(userKey); } catch { /* allow through if credits check fails */ }
     if (!creditCheck.ok) return NextResponse.json({ error: "Credit limit reached" }, { status: 402 });
 
-    const { message, recipeId, history, userProfile, project, projectStatus } = (await req.json()) as {
+    const { message, recipeId, history, userProfile, project, projectStatus, allProjects } = (await req.json()) as {
       message: string;
       recipeId?: string;
       history?: { role: "user" | "assistant"; content: string }[];
@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
         key_competitors?: { name: string; what_they_do: string }[];
       } | null;
       projectStatus?: Record<string, unknown> | null;
+      allProjects?: { title: string; oneliner?: string; status: Record<string, unknown> }[];
     };
 
     const p = userProfile ?? {};
@@ -140,12 +141,18 @@ First 10 customers: ${or(project.first_10_customers)}
 Distribution path: ${or(project.distribution_path)}
 Competitors: ${(project.key_competitors ?? []).map((c) => c.name).join(", ") || "Not provided"}
 ${project.description ? `Description: ${String(project.description).slice(0, 400)}` : ""}`
-      : `CURRENT PROJECT: None selected. Encourage them to pick or create a project, or choose a Direction first.`;
+      : allProjects?.length
+        ? `ALL PROJECTS OVERVIEW (no specific project open)\n${allProjects.map((p, i) =>
+            `${i + 1}. "${p.title}"${p.oneliner ? ` — ${p.oneliner}` : ""}${Object.keys(p.status).length ? `\n   Progress: ${JSON.stringify(p.status)}` : "\n   Progress: Not started"}`
+          ).join("\n")}`
+        : `CURRENT PROJECT: None selected. Encourage them to pick or create a project, or choose a Direction first.`;
 
     // ── Live execution status ──
-    const statusBlock = projectStatus && Object.keys(projectStatus).length > 0
-      ? `LIVE EXECUTION STATUS (what they've done so far)\n${JSON.stringify(projectStatus, null, 2)}`
-      : `LIVE EXECUTION STATUS: No progress recorded yet — they're at the very beginning.`;
+    const statusBlock = project
+      ? (projectStatus && Object.keys(projectStatus).length > 0
+          ? `LIVE EXECUTION STATUS (what they've done so far)\n${JSON.stringify(projectStatus, null, 2)}`
+          : `LIVE EXECUTION STATUS: No progress recorded yet — they're at the very beginning.`)
+      : "";
 
     const systemPrompt = `You are Sorene, a sharp, warm, practical execution coach inside the user's Execution Hub. You help them move their specific business forward — from validation to launch to growth.
 

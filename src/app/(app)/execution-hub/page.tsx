@@ -11649,7 +11649,7 @@ export default function Page() {
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="h-full shrink-0 hidden xl:block overflow-hidden"
           >
-            <ExecutionHubChat project={selectedProject ?? null} />
+            <ExecutionHubChat project={selectedProject ?? null} allProjects={projects} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -11668,7 +11668,7 @@ export default function Page() {
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="fixed inset-2 rounded-4xl z-50 xl:hidden overflow-hidden">
-            <ExecutionHubChat project={selectedProject ?? null} onClose={() => setChatOpen(false)} />
+            <ExecutionHubChat project={selectedProject ?? null} allProjects={projects} onClose={() => setChatOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>

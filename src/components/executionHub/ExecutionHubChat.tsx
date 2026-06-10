@@ -88,7 +88,7 @@ function FormattedMessage({ content }: { content: string }) {
   );
 }
 
-export function ExecutionHubChat({ project, onClose }: { project?: DirectionCardData | null; onClose?: () => void }) {
+export function ExecutionHubChat({ project, allProjects, onClose }: { project?: DirectionCardData | null; allProjects?: DirectionCardData[]; onClose?: () => void }) {
   const router = useRouter();
   const authUser = useAtomValue(userAtom);
   const setIsSettingsOpen = useSetAtom(isSettingsOpenAtom);
@@ -194,6 +194,13 @@ export function ExecutionHubChat({ project, onClose }: { project?: DirectionCard
             key_competitors: project.key_competitors,
           } : null,
           projectStatus: project ? gatherProjectStatus(project.title) : null,
+          allProjects: !project && allProjects?.length
+            ? allProjects.map((p) => ({
+                title: p.title,
+                oneliner: p.oneliner,
+                status: gatherProjectStatus(p.title),
+              }))
+            : undefined,
         }),
       });
 

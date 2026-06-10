@@ -74,6 +74,12 @@ export function UpgradePage() {
 
   async function handleUpgrade(plan: Plan, isCurrent: boolean) {
     if (isCurrent || loadingPlan) return;
+
+    if (plan.id === "free") {
+      router.push("/chat");
+      return;
+    }
+
     const email = user?.email ?? user?.uid ?? user?.profile?.email;
     if (!email) {
       toast({ title: "Error", description: "User email not found. Please log in again.", variant: "destructive" });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getAdminAuth, getAdminFirestore } from "@/lib/firebaseAdmin";
+import { getAdminAuth } from "@/lib/firebaseAdmin";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -61,32 +61,6 @@ export async function GET(req: NextRequest) {
 
   const googleUser = await userRes.json();
   const uid = googleUser.email;
-
-  // Save profile to Firestore using the ADMIN SDK. The client SDK's
-  // saveUserProfile is a no-op on the server (db never initializes outside the
-  // browser), which silently dropped the profile write — causing fresh sign-ins
-  // to land with no profile and get bounced back to the homepage.
-  try {
-    const adminDb = getAdminFirestore();
-    const docRef = adminDb.collection("users").doc(uid);
-    const existing = await docRef.get();
-    const now = new Date().toISOString();
-    if (existing.exists) {
-      await docRef.set(
-        { email: googleUser.email, updatedAt: now },
-        { merge: true },
-      );
-    } else {
-      await docRef.set({
-        email: googleUser.email,
-        onboardingComplete: false,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  } catch (e) {
-    console.error("[callback] profile write failed:", e);
-  }
 
   // Create Firebase custom token
   const adminAuth = getAdminAuth();

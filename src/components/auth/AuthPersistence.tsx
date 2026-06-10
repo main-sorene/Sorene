@@ -26,46 +26,37 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
       const appUid = firebaseUser.email || firebaseUser.uid;
 
+      // Check for pending OAuth flag set before navigation — fresh sign-in.
+      let isPendingOAuth = false;
+      try {
+        isPendingOAuth =
+          sessionStorage.getItem("sorene_pending_oauth") === "1" ||
+          sessionStorage.getItem("sorene_fresh_signin") === "1";
+        sessionStorage.removeItem("sorene_pending_oauth");
+        sessionStorage.removeItem("sorene_fresh_signin");
+      } catch {}
+
       let profile = null;
       try {
         profile = await getUserProfile(appUid);
       } catch {
-        // Firestore read failed (offline / network issue). Keep the user
-        // signed in — don't bounce them to the homepage.
+        // Firestore read failed — keep user signed in, don't bounce.
       }
 
-      if (!profile) {
-        // No Firestore profile. Could be a fresh OAuth sign-in where the server
-        // write hasn't replicated yet, OR a stale session after a data wipe.
-        // Check the sessionStorage flag set by page.tsx before signInWithCustomToken.
-        let isFreshSignIn = false;
-        try {
-          // Check both flags: sorene_pending_oauth is set before navigation (reliable),
-          // sorene_fresh_signin is set in page.tsx useEffect (fallback).
-          isFreshSignIn =
-            sessionStorage.getItem("sorene_pending_oauth") === "1" ||
-            sessionStorage.getItem("sorene_fresh_signin") === "1";
-          sessionStorage.removeItem("sorene_pending_oauth");
-          sessionStorage.removeItem("sorene_fresh_signin");
-        } catch {}
+      if (!profile && !isPendingOAuth) {
+        // No profile and no active OAuth flow = stale session after data wipe.
+        await signOut(auth!).catch(() => {});
+        setUser(null);
+        setLoading(false);
+        return;
+      }
 
-        if (isFreshSignIn) {
-          // Wait for Firestore replication then retry twice.
-          await new Promise((r) => setTimeout(r, 1500));
-          try { profile = await getUserProfile(appUid); } catch {}
-          if (!profile) {
-            await new Promise((r) => setTimeout(r, 1500));
-            try { profile = await getUserProfile(appUid); } catch {}
-          }
-        }
-
-        if (!profile) {
-          // Still no profile — stale session from before a data wipe. Sign out.
-          await signOut(auth!).catch(() => {});
-          setUser(null);
-          setLoading(false);
-          return;
-        }
+      // If no profile yet but OAuth is in flight, wait for the client-side
+      // profile write in page.tsx to complete, then retry.
+      if (!profile && isPendingOAuth) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try { profile = await getUserProfile(appUid); } catch {}
+        // If still nothing, proceed anyway — onboarding will create it.
       }
 
       if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {

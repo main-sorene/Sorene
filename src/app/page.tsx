@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LandingPageScreen } from "@/pages-gitlab/LandingPage";
 import { auth } from "@/lib/firebase";
 import { signInWithCustomToken } from "firebase/auth";
+import { getUserProfile, saveUserProfile } from "@/lib/firestore";
 import { Suspense } from "react";
 
 function PageInner() {
@@ -36,7 +37,21 @@ function PageInner() {
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)
-        .then(() => {
+        .then(async (result) => {
+          // Write a minimal profile client-side so AuthPersistence finds it.
+          // Server-side Firestore (Admin SDK) is blocked by IAM; the client SDK
+          // uses the user's own Firebase auth token which always has access.
+          const uid = result.user.email || result.user.uid;
+          try {
+            const existing = await getUserProfile(uid);
+            if (!existing) {
+              await saveUserProfile(uid, {
+                email: result.user.email || uid,
+              } as any);
+            }
+          } catch (e) {
+            console.warn("[page] profile ensure failed:", e);
+          }
           router.replace("/");
         })
         .catch((e) => {

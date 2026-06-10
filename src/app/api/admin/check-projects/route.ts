@@ -11,20 +11,17 @@ export async function GET(req: NextRequest) {
   let db: ReturnType<typeof getAdminFirestore>;
   try { db = getAdminFirestore(); } catch (e) { return Response.json({ error: "Firestore init failed: " + String(e) }, { status: 500 }); }
 
+  // Resolve uid via Firebase Auth first (most reliable), then fall back to Firestore
   let uid: string | null = null;
   try {
-    const directSnap = await db.collection("users").doc(email).get();
-    if (directSnap.exists) { uid = email; }
-    else {
-      const q = await db.collection("users").where("email", "==", email).limit(1).get();
-      if (!q.empty) uid = q.docs[0].id;
-    }
-  } catch (e) { return Response.json({ error: "Firestore query failed: " + String(e) }, { status: 500 }); }
+    const { getAuth } = await import("firebase-admin/auth");
+    uid = (await getAuth().getUserByEmail(email)).uid;
+  } catch { /* ignore */ }
 
   if (!uid) {
     try {
-      const { getAuth } = await import("firebase-admin/auth");
-      uid = (await getAuth().getUserByEmail(email)).uid;
+      const directSnap = await db.collection("users").doc(email).get();
+      if (directSnap.exists) uid = email;
     } catch { /* ignore */ }
   }
   if (!uid) return Response.json({ error: "User not found" }, { status: 404 });

@@ -94,13 +94,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/?auth_error=admin_not_configured`);
   }
 
-  const customToken = await adminAuth.createCustomToken(uid, {
-    email: googleUser.email,
-    name: googleUser.name,
-    picture: googleUser.picture,
-  });
+  let customToken: string;
+  try {
+    customToken = await adminAuth.createCustomToken(uid, {
+      email: googleUser.email,
+      name: googleUser.name,
+      picture: googleUser.picture,
+    });
+  } catch (e: any) {
+    console.error("[callback] createCustomToken failed:", e.message);
+    return NextResponse.redirect(`${APP_URL}/?auth_error=token_create_failed`);
+  }
 
-  // Redirect back to app with the custom token in the URL fragment
   return NextResponse.redirect(
     `${APP_URL}/?custom_token=${encodeURIComponent(customToken)}`,
   );

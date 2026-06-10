@@ -14,12 +14,10 @@ function PageInner() {
   const setAuthLoading = useSetAtom(authLoadingAtom);
   const router = useRouter();
   const searchParams = useSearchParams();
-  // True while we're completing the OAuth custom-token handshake. Keeps the
-  // app in a loading state instead of flashing the landing page (which on
-  // mobile looked like being "bounced back to the homepage" after login).
   const [signingIn, setSigningIn] = useState(
     () => !!searchParams.get("custom_token"),
   );
+  const [authErrorMsg, setAuthErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const customToken = searchParams.get("custom_token");
@@ -27,28 +25,26 @@ function PageInner() {
 
     if (authError) {
       console.error("OAuth error:", authError);
+      setAuthErrorMsg(authError);
       setSigningIn(false);
       router.replace("/");
       return;
     }
 
     if (customToken && auth) {
-      // Tell AuthPersistence this is a fresh sign-in so it retries the profile
-      // read instead of signing out (handles Firestore replication lag).
       try { sessionStorage.setItem("sorene_fresh_signin", "1"); } catch {}
       setSigningIn(true);
       setAuthLoading(true);
       signInWithCustomToken(auth, customToken)
         .then(() => {
-          // Strip the token from the URL only after sign-in succeeds.
-          // onAuthStateChanged populates the user; the redirect effect navigates.
           router.replace("/");
         })
         .catch((e) => {
           console.error("signInWithCustomToken error:", e.message);
+          setAuthErrorMsg(`signin_failed: ${e.message}`);
           setSigningIn(false);
           setAuthLoading(false);
-          router.replace("/?auth_error=signin_failed");
+          router.replace("/");
         });
     }
   }, [searchParams, router, setAuthLoading]);
@@ -93,7 +89,17 @@ function PageInner() {
     );
   }
 
-  return <LandingPageScreen />;
+  return (
+    <>
+      {authErrorMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl shadow max-w-sm w-full mx-4 text-center">
+          Sign-in failed: <strong>{authErrorMsg}</strong>
+          <br /><span className="text-xs text-red-500">Please try again or contact support.</span>
+        </div>
+      )}
+      <LandingPageScreen />
+    </>
+  );
 }
 
 export default function Page() {

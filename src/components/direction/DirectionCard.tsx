@@ -118,7 +118,21 @@ export function DirectionCard({
   const setSelectedProject = useSetAtom(selectedExecutionProjectAtom);
   const goValidate = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (cardData) setSelectedProject(cardData);
+    // Build the project — use full cardData if available, otherwise construct a
+    // minimal object from the props so Start Validate always works.
+    const project: import("@/lib/directionTypes").DirectionCardData = cardData ?? {
+      title,
+      compatibility: Number(score) || 85,
+      oneliner: description.slice(0, 120),
+      description,
+      why_fits_you: whyFitsYou.map((w) => w.title),
+      key_risks: keyRisks,
+      constraint_check: { status: "Pass" as const },
+    };
+    setSelectedProject(project);
+    // Persist to localStorage so Execution Hub can pick it up even if the atom
+    // is cleared by a mobile full-page navigation or hard refresh.
+    try { localStorage.setItem("pendingExecutionProject", JSON.stringify(project)); } catch {}
     router.push("/execution-hub");
   };
   const [internalIsExpanded, setInternalIsExpanded] = useState(false);

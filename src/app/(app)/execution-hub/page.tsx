@@ -11378,17 +11378,27 @@ export default function Page() {
 
   // Consume atom set by DirectionCard "Start Validate", persist to Firestore, then clear
   useEffect(() => {
-    if (!atomProject || !authUser?.uid) return;
+    if (!authUser?.uid) return;
+    // Prefer atom; fall back to localStorage for mobile full-page navigation
+    let project = atomProject;
+    if (!project) {
+      try {
+        const raw = localStorage.getItem("pendingExecutionProject");
+        if (raw) project = JSON.parse(raw) as DirectionCardData;
+      } catch {}
+    }
+    if (!project) return;
+    try { localStorage.removeItem("pendingExecutionProject"); } catch {}
     const add = async () => {
       // Persist via API
       const { authFetch } = await import("@/lib/authFetch");
       await authFetch("/api/execution-projects/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: atomProject }),
+        body: JSON.stringify({ project }),
       }).catch(() => {});
-      setProjects((prev) => prev.some((p) => p.title === atomProject.title) ? prev : [...prev, atomProject]);
-      setSelectedProject(atomProject);
+      setProjects((prev) => prev.some((p) => p.title === project!.title) ? prev : [...prev, project!]);
+      setSelectedProject(project);
       setAtomProject(null);
     };
     add();

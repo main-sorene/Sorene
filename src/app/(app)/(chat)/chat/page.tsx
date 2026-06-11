@@ -23,27 +23,31 @@ export default function Page() {
   const setThread = useSetAtom(assistantThreadAtom);
   const setThreadLoading = useSetAtom(assistantThreadLoadingAtom);
   const setReEntryMessage = useSetAtom(reEntryMessageAtom);
-  const loadedRef = useRef(false);
+  const loadedRef = useRef<string | null>(null);
 
+  // Load thread as soon as uid is available — Firestore is the source of truth.
+  // If messages exist → returning user (mark assessment complete, load thread).
+  // If no messages exist → new user (show AssessmentChatPage).
   useEffect(() => {
-    if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
-      const sessionKey = `assessment_state_${user.uid}`;
-      const hasActiveSession = sessionStorage.getItem(sessionKey);
-      if (!hasActiveSession) {
-        setAssessmentComplete(true);
-      }
-    }
-  }, [user, isAssessmentInProgress, setAssessmentComplete]);
-
-  // Load persistent assistant thread from Firestore on mount (once per page visit)
-  useEffect(() => {
-    if (!user?.uid || !isAssessmentComplete || loadedRef.current) return;
-    loadedRef.current = true;
+    if (!user?.uid || authLoading || loadedRef.current === user.uid) return;
+    loadedRef.current = user.uid;
     setThreadLoading(true);
     getAssistantMessages(user.uid, 50)
-      .then((messages) => setThread(messages))
+      .then((messages) => {
+        setThread(messages);
+        if (messages.length > 0) {
+          setAssessmentComplete(true);
+        }
+      })
       .finally(() => setThreadLoading(false));
-  }, [user?.uid, isAssessmentComplete, setThread, setThreadLoading]);
+  }, [user?.uid, authLoading, setThread, setThreadLoading, setAssessmentComplete]);
+
+  // Fallback: if profile says DNA complete and no active assessment session, mark complete
+  useEffect(() => {
+    if (user?.profile?.dnaAssessmentComplete && !isAssessmentInProgress) {
+      setAssessmentComplete(true);
+    }
+  }, [user?.profile?.dnaAssessmentComplete, isAssessmentInProgress, setAssessmentComplete]);
 
   // Re-entry opening: show once per session if user was away 48+ hours
   useEffect(() => {
@@ -71,8 +75,7 @@ export default function Page() {
   }, [user?.uid, user?.profile?.lastSessionAt, isAssessmentComplete, assistantThreadLoading, setReEntryMessage]);
 
   if (authLoading) return null;
-  // ChatLayout renders ChatArea for completed users — no WelcomeScreen
-  if (isAssessmentComplete) return null;
+  if (isAssessmentComplete) return null; // ChatLayout renders ChatArea
 
   return <AssessmentChatPage />;
 }

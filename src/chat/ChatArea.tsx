@@ -155,7 +155,6 @@ export function ChatArea() {
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="animate-spin text-muted-foreground" size={28} />
           </div>
-          <ChatInput className="w-full max-w-5xl" disableNavigation segmentOverride="chat" />
         </div>
       );
     }

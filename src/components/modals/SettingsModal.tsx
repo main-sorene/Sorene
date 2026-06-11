@@ -171,11 +171,16 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
     if (!file || !authUser?.uid) return;
     setIsUploadingCv(true);
     try {
-      const buf = await file.arrayBuffer();
-      let binary = "";
-      const bytes = new Uint8Array(buf);
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const fileBase64 = btoa(binary);
+      // Use FileReader for reliable base64 encoding of large files
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]); // strip "data:...;base64,"
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
       const { authFetch: af } = await import("@/lib/authFetch");
       const res = await af("/api/cv-summary", {
         method: "POST",
@@ -186,6 +191,11 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
       if (res.ok) {
         const data = await res.json();
         summary = (data?.summary || "").trim();
+      } else if (res.status === 413) {
+        throw new Error("File is too large. Please upload a PDF under 9MB.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Upload failed (${res.status})`);
       }
       const cvDataPayload = { file_name: file.name, file_path: "", status: "uploaded", text_length: file.size };
       const { saveUserProfile: svp } = await import("@/lib/firestore");
@@ -195,8 +205,8 @@ function ProfessionalExperienceSection({ authUser }: { authUser: ReturnType<type
         profile: { ...(authUser.profile as any), cvData: cvDataPayload, ...(summary ? { cvSummary: summary } : {}) },
       });
       toast({ description: "CV uploaded successfully." });
-    } catch {
-      toast({ description: "Failed to upload CV.", variant: "destructive" });
+    } catch (err) {
+      toast({ description: err instanceof Error ? err.message : "Failed to upload CV.", variant: "destructive" });
     } finally {
       setIsUploadingCv(false);
       if (cvInputRef.current) cvInputRef.current.value = "";

@@ -5,7 +5,7 @@ import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 export const maxDuration = 60;
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB base64 limit
+const MAX_FILE_SIZE_BYTES = 12 * 1024 * 1024; // 12MB base64 limit (~9MB file)
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

@@ -115,11 +115,32 @@ export function ChatArea() {
   const showButtons =
     isAssessmentDone && !isAddMoreInfoMode && !isAssessmentComplete;
 
+  const setAssistantThread = useSetAtom(assistantThreadAtom);
+
+  // On /chat, mirror settled conversation messages into assistantThreadAtom
+  // so they appear in the persistent thread view after ChatInput streams them.
+  useEffect(() => {
+    if (!isAssistantPath || !conversation) return;
+    const settled = conversation.messages.filter((m) => !m.isStreaming && !m.isHidden);
+    if (settled.length === 0) return;
+    setAssistantThread((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      const toAdd = settled
+        .filter((m) => !existingIds.has(m.id))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((m) => ({ ...m, createdAt: m.timestamp as any }));
+      if (toAdd.length === 0) return prev;
+      return [...prev, ...toAdd];
+    });
+  }, [isAssistantPath, conversation?.messages, setAssistantThread, conversation]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [
     conversation?.messages?.length,
     conversation?.messages?.[conversation?.messages?.length - 1]?.content,
+    assistantThread.length,
+    assistantThread[assistantThread.length - 1]?.content,
   ]);
 
   // Assistant thread path — /chat with persistent coaching thread
@@ -130,35 +151,42 @@ export function ChatArea() {
           <div className="flex-1 flex items-center justify-center">
             <Loader2 className="animate-spin text-muted-foreground" size={28} />
           </div>
-          <ChatInput className="w-full max-w-4xl" disableNavigation segmentOverride="chat" />
+          <ChatInput className="w-full max-w-5xl" disableNavigation segmentOverride="chat" />
         </div>
       );
     }
+
+    if (assistantThread.length === 0) {
+      return (
+        <div className="flex-1 overflow-auto">
+          <AssistantWelcomeScreen />
+        </div>
+      );
+    }
+
+    // Include any streaming messages from the temp conversation (while in-flight)
+    const streamingMessages = (conversation?.messages ?? []).filter(
+      (m) => m.isStreaming || !assistantThread.find((t) => t.id === m.id),
+    ).filter((m) => !m.isHidden);
 
     return (
       <div className="flex flex-col flex-1 overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 space-y-8" data-testid="assistant-thread">
-            {assistantThread.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full pt-24 gap-3 text-center">
-                <p className="text-lg font-medium text-foreground">Your Sorene Assistant</p>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  This is your personal coaching space. Send a message to begin.
-                </p>
-              </div>
-            ) : (
-              assistantThread.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={{
-                    id: msg.id,
-                    role: msg.role,
-                    content: msg.content,
-                    timestamp: msg.createdAt ? (msg.createdAt as unknown as { toDate(): Date }).toDate() : new Date(),
-                  }}
-                />
-              ))
-            )}
+            {assistantThread.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={{
+                  id: msg.id,
+                  role: msg.role,
+                  content: msg.content,
+                  timestamp: msg.createdAt ? (msg.createdAt as unknown as { toDate(): Date }).toDate() : new Date(),
+                }}
+              />
+            ))}
+            {streamingMessages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
             <div ref={bottomRef} />
           </div>
         </ScrollArea>
@@ -221,6 +249,43 @@ export function ChatArea() {
 
       {/* Bottom-fixed input — only shown when there are messages */}
       <ChatInput className="w-full max-w-4xl" />
+    </div>
+  );
+}
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  return "Good Evening";
+}
+
+function AssistantWelcomeScreen() {
+  const authUser = useAtomValue(userAtom);
+  const greeting = getGreeting();
+
+  return (
+    <div className="mt-20 flex flex-col items-center justify-start px-4 sm:px-8">
+      <div className="w-full max-w-5xl">
+        <div className="mb-6">
+          <img alt="Sorene logo" src="/figmaAssets/cube.svg" />
+        </div>
+        <div className="mb-8">
+          <h1
+            className="text-[32px] sm:text-[40px] font-medium text-[#111111] leading-tight mb-1"
+            style={{ fontFamily: "Satoshi, Helvetica", letterSpacing: "-0.5px" }}
+          >
+            {greeting}, {authUser?.profile?.firstName} {authUser?.profile?.lastName}!
+          </h1>
+          <h2
+            className="text-[32px] sm:text-[40px] font-medium text-[#111111] leading-tight"
+            style={{ fontFamily: "Satoshi, Helvetica", letterSpacing: "-0.5px" }}
+          >
+            What&apos;s on your mind?
+          </h2>
+        </div>
+        <ChatInput className="w-full max-w-5xl" disableNavigation segmentOverride="chat" />
+      </div>
     </div>
   );
 }

@@ -14,6 +14,16 @@ export async function POST(req: NextRequest) {
     adminGetAssistantMessages(uid, 6),
   ]);
 
+  // Count substantive exchanges (messages with more than ~20 chars of real content)
+  const substantiveMessages = recentMessages.filter((m) => m.content.trim().length > 20);
+  const hasSubstantiveHistory = substantiveMessages.length >= 3;
+
+  const firstName = user?.firstName ?? "there";
+
+  if (!hasSubstantiveHistory) {
+    return Response.json({ message: `Hey ${firstName}. What's on your mind today?` });
+  }
+
   const lastExchange = recentMessages
     .slice(-4)
     .map((m) => `${m.role === "user" ? "User" : "Sorene"}: ${m.content.slice(0, 120)}`)
@@ -31,9 +41,10 @@ Sentence 2: one direct question that picks up exactly where they stopped.
 
 Their coaching stage: ${user?.coachingStage ?? "exploring"}
 Last exchange:
-${lastExchange || "No previous exchange."}
+${lastExchange}
 
 Rules: No "Welcome back". No "I hope you're well". No fluff. Speak as if no time passed.
+RE-ENTRY: Never frame a previous short session as incomplete or as something the user failed to do. If there is nothing meaningful to reference, open simply and warmly without referencing history.
 Output only the 2 sentences.`,
     }],
   });

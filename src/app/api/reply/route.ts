@@ -48,8 +48,7 @@ export async function POST(req: NextRequest) {
     adminGetAssistantMessages(uid, 20),
     db.collection("users").doc(uid).collection("threadsScheduled")
       .where("status", "==", "pending")
-      .orderBy("scheduledAt", "asc")
-      .limit(10)
+      .limit(20)
       .get(),
     db.collection("users").doc(uid).get(),
   ]);
@@ -59,7 +58,9 @@ export async function POST(req: NextRequest) {
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
-  const scheduledPosts = threadsScheduledSnap.docs.map((d) => d.data() as { text: string; scheduledAt: number; projectTitle?: string; status: string });
+  const scheduledPosts = threadsScheduledSnap.docs
+    .map((d) => d.data() as { text: string; scheduledAt: number; projectTitle?: string; status: string })
+    .sort((a, b) => a.scheduledAt - b.scheduledAt);
   const todayPosts = scheduledPosts.filter((p) => p.scheduledAt >= todayStart.getTime() && p.scheduledAt <= todayEnd.getTime());
   const upcomingPosts = scheduledPosts.filter((p) => p.scheduledAt > todayEnd.getTime()).slice(0, 3);
 

@@ -6,6 +6,7 @@ import {
   adminGetAssistantMessages,
   adminGetUserProfile,
   adminSaveUserProfile,
+  getAdminFirestore,
 } from "@/lib/firebaseAdmin";
 import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
@@ -40,11 +41,56 @@ export async function POST(req: NextRequest) {
     segment?: string;
   };
 
-  // Fetch profile and conversation history in parallel
-  const [user, recentMessages] = await Promise.all([
+  // Fetch profile, conversation history, and cross-section data in parallel
+  const db = getAdminFirestore();
+  const [user, recentMessages, threadsScheduledSnap, userDocSnap] = await Promise.all([
     adminGetUserProfile(uid),
     adminGetAssistantMessages(uid, 20),
+    db.collection("users").doc(uid).collection("threadsScheduled")
+      .where("status", "==", "pending")
+      .orderBy("scheduledAt", "asc")
+      .limit(10)
+      .get(),
+    db.collection("users").doc(uid).get(),
   ]);
+
+  // Build Threads context block
+  const now = Date.now();
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+
+  const scheduledPosts = threadsScheduledSnap.docs.map((d) => d.data() as { text: string; scheduledAt: number; projectTitle?: string; status: string });
+  const todayPosts = scheduledPosts.filter((p) => p.scheduledAt >= todayStart.getTime() && p.scheduledAt <= todayEnd.getTime());
+  const upcomingPosts = scheduledPosts.filter((p) => p.scheduledAt > todayEnd.getTime()).slice(0, 3);
+
+  const userDocData = userDocSnap.data() ?? {};
+  // Count drafts across all project draft batches
+  const totalDrafts = Object.entries(userDocData)
+    .filter(([k]) => k.startsWith("threadsDraftBatch"))
+    .reduce((sum, [, v]) => sum + ((v as { drafts?: unknown[] })?.drafts?.length ?? 0), 0);
+
+  const threadsBlock = (() => {
+    const lines: string[] = [];
+    if (todayPosts.length > 0) {
+      lines.push(`Scheduled for today (${todayPosts.length}):`);
+      todayPosts.forEach((p) => {
+        const time = new Date(p.scheduledAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+        const project = p.projectTitle ? ` [${p.projectTitle}]` : "";
+        lines.push(`  - ${time}${project}: "${p.text.slice(0, 80)}${p.text.length > 80 ? "..." : ""}"`);
+      });
+    } else {
+      lines.push("No posts scheduled for today.");
+    }
+    if (upcomingPosts.length > 0) {
+      lines.push(`Upcoming (next ${upcomingPosts.length}):`);
+      upcomingPosts.forEach((p) => {
+        const date = new Date(p.scheduledAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+        lines.push(`  - ${date}: "${p.text.slice(0, 60)}..."`);
+      });
+    }
+    lines.push(`Drafts in queue: ${totalDrafts}`);
+    return lines.join("\n");
+  })();
 
   // Days since last session
   const daysSinceLastSession = (() => {
@@ -117,6 +163,9 @@ Why it fits: ${user?.directionRationale ?? "not yet set"}
 Execution stage: ${user?.executionStage ?? "not started"}
 LaunchPad completed: ${user?.launchpadItemsCompleted?.join(", ") ?? "none"}
 Active growth strategies: ${user?.activeGrowthStrategies?.join(", ") ?? "none"}
+
+=== THREADS CONTENT PIPELINE ===
+${threadsBlock}
 
 === EDUCATION MODULE STATE ===
 Current block: ${user?.educationProgress?.currentBlock ?? "not started"}
@@ -192,6 +241,15 @@ Customer Research conversations → acknowledge specific insights
 LaunchPad completions → reference as evidence of momentum
 Growth strategies → connect to current coaching moment
 Outreach attempts → factor into pivot signal evaluation
+
+=== THREADS CONTENT AWARENESS ===
+You have real-time visibility of the user's Threads content pipeline.
+When asked about scheduled posts, drafts, or content — answer directly from the data above.
+Do not say "I don't have access" — you do have access.
+If today's posts are listed → confirm them by time and project.
+If no posts are scheduled today → say so plainly, then ask if they want to create one.
+Drafts in queue → reference the count when relevant to execution momentum.
+Never invent post content — only reference what appears in the pipeline data.
 
 === EDUCATION MODULE AWARENESS ===
 If user is in an Education block, every response must:

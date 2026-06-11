@@ -180,7 +180,13 @@ export function ChatArea() {
                   id: msg.id,
                   role: msg.role,
                   content: msg.content,
-                  timestamp: msg.createdAt ? (msg.createdAt as unknown as { toDate(): Date }).toDate() : new Date(),
+                  timestamp: (() => {
+                    const c = msg.createdAt as unknown;
+                    if (!c) return new Date();
+                    if (typeof (c as { toDate?: unknown }).toDate === "function") return (c as { toDate(): Date }).toDate();
+                    if (c instanceof Date) return c;
+                    return new Date(c as string);
+                  })(),
                 }}
               />
             ))}

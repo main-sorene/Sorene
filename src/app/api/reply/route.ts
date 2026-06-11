@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { verifyAuth } from "@/lib/firebaseAdmin";
-import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 import {
-  getUserProfile,
-  saveUserProfile,
-  addAssistantMessage,
-  getAssistantMessages,
-} from "@/lib/firestore";
+  verifyAuth,
+  adminAddAssistantMessage,
+  adminGetAssistantMessages,
+  adminGetUserProfile,
+  adminSaveUserProfile,
+} from "@/lib/firebaseAdmin";
+import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 let _client: Anthropic | null = null;
 function getClient() {
@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
 
   // Fetch profile and conversation history in parallel
   const [user, recentMessages] = await Promise.all([
-    getUserProfile(uid),
-    getAssistantMessages(uid, 20),
+    adminGetUserProfile(uid),
+    adminGetAssistantMessages(uid, 20),
   ]);
 
   // Days since last session
@@ -227,7 +227,7 @@ Do not let sessions trail off without a named next action.`;
   })();
 
   // Save user message before calling Claude
-  await addAssistantMessage(uid, {
+  await adminAddAssistantMessage(uid, {
     role: "user",
     content: prompt,
     metadata: {
@@ -260,7 +260,7 @@ Do not let sessions trail off without a named next action.`;
 
   // Save assistant reply + update profile in parallel
   await Promise.all([
-    addAssistantMessage(uid, {
+    adminAddAssistantMessage(uid, {
       role: "assistant",
       content: reply,
       metadata: {
@@ -269,7 +269,7 @@ Do not let sessions trail off without a named next action.`;
         commitmentExtracted: null,
       },
     }),
-    saveUserProfile(uid, {
+    adminSaveUserProfile(uid, {
       lastSessionAt: new Date().toISOString(),
       firstSessionComplete: true,
     }),

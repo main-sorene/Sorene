@@ -36,6 +36,72 @@ export function getAdminFirestore(): Firestore {
   return adminDb;
 }
 
+// Re-export type so route.ts can import from one place
+export type { UserProfile } from "./firestore";
+
+export async function adminGetUserProfile(uid: string): Promise<import("./firestore").UserProfile | null> {
+  const db = getAdminFirestore();
+  const snap = await db.collection("users").doc(uid).get();
+  if (!snap.exists) return null;
+  return snap.data() as import("./firestore").UserProfile;
+}
+
+export async function adminSaveUserProfile(
+  uid: string,
+  data: Partial<import("./firestore").UserProfile>,
+): Promise<void> {
+  const db = getAdminFirestore();
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== undefined) clean[k] = v;
+  }
+  await db.collection("users").doc(uid).set(
+    { ...clean, updatedAt: new Date().toISOString() },
+    { merge: true },
+  );
+}
+
+export interface AdminAssistantMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: FirebaseFirestore.Timestamp;
+  metadata?: {
+    modeUsed?: string;
+    stageAtTime?: string;
+    commitmentExtracted?: string | null;
+  };
+}
+
+export async function adminAddAssistantMessage(
+  uid: string,
+  message: Omit<AdminAssistantMessage, "id" | "createdAt">,
+): Promise<string> {
+  const db = getAdminFirestore();
+  const { Timestamp } = await import("firebase-admin/firestore");
+  const ref = await db
+    .collection("assistantThreads")
+    .doc(uid)
+    .collection("messages")
+    .add({ ...message, createdAt: Timestamp.now() });
+  return ref.id;
+}
+
+export async function adminGetAssistantMessages(
+  uid: string,
+  limitCount = 20,
+): Promise<AdminAssistantMessage[]> {
+  const db = getAdminFirestore();
+  const snap = await db
+    .collection("assistantThreads")
+    .doc(uid)
+    .collection("messages")
+    .orderBy("createdAt", "asc")
+    .limit(limitCount)
+    .get();
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AdminAssistantMessage, "id">) }));
+}
+
 export async function verifyAuth(
   req: NextRequest,
 ): Promise<{ uid: string; email?: string } | null> {

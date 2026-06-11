@@ -308,15 +308,82 @@ Do not let sessions trail off without a named next action.`;
     content: m.content,
   }));
 
-  const message = await getClient().messages.create({
+  const tools: Anthropic.Tool[] = [
+    {
+      name: "update_business_status",
+      description: "Update the user's business status and behavior memory when they report real progress — experiments started, customer conversations, money received, commitments made or kept. Only call this when the user has explicitly shared a concrete update.",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          experimentsCompleted: { type: "number", description: "Total experiments completed so far" },
+          experimentsAbandoned: { type: "number", description: "Total experiments abandoned so far" },
+          customerConversations: { type: "number", description: "Total customer conversations logged" },
+          lastCommitment: { type: "string", description: "The specific action they committed to" },
+          lastCommitmentKept: { type: "boolean", description: "Whether they kept their last commitment" },
+          firstMoneyReceivedAt: { type: "string", description: "ISO date string if they received first payment" },
+          coachingStage: { type: "string", enum: ["lost", "exploring", "testing", "earning", "stabilizing"], description: "Updated coaching stage if it has changed" },
+        },
+        required: [],
+      },
+    },
+  ];
+
+  let message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     system: systemPrompt,
+    tools,
     messages: [
       ...historyMessages,
       { role: "user", content: prompt },
     ],
   });
+
+  // Handle tool use — update profile then get final reply
+  let profileUpdated = false;
+  if (message.stop_reason === "tool_use") {
+    const toolUseBlock = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (toolUseBlock?.name === "update_business_status") {
+      const updates = toolUseBlock.input as Record<string, unknown>;
+      const behaviorPatch: Record<string, unknown> = {};
+      const profilePatch: Record<string, unknown> = {};
+
+      if (typeof updates.experimentsCompleted === "number") behaviorPatch["behaviorMemory.experimentsCompleted"] = updates.experimentsCompleted;
+      if (typeof updates.experimentsAbandoned === "number") behaviorPatch["behaviorMemory.experimentsAbandoned"] = updates.experimentsAbandoned;
+      if (typeof updates.customerConversations === "number") behaviorPatch["behaviorMemory.customerConversations"] = updates.customerConversations;
+      if (typeof updates.lastCommitment === "string") behaviorPatch["behaviorMemory.lastCommitment"] = updates.lastCommitment;
+      if (typeof updates.lastCommitmentKept === "boolean") behaviorPatch["behaviorMemory.lastCommitmentKept"] = updates.lastCommitmentKept;
+      if (typeof updates.firstMoneyReceivedAt === "string") behaviorPatch["behaviorMemory.firstMoneyReceivedAt"] = updates.firstMoneyReceivedAt;
+      if (typeof updates.coachingStage === "string") profilePatch.coachingStage = updates.coachingStage;
+
+      if (Object.keys(behaviorPatch).length > 0 || Object.keys(profilePatch).length > 0) {
+        const db = getAdminFirestore();
+        await db.collection("users").doc(uid).set({ ...behaviorPatch, ...profilePatch }, { merge: true });
+        profileUpdated = true;
+      }
+
+      // Continue with tool result to get the final coaching reply
+      message = await getClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools,
+        messages: [
+          ...historyMessages,
+          { role: "user", content: prompt },
+          { role: "assistant", content: message.content },
+          {
+            role: "user",
+            content: [{
+              type: "tool_result",
+              tool_use_id: toolUseBlock.id,
+              content: profileUpdated ? "Status updated successfully." : "No changes to save.",
+            }],
+          },
+        ],
+      });
+    }
+  }
 
   const reply = message.content
     .filter((b: Anthropic.ContentBlock) => b.type === "text")
@@ -369,7 +436,7 @@ Output ONLY the JSON. No explanation.`,
     });
   }).catch((err: unknown) => { console.error("[stateMemory] extraction failed:", err); });
 
-  const credits = calculateCredits("claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens);
+  const credits = calculateCredits("claude-sonnet-4-6", message.usage.input_tokens + (profileUpdated ? 200 : 0), message.usage.output_tokens);
   await deductCredits(userKey, credits);
 
   return Response.json({

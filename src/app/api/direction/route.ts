@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { DirectionEligibility } from "@/lib/dnaEngine";
 import { maskPii, maskAnswers, maskScores, sanitizeName } from "@/lib/aiSafety";
-import { verifyAuth } from "@/lib/firebaseAdmin";
+import { verifyAuth, adminGetUserProfile, adminSaveUserProfile } from "@/lib/firebaseAdmin";
 import { checkCredits, deductCredits, calculateCredits } from "@/lib/credits";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -149,14 +149,18 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: userMessage }],
     });
 
+    const scores = safeEligibility.scores;
+
     const readable = new ReadableStream({
       async start(controller) {
+        let fullText = "";
         for await (const chunk of stream) {
           if (
             chunk.type === "content_block_delta" &&
             chunk.delta.type === "text_delta"
           ) {
             controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+            fullText += chunk.delta.text;
           }
         }
         // Deduct after stream completes, before closing so the write finishes
@@ -164,6 +168,71 @@ export async function POST(req: NextRequest) {
         const final = await stream.finalMessage();
         await deductCredits(userKey, calculateCredits("claude-sonnet-4-6", final.usage.input_tokens, final.usage.output_tokens));
         controller.close();
+
+        // Fire-and-forget: extract directionRationale, value_signature, hidden_strength
+        (async () => {
+          // Extract directionRationale from the streamed text
+          let directionRationale = "";
+          const triggerPhrases = ["fits you", "because your", "your energy", "this direction"];
+          let found = false;
+          for (const trigger of triggerPhrases) {
+            const idx = fullText.toLowerCase().indexOf(trigger);
+            if (idx !== -1) {
+              // Take up to 2 sentences starting from this trigger
+              const segment = fullText.slice(idx);
+              const sentenceMatches = segment.match(/[^.!?]*[.!?]/g);
+              if (sentenceMatches) {
+                directionRationale = sentenceMatches.slice(0, 2).join(" ").trim();
+                found = true;
+                break;
+              }
+            }
+          }
+          if (!found) {
+            // Fall back to 3rd paragraph
+            const paragraphs = fullText.split(/\n\n+/).filter((p) => p.trim().length > 0);
+            directionRationale = paragraphs[2] ?? paragraphs[0] ?? "";
+          }
+          if (directionRationale.length > 200) {
+            directionRationale = directionRationale.slice(0, 197) + "...";
+          }
+
+          // Haiku call for value_signature and hidden_strength
+          const haiku = await client.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 150,
+            messages: [{
+              role: "user",
+              content: `Based on this person's DNA profile, generate two short coaching identity labels.
+
+Energy source: ${scores.energy_source}
+Non-negotiable: ${scores.non_negotiable}
+Strengths: ${scores.motivation_driver}
+Hidden pattern: ${scores.energy_drains} (what they've been running from)
+Strengths summary: ${scores.strengths_summary}
+
+Generate exactly 2 outputs:
+VALUE_SIGNATURE: [3-7 word phrase: what this person creates / stands for when at their best. Not a job title. Examples: "Clarity That Moves People", "Systems That Free Others", "Work That Heals Community"]
+HIDDEN_STRENGTH: [3-7 word phrase: the undervalued strength they don't name. Often the inverse of what drains them. Examples: "Structural Calm Under Ambiguity", "Pattern Recognition Through People", "Depth That Others Rush Past"]
+
+No explanation. Just the two labeled outputs.`,
+            }],
+          });
+
+          const haikuText = haiku.content[0]?.type === "text" ? haiku.content[0].text : "";
+          const vsMatch = haikuText.match(/VALUE_SIGNATURE:\s*(.+)/i);
+          const hsMatch = haikuText.match(/HIDDEN_STRENGTH:\s*(.+)/i);
+          const value_signature = vsMatch?.[1]?.trim() ?? "";
+          const hidden_strength = hsMatch?.[1]?.trim() ?? "";
+
+          // Merge with existing dnaScores and save
+          const existingProfile = await adminGetUserProfile(authedUser.uid);
+          const existingScores = existingProfile?.dnaScores ?? {};
+          await adminSaveUserProfile(authedUser.uid, {
+            directionRationale,
+            dnaScores: { ...existingScores, value_signature, hidden_strength },
+          });
+        })().catch((err) => console.error("[direction] post-stream save failed:", err));
       },
     });
 

@@ -7,6 +7,7 @@ import {
   authLoadingAtom,
   assistantThreadAtom,
   assistantThreadLoadingAtom,
+  reEntryMessageAtom,
 } from "@/store/atoms";
 import { useEffect, useRef } from "react";
 import { AssessmentChatPage } from "@/components/assessment/AssessmentChatPage";
@@ -17,9 +18,11 @@ export default function Page() {
   const authLoading = useAtomValue(authLoadingAtom);
   const isAssessmentComplete = useAtomValue(isAssessmentCompleteAtom);
   const isAssessmentInProgress = useAtomValue(isAssessmentInProgressAtom);
+  const assistantThreadLoading = useAtomValue(assistantThreadLoadingAtom);
   const setAssessmentComplete = useSetAtom(isAssessmentCompleteAtom);
   const setThread = useSetAtom(assistantThreadAtom);
   const setThreadLoading = useSetAtom(assistantThreadLoadingAtom);
+  const setReEntryMessage = useSetAtom(reEntryMessageAtom);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -41,6 +44,31 @@ export default function Page() {
       .then((messages) => setThread(messages))
       .finally(() => setThreadLoading(false));
   }, [user?.uid, isAssessmentComplete, setThread, setThreadLoading]);
+
+  // Re-entry opening: show once per session if user was away 48+ hours
+  useEffect(() => {
+    if (!user?.uid || !isAssessmentComplete || assistantThreadLoading) return;
+    const lastSession = user.profile?.lastSessionAt;
+    if (!lastSession) return;
+    const hoursSince = (Date.now() - new Date(lastSession).getTime()) / (1000 * 60 * 60);
+    if (hoursSince < 48) return;
+    const reEntryKey = `re_entry_shown_${user.uid}`;
+    if (sessionStorage.getItem(reEntryKey)) return;
+    sessionStorage.setItem(reEntryKey, "1");
+
+    import("@/lib/authFetch").then(({ authFetch }) => {
+      authFetch(`${process.env.NEXT_PUBLIC_APP_URL || ""}/api/re-entry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: user.uid }),
+      })
+        .then((res) => res.json())
+        .then((data: { message?: string }) => {
+          if (data.message) setReEntryMessage(data.message);
+        })
+        .catch((err: unknown) => { console.error("[re-entry]", err); });
+    });
+  }, [user?.uid, user?.profile?.lastSessionAt, isAssessmentComplete, assistantThreadLoading, setReEntryMessage]);
 
   if (authLoading) return null;
   // ChatLayout renders ChatArea for completed users — no WelcomeScreen

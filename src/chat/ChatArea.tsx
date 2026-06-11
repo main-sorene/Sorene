@@ -12,6 +12,7 @@ import {
   ideationAtom,
   assistantThreadAtom,
   assistantThreadLoadingAtom,
+  reEntryMessageAtom,
 } from "@/store/atoms";
 import { MessageBubble } from "./MessageBubble";
 import { ChatInput } from "./ChatInput";
@@ -115,6 +116,9 @@ export function ChatArea() {
   const showButtons =
     isAssessmentDone && !isAddMoreInfoMode && !isAssessmentComplete;
 
+  const reEntryMessage = useAtomValue(reEntryMessageAtom);
+  const setReEntryMessage = useSetAtom(reEntryMessageAtom);
+
   const setAssistantThread = useSetAtom(assistantThreadAtom);
 
   // On /chat, mirror settled conversation messages into assistantThreadAtom
@@ -173,6 +177,12 @@ export function ChatArea() {
       <div className="flex flex-col flex-1 overflow-hidden">
         <ScrollArea className="flex-1">
           <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 space-y-8" data-testid="assistant-thread">
+            {reEntryMessage && (
+              <div className="mb-4 p-4 rounded-xl bg-[#F5F5F5] text-[#333333] text-sm leading-relaxed flex justify-between items-start gap-3">
+                <span>{reEntryMessage}</span>
+                <button onClick={() => setReEntryMessage(null)} className="text-[#999] hover:text-[#333] shrink-0 text-xs mt-0.5">✕</button>
+              </div>
+            )}
             {assistantThread.map((msg) => (
               <MessageBubble
                 key={msg.id}
@@ -268,6 +278,7 @@ function getGreeting(): string {
 
 function AssistantWelcomeScreen() {
   const authUser = useAtomValue(userAtom);
+  const reEntryMessage = useAtomValue(reEntryMessageAtom);
   const greeting = getGreeting();
 
   return (
@@ -290,6 +301,11 @@ function AssistantWelcomeScreen() {
             What&apos;s on your mind?
           </h2>
         </div>
+        {reEntryMessage && (
+          <div className="mb-6 p-4 rounded-xl bg-[#F5F5F5] text-[#333333] text-sm leading-relaxed max-w-2xl">
+            {reEntryMessage}
+          </div>
+        )}
         <ChatInput className="w-full max-w-5xl" disableNavigation segmentOverride="chat" />
       </div>
     </div>

@@ -275,6 +275,35 @@ Do not let sessions trail off without a named next action.`;
     }),
   ]);
 
+  // Fire-and-forget: extract state memory from this exchange
+  getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 80,
+    messages: [{
+      role: "user",
+      content: `From this coaching exchange, output ONLY a JSON object with exactly these fields:
+{"emotion": "<one word: anxious|excited|stuck|clear|overwhelmed|hopeful|flat|frustrated|energised>", "energyLevel": "<low|medium|high>", "clarityLevel": "<confused|exploring|clear>"}
+
+User said: "${prompt.slice(0, 300)}"
+Coach replied: "${reply.slice(0, 300)}"
+
+Output ONLY the JSON. No explanation.`,
+    }],
+  }).then(async (stateMsg) => {
+    const raw = stateMsg.content[0]?.type === "text" ? stateMsg.content[0].text.trim() : "";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return;
+    const state = JSON.parse(jsonMatch[0]);
+    await adminSaveUserProfile(uid, {
+      stateMemory: {
+        emotion: state.emotion,
+        energyLevel: state.energyLevel,
+        clarityLevel: state.clarityLevel,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  }).catch((err: unknown) => { console.error("[stateMemory] extraction failed:", err); });
+
   const credits = calculateCredits("claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens);
   await deductCredits(userKey, credits);
 

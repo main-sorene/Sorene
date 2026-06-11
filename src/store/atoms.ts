@@ -202,3 +202,5 @@ export const EMPTY_RESOURCES: ResourcesConstraints = {
 export const resourcesConstraintsAtom = atom<ResourcesConstraints>(EMPTY_RESOURCES);
 
 export const selectedExecutionProjectAtom = atom<DirectionCardData | null>(null);
+
+export const reEntryMessageAtom = atom<string | null>(null);

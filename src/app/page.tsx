@@ -33,7 +33,6 @@ function PageInner() {
     }
 
     if (googleIdToken && auth) {
-      try { sessionStorage.setItem("sorene_fresh_signin", "1"); } catch {}
       setSigningIn(true);
       setAuthLoading(true);
       const credential = GoogleAuthProvider.credential(googleIdToken);

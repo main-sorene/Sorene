@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useSetAtom } from "jotai";
 import { userAtom, authLoadingAtom } from "@/store/atoms";
@@ -14,10 +14,12 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!auth) { setLoading(false); return; }
 
+    // Fallback in case onAuthStateChanged never fires (e.g. Firebase init failure)
     const fallbackTimer = setTimeout(() => setLoading(false), 8000);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       clearTimeout(fallbackTimer);
+
       if (!firebaseUser) {
         setUser(null);
         setLoading(false);
@@ -26,37 +28,17 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
       const appUid = firebaseUser.email || firebaseUser.uid;
 
-      // Check for pending OAuth flag set before navigation — fresh sign-in.
-      let isPendingOAuth = false;
-      try {
-        isPendingOAuth =
-          sessionStorage.getItem("sorene_pending_oauth") === "1" ||
-          sessionStorage.getItem("sorene_fresh_signin") === "1";
-        sessionStorage.removeItem("sorene_pending_oauth");
-        sessionStorage.removeItem("sorene_fresh_signin");
-      } catch {}
-
+      // Cap the Firestore read at 5s — on a slow mobile network an uncapped read
+      // hangs indefinitely because the fallback timer was already cleared above.
       let profile = null;
       try {
-        profile = await getUserProfile(appUid);
+        const timeout = new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 5000),
+        );
+        profile = await Promise.race([getUserProfile(appUid), timeout]);
       } catch {
-        // Firestore read failed — keep user signed in, don't bounce.
-      }
-
-      if (!profile && !isPendingOAuth) {
-        // No profile and no active OAuth flow = stale session after data wipe.
-        await signOut(auth!).catch(() => {});
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
-      // If no profile yet but OAuth is in flight, wait for the client-side
-      // profile write in page.tsx to complete, then retry.
-      if (!profile && isPendingOAuth) {
-        await new Promise((r) => setTimeout(r, 2000));
-        try { profile = await getUserProfile(appUid); } catch {}
-        // If still nothing, proceed anyway — onboarding will create it.
+        // Network slow, Firestore unavailable, or timed out — proceed without
+        // profile. AppLayout will redirect to /onBoarding which creates it.
       }
 
       if (profile?.photoUrl && !profile.photoUrl.startsWith("data:")) {
@@ -82,3 +64,4 @@ export function AuthPersistence({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+

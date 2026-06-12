@@ -36,18 +36,23 @@ function PageInner() {
       setSigningIn(true);
       setAuthLoading(true);
       const credential = GoogleAuthProvider.credential(googleIdToken);
-      signInWithCredential(auth, credential)
-        .then(async (result) => {
-          // Ensure a Firestore profile exists for this user.
+      // Timeout so a Firebase connectivity issue never hangs the spinner forever
+      const authTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("auth_timeout")), 15000),
+      );
+      Promise.race([signInWithCredential(auth, credential), authTimeout])
+        .then((result) => {
+          // Navigate away immediately — don't block on the profile write.
+          // AuthPersistence handles loading the profile; we just need to
+          // ensure one exists so it doesn't see a blank record.
           const uid = result.user.email || result.user.uid;
-          try {
-            const existing = await getUserProfile(uid);
-            if (!existing) {
-              await saveUserProfile(uid, { email: result.user.email || uid } as any);
-            }
-          } catch (e) {
-            console.warn("[page] profile ensure failed:", e);
-          }
+          getUserProfile(uid)
+            .then((existing) => {
+              if (!existing) {
+                saveUserProfile(uid, { email: result.user.email || uid } as any).catch(() => {});
+              }
+            })
+            .catch(() => {});
           router.replace("/");
         })
         .catch((e) => {

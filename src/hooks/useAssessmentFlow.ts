@@ -13,6 +13,7 @@ import {
 } from "@/lib/assessmentFlow";
 import { computeDirection } from "@/lib/dnaEngine";
 import { saveAssessmentResults } from "@/lib/firestore";
+import { trackDNAAssessmentComplete } from "@/lib/analytics";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { userAtom, isAssessmentCompleteAtom, conversationsAtom, type Conversation } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
@@ -359,6 +360,7 @@ export function useAssessmentFlow() {
         const eligibility = computeDirection(currentAnswers);
         if (authUser?.uid) {
           await saveAssessmentResults(authUser.uid, currentAnswers, eligibility);
+          trackDNAAssessmentComplete();
         }
         // Note: do NOT flip isAssessmentCompleteAtom here — that would unmount
         // this component and the user would never see the summary or nav buttons.

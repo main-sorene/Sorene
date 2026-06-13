@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { Auth, getAuth, GoogleAuthProvider } from "firebase/auth";
 import { FirebaseStorage, getStorage } from "firebase/storage";
 import { Firestore, getFirestore } from "firebase/firestore";
+import { Analytics, getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,6 +11,7 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 let app: FirebaseApp | undefined;
@@ -17,6 +19,7 @@ let auth: Auth | undefined;
 let storage: FirebaseStorage | undefined;
 let db: Firestore | undefined;
 let provider: GoogleAuthProvider | undefined;
+let analytics: Analytics | undefined;
 
 function initializeFirebase() {
   if (typeof window === "undefined") return;
@@ -36,6 +39,12 @@ function initializeFirebase() {
     provider.setCustomParameters({
       prompt: "select_account",
     });
+    // Initialise Analytics only when supported (requires measurementId)
+    if (firebaseConfig.measurementId) {
+      isSupported().then((supported) => {
+        if (supported && app) analytics = getAnalytics(app);
+      });
+    }
   } catch (error) {
     console.error("Firebase initialization failed:", error);
   }
@@ -43,4 +52,4 @@ function initializeFirebase() {
 
 initializeFirebase();
 
-export { app, auth, provider, storage, db };
+export { app, auth, provider, storage, db, analytics };

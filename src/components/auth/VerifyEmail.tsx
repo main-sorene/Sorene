@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 import { getFriendlyErrorMessage } from "@/lib/utils";
 import { signInWithCustomToken } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { trackSignUpComplete } from "@/lib/analytics";
 
 const VerifyEmail = () => {
   const email = useAtomValue(emailInputAtom);
@@ -45,6 +46,7 @@ const VerifyEmail = () => {
           profile: profile || undefined,
         });
 
+        trackSignUpComplete("email");
         if (profile?.onboardingComplete) {
           router.push("/chat");
         } else {

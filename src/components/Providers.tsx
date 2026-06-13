@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthPersistence } from "@/components/auth/AuthPersistence";
 import { CookieBanner } from "@/components/modals/CookieBanner";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -15,7 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <TooltipProvider>
           <Toaster />
           <AuthPersistence>
-            {children}
+            <AnalyticsProvider>
+              {children}
+            </AnalyticsProvider>
           </AuthPersistence>
           <CookieBanner />
         </TooltipProvider>

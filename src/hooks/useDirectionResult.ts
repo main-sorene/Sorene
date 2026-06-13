@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAtomValue } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { getUserProfile, saveUserProfile } from "@/lib/firestore";
+import { trackDirectionGenerated } from "@/lib/analytics";
 import { useQuery } from "@tanstack/react-query";
 
 export type DirectionAlternative = {
@@ -90,6 +91,7 @@ export function useDirectionResult() {
 
         if (user?.uid && fullText) {
           await saveUserProfile(user.uid, { directionText: fullText });
+          trackDirectionGenerated(profile.directionEligibility?.model ?? "unknown");
         }
 
         // After main direction streams, fetch alternative summaries

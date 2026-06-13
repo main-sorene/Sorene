@@ -17,6 +17,7 @@ import { FormData } from "@/types/onboarding";
 import { useAtom } from "jotai";
 import { userAtom } from "@/store/atoms";
 import { saveUserProfile } from "@/lib/firestore";
+import { trackOnboardingComplete } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { OnboardingSideImage } from "./OnboardingSideImage";
 
@@ -127,6 +128,7 @@ export function OnboardingForm({
 
       onNext(data);
 
+      trackOnboardingComplete();
       router.push("/chat");
     } catch (error) {
       console.error("Error saving user profile:", error);
